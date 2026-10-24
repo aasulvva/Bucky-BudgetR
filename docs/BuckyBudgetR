@@ -203,6 +203,7 @@ On desktop: navigation by side menu
 [DASHBOARD] - Overview screen (with customizable widgets for things like "Budget Health", "Bucket Status", "Account Balances", "Recent Transactions", "Graphs" etc.)
 [CREATE NEW TRANSACTION] - Create a new transaction (only INC, EXP, TRF, INP are possible here, rest are system created)
 [BUCKETS] - See the status of all your buckets right now (CAF, TF), click to see transactions
+    - Trigger manual refill of single bucket if enabled
 [BUCKET SETUP] - Create and manage your budget buckets
     - Create buckets
     - Edit buckets (change name, importance, priority status)
@@ -211,6 +212,7 @@ On desktop: navigation by side menu
         - Future: set RA (and BC based on rules or if below new RA when using fixed), leaving TF the same
         - Both: set RA (and BC based on rules or if below new RA when using fixed), TF adjusted by the relative increase/decrease (creates BUA transaction)
         - You may also select the option to reallocate between buckets with the same three options, if TF is adjusted,
+    - Set bucket options (allow manual refill, exclude from auto-refill at cycle end)
     - Delete buckets
 [BUDGET SETUP] - Management screen, looks at all your buckets. Used to setup a budget, enter expected income on each source account every month then set refill amount for each bucket, the system will show % allocated and remaining from the expected income.
 [ACCOUNTS] - See the status of your accounts, click to see transactions
