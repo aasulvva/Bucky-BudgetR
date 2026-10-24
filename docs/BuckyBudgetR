@@ -1,0 +1,252 @@
+-=== BudgetR Budget Software ===-
+
+Self-hosted budgeting application. Currently, the application is not intended for public use and will be hosted on LAN and Tailscale access, access over the internet may be considered, but given the nature of the app, security is an issue.
+
+Target Plaform: Web-based app for PC and mobile use
+
+=== TECH STACK
+
+Running as Docker containers
+
+Frontend: React with Typescript
+Backend: Go
+Database: PostgreSQL
+
+=== KEY CONCEPTS
+
+== USER ACCOUNTS
+
+- User data
+    - User-ID: <6-digit random number>
+    - Username
+    - Password (bcrypt hashed)
+    - Active
+    - Admin (true/false)
+    - User preferences (JSON) (e.g. auto refill on cycle start)
+    - Created/Modified
+    - User (the one who created the record)
+
+== CYCLES
+
+Represents a budgetary cycle. Typically a month, but can be adjusted freely to fit within e.g. salary timing
+
+- Cycle data:
+    - Cycle-ID: <6-digit User ID><6-digit random number>
+    - Owner (user)
+    - Start date (starts 00:00:00 on this date)
+    - End date (ends 23:59:59 on this date)
+    - Finished (true/false)
+
+= CYCLE RULES
+- A cycle is user-wide. An user can only have one active cycle at a time.
+- If a cycle isn't currently set for the user, the user will be prompted to do so.
+- Cycles are manually ended. They can be ended before their end date.
+- You can setup future cycles. The first applicable cycle will automatically start once you end one.
+- On cycle start:
+    - Buckets are refilled (Refill transactions), unless user has enabled manual refill (then it is done using a button on the "BUCKETS" screen once per cycle) or trigger refill by income transaction
+- On cycle end:
+    - Calculate CAF on applicable buckets
+    - Buckets with keep funds disabled: remaining CAF is removed using an OVF transaction and is handled according to the bucket's overflow setting
+    - Buckets with keep funs enabled: RA is added, if above BC then the above amount is removed using an OVF transaction and is handled according to the bucket's overflow setting
+
+== BUCKETS
+
+- Bucket data
+    - Bucket-ID: <6-digit User ID><4-digit random number>
+    - Owner (user)
+    - Source Bank Account - Which bank account this bucket sources its funds from, must be owned by the same user
+    - BC (Bucket Capacity) - Maximum funds that can normally be allocated to this bucket
+    - RA (Refill Amount) - Amount to budget each cycle (when refill is triggered)
+    - TF (Target Funds) - Funds that are supposed to be avaliable (calculated based off bucket transactions)
+    - CAF (Current Available Funds) - Funds that are avaliable (calculated with the Money Allocation Routine)
+    - Keep funds toggle - Whether to keep remainder funds on cycle change, normally you want BC to be higher than RA if this is enabled to allow the rollover effect to properly occur
+    - BC Setting (Refill Multiplier/Fixed Amount) - Set bucket capacity based on a multiplier on RA or a fixed amount
+    - BC Multiplier (multiplier on RA) - Multiplier on RA to set bucket capacity (e.g. 2.0, 1000 RA = 2000 BC), cannot be below 1.00
+    - Priority Bucket (true/false) - Buckets with it enabled gets allocated funds first, before non-priority buckets (typically used for neccessities such as housing expenses, transportation or groceries)
+    - Importance Amount (1-10) - Used in the allocation process
+    - Deleted flag
+    - Created/Modified
+
+= BUCKET RULES
+    - Bucket amounts follow the currency of its source bank account
+    - RA can never be above BC, BC Is adjusted automatically if set to fixed amount as needed
+
+== BANK ACCOUNTS
+
+- Bank account data
+    - Account-ID: <4-digit random number>
+    - Owner (user)
+    - Account Type (usage, savings, BSU, fond/ASK, investment)
+    - Deleted flag
+    - Created/Modified
+
+= BANK ACCOUNT RULES
+- Amount/balance is not stored, calculated from transactions
+- Consider a snapshot system, e.g. pre-calculate amount/balance as of say 01/01 of the year, then apply transactions after that to get the current amount/balance.
+- This is how bucket TF should work too.
+
+== TRANSACTIONS
+
+All transactions have a header. The objects involved gets their own transaction linked to the header.
+If you want to edit a transaction, a correction is created to correct the transaction.
+
+- Transaction header: Represents any transaction, holds metadata and pointers to affected objects
+    - Transaction-ID: <YYYYMMDD><8-digit random number>
+    - Parent Transaction (if it is a correction)
+    - Correction Type: (none/adjustment/reversal)
+    - Transaction Type
+        - Opening Balance (1x Bank) - Used when creating new bank accounts
+        - Balance Adjustment (1x Bank) - Used to correct the balance of a bank account (often used for investment accounts gains/losses)
+        - Income (1x Bank, 0-1+ Bucket) - Income from an external source
+        - Expense (1x Bank, 0-1+ Bucket) - Expense to an external source
+        - Transfer (2x Bank) - Transfer between owned accounts
+        - Internal Payment (2x Bank, 0-1+ Bucket) - Payment to another user's account (if both are using BuckyBudgetR, this saves the recipient from having to create an income record)
+        - Opening Funds (1x Bucket) - Used when creating new buckets
+        - Refill (1x Bucket) - At the start of a cycle, buckets are refilled with their RA
+        - Budget Adjustment (1x Bucket) - Used when adjusting a bucket's TF
+        - Budget Adjustment Transfer (2x Bucket) - Used when transferring TFs from one bucket to another
+        - Overflow (1x Bucket) - Used to remove overflow from a bucket (at start of cycle)
+    - Transaction Date
+    - Company/Person (for transactions to/from external sources)
+    - Tags
+    - Link to bank transaction(s)
+    - Link to bucket transaction(s)
+    - Created/Modified
+    - User
+
+| Transaction Types
+===| Opening Balance (OPB): Used when user creates a new account, initial account balance
+======| Uses 1x Bank Transaction (newly opened account)
+===| Balance Adjustment (BLA): Used if you need to adjust the balance of any of your accounts if the balance in the app is out of sync.
+======| Uses 1x Bank Transaction (the account that the balance is adjusted for)
+===| Income (INC): Used for income transactions from an external source (e.g. gifts, salary, sold items etc.)
+======| Uses 1x Bank Transaction (account that received the money)
+======| Uses 1x or more Bucket Transaction (optional) (if you want to directly allocate the new money to one of your buckets)
+===| Expense (EXP): Used for expense transactions to an external source (e.g. purchases, rent, bills etc.)
+======| Uses 1x Bank Transaction (account used to pay/account tied to card used to pay)
+======| Uses 1x or more Bucket Transaction (optional) (spend budget TF in a bucket)
+===| Transfer (TRF): Used for transfers between your accounts
+======| Uses 2x Bank Transaction (from account and to account)
+===| Internal Payment (INP): Used for expense transactions to another user on Bucky BudgetR (e.g. gifts, Vipps payments)
+======| Uses 2x Bank Transactions (from account and to account, can be another user's)
+======| Uses 1x or more Bucket Transaction (optional) (spend budget TF in a bucket)
+===| Opening Funds (OPF): Used when user creates a new bucket, initial bucket TF
+======| Uses 1x Bucket Transaction (newly created bucket)
+===| Refill (REF)
+======| Uses 1x Bucket Transaction (bucket being refilled)
+===| Budget Adjustment (BUA)
+======| Uses 1x Bucket Transaction (adjustment amount)
+===| Budget Adjustment Transfer (BAT)
+======| Uses 2x Bucket Transaction (adjustment amount, adjust between accounts)
+===| Overflow (OVF)
+======| Uses 1x Bucket Transaction (when buckets are refilled, if using KeepFunds then amount above BC or
+                                    CAF when not using KeepFunds)
+
+- Bank transaction
+    - Transaction-ID: <4-digit bank account ID><12-digit random number>
+    - Bank account ID
+    - Original amount
+    - Currency
+    - Exchange rate (at the time of transaction) (calculated from Amount)
+    - Amount (account currency)
+    - Created/Modified
+    - User
+
+(transactions in foreign currencies: record the account currency amount found within your bank or similar including the fees. The original amount, currency and exchange rate are there for record keeping/show, transaction amount is what matters)
+
+- Bucket transaction
+    - Transaction-ID: <10-digit bucket ID><14-digit random number>
+    - Bucket ID
+    - Amount
+    - Cycle - Which cycle the transaction is considered part of
+    - Created/Modified
+    - User
+
+- Savings transaction? (allocating funds to the distributor, pending funds to savings targets from bucket overlow etc.)
+
+- Edits are done as correction transactions. E.g. original transaction 100 NOK, correct to 150 NOK = creates correction transaction of 50 NOK (normally displayed as one 150 NOK transaction in the UI). Transactions entered by mistake can be reverted.
+- Scheduled transactions: schedule transactions for the future, recurring transactions. They can be auto approved and run when scheduled or added to an approval queue with a due date (add to queue date + due date) where it must be approved and applied manually.
+
+= TRANSACTION RULES
+- Bucket transactions will be tied to the active cycle of the bucket's owner.
+- Transactions involving buckets must have a transaction date within the active cycle of the bucket's owner.
+- Internal payment transactions can only be created as paying another user, not another user paying you (in that case, they need to create the transaction ofc)
+
+== MONEY ALLOCATION ROUTINE
+
+- The money allocation routine allocates money from source accounts to CAF according to TF on the buckets
+- Run grouped by source account on user
+- If the current balance of the source account is equal or greater than the combined TF of the budgets = simple approach = allocate the TF (CAF = TF on every bucket)
+- Leftover funds are stored and displayed. An option can be created to allocate whatever remaining funds to the distribution amount in the savings module
+- If the current balance is insufficient:
+    - Priority buckets gets their required funds first
+    - Calculation is based on <TF on bucket*importance on bucket>/<total TF*total importance>*<available funds>
+- The CAF values are stored. Because recalculation/redistribution when funds are insufficient should not happen constantly!
+- recalculation happens when:
+    - CAF is greater than available funds
+    - Available funds is now found to cover the TF
+    - Available funds is 1.00 above CAF (if below TF)
+- Buckets with negative TF are allocated 0 CAF naturally.
+
+- Values calculated here are cached and stored. This is checked on every run transaction
+
+== SAVINGS MODULE
+
+- To be worked on
+- Tasks:
+    - Savings distribution, an amount that should be distributed to a set of savings targets (based off Priority rules set by amount tresholds on the savings targets)
+    - Hold amounts that are allocated for savings to a specific target (emergency funds on savings account, to be invested in fond, BSU etc.)
+
+=== UI FEATURES
+
+On desktop: navigation by side menu
+[DASHBOARD] - Overview screen (with customizable widgets for things like "Budget Health", "Bucket Status", "Account Balances", "Recent Transactions", "Graphs" etc.)
+[CREATE NEW TRANSACTION] - Create a new transaction (only INC, EXP, TRF, INP are possible here, rest are system created)
+[BUCKETS] - See the status of all your buckets right now (CAF, TF), click to see transactions
+[BUCKET SETUP] - Create and manage your budget buckets
+    - Create buckets
+    - Edit buckets (change name, importance, priority status)
+    - Adjust buckets
+        - Temporary: set TF to your desired value including above BC (creates BUA transaction)
+        - Future: set RA (and BC based on rules or if below new RA when using fixed), leaving TF the same
+        - Both: set RA (and BC based on rules or if below new RA when using fixed), TF adjusted by the relative increase/decrease (creates BUA transaction)
+        - You may also select the option to reallocate between buckets with the same three options, if TF is adjusted,
+    - Delete buckets
+[BUDGET SETUP] - Management screen, looks at all your buckets. Used to setup a budget, enter expected income on each source account every month then set refill amount for each bucket, the system will show % allocated and remaining from the expected income.
+[ACCOUNTS] - See the status of your accounts, click to see transactions
+    - You may also adjust account balance from here, creating a BLA transaction for the difference
+[ACCOUNT SETUP] - Create and manage your bank accounts
+[TRANSACTIONS] - Manage transactions (filter by bank account, bucket, cycle etc.), including corrections and reversals
+[SAVINGS] - Look at money expected to be deposited to various savings targets. Click "Done" to automatically create the transactions to move the money to the savings targets
+[SAVINGS SETUP] - Setup savings targets and the Priority rules used by the savings distribution
+[STATS AND REPORTS] - See graphs seeing your spending, account balances over time. Generate report PDFs of your spending over the last year. Options to filter by bucket, tags on the transactions, company/person etc.
+[SETTINGS AND MORE]
+    - User account management (password, preferences)
+    - Data export and import (export transactions, bucket setups etc.)
+[ADMIN] - Admin screens
+    - User management (incl. reset of passwords)
+
+On mobile; navigation by bottom tabs/use a more simplified set of options with sub-menus instead of listing every option
+[OVERVIEW][TRANSACTIONS](CREATE NEW TRANSACTION)[BUDGET AND REPORTING][SETTINGS AND PREFERENCES]
+
+TODO: Figure out where to put each screen?
+
+=== KNOWN CHALLENGES AND FUTURE FEATURES
+
+- How to handle credit card transactions?
+- Basic spending analysis (e.g. allow for warnings that you should slow down spending in certain categories)
+- Better handling of investments tracking?
+- Shared budgeting: couples having a partial or fully shared economy (i.e. having a shared "Groceries" bucket, but separate "Hobby" buckets)
+- Admin password reset if forgotten?
+- Flesh out what kinds of stats and reports should be available and how.
+
+=== MISC
+
+- Use as precise math as possible, however final stored amounts only need 2 digit precision
+- We may need some design sessions to design the UI
+- On initial setup: creates a default admin account with password "BuckyBudgetR_ADMIN_Pa$$w0rd", user is prompted to change it immediately upon initial login
+
+=== DEV RULES
+
+- REST API must be documentable
+- Use branches
