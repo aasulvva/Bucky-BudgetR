@@ -15,6 +15,7 @@ type PageModule = Promise<{ default: ComponentType }>;
 const pages: Partial<Record<string, () => PageModule>> = {
   "/accounts": () => import("@/pages/Accounts"),
   "/accounts/setup": () => import("@/pages/AccountSetup"),
+  "/cycles": () => import("@/pages/Cycles"),
   "/settings": () => import("@/pages/Settings"),
 };
 

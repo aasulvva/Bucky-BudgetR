@@ -1,6 +1,8 @@
 // Sample data for tests, in the API's shapes.
 
 import type { Account, Bucket } from "@/api/accounts";
+import type { Cycle } from "@/api/cycles";
+import { addDays, endAtFor, startAtFor, today } from "@/lib/cycles";
 
 export function account(overrides: Partial<Account> & Pick<Account, "id" | "name">): Account {
   return {
@@ -31,6 +33,21 @@ export function bucket(
     priority: false,
     importance: 5,
     refilled: false,
+    created_at: "2026-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+/**
+ * A cycle; by default the active one, at local midnights from 10 days ago
+ * to 19 days ahead (its last day).
+ */
+export function cycle(overrides: Partial<Cycle> = {}): Cycle {
+  return {
+    id: "100001000001",
+    start_at: startAtFor(addDays(today(), -10)),
+    end_at: endAtFor(addDays(today(), 19)),
+    state: "active",
     created_at: "2026-01-01T00:00:00Z",
     ...overrides,
   };

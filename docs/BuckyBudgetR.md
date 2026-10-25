@@ -279,7 +279,7 @@ Desktop and mobile use the same groups (decided in #8; wireframes in the design 
 | Bucket setup | Create/edit (name, importance, priority, options)/delete buckets. **Adjust:** *Temporary* (set TF, may exceed BC → BUA) · *Future* (set RA, BC follows its rules, TF unchanged) · *Both* (set RA and change TF by the same relative amount → BUA). The same options are available for reallocating between buckets (→ BAT). |
 | Budget setup | All buckets at once: enter the expected monthly income per source account, set RAs, see the % allocated and the remainder |
 | Accounts | Balances, drill into transactions, balance adjustment (BLA), register interest (INC); a cog opens the account in Account setup |
-| Cycles | The active cycle (extend, end) and planned cycles. Ending asks for confirmation, listing the buckets that will be emptied (OVF) and the Auto buckets the next cycle refills. Without an active cycle, a prompt offers to start the planned one or a new one. |
+| Cycles | The active cycle (extend, end) and planned cycles. Ending asks for confirmation, listing the buckets that will be emptied (OVF) and the Auto buckets the next cycle refills, with the amounts (REF, and any overflow). Without an active cycle, a prompt offers to start the planned one or a new one. |
 | Account setup | Create/manage bank accounts |
 | Transactions | Filter by account, bucket, cycle…; corrections and reversals |
 | Savings | Expected deposits per savings target. "Done" creates the transfers |

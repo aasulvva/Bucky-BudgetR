@@ -186,6 +186,13 @@ Money is never a JS `number`. The API sends and receives amounts as decimal stri
 - `<AmountInput>` takes what the user types (`1 234,5`) and emits the canonical string, or `null` if the input is invalid.
 - API dates (`YYYY-MM-DD`) go through `lib/dates.ts`, so they don't shift a day in other time zones.
 
+Cycles are picked as local dates, but the API takes timestamps (spec §3). `lib/cycles.ts` does the conversion:
+- `startAtFor(date)` is the UTC moment of that date's local midnight.
+- `endAtFor(lastDay)` is the next local midnight, since `end_at` is exclusive.
+- `firstDay()` and `lastDay()` convert back.
+
+The End cycle confirmation previews the OVF and REF with `lib/cycleEnd.ts`. It mirrors the routines in `internal/refill/refill.go`, so a change to one needs the same change in the other.
+
 Tests run in jsdom. `src/test/render.tsx` has helpers that render a component with the app's providers (the real query client, minus retries), or the whole app at a given path. `viewport.width` from `src/test/setup.ts` switches between the desktop and mobile layouts.
 
 Tests never reach a server. `src/test/fixtures.ts` builds sample accounts and buckets. `src/test/api.ts` is a fake backend that `setup.ts` installs as `fetch`. By default it answers as a logged-in normal user, `testUser`. A test changes an answer with `apiMock.on("PATCH /api/v1/me/preferences", { body: … })`, or with a function of the request; `problem(status, code, detail)` builds an error. The test then checks what was sent with `apiMock.calls(route)`. The answers reset after each test.
