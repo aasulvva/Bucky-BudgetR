@@ -25,6 +25,7 @@ describe("Account setup", () => {
     renderRoute("/accounts/setup");
     const row = within((await screen.findByText("Euro account")).closest("tr") as HTMLElement);
     expect(row.getByText("EUR")).toBeInTheDocument();
+    expect(row.getByText("(3456)")).toBeInTheDocument();
     expect(row.getByRole("button", { name: "Edit Euro account" })).toBeInTheDocument();
   });
 

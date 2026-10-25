@@ -166,7 +166,14 @@ function AccountTable({ accounts, onEdit }: { accounts: Account[]; onEdit: (id: 
           <Table.Tbody>
             {accounts.map((a) => (
               <Table.Tr key={a.id}>
-                <Table.Td fw={600}>{a.name}</Table.Td>
+                <Table.Td>
+                  <Text span fw={600}>
+                    {a.name}
+                  </Text>{" "}
+                  <Text span c="dimmed">
+                    ({a.id})
+                  </Text>
+                </Table.Td>
                 <Table.Td>{accountTypeLabel(a.type)}</Table.Td>
                 <Table.Td>{a.currency}</Table.Td>
                 <Table.Td ta="right" style={{ whiteSpace: "nowrap" }}>
