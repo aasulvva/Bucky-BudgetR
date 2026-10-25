@@ -168,7 +168,7 @@ The React app lives in `source/frontend`. It uses Vite, TypeScript (strict), Man
 
 Layout of `src/`:
 
-- `app/nav.ts` is the navigation in one place: tabs, the screens in each tab, and the issue that builds each screen. The side menu (desktop), the bottom tabs and sub-menus (mobile) and the routes are all built from it. A screen without a page component gets a placeholder. To build a screen, add its page to `pages` in `app/routes.tsx`.
+- `app/nav.ts` is the navigation in one place (spec §9): the groups, the screens in each, the profile menu's screens, and the issue that builds each screen. The side menu (desktop), the bottom tabs and their sheets (mobile), the profile menu and the routes are all built from it. A screen without a page component gets a placeholder. To build a screen, add its page to `pages` in `app/routes.tsx`.
 - `api/` holds the API client.
   - `client.ts` is the typed client. Always call it through `unwrap()`, which returns the data or throws an `ApiError` carrying the server's problem details.
   - `queryClient.ts` sets the query defaults. Queries retry twice, but never on 4xx. A failed mutation shows an error notification unless it sets `meta: { silentError: true }`.
