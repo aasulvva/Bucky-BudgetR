@@ -6,6 +6,7 @@ FRONTEND   := source/frontend
 MIGRATIONS := internal/db/migrations
 
 HAS_BACKEND  := $(wildcard $(BACKEND)/go.mod)
+HAS_QUERIES  := $(wildcard $(BACKEND)/internal/db/queries/*.sql)
 HAS_FRONTEND := $(wildcard $(FRONTEND)/package.json)
 skip = @echo "skip: $(1) is not scaffolded yet"
 
@@ -67,7 +68,10 @@ endif
 
 generate: ## Regenerate code: sqlc, oapi-codegen (go generate) and the TS API client
 ifneq ($(HAS_BACKEND),)
-	cd $(BACKEND) && go tool sqlc generate && go generate ./...
+ifneq ($(HAS_QUERIES),)
+	cd $(BACKEND) && go tool sqlc generate
+endif
+	cd $(BACKEND) && go generate ./...
 else
 	$(call skip,backend)
 endif
@@ -89,7 +93,7 @@ else
 	$(call skip,frontend)
 endif
 
-test: ## Run the backend and frontend tests
+test: db-up ## Run the backend and frontend tests (backend tests use the dev database)
 ifneq ($(HAS_BACKEND),)
 	cd $(BACKEND) && go test ./...
 else
