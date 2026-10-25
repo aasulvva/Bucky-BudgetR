@@ -1,0 +1,29 @@
+# Local config
+.env
+.env.*
+!.env.example
+
+# Go
+source/backend/bin/
+source/backend/tmp/
+*.test
+*.out
+coverage.*
+
+# Node / Vite
+node_modules/
+source/frontend/dist/
+source/frontend/coverage/
+*.tsbuildinfo
+.vite/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editors and OS (.vscode/ is shared and tracked)
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
