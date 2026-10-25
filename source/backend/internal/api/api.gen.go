@@ -70,6 +70,27 @@ func (e AccountType) Valid() bool {
 	}
 }
 
+// Defines values for CycleState.
+const (
+	Active   CycleState = "active"
+	Finished CycleState = "finished"
+	Future   CycleState = "future"
+)
+
+// Valid indicates whether the value is a known member of the CycleState enum.
+func (e CycleState) Valid() bool {
+	switch e {
+	case Active:
+		return true
+	case Finished:
+		return true
+	case Future:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for StatusStatus.
 const (
 	Ok StatusStatus = "ok"
@@ -198,6 +219,63 @@ type BalanceAdjustment struct {
 // Example: NOK
 type Currency = string
 
+// CurrentCycles defines model for CurrentCycles.
+type CurrentCycles struct {
+	Active nullable.Nullable[Cycle] `json:"active"`
+
+	// Next The earliest planned cycle.
+	Next nullable.Nullable[Cycle] `json:"next"`
+}
+
+// Cycle defines model for Cycle.
+type Cycle struct {
+	CreatedAt time.Time `json:"created_at"`
+
+	// EndAt Exclusive. For the active cycle this is the planned end; once it has passed, bucket transactions are refused until the cycle is extended or ended.
+	EndAt time.Time `json:"end_at"`
+
+	// Id 12-digit cycle ID (the owner's user ID, then 6 digits).
+	//
+	// Example: 482913000417
+	Id      CycleId    `json:"id"`
+	StartAt time.Time  `json:"start_at"`
+	State   CycleState `json:"state"`
+}
+
+// CycleEnd defines model for CycleEnd.
+type CycleEnd struct {
+	// StartNext When the next planned cycle begins later than this one ends, start it right away instead of leaving a gap.
+	StartNext *bool `json:"start_next,omitempty"`
+}
+
+// CycleEndResult defines model for CycleEndResult.
+type CycleEndResult struct {
+	Ended Cycle `json:"ended"`
+
+	// Started The cycle that started, or null if none did.
+	Started nullable.Nullable[Cycle] `json:"started"`
+}
+
+// CycleId 12-digit cycle ID (the owner's user ID, then 6 digits).
+//
+// Example: 482913000417
+type CycleId = string
+
+// CycleState defines model for CycleState.
+type CycleState string
+
+// CycleTimes defines model for CycleTimes.
+type CycleTimes struct {
+	EndAt   time.Time `json:"end_at"`
+	StartAt time.Time `json:"start_at"`
+}
+
+// CycleUpdate defines model for CycleUpdate.
+type CycleUpdate struct {
+	EndAt   *time.Time `json:"end_at,omitempty"`
+	StartAt *time.Time `json:"start_at,omitempty"`
+}
+
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
 	Password string `json:"password"`
@@ -304,6 +382,15 @@ type DeleteAccountJSONRequestBody = AccountDelete
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
 
+// CreateCycleJSONRequestBody defines body for CreateCycle for application/json ContentType.
+type CreateCycleJSONRequestBody = CycleTimes
+
+// UpdateCycleJSONRequestBody defines body for UpdateCycle for application/json ContentType.
+type UpdateCycleJSONRequestBody = CycleUpdate
+
+// EndCycleJSONRequestBody defines body for EndCycle for application/json ContentType.
+type EndCycleJSONRequestBody = CycleEnd
+
 // ChangePasswordJSONRequestBody defines body for ChangePassword for application/json ContentType.
 type ChangePasswordJSONRequestBody = PasswordChange
 
@@ -336,6 +423,30 @@ type ServerInterface interface {
 	// Logout Log out
 	// (POST /api/v1/auth/logout)
 	Logout(w http.ResponseWriter, r *http.Request)
+	// ListCycles List cycles
+	// (GET /api/v1/cycles)
+	ListCycles(w http.ResponseWriter, r *http.Request)
+	// CreateCycle Plan a cycle
+	// (POST /api/v1/cycles)
+	CreateCycle(w http.ResponseWriter, r *http.Request)
+	// GetCurrentCycles The active and next cycle
+	// (GET /api/v1/cycles/active)
+	GetCurrentCycles(w http.ResponseWriter, r *http.Request)
+	// DeleteCycle Delete a planned cycle
+	// (DELETE /api/v1/cycles/{cycleId})
+	DeleteCycle(w http.ResponseWriter, r *http.Request, cycleId CycleId)
+	// GetCycle Get a cycle
+	// (GET /api/v1/cycles/{cycleId})
+	GetCycle(w http.ResponseWriter, r *http.Request, cycleId CycleId)
+	// UpdateCycle Move or extend a cycle
+	// (PATCH /api/v1/cycles/{cycleId})
+	UpdateCycle(w http.ResponseWriter, r *http.Request, cycleId CycleId)
+	// EndCycle End the active cycle
+	// (POST /api/v1/cycles/{cycleId}/end)
+	EndCycle(w http.ResponseWriter, r *http.Request, cycleId CycleId)
+	// StartCycle Start a planned cycle
+	// (POST /api/v1/cycles/{cycleId}/start)
+	StartCycle(w http.ResponseWriter, r *http.Request, cycleId CycleId)
 	// GetMe The current user
 	// (GET /api/v1/me)
 	GetMe(w http.ResponseWriter, r *http.Request)
@@ -513,6 +624,178 @@ func (siw *ServerInterfaceWrapper) Logout(w http.ResponseWriter, r *http.Request
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Logout(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListCycles operation middleware
+func (siw *ServerInterfaceWrapper) ListCycles(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCycles(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateCycle operation middleware
+func (siw *ServerInterfaceWrapper) CreateCycle(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateCycle(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCurrentCycles operation middleware
+func (siw *ServerInterfaceWrapper) GetCurrentCycles(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCurrentCycles(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteCycle operation middleware
+func (siw *ServerInterfaceWrapper) DeleteCycle(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "cycleId" -------------
+	var cycleId CycleId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cycleId", r.PathValue("cycleId"), &cycleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cycleId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteCycle(w, r, cycleId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCycle operation middleware
+func (siw *ServerInterfaceWrapper) GetCycle(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "cycleId" -------------
+	var cycleId CycleId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cycleId", r.PathValue("cycleId"), &cycleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cycleId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCycle(w, r, cycleId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateCycle operation middleware
+func (siw *ServerInterfaceWrapper) UpdateCycle(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "cycleId" -------------
+	var cycleId CycleId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cycleId", r.PathValue("cycleId"), &cycleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cycleId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateCycle(w, r, cycleId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EndCycle operation middleware
+func (siw *ServerInterfaceWrapper) EndCycle(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "cycleId" -------------
+	var cycleId CycleId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cycleId", r.PathValue("cycleId"), &cycleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cycleId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EndCycle(w, r, cycleId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StartCycle operation middleware
+func (siw *ServerInterfaceWrapper) StartCycle(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "cycleId" -------------
+	var cycleId CycleId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cycleId", r.PathValue("cycleId"), &cycleId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cycleId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartCycle(w, r, cycleId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -725,6 +1008,14 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/accounts/{accountId}", wrapper.UpdateAccount)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/accounts/{accountId}/balance-adjustment", wrapper.AdjustAccountBalance)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/accounts/{accountId}/delete", wrapper.DeleteAccount)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/cycles", wrapper.ListCycles)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/cycles", wrapper.CreateCycle)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/cycles/active", wrapper.GetCurrentCycles)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/cycles/{cycleId}", wrapper.DeleteCycle)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/cycles/{cycleId}", wrapper.GetCycle)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/cycles/{cycleId}", wrapper.UpdateCycle)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/cycles/{cycleId}/start", wrapper.StartCycle)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/cycles/{cycleId}/end", wrapper.EndCycle)
 
 	return m
 }
@@ -1356,6 +1647,608 @@ func (response LogoutdefaultApplicationProblemPlusJSONResponse) VisitLogoutRespo
 	return err
 }
 
+type ListCyclesRequestObject struct {
+}
+
+type ListCyclesResponseObject interface {
+	VisitListCyclesResponse(w http.ResponseWriter) error
+}
+
+type ListCycles200JSONResponse []Cycle
+
+func (response ListCycles200JSONResponse) VisitListCyclesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCycles401ApplicationProblemPlusJSONResponse struct {
+	ErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListCycles401ApplicationProblemPlusJSONResponse) VisitListCyclesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCyclesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListCyclesdefaultApplicationProblemPlusJSONResponse) VisitListCyclesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCycleRequestObject struct {
+	Body *CreateCycleJSONRequestBody
+}
+
+type CreateCycleResponseObject interface {
+	VisitCreateCycleResponse(w http.ResponseWriter) error
+}
+
+type CreateCycle201JSONResponse Cycle
+
+func (response CreateCycle201JSONResponse) VisitCreateCycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCycle400ApplicationProblemPlusJSONResponse struct {
+	ErrorApplicationProblemPlusJSONResponse
+}
+
+func (response CreateCycle400ApplicationProblemPlusJSONResponse) VisitCreateCycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCycle401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateCycle401ApplicationProblemPlusJSONResponse) VisitCreateCycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCycle409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateCycle409ApplicationProblemPlusJSONResponse) VisitCreateCycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateCycledefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateCycledefaultApplicationProblemPlusJSONResponse) VisitCreateCycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCurrentCyclesRequestObject struct {
+}
+
+type GetCurrentCyclesResponseObject interface {
+	VisitGetCurrentCyclesResponse(w http.ResponseWriter) error
+}
+
+type GetCurrentCycles200JSONResponse CurrentCycles
+
+func (response GetCurrentCycles200JSONResponse) VisitGetCurrentCyclesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCurrentCycles401ApplicationProblemPlusJSONResponse struct {
+	ErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetCurrentCycles401ApplicationProblemPlusJSONResponse) VisitGetCurrentCyclesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCurrentCyclesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetCurrentCyclesdefaultApplicationProblemPlusJSONResponse) VisitGetCurrentCyclesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteCycleRequestObject struct {
+	CycleId CycleId `json:"cycleId"`
+}
+
+type DeleteCycleResponseObject interface {
+	VisitDeleteCycleResponse(w http.ResponseWriter) error
+}
+
+type DeleteCycle204Response struct {
+}
+
+func (response DeleteCycle204Response) VisitDeleteCycleResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteCycle401ApplicationProblemPlusJSONResponse struct {
+	ErrorApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteCycle401ApplicationProblemPlusJSONResponse) VisitDeleteCycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteCycle404ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteCycle404ApplicationProblemPlusJSONResponse) VisitDeleteCycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteCycle409ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteCycle409ApplicationProblemPlusJSONResponse) VisitDeleteCycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteCycledefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteCycledefaultApplicationProblemPlusJSONResponse) VisitDeleteCycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCycleRequestObject struct {
+	CycleId CycleId `json:"cycleId"`
+}
+
+type GetCycleResponseObject interface {
+	VisitGetCycleResponse(w http.ResponseWriter) error
+}
+
+type GetCycle200JSONResponse Cycle
+
+func (response GetCycle200JSONResponse) VisitGetCycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCycle401ApplicationProblemPlusJSONResponse struct {
+	ErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetCycle401ApplicationProblemPlusJSONResponse) VisitGetCycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCycle404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetCycle404ApplicationProblemPlusJSONResponse) VisitGetCycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCycledefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetCycledefaultApplicationProblemPlusJSONResponse) VisitGetCycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCycleRequestObject struct {
+	CycleId CycleId `json:"cycleId"`
+	Body    *UpdateCycleJSONRequestBody
+}
+
+type UpdateCycleResponseObject interface {
+	VisitUpdateCycleResponse(w http.ResponseWriter) error
+}
+
+type UpdateCycle200JSONResponse Cycle
+
+func (response UpdateCycle200JSONResponse) VisitUpdateCycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCycle400ApplicationProblemPlusJSONResponse struct {
+	ErrorApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateCycle400ApplicationProblemPlusJSONResponse) VisitUpdateCycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCycle401ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateCycle401ApplicationProblemPlusJSONResponse) VisitUpdateCycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCycle404ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateCycle404ApplicationProblemPlusJSONResponse) VisitUpdateCycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCycle409ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateCycle409ApplicationProblemPlusJSONResponse) VisitUpdateCycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateCycledefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateCycledefaultApplicationProblemPlusJSONResponse) VisitUpdateCycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EndCycleRequestObject struct {
+	CycleId CycleId `json:"cycleId"`
+	Body    *EndCycleJSONRequestBody
+}
+
+type EndCycleResponseObject interface {
+	VisitEndCycleResponse(w http.ResponseWriter) error
+}
+
+type EndCycle200JSONResponse CycleEndResult
+
+func (response EndCycle200JSONResponse) VisitEndCycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EndCycle401ApplicationProblemPlusJSONResponse struct {
+	ErrorApplicationProblemPlusJSONResponse
+}
+
+func (response EndCycle401ApplicationProblemPlusJSONResponse) VisitEndCycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EndCycle404ApplicationProblemPlusJSONResponse Problem
+
+func (response EndCycle404ApplicationProblemPlusJSONResponse) VisitEndCycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EndCycle409ApplicationProblemPlusJSONResponse Problem
+
+func (response EndCycle409ApplicationProblemPlusJSONResponse) VisitEndCycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EndCycledefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response EndCycledefaultApplicationProblemPlusJSONResponse) VisitEndCycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartCycleRequestObject struct {
+	CycleId CycleId `json:"cycleId"`
+}
+
+type StartCycleResponseObject interface {
+	VisitStartCycleResponse(w http.ResponseWriter) error
+}
+
+type StartCycle200JSONResponse Cycle
+
+func (response StartCycle200JSONResponse) VisitStartCycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartCycle401ApplicationProblemPlusJSONResponse struct {
+	ErrorApplicationProblemPlusJSONResponse
+}
+
+func (response StartCycle401ApplicationProblemPlusJSONResponse) VisitStartCycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartCycle404ApplicationProblemPlusJSONResponse Problem
+
+func (response StartCycle404ApplicationProblemPlusJSONResponse) VisitStartCycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartCycle409ApplicationProblemPlusJSONResponse Problem
+
+func (response StartCycle409ApplicationProblemPlusJSONResponse) VisitStartCycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartCycledefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response StartCycledefaultApplicationProblemPlusJSONResponse) VisitStartCycleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetMeRequestObject struct {
 }
 
@@ -1658,6 +2551,30 @@ type StrictServerInterface interface {
 	// Logout Log out
 	// (POST /api/v1/auth/logout)
 	Logout(ctx context.Context, request LogoutRequestObject) (LogoutResponseObject, error)
+	// ListCycles List cycles
+	// (GET /api/v1/cycles)
+	ListCycles(ctx context.Context, request ListCyclesRequestObject) (ListCyclesResponseObject, error)
+	// CreateCycle Plan a cycle
+	// (POST /api/v1/cycles)
+	CreateCycle(ctx context.Context, request CreateCycleRequestObject) (CreateCycleResponseObject, error)
+	// GetCurrentCycles The active and next cycle
+	// (GET /api/v1/cycles/active)
+	GetCurrentCycles(ctx context.Context, request GetCurrentCyclesRequestObject) (GetCurrentCyclesResponseObject, error)
+	// DeleteCycle Delete a planned cycle
+	// (DELETE /api/v1/cycles/{cycleId})
+	DeleteCycle(ctx context.Context, request DeleteCycleRequestObject) (DeleteCycleResponseObject, error)
+	// GetCycle Get a cycle
+	// (GET /api/v1/cycles/{cycleId})
+	GetCycle(ctx context.Context, request GetCycleRequestObject) (GetCycleResponseObject, error)
+	// UpdateCycle Move or extend a cycle
+	// (PATCH /api/v1/cycles/{cycleId})
+	UpdateCycle(ctx context.Context, request UpdateCycleRequestObject) (UpdateCycleResponseObject, error)
+	// EndCycle End the active cycle
+	// (POST /api/v1/cycles/{cycleId}/end)
+	EndCycle(ctx context.Context, request EndCycleRequestObject) (EndCycleResponseObject, error)
+	// StartCycle Start a planned cycle
+	// (POST /api/v1/cycles/{cycleId}/start)
+	StartCycle(ctx context.Context, request StartCycleRequestObject) (StartCycleResponseObject, error)
 	// GetMe The current user
 	// (GET /api/v1/me)
 	GetMe(ctx context.Context, request GetMeRequestObject) (GetMeResponseObject, error)
@@ -1952,6 +2869,232 @@ func (sh *strictHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ListCycles operation middleware
+func (sh *strictHandler) ListCycles(w http.ResponseWriter, r *http.Request) {
+	var request ListCyclesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListCycles(ctx, request.(ListCyclesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListCycles")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListCyclesResponseObject); ok {
+		if err := validResponse.VisitListCyclesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateCycle operation middleware
+func (sh *strictHandler) CreateCycle(w http.ResponseWriter, r *http.Request) {
+	var request CreateCycleRequestObject
+
+	var body CreateCycleJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateCycle(ctx, request.(CreateCycleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateCycle")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateCycleResponseObject); ok {
+		if err := validResponse.VisitCreateCycleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetCurrentCycles operation middleware
+func (sh *strictHandler) GetCurrentCycles(w http.ResponseWriter, r *http.Request) {
+	var request GetCurrentCyclesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCurrentCycles(ctx, request.(GetCurrentCyclesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCurrentCycles")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCurrentCyclesResponseObject); ok {
+		if err := validResponse.VisitGetCurrentCyclesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteCycle operation middleware
+func (sh *strictHandler) DeleteCycle(w http.ResponseWriter, r *http.Request, cycleId CycleId) {
+	var request DeleteCycleRequestObject
+
+	request.CycleId = cycleId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteCycle(ctx, request.(DeleteCycleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteCycle")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteCycleResponseObject); ok {
+		if err := validResponse.VisitDeleteCycleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetCycle operation middleware
+func (sh *strictHandler) GetCycle(w http.ResponseWriter, r *http.Request, cycleId CycleId) {
+	var request GetCycleRequestObject
+
+	request.CycleId = cycleId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCycle(ctx, request.(GetCycleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCycle")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCycleResponseObject); ok {
+		if err := validResponse.VisitGetCycleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateCycle operation middleware
+func (sh *strictHandler) UpdateCycle(w http.ResponseWriter, r *http.Request, cycleId CycleId) {
+	var request UpdateCycleRequestObject
+
+	request.CycleId = cycleId
+
+	var body UpdateCycleJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateCycle(ctx, request.(UpdateCycleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateCycle")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateCycleResponseObject); ok {
+		if err := validResponse.VisitUpdateCycleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// EndCycle operation middleware
+func (sh *strictHandler) EndCycle(w http.ResponseWriter, r *http.Request, cycleId CycleId) {
+	var request EndCycleRequestObject
+
+	request.CycleId = cycleId
+
+	var body EndCycleJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		if !errors.Is(err, io.EOF) {
+			sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+			return
+		}
+	} else {
+		request.Body = &body
+	}
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EndCycle(ctx, request.(EndCycleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EndCycle")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EndCycleResponseObject); ok {
+		if err := validResponse.VisitEndCycleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartCycle operation middleware
+func (sh *strictHandler) StartCycle(w http.ResponseWriter, r *http.Request, cycleId CycleId) {
+	var request StartCycleRequestObject
+
+	request.CycleId = cycleId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StartCycle(ctx, request.(StartCycleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartCycle")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StartCycleResponseObject); ok {
+		if err := validResponse.VisitStartCycleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetMe operation middleware
 func (sh *strictHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	var request GetMeRequestObject
@@ -2091,74 +3234,97 @@ func (sh *strictHandler) GetReadyz(w http.ResponseWriter, r *http.Request) {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"YNnKWULJ5BiXv31X+xFw27l9d/u/AQAA//8=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

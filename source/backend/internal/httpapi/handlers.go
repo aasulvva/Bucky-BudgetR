@@ -13,6 +13,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/accounts"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/api"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/auth"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/cycles"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 )
 
@@ -22,6 +23,7 @@ type server struct {
 	db       Pinger
 	auth     *auth.Service
 	accounts *accounts.Service
+	cycles   *cycles.Service
 }
 
 var _ api.StrictServerInterface = (*server)(nil)
