@@ -96,6 +96,49 @@ func (s *server) GetTransaction(ctx context.Context, req api.GetTransactionReque
 	return api.GetTransaction200JSONResponse(toAPITransaction(t)), nil
 }
 
+func (s *server) CorrectTransaction(ctx context.Context, req api.CorrectTransactionRequestObject) (api.CorrectTransactionResponseObject, error) {
+	svc, err := s.transactionService()
+	if err != nil {
+		return nil, err
+	}
+	b := req.Body
+	c := transactions.Changes{AccountID: b.AccountId, ToAccountID: b.ToAccountId, Counterparty: b.Counterparty, Tags: b.Tags}
+	if b.Amount != nil {
+		d, err := parseAmount(*b.Amount)
+		if err != nil {
+			return nil, err
+		}
+		c.Amount = &d
+	}
+	if b.BucketLines != nil {
+		c.SetBuckets, c.Buckets = true, []transactions.BucketAmount{}
+		for _, l := range *b.BucketLines {
+			amount, err := parseAmount(l.Amount)
+			if err != nil {
+				return nil, err
+			}
+			c.Buckets = append(c.Buckets, transactions.BucketAmount{BucketID: l.BucketId, Amount: amount})
+		}
+	}
+	t, err := svc.Correct(ctx, sessionFrom(ctx).User.ID, req.TransactionId, c)
+	if err != nil {
+		return nil, transactionError(err)
+	}
+	return api.CorrectTransaction200JSONResponse(toAPITransaction(t)), nil
+}
+
+func (s *server) ReverseTransaction(ctx context.Context, req api.ReverseTransactionRequestObject) (api.ReverseTransactionResponseObject, error) {
+	svc, err := s.transactionService()
+	if err != nil {
+		return nil, err
+	}
+	t, err := svc.Reverse(ctx, sessionFrom(ctx).User.ID, req.TransactionId)
+	if err != nil {
+		return nil, transactionError(err)
+	}
+	return api.ReverseTransaction200JSONResponse(toAPITransaction(t)), nil
+}
+
 func (s *server) transactionService() (*transactions.Service, error) {
 	if s.transactions == nil {
 		return nil, NewError(http.StatusServiceUnavailable, "transactions_unavailable", "")
@@ -108,6 +151,16 @@ func transactionError(err error) error {
 	switch {
 	case errors.Is(err, transactions.ErrNotFound):
 		return &Error{Status: http.StatusNotFound, Code: "not_found", Detail: "Transaction not found.", Err: err}
+	case errors.Is(err, transactions.ErrNotCorrectable):
+		return &Error{Status: http.StatusConflict, Code: "not_correctable",
+			Detail: "System transactions of this type can't be corrected or reversed.", Err: err}
+	case errors.Is(err, transactions.ErrAlreadyReversed):
+		return &Error{Status: http.StatusConflict, Code: "already_reversed", Detail: "The transaction has been reversed."}
+	case errors.Is(err, transactions.ErrBucketLinesLocked):
+		return &Error{Status: http.StatusConflict, Code: "bucket_lines_locked",
+			Detail: "The transaction is outside the active cycle, so its bucket lines can't change. You can still change the bank amount, counterparty and tags.", Err: err}
+	case errors.Is(err, transactions.ErrNoChange):
+		return &Error{Status: http.StatusBadRequest, Code: "no_change", Detail: "Nothing would change.", Err: err}
 	case errors.Is(err, transactions.ErrCurrencyMismatch):
 		return &Error{Status: http.StatusBadRequest, Code: "currency_mismatch",
 			Detail: "A transfer can only go between accounts in the same currency."}
@@ -132,6 +185,8 @@ func toAPITransaction(t transactions.Transaction) api.Transaction {
 		CreatedBy:    nullableString(t.CreatedBy),
 		Corrected:    t.Corrected,
 		Reversed:     t.Reversed,
+		Replaces:     nullableString(t.Replaces),
+		ReplacedBy:   nullableString(t.ReplacedBy),
 		BankLines:    toAPIBankLines(t.BankLines),
 		BucketLines:  toAPIBucketLines(t.BucketLines),
 	}

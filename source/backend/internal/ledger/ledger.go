@@ -63,6 +63,9 @@ type Entry struct {
 	// and reversals need ParentID.
 	Correction sqlc.CorrectionType
 	ParentID   string
+	// ReplacesID is set on an original that replaces a reversed transaction
+	// (moved to another account).
+	ReplacesID string
 	// At is when the transaction happened. It is stored in UTC, to the
 	// microsecond.
 	At           time.Time
@@ -190,6 +193,7 @@ func (l *Ledger) Record(ctx context.Context, tx pgx.Tx, e Entry) (*Transaction, 
 				TransactionAt:   e.At,
 				Counterparty:    e.Counterparty,
 				CreatedBy:       createdBy,
+				ReplacesID:      pgtype.Text{String: e.ReplacesID, Valid: e.ReplacesID != ""},
 			})
 			return ids.Inserted(err)
 		})
@@ -323,6 +327,9 @@ func normalize(e Entry) (Entry, error) {
 		if e.ParentID != "" {
 			return invalid("only corrections have a parent transaction")
 		}
+		if e.ReplacesID != "" && !ids.Transaction.Valid(e.ReplacesID) {
+			return invalid("replaces %q", e.ReplacesID)
+		}
 		if len(e.BankLines) != s.bank {
 			return invalid("%s needs %d bank line(s), got %d", e.Type, s.bank, len(e.BankLines))
 		}
@@ -336,10 +343,14 @@ func normalize(e Entry) (Entry, error) {
 		if !ids.Transaction.Valid(e.ParentID) {
 			return invalid("a %s needs a parent transaction", e.Correction)
 		}
+		if e.ReplacesID != "" {
+			return invalid("only originals replace a transaction")
+		}
 		// A correction changes some of its parent's lines, so it can have
 		// fewer lines than the type needs, but none of a kind the type lacks.
-		if len(e.BankLines)+len(e.BucketLines) == 0 {
-			return invalid("a %s needs at least one line", e.Correction)
+		// An adjustment without lines changes only the counterparty or tags.
+		if e.Correction == sqlc.CorrectionTypeReversal && len(e.BankLines)+len(e.BucketLines) == 0 {
+			return invalid("a reversal needs at least one line")
 		}
 		if len(e.BankLines) > s.bank {
 			return invalid("%s has at most %d bank line(s)", e.Type, s.bank)

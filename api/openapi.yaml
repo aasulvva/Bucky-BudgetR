@@ -885,6 +885,90 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/v1/transactions/{transactionId}/correction:
+    parameters:
+      - $ref: "#/components/parameters/TransactionId"
+    post:
+      operationId: correctTransaction
+      tags: [transactions]
+      summary: Correct a transaction
+      description: |
+        Records an adjustment that turns the transaction into the values
+        given; omitted fields keep their current values, and `bucket_lines:
+        []` removes all bucket lines. The adjustment holds the difference
+        (100 corrected to 150 records +50) and keeps the original time. A
+        correction's ID corrects the transaction it belongs to.
+
+        Amounts are positive, as when creating, except for OPB and BLA: their
+        `amount` is the signed balance amount, and only `amount`,
+        `counterparty` and `tags` can change.
+
+        A new `account_id` (or `to_account_id` for a transfer) moves the
+        transaction: it is reversed and recorded again on the new account,
+        and the response is the new transaction, whose `replaces` points to
+        the old one.
+
+        Bucket lines can only change while the original time is in the
+        active cycle (409 `bucket_lines_locked`); the bank amount,
+        counterparty and tags can change at any time. Only INC, EXP, TRF, OPB
+        and BLA can be corrected (409 `not_correctable`), and not after a
+        reversal (409 `already_reversed`). A correction that changes nothing
+        gets 400 `no_change`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransactionCorrection"
+      responses:
+        "200":
+          description: The corrected transaction, or the new one after a move to another account.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/transactions/{transactionId}/reversal:
+    parameters:
+      - $ref: "#/components/parameters/TransactionId"
+    post:
+      operationId: reverseTransaction
+      tags: [transactions]
+      summary: Reverse a transaction
+      description: |
+        Records a reversal that cancels every effective line, at the original
+        time. The transaction stays in the list, marked `reversed`. The same
+        rules as for corrections apply: bucket lines must be in the active
+        cycle (409 `bucket_lines_locked`), only INC, EXP, TRF, OPB and BLA
+        (409 `not_correctable`), and only once (409 `already_reversed`).
+      responses:
+        "200":
+          description: The reversed transaction.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
 components:
   securitySchemes:
     cookieAuth:
@@ -1449,7 +1533,7 @@ components:
     Transaction:
       type: object
       additionalProperties: false
-      required: [id, type, at, counterparty, tags, created_at, created_by, corrected, reversed, bank_lines, bucket_lines]
+      required: [id, type, at, counterparty, tags, created_at, created_by, corrected, reversed, replaces, replaced_by, bank_lines, bucket_lines]
       properties:
         id:
           $ref: "#/components/schemas/TransactionId"
@@ -1461,8 +1545,10 @@ components:
           description: When the transaction happened.
         counterparty:
           type: string
+          description: The effective counterparty, from the newest correction.
         tags:
           type: array
+          description: The effective tags, from the newest correction.
           items:
             type: string
         created_at:
@@ -1478,6 +1564,14 @@ components:
         reversed:
           type: boolean
           description: The transaction has been reversed. Its effective lines are then empty.
+        replaces:
+          type: string
+          nullable: true
+          description: The transaction this one replaced when it was moved to another account.
+        replaced_by:
+          type: string
+          nullable: true
+          description: The transaction that replaced this one when it was moved to another account.
         bank_lines:
           type: array
           description: Effective amounts per account, the original plus its corrections. Lines that sum to 0 are left out.
@@ -1581,6 +1675,49 @@ components:
                 allOf:
                   - $ref: "#/components/schemas/Amount"
                 description: Positive.
+
+    TransactionCorrection:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: The desired values. Omitted fields keep their current values.
+      properties:
+        account_id:
+          allOf:
+            - $ref: "#/components/schemas/AccountId"
+          description: Moves the transaction to this account (reverse and re-create).
+        to_account_id:
+          allOf:
+            - $ref: "#/components/schemas/AccountId"
+          description: Moves a transfer to this receiving account (reverse and re-create).
+        amount:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Positive, except for OPB and BLA (signed).
+        bucket_lines:
+          type: array
+          description: Replaces all bucket lines; an empty list removes them.
+          items:
+            type: object
+            additionalProperties: false
+            required: [bucket_id, amount]
+            properties:
+              bucket_id:
+                $ref: "#/components/schemas/BucketId"
+              amount:
+                allOf:
+                  - $ref: "#/components/schemas/Amount"
+                description: Positive.
+        counterparty:
+          type: string
+          maxLength: 200
+        tags:
+          type: array
+          maxItems: 20
+          description: Replaces all tags; an empty list removes them.
+          items:
+            type: string
+            maxLength: 50
 
     Problem:
       type: object

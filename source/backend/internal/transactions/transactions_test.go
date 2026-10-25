@@ -2,6 +2,7 @@ package transactions_test
 
 import (
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -71,16 +72,10 @@ func lines(t transactions.Transaction) []string {
 	return out
 }
 
+// equal compares ignoring order: lines come in the order of their IDs, which
+// start with random account and bucket IDs.
 func equal(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
+	return slices.Equal(slices.Sorted(slices.Values(a)), slices.Sorted(slices.Values(b)))
 }
 
 func TestCreateSigns(t *testing.T) {
@@ -192,7 +187,7 @@ func TestCorrections(t *testing.T) {
 	// 100 corrected to 150, all of it from the bucket.
 	adj, err := e.ledger.Create(t.Context(), e.pool, ledger.Entry{
 		UserID: e.user, CreatedBy: e.user, Type: sqlc.TransactionTypeEXP, Correction: sqlc.CorrectionTypeAdjustment,
-		ParentID: orig.ID, At: orig.At,
+		ParentID: orig.ID, At: orig.At, Tags: orig.Tags, // a correction carries the effective tags
 		BankLines:   []ledger.BankLine{{AccountID: e.account, Amount: dec("-50")}},
 		BucketLines: []ledger.BucketLine{{BucketID: bucket, Amount: dec("-50")}},
 	})
@@ -293,7 +288,7 @@ func TestList(t *testing.T) {
 		"counterparty":   {transactions.Filter{Counterparty: "rema"}, []string{"food"}},
 		"wildcards":      {transactions.Filter{Counterparty: "%_"}, []string{"old"}},
 	} {
-		if got := list(tc.f); !equal(got, tc.want) {
+		if got := list(tc.f); !slices.Equal(got, tc.want) {
 			t.Errorf("%s: %v, want %v", name, got, tc.want)
 		}
 	}
@@ -314,7 +309,7 @@ func TestList(t *testing.T) {
 		}
 		f.Cursor = page.Next
 	}
-	if want := []string{ids["save"], ids["food"], ids["rent"], ids["salary"], ids["old"]}; !equal(all, want) {
+	if want := []string{ids["save"], ids["food"], ids["rent"], ids["salary"], ids["old"]}; !slices.Equal(all, want) {
 		t.Errorf("paged %v, want %v", all, want)
 	}
 

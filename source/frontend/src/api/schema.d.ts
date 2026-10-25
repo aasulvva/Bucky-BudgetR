@@ -519,6 +519,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/transactions/{transactionId}/correction": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                transactionId: components["parameters"]["TransactionId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Correct a transaction
+         * @description Records an adjustment that turns the transaction into the values
+         *     given; omitted fields keep their current values, and `bucket_lines:
+         *     []` removes all bucket lines. The adjustment holds the difference
+         *     (100 corrected to 150 records +50) and keeps the original time. A
+         *     correction's ID corrects the transaction it belongs to.
+         *
+         *     Amounts are positive, as when creating, except for OPB and BLA: their
+         *     `amount` is the signed balance amount, and only `amount`,
+         *     `counterparty` and `tags` can change.
+         *
+         *     A new `account_id` (or `to_account_id` for a transfer) moves the
+         *     transaction: it is reversed and recorded again on the new account,
+         *     and the response is the new transaction, whose `replaces` points to
+         *     the old one.
+         *
+         *     Bucket lines can only change while the original time is in the
+         *     active cycle (409 `bucket_lines_locked`); the bank amount,
+         *     counterparty and tags can change at any time. Only INC, EXP, TRF, OPB
+         *     and BLA can be corrected (409 `not_correctable`), and not after a
+         *     reversal (409 `already_reversed`). A correction that changes nothing
+         *     gets 400 `no_change`.
+         */
+        post: operations["correctTransaction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/transactions/{transactionId}/reversal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                transactionId: components["parameters"]["TransactionId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reverse a transaction
+         * @description Records a reversal that cancels every effective line, at the original
+         *     time. The transaction stays in the list, marked `reversed`. The same
+         *     rules as for corrections apply: bucket lines must be in the active
+         *     cycle (409 `bucket_lines_locked`), only INC, EXP, TRF, OPB and BLA
+         *     (409 `not_correctable`), and only once (409 `already_reversed`).
+         */
+        post: operations["reverseTransaction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -806,7 +874,9 @@ export interface components {
              * @description When the transaction happened.
              */
             at: string;
+            /** @description The effective counterparty, from the newest correction. */
             counterparty: string;
+            /** @description The effective tags, from the newest correction. */
             tags: string[];
             /** Format: date-time */
             created_at: string;
@@ -816,6 +886,10 @@ export interface components {
             corrected: boolean;
             /** @description The transaction has been reversed. Its effective lines are then empty. */
             reversed: boolean;
+            /** @description The transaction this one replaced when it was moved to another account. */
+            replaces: string | null;
+            /** @description The transaction that replaced this one when it was moved to another account. */
+            replaced_by: string | null;
             /** @description Effective amounts per account, the original plus its corrections. Lines that sum to 0 are left out. */
             bank_lines: components["schemas"]["TransactionBankLine"][];
             /** @description Effective amounts per bucket, the original plus its corrections. Lines that sum to 0 are left out. */
@@ -861,6 +935,24 @@ export interface components {
                 /** @description Positive. */
                 amount: components["schemas"]["Amount"];
             }[];
+        };
+        /** @description The desired values. Omitted fields keep their current values. */
+        TransactionCorrection: {
+            /** @description Moves the transaction to this account (reverse and re-create). */
+            account_id?: components["schemas"]["AccountId"];
+            /** @description Moves a transfer to this receiving account (reverse and re-create). */
+            to_account_id?: components["schemas"]["AccountId"];
+            /** @description Positive, except for OPB and BLA (signed). */
+            amount?: components["schemas"]["Amount"];
+            /** @description Replaces all bucket lines; an empty list removes them. */
+            bucket_lines?: {
+                bucket_id: components["schemas"]["BucketId"];
+                /** @description Positive. */
+                amount: components["schemas"]["Amount"];
+            }[];
+            counterparty?: string;
+            /** @description Replaces all tags; an empty list removes them. */
+            tags?: string[];
         };
         /** @description RFC 9457 problem details. */
         Problem: {
@@ -1702,6 +1794,64 @@ export interface operations {
             };
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    correctTransaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                transactionId: components["parameters"]["TransactionId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransactionCorrection"];
+            };
+        };
+        responses: {
+            /** @description The corrected transaction, or the new one after a move to another account. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transaction"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    reverseTransaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                transactionId: components["parameters"]["TransactionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The reversed transaction. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transaction"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };
