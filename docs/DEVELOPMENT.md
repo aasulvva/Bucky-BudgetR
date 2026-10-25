@@ -72,6 +72,19 @@ It is configured with environment variables. The Makefile exports everything in 
 
 `GET /healthz` reports that the process is up. `GET /readyz` also checks the database. Every error response is an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem (`application/problem+json`) with extra `code` and `request_id` fields.
 
+### API contract
+
+`api/openapi.yaml` (OpenAPI 3.0.3, the version oapi-codegen supports) is the source of truth for the REST API. To add or change an endpoint:
+
+1. Edit the spec. Resources go under `/api/v1`. IDs and amounts are strings, as described in the spec's conventions.
+2. Run `make generate`. oapi-codegen regenerates `internal/api/api.gen.go`: the models, the routes and a `StrictServerInterface`.
+3. Implement the new method on `server` in `internal/httpapi/handlers.go`. The build fails until you do. To answer with an error, return an `*httpapi.Error`. It becomes a problem response with its status and code. Any other error is logged and becomes a 500.
+4. Run `make lint`. It lints the spec with Redocly CLI (via `npx`, so it needs Node.js) as well as the Go code.
+
+Commit the generated code. `make generate-check` fails if it is out of date, and CI runs it.
+
+With `APP_ENV=development`, the interactive docs (Scalar) are at <http://localhost:8080/api/docs> and the spec as JSON at `/api/openapi.json`. Neither is served in production.
+
 Migrations are goose SQL files in `internal/db/migrations`, embedded in the binary. Create one with `go tool goose -dir internal/db/migrations create <name> sql`. Never edit a migration once it has been merged.
 
 ### Tests

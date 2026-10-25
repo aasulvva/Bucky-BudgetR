@@ -1,11 +1,15 @@
 // Package httpapi is the HTTP layer: routing, middleware and error responses.
+// Routes and models are generated from api/openapi.yaml (package api).
 package httpapi
 
 import (
 	"context"
+	_ "embed"
+	"errors"
 	"log/slog"
 	"net/http"
-	"time"
+
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/api"
 )
 
 // Pinger reports whether a dependency is reachable. *pgxpool.Pool implements it.
@@ -13,11 +17,30 @@ type Pinger interface {
 	Ping(ctx context.Context) error
 }
 
+// Options toggles optional parts of the handler.
+type Options struct {
+	// Docs serves the interactive API docs at /api/docs and the spec at
+	// /api/openapi.json. Meant for development only.
+	Docs bool
+}
+
 // NewHandler returns the root handler with all routes and middleware.
-func NewHandler(logger *slog.Logger, db Pinger) http.Handler {
+func NewHandler(logger *slog.Logger, db Pinger, opts Options) http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", handleHealthz)
-	mux.HandleFunc("GET /readyz", handleReadyz(logger, db))
+
+	strict := api.NewStrictHandlerWithOptions(&server{db: db}, nil, api.StrictHTTPServerOptions{
+		RequestErrorHandlerFunc:  badRequest,
+		ResponseErrorHandlerFunc: responseError(logger),
+	})
+	api.HandlerWithOptions(strict, api.StdHTTPServerOptions{
+		BaseRouter:       mux,
+		ErrorHandlerFunc: badRequest,
+	})
+
+	if opts.Docs {
+		mux.HandleFunc("GET /api/docs", serveDocs)
+		mux.HandleFunc("GET /api/openapi.json", serveSpec(logger))
+	}
 
 	h := problemOnUnmatched(mux)
 	h = Recover(logger)(h)
@@ -26,27 +49,51 @@ func NewHandler(logger *slog.Logger, db Pinger) http.Handler {
 	return h
 }
 
-type status struct {
-	Status string `json:"status"`
+// badRequest answers requests whose parameters or body don't match the spec.
+// The generated binding errors name the offending parameter and are safe to show.
+func badRequest(w http.ResponseWriter, r *http.Request, err error) {
+	WriteProblem(w, r, http.StatusBadRequest, "invalid_request", err.Error())
 }
 
-// handleHealthz reports that the process is up. It checks nothing else.
-func handleHealthz(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, "application/json", http.StatusOK, status{"ok"})
+// responseError turns an error returned by a handler into a problem response.
+// An *Error is sent as is; anything else is logged and becomes a 500.
+func responseError(logger *slog.Logger) func(http.ResponseWriter, *http.Request, error) {
+	return func(w http.ResponseWriter, r *http.Request, err error) {
+		var e *Error
+		if !errors.As(err, &e) {
+			e = &Error{Status: http.StatusInternalServerError, Code: "internal_error", Err: err}
+		}
+		if e.Status >= 500 {
+			level := slog.LevelWarn
+			if e.Status == http.StatusInternalServerError {
+				level = slog.LevelError
+			}
+			logger.Log(r.Context(), level, "request failed",
+				slog.String("code", e.Code),
+				slog.Any("error", e.Err),
+				slog.String("request_id", RequestIDFromContext(r.Context())))
+		}
+		WriteProblem(w, r, e.Status, e.Code, e.Detail)
+	}
 }
 
-// handleReadyz reports whether the server can handle requests, i.e. whether
-// the database is reachable.
-func handleReadyz(logger *slog.Logger, db Pinger) http.HandlerFunc {
+//go:embed docs.html
+var docsPage []byte
+
+func serveDocs(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write(docsPage)
+}
+
+func serveSpec(logger *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
-		defer cancel()
-		if err := db.Ping(ctx); err != nil {
-			logger.WarnContext(r.Context(), "readiness check failed", slog.Any("error", err))
-			WriteProblem(w, r, http.StatusServiceUnavailable, "database_unavailable", "The database is not reachable.")
+		spec, err := api.GetSpecJSON()
+		if err != nil {
+			responseError(logger)(w, r, err)
 			return
 		}
-		writeJSON(w, "application/json", http.StatusOK, status{"ok"})
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(spec)
 	}
 }
 

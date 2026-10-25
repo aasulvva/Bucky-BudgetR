@@ -4,6 +4,10 @@
 BACKEND    := source/backend
 FRONTEND   := source/frontend
 MIGRATIONS := internal/db/migrations
+SPEC       := api/openapi.yaml
+REDOCLY    := npx --yes @redocly/cli@2.62.1
+# Generated files, committed so CI can check that they are up to date.
+GENERATED  := $(BACKEND)/internal/api/api.gen.go $(BACKEND)/internal/db/sqlc
 
 HAS_BACKEND  := $(wildcard $(BACKEND)/go.mod)
 HAS_QUERIES  := $(wildcard $(BACKEND)/internal/db/queries/*.sql)
@@ -20,10 +24,10 @@ DATABASE_URL      ?= postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@localhost:
 export
 
 .DEFAULT_GOAL := help
-.PHONY: help dev dev-backend dev-frontend db-up db-down db-reset psql migrate generate lint test
+.PHONY: help dev dev-backend dev-frontend db-up db-down db-reset psql migrate generate generate-check lint test
 
 help: ## Show this help
-	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
+	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
 .env: | .env.example
 	cp .env.example $@
@@ -81,7 +85,15 @@ else
 	$(call skip,frontend)
 endif
 
-lint: ## Lint the backend (go vet, golangci-lint) and frontend (ESLint, tsc)
+generate-check: generate ## Fail if the committed generated code is out of date (used by CI)
+	@if [ -n "$$(git status --porcelain -- $(GENERATED))" ]; then \
+		git status --short -- $(GENERATED); \
+		echo "Generated code is out of date. Run 'make generate' and commit the result."; \
+		exit 1; \
+	fi
+
+lint: ## Lint the API spec (Redocly), backend (go vet, golangci-lint) and frontend (ESLint, tsc)
+	$(REDOCLY) lint $(SPEC)
 ifneq ($(HAS_BACKEND),)
 	cd $(BACKEND) && go vet ./... && go tool golangci-lint run
 else
