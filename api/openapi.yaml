@@ -46,6 +46,8 @@ tags:
     description: Bank accounts and their balances.
   - name: cycles
     description: Budget cycles and their lifecycle.
+  - name: buckets
+    description: Buckets, their settings and their funds.
 
 paths:
   /healthz:
@@ -599,6 +601,139 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/v1/buckets:
+    get:
+      operationId: listBuckets
+      tags: [buckets]
+      summary: List buckets
+      description: The user's buckets that aren't deleted, sorted by name, each with its TF and CAF.
+      responses:
+        "200":
+          description: The buckets.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Bucket"
+        "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+    post:
+      operationId: createBucket
+      tags: [buckets]
+      summary: Create a bucket
+      description: |
+        Creates a bucket funded from `source_account_id`, in that account's
+        currency. Names must be unique among the user's buckets (409
+        `name_taken`).
+
+        A non-zero `opening_funds` is recorded now as an Opening Funds (OPF)
+        transaction. Like every bucket transaction, that needs an active
+        cycle: without one the answer is 409 `no_active_cycle`, and with an
+        overdue one 409 `cycle_overdue`. Nothing is created then.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BucketCreate"
+      responses:
+        "201":
+          description: The new bucket.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bucket"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/buckets/{bucketId}:
+    parameters:
+      - $ref: "#/components/parameters/BucketId"
+    get:
+      operationId: getBucket
+      tags: [buckets]
+      summary: Get a bucket
+      responses:
+        "200":
+          description: The bucket with its TF and CAF.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bucket"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+    patch:
+      operationId: updateBucket
+      tags: [buckets]
+      summary: Change a bucket's settings
+      description: |
+        The source account can only change to an account in the same currency
+        (400 `currency_mismatch`). Changing it resets CAF to 0 until the
+        allocation routine funds the bucket from the new account.
+
+        Switching `cap_mode` without the new mode's value uses multiplier 1,
+        or a fixed amount equal to the refill amount. A fixed capacity below
+        the refill amount is raised to it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BucketUpdate"
+      responses:
+        "200":
+          description: The updated bucket.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bucket"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+    delete:
+      operationId: deleteBucket
+      tags: [buckets]
+      summary: Delete a bucket
+      description: |
+        Releases the bucket's remaining TF with a Bucket Adjustment (BUA) to
+        0, so the money becomes unallocated in the source account, then
+        deletes the bucket. Its transactions stay.
+
+        Releasing TF needs an active cycle (409 `no_active_cycle` or
+        `cycle_overdue`); a bucket whose TF is already 0 can be deleted
+        without one.
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
 components:
   securitySchemes:
     cookieAuth:
@@ -627,6 +762,13 @@ components:
       required: true
       schema:
         $ref: "#/components/schemas/CycleId"
+
+    BucketId:
+      name: bucketId
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/BucketId"
 
   responses:
     Error:
@@ -681,6 +823,12 @@ components:
           pattern: "^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$"
           maxLength: 35
           example: nb-NO
+        default_refill_mode:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/RefillMode"
+          nullable: true
+          description: The refill mode new buckets get when none is given. Null means `auto`.
 
     AccountId:
       type: string
@@ -921,6 +1069,183 @@ components:
           minLength: 12
           maxLength: 72
           format: password
+
+    BucketId:
+      type: string
+      description: 10-digit bucket ID.
+      pattern: "^[1-9][0-9]{9}$"
+      example: "4829131234"
+
+    BucketName:
+      type: string
+      description: 1 to 100 characters after trimming. Unique among the user's buckets, ignoring case.
+      minLength: 1
+      maxLength: 100
+      example: Groceries
+
+    CapMode:
+      type: string
+      enum: [multiplier, fixed]
+      description: |
+        How the Bucket Capacity (BC) is set: the refill amount times
+        `cap_multiplier`, or the fixed `cap_amount`.
+
+    CapMultiplier:
+      type: string
+      description: 1.00 or more, with at most 2 decimals, as a string.
+      pattern: "^[0-9]{1,4}(\\.[0-9]{1,2})?$"
+      example: "1.50"
+
+    RefillMode:
+      type: string
+      enum: [auto, manual, on_income]
+      description: "`auto` refills at cycle start, `manual` with a button once per cycle, `on_income` when income arrives."
+
+    OverflowDestination:
+      type: string
+      enum: [unallocated, savings_distribution, savings_target]
+      description: Where overflow goes. Only `unallocated` is available until the savings module; the others get 400.
+
+    Bucket:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - source_account_id
+        - currency
+        - refill_amount
+        - cap_mode
+        - cap_multiplier
+        - cap_amount
+        - capacity
+        - target_funds
+        - current_available_funds
+        - keep_funds
+        - refill_mode
+        - overflow_destination
+        - priority
+        - importance
+        - created_at
+      properties:
+        id:
+          $ref: "#/components/schemas/BucketId"
+        name:
+          type: string
+        source_account_id:
+          $ref: "#/components/schemas/AccountId"
+        currency:
+          $ref: "#/components/schemas/Currency"
+        refill_amount:
+          $ref: "#/components/schemas/Amount"
+        cap_mode:
+          $ref: "#/components/schemas/CapMode"
+        cap_multiplier:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/CapMultiplier"
+          nullable: true
+          description: Set in the multiplier mode, otherwise null.
+        cap_amount:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          nullable: true
+          description: Set in the fixed mode, otherwise null.
+        capacity:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: The Bucket Capacity (BC), never below the refill amount.
+        target_funds:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Target Funds (TF), the sum of the bucket's transactions.
+        current_available_funds:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Current Available Funds (CAF), what the source account actually backs.
+        keep_funds:
+          type: boolean
+        refill_mode:
+          $ref: "#/components/schemas/RefillMode"
+        overflow_destination:
+          $ref: "#/components/schemas/OverflowDestination"
+        priority:
+          type: boolean
+        importance:
+          type: integer
+          minimum: 1
+          maximum: 10
+        created_at:
+          type: string
+          format: date-time
+
+    BucketCreate:
+      type: object
+      additionalProperties: false
+      required: [name, source_account_id]
+      properties:
+        name:
+          $ref: "#/components/schemas/BucketName"
+        source_account_id:
+          $ref: "#/components/schemas/AccountId"
+        refill_amount:
+          $ref: "#/components/schemas/Amount"
+        cap_mode:
+          $ref: "#/components/schemas/CapMode"
+        cap_multiplier:
+          $ref: "#/components/schemas/CapMultiplier"
+        cap_amount:
+          $ref: "#/components/schemas/Amount"
+        keep_funds:
+          type: boolean
+        refill_mode:
+          allOf:
+            - $ref: "#/components/schemas/RefillMode"
+          description: Defaults to the user's `default_refill_mode` preference, or `auto`.
+        overflow_destination:
+          $ref: "#/components/schemas/OverflowDestination"
+        priority:
+          type: boolean
+        importance:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 5
+        opening_funds:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Recorded now as an Opening Funds (OPF) transaction when not 0. Needs an active cycle.
+
+    BucketUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          $ref: "#/components/schemas/BucketName"
+        source_account_id:
+          $ref: "#/components/schemas/AccountId"
+        refill_amount:
+          $ref: "#/components/schemas/Amount"
+        cap_mode:
+          $ref: "#/components/schemas/CapMode"
+        cap_multiplier:
+          $ref: "#/components/schemas/CapMultiplier"
+        cap_amount:
+          $ref: "#/components/schemas/Amount"
+        keep_funds:
+          type: boolean
+        refill_mode:
+          $ref: "#/components/schemas/RefillMode"
+        overflow_destination:
+          $ref: "#/components/schemas/OverflowDestination"
+        priority:
+          type: boolean
+        importance:
+          type: integer
+          minimum: 1
+          maximum: 10
 
     Problem:
       type: object

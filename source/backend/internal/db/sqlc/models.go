@@ -70,6 +70,57 @@ func (e AccountType) Valid() bool {
 	return false
 }
 
+type BucketCapMode string
+
+const (
+	BucketCapModeMultiplier BucketCapMode = "multiplier"
+	BucketCapModeFixed      BucketCapMode = "fixed"
+)
+
+func (e *BucketCapMode) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = BucketCapMode(s)
+	case string:
+		*e = BucketCapMode(s)
+	default:
+		return fmt.Errorf("unsupported scan type for BucketCapMode: %T", src)
+	}
+	return nil
+}
+
+type NullBucketCapMode struct {
+	BucketCapMode BucketCapMode
+	Valid         bool // Valid is true if BucketCapMode is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullBucketCapMode) Scan(value interface{}) error {
+	if value == nil {
+		ns.BucketCapMode, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.BucketCapMode.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullBucketCapMode) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.BucketCapMode), nil
+}
+
+func (e BucketCapMode) Valid() bool {
+	switch e {
+	case BucketCapModeMultiplier,
+		BucketCapModeFixed:
+		return true
+	}
+	return false
+}
+
 type CorrectionType string
 
 const (
@@ -176,6 +227,112 @@ func (e CycleState) Valid() bool {
 	return false
 }
 
+type OverflowDestination string
+
+const (
+	OverflowDestinationUnallocated         OverflowDestination = "unallocated"
+	OverflowDestinationSavingsDistribution OverflowDestination = "savings_distribution"
+	OverflowDestinationSavingsTarget       OverflowDestination = "savings_target"
+)
+
+func (e *OverflowDestination) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = OverflowDestination(s)
+	case string:
+		*e = OverflowDestination(s)
+	default:
+		return fmt.Errorf("unsupported scan type for OverflowDestination: %T", src)
+	}
+	return nil
+}
+
+type NullOverflowDestination struct {
+	OverflowDestination OverflowDestination
+	Valid               bool // Valid is true if OverflowDestination is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullOverflowDestination) Scan(value interface{}) error {
+	if value == nil {
+		ns.OverflowDestination, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.OverflowDestination.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullOverflowDestination) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.OverflowDestination), nil
+}
+
+func (e OverflowDestination) Valid() bool {
+	switch e {
+	case OverflowDestinationUnallocated,
+		OverflowDestinationSavingsDistribution,
+		OverflowDestinationSavingsTarget:
+		return true
+	}
+	return false
+}
+
+type RefillMode string
+
+const (
+	RefillModeAuto     RefillMode = "auto"
+	RefillModeManual   RefillMode = "manual"
+	RefillModeOnIncome RefillMode = "on_income"
+)
+
+func (e *RefillMode) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = RefillMode(s)
+	case string:
+		*e = RefillMode(s)
+	default:
+		return fmt.Errorf("unsupported scan type for RefillMode: %T", src)
+	}
+	return nil
+}
+
+type NullRefillMode struct {
+	RefillMode RefillMode
+	Valid      bool // Valid is true if RefillMode is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullRefillMode) Scan(value interface{}) error {
+	if value == nil {
+		ns.RefillMode, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.RefillMode.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullRefillMode) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.RefillMode), nil
+}
+
+func (e RefillMode) Valid() bool {
+	switch e {
+	case RefillModeAuto,
+		RefillModeManual,
+		RefillModeOnIncome:
+		return true
+	}
+	return false
+}
+
 type TransactionType string
 
 const (
@@ -269,13 +426,23 @@ type BankTransaction struct {
 }
 
 type Bucket struct {
-	ID              string
-	UserID          string
-	Name            string
-	SourceAccountID string
-	Deleted         bool
-	CreatedAt       time.Time
-	ModifiedAt      time.Time
+	ID                  string
+	UserID              string
+	Name                string
+	SourceAccountID     string
+	Deleted             bool
+	CreatedAt           time.Time
+	ModifiedAt          time.Time
+	RefillAmount        decimal.Decimal
+	CapMode             BucketCapMode
+	CapMultiplier       decimal.NullDecimal
+	CapAmount           decimal.NullDecimal
+	Caf                 decimal.Decimal
+	KeepFunds           bool
+	RefillMode          RefillMode
+	OverflowDestination OverflowDestination
+	Priority            bool
+	Importance          int16
 }
 
 type BucketTransaction struct {

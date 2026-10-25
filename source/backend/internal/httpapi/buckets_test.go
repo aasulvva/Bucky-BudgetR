@@ -1,0 +1,113 @@
+package httpapi_test
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/accounts"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/api"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/auth"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/authtest"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/buckets"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/cycles"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/httpapi"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/testdb"
+)
+
+func TestBucketsAPI(t *testing.T) {
+	pool := testdb.New(t)
+	l := ledger.New(ledger.Options{})
+	h := newHandler(t, discard(), pool, httpapi.Options{
+		Auth:     auth.NewService(pool, discard(), auth.Options{IdleTimeout: idle, MaxAge: maxAge}),
+		Accounts: accounts.NewService(pool, l, accounts.Options{}),
+		Cycles:   cycles.NewService(pool, cycles.Options{}),
+		Buckets:  buckets.NewService(pool, l, buckets.Options{}),
+	})
+	authtest.NewUser(t, pool, "alice")
+	authtest.NewUser(t, pool, "bob")
+	alice, bob := authtest.Login(t, h, "alice"), authtest.Login(t, h, "bob")
+	do := func(method, path string, body any, c *http.Cookie) *httptest.ResponseRecorder {
+		t.Helper()
+		return authtest.Do(t, h, method, path, body, c)
+	}
+
+	w := do(http.MethodPost, "/api/v1/accounts", map[string]any{"name": "Main", "opening_balance": "10000"}, alice)
+	expect(t, "create account", w, http.StatusCreated, "")
+	acc := decode[api.Account](t, w)
+	w = do(http.MethodPost, "/api/v1/accounts", map[string]any{"name": "Euro", "currency": "EUR"}, alice)
+	expect(t, "create EUR account", w, http.StatusCreated, "")
+	eur := decode[api.Account](t, w)
+
+	expect(t, "no session", do(http.MethodGet, "/api/v1/buckets", nil, nil), http.StatusUnauthorized, "unauthenticated")
+
+	// The preference sets the default refill mode.
+	w = do(http.MethodPatch, "/api/v1/me/preferences", map[string]any{"default_refill_mode": "manual"}, alice)
+	expect(t, "set preference", w, http.StatusOK, "")
+	if p := decode[api.Preferences](t, w); p.DefaultRefillMode.MustGet() != api.Manual {
+		t.Errorf("preferences %+v", p)
+	}
+	expect(t, "bad preference", do(http.MethodPatch, "/api/v1/me/preferences",
+		map[string]any{"default_refill_mode": "weekly"}, alice), http.StatusBadRequest, "invalid_request")
+
+	w = do(http.MethodPost, "/api/v1/buckets", map[string]any{
+		"name": "Groceries", "source_account_id": acc.Id, "refill_amount": "4000", "cap_multiplier": "1.25",
+	}, alice)
+	expect(t, "create", w, http.StatusCreated, "")
+	b := decode[api.Bucket](t, w)
+	if b.Capacity != "5000.00" || b.CapMultiplier.MustGet() != "1.25" || !b.CapAmount.IsNull() ||
+		b.RefillMode != api.Manual || b.Currency != "NOK" || b.TargetFunds != "0.00" || b.CurrentAvailableFunds != "0.00" {
+		t.Errorf("created %+v", b)
+	}
+
+	expect(t, "duplicate name", do(http.MethodPost, "/api/v1/buckets",
+		map[string]any{"name": "groceries", "source_account_id": acc.Id}, alice), http.StatusConflict, "name_taken")
+	expect(t, "savings overflow", do(http.MethodPost, "/api/v1/buckets",
+		map[string]any{"name": "Fun", "source_account_id": acc.Id, "overflow_destination": "savings_target"}, alice), http.StatusBadRequest, "invalid_request")
+	expect(t, "opening funds without a cycle", do(http.MethodPost, "/api/v1/buckets",
+		map[string]any{"name": "Fun", "source_account_id": acc.Id, "opening_funds": "100"}, alice), http.StatusConflict, "no_active_cycle")
+	expect(t, "bob's source account", do(http.MethodPost, "/api/v1/buckets",
+		map[string]any{"name": "Fun", "source_account_id": acc.Id}, bob), http.StatusBadRequest, "invalid_request")
+	expect(t, "bad ID", do(http.MethodGet, "/api/v1/buckets/123", nil, alice), http.StatusBadRequest, "invalid_request")
+
+	expect(t, "bob gets alice's", do(http.MethodGet, "/api/v1/buckets/"+b.Id, nil, bob), http.StatusNotFound, "not_found")
+	w = do(http.MethodGet, "/api/v1/buckets/"+b.Id, nil, alice)
+	expect(t, "get", w, http.StatusOK, "")
+
+	w = do(http.MethodPatch, "/api/v1/buckets/"+b.Id, map[string]any{"cap_mode": "fixed", "cap_amount": "4500", "priority": true}, alice)
+	expect(t, "update", w, http.StatusOK, "")
+	if u := decode[api.Bucket](t, w); u.Capacity != "4500.00" || u.CapAmount.MustGet() != "4500.00" || !u.CapMultiplier.IsNull() || !u.Priority {
+		t.Errorf("updated %+v", u)
+	}
+	expect(t, "to EUR", do(http.MethodPatch, "/api/v1/buckets/"+b.Id,
+		map[string]any{"source_account_id": eur.Id}, alice), http.StatusBadRequest, "currency_mismatch")
+	expect(t, "empty update", do(http.MethodPatch, "/api/v1/buckets/"+b.Id, map[string]any{}, alice), http.StatusBadRequest, "invalid_request")
+
+	// With an active cycle, opening funds are recorded and released on delete.
+	now := time.Now().UTC()
+	w = do(http.MethodPost, "/api/v1/cycles", map[string]any{"start_at": now.Add(time.Hour), "end_at": now.Add(30 * 24 * time.Hour)}, alice)
+	expect(t, "create cycle", w, http.StatusCreated, "")
+	expect(t, "start cycle", do(http.MethodPost, "/api/v1/cycles/"+decode[api.Cycle](t, w).Id+"/start", nil, alice), http.StatusOK, "")
+	w = do(http.MethodPost, "/api/v1/buckets", map[string]any{"name": "Fun", "source_account_id": acc.Id, "opening_funds": "100"}, alice)
+	expect(t, "create with opening funds", w, http.StatusCreated, "")
+	fun := decode[api.Bucket](t, w)
+	if fun.TargetFunds != "100.00" {
+		t.Errorf("TF %s, want 100.00", fun.TargetFunds)
+	}
+
+	w = do(http.MethodGet, "/api/v1/buckets", nil, alice)
+	expect(t, "list", w, http.StatusOK, "")
+	if list := decode[[]api.Bucket](t, w); len(list) != 2 || list[0].Id != fun.Id || list[1].Id != b.Id {
+		t.Errorf("list %+v, want Fun, Groceries", list)
+	}
+
+	expect(t, "bob deletes alice's", do(http.MethodDelete, "/api/v1/buckets/"+fun.Id, nil, bob), http.StatusNotFound, "not_found")
+	expect(t, "delete", do(http.MethodDelete, "/api/v1/buckets/"+fun.Id, nil, alice), http.StatusNoContent, "")
+	expect(t, "get deleted", do(http.MethodGet, "/api/v1/buckets/"+fun.Id, nil, alice), http.StatusNotFound, "not_found")
+	w = do(http.MethodGet, "/api/v1/buckets", nil, bob)
+	if list := decode[[]api.Bucket](t, w); len(list) != 0 {
+		t.Errorf("bob sees %d buckets", len(list))
+	}
+}

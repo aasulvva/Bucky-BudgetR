@@ -220,6 +220,7 @@ func (q *Queries) GetOwnedAccounts(ctx context.Context, arg GetOwnedAccountsPara
 const getOwnedBuckets = `-- name: GetOwnedBuckets :many
 SELECT id, source_account_id FROM buckets
 WHERE id = ANY($1::text[]) AND user_id = $2 AND NOT deleted
+FOR SHARE
 `
 
 type GetOwnedBucketsParams struct {
@@ -232,6 +233,8 @@ type GetOwnedBucketsRow struct {
 	SourceAccountID string
 }
 
+// FOR SHARE: waits for a concurrent delete of the bucket, then sees whether it
+// still exists.
 func (q *Queries) GetOwnedBuckets(ctx context.Context, arg GetOwnedBucketsParams) ([]GetOwnedBucketsRow, error) {
 	rows, err := q.db.Query(ctx, getOwnedBuckets, arg.Ids, arg.UserID)
 	if err != nil {

@@ -39,7 +39,7 @@ func Cycle(t testing.TB, pool *pgxpool.Pool, userID string, start, end time.Time
 func Bucket(t testing.TB, pool *pgxpool.Pool, userID, accountID string) string {
 	t.Helper()
 	return insert(t, ids.Bucket, func() string { return ids.NewBucket(userID) }, func(ctx context.Context, id string) error {
-		return pool.QueryRow(ctx, `INSERT INTO buckets (id, user_id, name, source_account_id) VALUES ($1, $2, 'Test bucket', $3)
+		return pool.QueryRow(ctx, `INSERT INTO buckets (id, user_id, name, source_account_id) VALUES ($1, $2, 'Bucket ' || $1, $3)
 			ON CONFLICT (id) DO NOTHING RETURNING id`, id, userID, accountID).Scan(&id)
 	})
 }

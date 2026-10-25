@@ -38,8 +38,11 @@ WHERE id = ANY(sqlc.arg(ids)::text[]) AND user_id = sqlc.arg(user_id) AND NOT de
 FOR SHARE;
 
 -- name: GetOwnedBuckets :many
+-- FOR SHARE: waits for a concurrent delete of the bucket, then sees whether it
+-- still exists.
 SELECT id, source_account_id FROM buckets
-WHERE id = ANY(sqlc.arg(ids)::text[]) AND user_id = sqlc.arg(user_id) AND NOT deleted;
+WHERE id = ANY(sqlc.arg(ids)::text[]) AND user_id = sqlc.arg(user_id) AND NOT deleted
+FOR SHARE;
 
 -- name: GetActiveCycle :one
 -- Locks the cycle until the transaction ends, so it can't be ended meanwhile.
