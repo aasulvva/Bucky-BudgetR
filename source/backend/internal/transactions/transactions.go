@@ -180,6 +180,9 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Transaction
 	}
 	var out Transaction
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := ledger.LockUser(ctx, tx, userID); err != nil {
+			return err
+		}
 		t, err := s.record(ctx, tx, userID, n, "")
 		if err != nil {
 			return err

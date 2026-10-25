@@ -66,3 +66,8 @@ SELECT * FROM bucket_transactions WHERE transaction_id = $1 ORDER BY id;
 -- name: ListTransactionTags :many
 SELECT t.name FROM transaction_tags tt JOIN tags t ON t.id = tt.tag_id
 WHERE tt.transaction_id = $1 ORDER BY lower(t.name) COLLATE "C";
+
+-- name: LockUser :exec
+-- Serializes a user's money writes until the transaction ends (see
+-- ledger.LockUser).
+SELECT pg_advisory_xact_lock(1, (sqlc.arg(user_id)::text)::int);

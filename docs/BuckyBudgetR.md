@@ -224,11 +224,14 @@ Funds the buckets: works out how much of each source account's money backs each 
 - **Not enough funds:**
   1. Priority buckets are funded first.
   2. The remaining funds are split by weight: `CAF_i = available × (TF_i × importance_i) / Σ(TF_j × importance_j)`. No bucket gets more than its TF, and any excess is split again among the rest. If even the priority buckets can't be fully funded, the same split is used among them.
-- Buckets with TF ≤ 0 get CAF = 0.
-- CAF is **stored**, so funds aren't redistributed on every change. The check runs after every transaction, and a recalculation happens when:
+- Buckets with TF ≤ 0 get CAF = 0. A negative account balance counts as 0 available.
+- **Rounding:** shares are calculated at full precision, rounded down to cents, and the leftover cents go one each to the buckets with the largest remainders, so the CAFs add up to exactly what was split.
+- CAF is **stored**, so funds aren't redistributed on every change. The check runs after every transaction, for the accounts it touched (directly or as a bucket's source). First each CAF is limited to 0 ≤ CAF ≤ TF: an expense from a bucket lowers its TF and the balance by the same amount, so its CAF follows and the other buckets keep theirs. Then a recalculation happens when:
   - CAF exceeds the available funds;
   - the available funds now cover TF;
   - the available funds are ≥ 1.00 above CAF (while CAF < TF).
+- **Bucket changes recalculate at once:** creating or deleting a bucket, moving it to another account, or changing its priority or importance recalculates the accounts involved right away.
+- **Unallocated** is the account balance minus the CAF of its buckets. It is derived from the stored CAF rather than stored separately.
 
 ## 8. Savings module *(later)*
 

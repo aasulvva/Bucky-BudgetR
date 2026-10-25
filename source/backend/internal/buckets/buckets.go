@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -19,6 +20,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shopspring/decimal"
 
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/allocation"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/balance"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ids"
@@ -171,9 +173,12 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Bucket, err
 
 	var out Bucket
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := ledger.LockUser(ctx, tx, userID); err != nil {
+			return err
+		}
 		q := sqlc.New(tx)
-		currency, err := sourceCurrency(ctx, q, userID, n.SourceAccountID)
-		if err != nil {
+		// The source must be a live account of the user.
+		if _, err := sourceCurrency(ctx, q, userID, n.SourceAccountID); err != nil {
 			return err
 		}
 		if n.RefillMode == "" {
@@ -222,8 +227,12 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Bucket, err
 				return fmt.Errorf("record opening funds: %w", err)
 			}
 		}
-		out = toBucket(row, currency, n.OpeningFunds)
-		return nil
+		// A new bucket changes how its account's money is split.
+		if err := allocation.Run(ctx, tx, userID, []string{n.SourceAccountID}, true); err != nil {
+			return err
+		}
+		out, err = s.get(ctx, tx, userID, row.ID)
+		return err
 	})
 	if err != nil {
 		return Bucket{}, err
@@ -235,6 +244,9 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Bucket, err
 func (s *Service) Update(ctx context.Context, userID, id string, c Changes) (Bucket, error) {
 	var out Bucket
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := ledger.LockUser(ctx, tx, userID); err != nil {
+			return err
+		}
 		q := sqlc.New(tx)
 		row, err := q.GetBucketForUpdate(ctx, sqlc.GetBucketForUpdateParams{ID: id, UserID: userID})
 		if err != nil {
@@ -271,6 +283,12 @@ func (s *Service) Update(ctx context.Context, userID, id string, c Changes) (Buc
 		if err := q.UpdateBucket(ctx, p); err != nil {
 			return nameTaken(err)
 		}
+		// Settings that change how the money is split take effect at once.
+		if p.SourceAccountID != row.SourceAccountID || p.Priority != row.Priority || p.Importance != row.Importance {
+			if err := allocation.Run(ctx, tx, userID, compact(row.SourceAccountID, p.SourceAccountID), true); err != nil {
+				return err
+			}
+		}
 		out, err = s.get(ctx, tx, userID, id)
 		return err
 	})
@@ -286,8 +304,12 @@ func (s *Service) Update(ctx context.Context, userID, id string, c Changes) (Buc
 // bucket's transactions stay.
 func (s *Service) Delete(ctx context.Context, userID, id string) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := ledger.LockUser(ctx, tx, userID); err != nil {
+			return err
+		}
 		q := sqlc.New(tx)
-		if _, err := q.GetBucketForUpdate(ctx, sqlc.GetBucketForUpdateParams{ID: id, UserID: userID}); err != nil {
+		row, err := q.GetBucketForUpdate(ctx, sqlc.GetBucketForUpdateParams{ID: id, UserID: userID})
+		if err != nil {
 			return notFound(err, id)
 		}
 		tf, err := balance.Buckets(ctx, tx, userID)
@@ -303,8 +325,18 @@ func (s *Service) Delete(ctx context.Context, userID, id string) error {
 				return fmt.Errorf("release target funds: %w", err)
 			}
 		}
-		return q.DeleteBucket(ctx, sqlc.DeleteBucketParams{ID: id, UserID: userID})
+		if err := q.DeleteBucket(ctx, sqlc.DeleteBucketParams{ID: id, UserID: userID}); err != nil {
+			return err
+		}
+		// Its CAF is free for the account's other buckets.
+		return allocation.Run(ctx, tx, userID, []string{row.SourceAccountID}, true)
 	})
+}
+
+// compact returns the distinct IDs.
+func compact(ids ...string) []string {
+	slices.Sort(ids)
+	return slices.Compact(ids)
 }
 
 func (s *Service) get(ctx context.Context, db sqlc.DBTX, userID, id string) (Bucket, error) {

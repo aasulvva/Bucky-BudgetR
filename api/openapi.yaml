@@ -1106,7 +1106,7 @@ components:
     Account:
       type: object
       additionalProperties: false
-      required: [id, name, type, currency, balance, created_at]
+      required: [id, name, type, currency, balance, unallocated, created_at]
       properties:
         id:
           $ref: "#/components/schemas/AccountId"
@@ -1118,6 +1118,10 @@ components:
           $ref: "#/components/schemas/Currency"
         balance:
           $ref: "#/components/schemas/Amount"
+        unallocated:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: The part of the balance that backs no bucket, balance − Σ CAF of its buckets (spec §7). Negative when the account is overdrawn.
         created_at:
           type: string
           format: date-time
@@ -1405,7 +1409,10 @@ components:
         current_available_funds:
           allOf:
             - $ref: "#/components/schemas/Amount"
-          description: Current Available Funds (CAF), what the source account actually backs.
+          description: |
+            Current Available Funds (CAF), what the source account actually
+            backs. Set by the Money Allocation Routine (spec §7): below TF when
+            the account can't cover all its buckets.
         keep_funds:
           type: boolean
         refill_mode:

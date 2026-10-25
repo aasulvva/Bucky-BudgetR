@@ -163,6 +163,9 @@ func (l *Ledger) Record(ctx context.Context, tx pgx.Tx, e Entry) (*Transaction, 
 		return nil, err
 	}
 	q := sqlc.New(tx)
+	if err := LockUser(ctx, tx, e.UserID); err != nil {
+		return nil, err
+	}
 
 	if e.Correction != sqlc.CorrectionTypeNone {
 		if err := checkParent(ctx, q, e); err != nil {
@@ -268,6 +271,20 @@ func (l *Ledger) Record(ctx context.Context, tx pgx.Tx, e Entry) (*Transaction, 
 		}
 	}
 	return t, nil
+}
+
+// LockUser takes the user's write lock, held until tx ends. Every database
+// transaction that changes a user's money (accounts, buckets, cycles, the
+// ledger and CAF) takes it first, before any row lock, so the user's writes
+// run one at a time and can't deadlock on each other's row locks: the ledger
+// share-locks the rows it records on, and the allocation routine then updates
+// buckets of the same accounts. Taking it again in the same transaction is a
+// no-op.
+func LockUser(ctx context.Context, tx pgx.Tx, userID string) error {
+	if err := sqlc.New(tx).LockUser(ctx, userID); err != nil {
+		return fmt.Errorf("lock user %s: %w", userID, err)
+	}
+	return nil
 }
 
 // Get returns the user's transaction with this ID, or ErrNotFound.

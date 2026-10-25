@@ -194,11 +194,12 @@ func parseAmount(s string) (decimal.Decimal, error) {
 
 func toAPIAccount(a accounts.Account) api.Account {
 	return api.Account{
-		Id:        a.ID,
-		Name:      a.Name,
-		Type:      api.AccountType(a.Type),
-		Currency:  a.Currency,
-		Balance:   a.Balance.StringFixed(money.Places),
-		CreatedAt: a.CreatedAt.UTC(),
+		Id:          a.ID,
+		Name:        a.Name,
+		Type:        api.AccountType(a.Type),
+		Currency:    a.Currency,
+		Balance:     a.Balance.StringFixed(money.Places),
+		Unallocated: a.Unallocated.StringFixed(money.Places),
+		CreatedAt:   a.CreatedAt.UTC(),
 	}
 }

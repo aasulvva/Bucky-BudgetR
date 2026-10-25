@@ -29,4 +29,5 @@ UPDATE bank_accounts SET deleted = true, modified_at = now() WHERE id = $1 AND u
 SELECT id FROM buckets WHERE source_account_id = $1 AND user_id = $2 AND NOT deleted ORDER BY id FOR UPDATE;
 
 -- name: SetBucketSource :exec
-UPDATE buckets SET source_account_id = $3, modified_at = now() WHERE id = $1 AND user_id = $2;
+-- CAF resets: the bucket is funded from the new account from now on.
+UPDATE buckets SET source_account_id = $3, caf = 0, modified_at = now() WHERE id = $1 AND user_id = $2;
