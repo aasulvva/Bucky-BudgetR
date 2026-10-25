@@ -2,6 +2,7 @@
 // browser APIs Mantine needs that jsdom lacks.
 import "@testing-library/jest-dom/vitest";
 
+import { notifications } from "@mantine/notifications";
 import { cleanup } from "@testing-library/react";
 
 import { apiMock, fakeFetch } from "./api";
@@ -11,6 +12,9 @@ globalThis.fetch = fakeFetch as typeof fetch;
 afterEach(() => {
   cleanup();
   apiMock.reset();
+  // The notification store is global; don't let one test's toasts show in the next.
+  notifications.clean();
+  notifications.cleanQueue();
 });
 
 /** Width the stubbed matchMedia answers for; tests can change it. */

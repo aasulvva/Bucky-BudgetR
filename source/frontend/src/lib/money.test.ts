@@ -1,20 +1,29 @@
-import { formatAmountInput, formatMoney, isValidAmount, parseAmount } from "./money";
+import {
+  addAmounts,
+  compareAmounts,
+  currencyOptions,
+  formatAmountInput,
+  formatMoney,
+  isValidAmount,
+  parseAmount,
+  subtractAmounts,
+} from "./money";
 
 // ICU uses (narrow) no-break spaces; compare with plain ones.
 const plain = (s: string) => s.replace(/\s/g, " ");
 
 describe("formatMoney", () => {
   it("formats decimal strings exactly, even beyond 2^53", () => {
-    expect(plain(formatMoney("1234.50", "en-US"))).toBe("NOK 1,234.50");
-    expect(plain(formatMoney("-1234.50", "en-US"))).toBe("-NOK 1,234.50");
-    expect(plain(formatMoney("0.00", "en-US"))).toBe("NOK 0.00");
-    expect(plain(formatMoney("12345678901234567.89", "en-US"))).toBe(
+    expect(plain(formatMoney("1234.50", "NOK", "en-US"))).toBe("NOK 1,234.50");
+    expect(plain(formatMoney("-1234.50", "NOK", "en-US"))).toBe("-NOK 1,234.50");
+    expect(plain(formatMoney("0.00", "NOK", "en-US"))).toBe("NOK 0.00");
+    expect(plain(formatMoney("12345678901234567.89", "NOK", "en-US"))).toBe(
       "NOK 12,345,678,901,234,567.89",
     );
   });
 
   it("uses the locale's conventions", () => {
-    const nb = plain(formatMoney("1234.50", "nb-NO"));
+    const nb = plain(formatMoney("1234.50", "NOK", "nb-NO"));
     expect(nb).toContain("1 234,50");
     expect(nb).toContain("kr");
   });
@@ -68,5 +77,43 @@ describe("isValidAmount", () => {
     expect(isValidAmount("-0.01")).toBe(true);
     expect(isValidAmount("1234.5")).toBe(false);
     expect(isValidAmount("1,234.50")).toBe(false);
+  });
+});
+
+describe("amount arithmetic", () => {
+  it("adds and subtracts exactly", () => {
+    expect(addAmounts("0.10", "0.20")).toBe("0.30");
+    expect(addAmounts("12345678901234567.89", "0.11")).toBe("12345678901234568.00");
+    expect(addAmounts()).toBe("0.00");
+    expect(subtractAmounts("5.00", "7.25")).toBe("-2.25");
+    expect(subtractAmounts("-0.05", "-0.05")).toBe("0.00");
+  });
+
+  it("takes the API's short forms", () => {
+    expect(addAmounts("20000", "1.5")).toBe("20001.50");
+  });
+
+  it("compares", () => {
+    expect(compareAmounts("1.00", "1")).toBe(0);
+    expect(compareAmounts("-1.00", "0.00")).toBe(-1);
+    expect(compareAmounts("0.01", "0.00")).toBe(1);
+  });
+});
+
+describe("formatMoney with another currency", () => {
+  it("uses that currency", () => {
+    expect(plain(formatMoney("10.00", "SEK", "en-US"))).toBe("SEK 10.00");
+    expect(plain(formatMoney("10.00", "EUR", "en-US"))).toBe("€10.00");
+  });
+});
+
+describe("currencyOptions", () => {
+  it("offers currencies with at most two decimals", () => {
+    const codes = currencyOptions("en").map((o) => o.value);
+    expect(codes).toEqual(expect.arrayContaining(["NOK", "EUR", "USD", "JPY"]));
+    expect(codes).not.toContain("KWD");
+    expect(currencyOptions("en").find((o) => o.value === "NOK")?.label).toBe(
+      "NOK · Norwegian Krone",
+    );
   });
 });

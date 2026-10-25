@@ -38,6 +38,8 @@ function defaults(): Map<string, Handler> {
     ["GET /api/v1/me", { body: testUser }],
     ["GET /readyz", { body: { status: "ok" } }],
     ["POST /api/v1/auth/logout", { status: 204 }],
+    ["GET /api/v1/accounts", { body: [] }],
+    ["GET /api/v1/buckets", { body: [] }],
   ]);
 }
 

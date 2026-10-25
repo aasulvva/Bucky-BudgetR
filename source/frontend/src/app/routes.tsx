@@ -13,8 +13,13 @@ type PageModule = Promise<{ default: ComponentType }>;
 
 /** Screens that exist. Every other nav item gets a placeholder. */
 const pages: Partial<Record<string, () => PageModule>> = {
+  "/accounts": () => import("@/pages/Accounts"),
+  "/accounts/setup": () => import("@/pages/AccountSetup"),
   "/settings": () => import("@/pages/Settings"),
 };
+
+/** The paths whose screen is built, rather than a placeholder. */
+export const builtPaths = Object.keys(pages);
 
 const lazyPage = (load: () => PageModule) => async () => ({ Component: (await load()).default });
 

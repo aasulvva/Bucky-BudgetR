@@ -7,6 +7,8 @@ interface AmountInputProps extends Omit<TextInputProps, "value" | "defaultValue"
   /** A canonical amount ("1234.50"), or null when empty or invalid. */
   value: string | null;
   onChange: (value: string | null) => void;
+  /** The currency whose symbol is shown; defaults to NOK. */
+  currency?: string;
 }
 
 /**
@@ -14,7 +16,14 @@ interface AmountInputProps extends Omit<TextInputProps, "value" | "defaultValue"
  * through a float. Accepts "1 234,5", "1234.50" and the like; shows the
  * amount formatted for the locale once the field loses focus.
  */
-export function AmountInput({ value, onChange, onBlur, error, ...props }: AmountInputProps) {
+export function AmountInput({
+  value,
+  onChange,
+  onBlur,
+  error,
+  currency,
+  ...props
+}: AmountInputProps) {
   const [text, setText] = useState(() => (value === null ? "" : formatAmountInput(value)));
   const [touched, setTouched] = useState(false);
 
@@ -33,7 +42,7 @@ export function AmountInput({ value, onChange, onBlur, error, ...props }: Amount
       autoComplete="off"
       rightSection={
         <Text size="sm" c="dimmed">
-          {currencySymbol()}
+          {currencySymbol(currency)}
         </Text>
       }
       {...props}
