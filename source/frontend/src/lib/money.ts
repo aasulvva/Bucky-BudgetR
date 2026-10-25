@@ -1,7 +1,7 @@
 // Amounts travel as decimal strings ("-1234.50") and are never converted to
 // floats. Intl.NumberFormat formats such strings exactly.
 
-import { CURRENCY, LOCALE } from "./locale";
+import { CURRENCY, getLocale } from "./locale";
 
 /** A canonical API amount: optional minus, digits, exactly two decimals. */
 const CANONICAL = /^-?\d+\.\d{2}$/;
@@ -13,14 +13,14 @@ export function isValidAmount(value: string): boolean {
 }
 
 /** Formats an amount with the currency, e.g. "kr 1 234,50" or "NOK 1,234.50". */
-export function formatMoney(amount: string, locale = LOCALE): string {
+export function formatMoney(amount: string, locale = getLocale()): string {
   return new Intl.NumberFormat(locale, { style: "currency", currency: CURRENCY }).format(
     amount as Decimal,
   );
 }
 
 /** Formats an amount for editing: grouped, two decimals, no currency. */
-export function formatAmountInput(amount: string, locale = LOCALE): string {
+export function formatAmountInput(amount: string, locale = getLocale()): string {
   return new Intl.NumberFormat(locale, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -28,7 +28,7 @@ export function formatAmountInput(amount: string, locale = LOCALE): string {
 }
 
 /** The currency symbol as the locale writes it, e.g. "kr" or "NOK". */
-export function currencySymbol(locale = LOCALE): string {
+export function currencySymbol(locale = getLocale()): string {
   const parts = new Intl.NumberFormat(locale, {
     style: "currency",
     currency: CURRENCY,
@@ -37,7 +37,7 @@ export function currencySymbol(locale = LOCALE): string {
 }
 
 /** The locale's decimal separator, e.g. "," for nb-NO. */
-export function decimalSeparator(locale = LOCALE): string {
+export function decimalSeparator(locale = getLocale()): string {
   const parts = new Intl.NumberFormat(locale).formatToParts(1.5);
   return parts.find((p) => p.type === "decimal")?.value ?? ".";
 }

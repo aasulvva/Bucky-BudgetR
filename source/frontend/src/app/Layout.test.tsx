@@ -1,6 +1,7 @@
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import { apiMock, problem, testUser } from "@/test/api";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
 
@@ -65,8 +66,31 @@ describe("desktop layout", () => {
       "/settings",
     );
     expect(within(menu).getByRole("menuitem", { name: "Sign out" })).toBeInTheDocument();
-    // Admin is only for admins; without a session nobody is.
+    expect(within(menu).getByText("kari · User")).toBeInTheDocument();
     expect(within(menu).queryByRole("menuitem", { name: /Admin/ })).not.toBeInTheDocument();
+  });
+
+  it("shows Admin to admins", async () => {
+    apiMock.on("GET /api/v1/me", { body: { ...testUser, admin: true } });
+    renderRoute("/");
+    const nav = await screen.findByRole("navigation");
+    await userEvent.click(within(nav).getByRole("button", { name: /Profile/ }));
+    const menu = await screen.findByRole("menu");
+    expect(await within(menu).findByRole("menuitem", { name: /Admin/ })).toHaveAttribute(
+      "href",
+      "/admin",
+    );
+  });
+
+  it("signs out to the login page", async () => {
+    const { router } = renderRoute("/accounts");
+    const nav = await screen.findByRole("navigation");
+    await userEvent.click(within(nav).getByRole("button", { name: /Profile/ }));
+    apiMock.on("GET /api/v1/me", problem(401, "unauthenticated", "Log in first."));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Sign out" }));
+    expect(await screen.findByRole("button", { name: "Log in" })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe("/login");
+    expect(apiMock.calls("POST /api/v1/auth/logout")).toHaveLength(1);
   });
 });
 

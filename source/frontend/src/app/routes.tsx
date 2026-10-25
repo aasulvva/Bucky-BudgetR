@@ -6,6 +6,7 @@ import { Placeholder } from "@/pages/Placeholder";
 
 import { Layout } from "./Layout";
 import { navItems } from "./nav";
+import { RequireSession } from "./RequireSession";
 import { RouteError } from "./RouteError";
 
 type PageModule = Promise<{ default: ComponentType }>;
@@ -18,19 +19,30 @@ const pages: Partial<Record<string, () => PageModule>> = {
 const lazyPage = (load: () => PageModule) => async () => ({ Component: (await load()).default });
 
 export const routes: RouteObject[] = [
+  // Outside the app shell and the session guard.
+  { path: "/login", lazy: lazyPage(() => import("@/pages/Login")) },
+  { path: "/change-password", lazy: lazyPage(() => import("@/pages/ChangePassword")) },
   {
-    element: <Layout />,
+    element: <RequireSession />,
     children: [
       {
-        errorElement: <RouteError />,
+        element: <Layout />,
         children: [
-          ...navItems.map((item): RouteObject => {
-            const load = pages[item.path];
-            return load
-              ? { path: item.path, lazy: lazyPage(load) }
-              : { path: item.path, element: <Placeholder title={item.label} issue={item.issue} /> };
-          }),
-          { path: "*", element: <NotFound /> },
+          {
+            errorElement: <RouteError />,
+            children: [
+              ...navItems.map((item): RouteObject => {
+                const load = pages[item.path];
+                return load
+                  ? { path: item.path, lazy: lazyPage(load) }
+                  : {
+                      path: item.path,
+                      element: <Placeholder title={item.label} issue={item.issue} />,
+                    };
+              }),
+              { path: "*", element: <NotFound /> },
+            ],
+          },
         ],
       },
     ],

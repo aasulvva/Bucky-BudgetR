@@ -1,5 +1,7 @@
 import { notifications } from "@mantine/notifications";
-import { MutationCache, QueryClient } from "@tanstack/react-query";
+import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
+
+import { handleSessionError } from "@/app/session";
 
 import { ApiError, describeError } from "./errors";
 
@@ -16,13 +18,20 @@ declare module "@tanstack/react-query" {
  * Query defaults:
  * - Queries retry up to twice, but never on 4xx (retrying won't help).
  * - Failed mutations show an error notification unless meta.silentError is set.
+ * - An error saying the session ended, or that the password must change
+ *   first, goes to the session (app/session.ts) instead, with no notification.
  * Query errors are shown in place, with <QueryState>.
  */
 export function createQueryClient(): QueryClient {
-  return new QueryClient({
+  const client: QueryClient = new QueryClient({
+    queryCache: new QueryCache({
+      onError: (error) => {
+        handleSessionError(client, error);
+      },
+    }),
     mutationCache: new MutationCache({
       onError: (error, _variables, _result, mutation) => {
-        if (mutation.meta?.silentError) return;
+        if (handleSessionError(client, error) || mutation.meta?.silentError) return;
         const { title, detail, requestId } = describeError(error);
         notifications.show({
           color: "red",
@@ -40,4 +49,5 @@ export function createQueryClient(): QueryClient {
       },
     },
   });
+  return client;
 }
