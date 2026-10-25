@@ -92,7 +92,12 @@ func (q *Queries) DeleteBucket(ctx context.Context, arg DeleteBucketParams) erro
 }
 
 const getBucket = `-- name: GetBucket :one
-SELECT b.id, b.user_id, b.name, b.source_account_id, b.deleted, b.created_at, b.modified_at, b.refill_amount, b.cap_mode, b.cap_multiplier, b.cap_amount, b.caf, b.keep_funds, b.refill_mode, b.overflow_destination, b.priority, b.importance, a.currency
+SELECT b.id, b.user_id, b.name, b.source_account_id, b.deleted, b.created_at, b.modified_at, b.refill_amount, b.cap_mode, b.cap_multiplier, b.cap_amount, b.caf, b.keep_funds, b.refill_mode, b.overflow_destination, b.priority, b.importance, a.currency,
+    -- Whether the bucket has been refilled in the active cycle.
+    EXISTS (
+        SELECT 1 FROM refills r JOIN cycles c ON c.id = r.cycle_id
+        WHERE r.bucket_id = b.id AND c.state = 'active'
+    ) AS refilled
 FROM buckets b
 JOIN bank_accounts a ON a.id = b.source_account_id
 WHERE b.id = $1 AND b.user_id = $2 AND NOT b.deleted
@@ -106,6 +111,7 @@ type GetBucketParams struct {
 type GetBucketRow struct {
 	Bucket   Bucket
 	Currency string
+	Refilled bool
 }
 
 func (q *Queries) GetBucket(ctx context.Context, arg GetBucketParams) (GetBucketRow, error) {
@@ -130,6 +136,7 @@ func (q *Queries) GetBucket(ctx context.Context, arg GetBucketParams) (GetBucket
 		&i.Bucket.Priority,
 		&i.Bucket.Importance,
 		&i.Currency,
+		&i.Refilled,
 	)
 	return i, err
 }
@@ -182,7 +189,12 @@ func (q *Queries) GetDefaultRefillMode(ctx context.Context, id string) (string, 
 }
 
 const listBuckets = `-- name: ListBuckets :many
-SELECT b.id, b.user_id, b.name, b.source_account_id, b.deleted, b.created_at, b.modified_at, b.refill_amount, b.cap_mode, b.cap_multiplier, b.cap_amount, b.caf, b.keep_funds, b.refill_mode, b.overflow_destination, b.priority, b.importance, a.currency
+SELECT b.id, b.user_id, b.name, b.source_account_id, b.deleted, b.created_at, b.modified_at, b.refill_amount, b.cap_mode, b.cap_multiplier, b.cap_amount, b.caf, b.keep_funds, b.refill_mode, b.overflow_destination, b.priority, b.importance, a.currency,
+    -- Whether the bucket has been refilled in the active cycle.
+    EXISTS (
+        SELECT 1 FROM refills r JOIN cycles c ON c.id = r.cycle_id
+        WHERE r.bucket_id = b.id AND c.state = 'active'
+    ) AS refilled
 FROM buckets b
 JOIN bank_accounts a ON a.id = b.source_account_id
 WHERE b.user_id = $1 AND NOT b.deleted
@@ -192,6 +204,7 @@ ORDER BY lower(b.name), b.id
 type ListBucketsRow struct {
 	Bucket   Bucket
 	Currency string
+	Refilled bool
 }
 
 func (q *Queries) ListBuckets(ctx context.Context, userID string) ([]ListBucketsRow, error) {
@@ -222,6 +235,7 @@ func (q *Queries) ListBuckets(ctx context.Context, userID string) ([]ListBuckets
 			&i.Bucket.Priority,
 			&i.Bucket.Importance,
 			&i.Currency,
+			&i.Refilled,
 		); err != nil {
 			return nil, err
 		}

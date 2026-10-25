@@ -736,6 +736,39 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/v1/buckets/{bucketId}/refill:
+    parameters:
+      - $ref: "#/components/parameters/BucketId"
+    post:
+      operationId: refillBucket
+      tags: [buckets]
+      summary: Refill a bucket by hand
+      description: |
+        Refills a bucket with the *manual* refill mode now (spec §6). Without
+        Keep funds, TF is set to the refill amount (REF = RA − TF). With Keep
+        funds, the refill amount is added (REF = RA), and an Overflow (OVF)
+        removes what TF then has above the capacity.
+
+        A bucket is refilled at most once per cycle (409 `already_refilled`).
+        Buckets with another refill mode get 409 `wrong_refill_mode`. Like
+        every bucket transaction, it needs an active cycle (409
+        `no_active_cycle` or `cycle_overdue`).
+      responses:
+        "200":
+          description: The refilled bucket.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bucket"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
   /api/v1/transactions:
     get:
       operationId: listTransactions
@@ -838,6 +871,9 @@ paths:
         Bucket lines need an active cycle that `at` falls in (409
         `no_active_cycle` or `cycle_overdue`, 400 `invalid_request` if `at` is
         outside it). `at` defaults to now and can't be in the future.
+
+        An income can trigger the refill of its account's *on income*
+        buckets: see `triggers_refill`.
       requestBody:
         required: true
         content:
@@ -906,7 +942,8 @@ paths:
         A new `account_id` (or `to_account_id` for a transfer) moves the
         transaction: it is reversed and recorded again on the new account,
         and the response is the new transaction, whose `replaces` points to
-        the old one.
+        the old one. Refills the income triggered on the old account are
+        undone, and it triggers them on the new one if it can.
 
         Bucket lines can only change while the original time is in the
         active cycle (409 `bucket_lines_locked`); the bank amount,
@@ -951,6 +988,10 @@ paths:
         rules as for corrections apply: bucket lines must be in the active
         cycle (409 `bucket_lines_locked`), only INC, EXP, TRF, OPB and BLA
         (409 `not_correctable`), and only once (409 `already_reversed`).
+
+        Reversing an income undoes the refills it triggered in the active
+        cycle (their REF and OVF are reversed), so those buckets can be
+        refilled again. Refills in a finished cycle stay.
       responses:
         "200":
           description: The reversed transaction.
@@ -1071,6 +1112,33 @@ components:
             - $ref: "#/components/schemas/RefillMode"
           nullable: true
           description: The refill mode new buckets get when none is given. Null means `auto`.
+        income_refill_rules:
+          type: array
+          nullable: true
+          maxItems: 20
+          description: |
+            An income from `counterparty` (the same text, ignoring case) of at
+            least `min_amount` triggers the refill of its account's *on
+            income* buckets, unless the income says otherwise with
+            `triggers_refill` (spec §6). Null means no rules.
+          items:
+            $ref: "#/components/schemas/IncomeRefillRule"
+
+    IncomeRefillRule:
+      type: object
+      additionalProperties: false
+      required: [counterparty, min_amount]
+      properties:
+        counterparty:
+          type: string
+          minLength: 1
+          maxLength: 200
+          pattern: "\\S"
+        min_amount:
+          type: string
+          description: The smallest income that matches, at least 0.
+          pattern: "^[0-9]{1,12}(\\.[0-9]{1,2})?$"
+          example: "20000"
 
     AccountId:
       type: string
@@ -1372,6 +1440,7 @@ components:
         - overflow_destination
         - priority
         - importance
+        - refilled
         - created_at
       properties:
         id:
@@ -1425,6 +1494,11 @@ components:
           type: integer
           minimum: 1
           maximum: 10
+        refilled:
+          type: boolean
+          description: |
+            The bucket has been refilled in the active cycle (spec §6). A
+            bucket is refilled at most once per cycle.
         created_at:
           type: string
           format: date-time
@@ -1540,7 +1614,7 @@ components:
     Transaction:
       type: object
       additionalProperties: false
-      required: [id, type, at, counterparty, tags, created_at, created_by, corrected, reversed, replaces, replaced_by, bank_lines, bucket_lines]
+      required: [id, type, at, counterparty, tags, triggers_refill, created_at, created_by, corrected, reversed, replaces, replaced_by, bank_lines, bucket_lines]
       properties:
         id:
           $ref: "#/components/schemas/TransactionId"
@@ -1558,6 +1632,9 @@ components:
           description: The effective tags, from the newest correction.
           items:
             type: string
+        triggers_refill:
+          type: boolean
+          description: An income that triggers the refill of its account's *on income* buckets, from the newest correction.
         created_at:
           type: string
           format: date-time
@@ -1656,6 +1733,14 @@ components:
           items:
             type: string
             maxLength: 50
+        triggers_refill:
+          type: boolean
+          description: |
+            Only for an income: refill the *on income* buckets funded from
+            the account that haven't been refilled in this cycle (spec §6).
+            Omitted, the user's `income_refill_rules` decide; an explicit
+            value overrides them. `true` needs the income to be in the active
+            cycle (409 `refill_unavailable`).
         account_id:
           allOf:
             - $ref: "#/components/schemas/AccountId"
@@ -1725,6 +1810,13 @@ components:
           items:
             type: string
             maxLength: 50
+        triggers_refill:
+          type: boolean
+          description: |
+            Only for an income. `true` refills its account's *on income*
+            buckets now, if the income is in the active cycle (409
+            `refill_unavailable` otherwise). `false` undoes the refills it
+            triggered in the active cycle.
 
     Problem:
       type: object

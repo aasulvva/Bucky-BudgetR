@@ -458,6 +458,36 @@ export interface paths {
         patch: operations["updateBucket"];
         trace?: never;
     };
+    "/api/v1/buckets/{bucketId}/refill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bucketId: components["parameters"]["BucketId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refill a bucket by hand
+         * @description Refills a bucket with the *manual* refill mode now (spec §6). Without
+         *     Keep funds, TF is set to the refill amount (REF = RA − TF). With Keep
+         *     funds, the refill amount is added (REF = RA), and an Overflow (OVF)
+         *     removes what TF then has above the capacity.
+         *
+         *     A bucket is refilled at most once per cycle (409 `already_refilled`).
+         *     Buckets with another refill mode get 409 `wrong_refill_mode`. Like
+         *     every bucket transaction, it needs an active cycle (409
+         *     `no_active_cycle` or `cycle_overdue`).
+         */
+        post: operations["refillBucket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/transactions": {
         parameters: {
             query?: never;
@@ -487,6 +517,9 @@ export interface paths {
          *     Bucket lines need an active cycle that `at` falls in (409
          *     `no_active_cycle` or `cycle_overdue`, 400 `invalid_request` if `at` is
          *     outside it). `at` defaults to now and can't be in the future.
+         *
+         *     An income can trigger the refill of its account's *on income*
+         *     buckets: see `triggers_refill`.
          */
         post: operations["createTransaction"];
         delete?: never;
@@ -545,7 +578,8 @@ export interface paths {
          *     A new `account_id` (or `to_account_id` for a transfer) moves the
          *     transaction: it is reversed and recorded again on the new account,
          *     and the response is the new transaction, whose `replaces` points to
-         *     the old one.
+         *     the old one. Refills the income triggered on the old account are
+         *     undone, and it triggers them on the new one if it can.
          *
          *     Bucket lines can only change while the original time is in the
          *     active cycle (409 `bucket_lines_locked`); the bank amount,
@@ -579,6 +613,10 @@ export interface paths {
          *     rules as for corrections apply: bucket lines must be in the active
          *     cycle (409 `bucket_lines_locked`), only INC, EXP, TRF, OPB and BLA
          *     (409 `not_correctable`), and only once (409 `already_reversed`).
+         *
+         *     Reversing an income undoes the refills it triggered in the active
+         *     cycle (their REF and OVF are reversed), so those buckets can be
+         *     refilled again. Refills in a finished cycle stay.
          */
         post: operations["reverseTransaction"];
         delete?: never;
@@ -618,6 +656,21 @@ export interface components {
             locale?: string | null;
             /** @description The refill mode new buckets get when none is given. Null means `auto`. */
             default_refill_mode?: (string & components["schemas"]["RefillMode"]) | null;
+            /**
+             * @description An income from `counterparty` (the same text, ignoring case) of at
+             *     least `min_amount` triggers the refill of its account's *on
+             *     income* buckets, unless the income says otherwise with
+             *     `triggers_refill` (spec §6). Null means no rules.
+             */
+            income_refill_rules?: components["schemas"]["IncomeRefillRule"][] | null;
+        };
+        IncomeRefillRule: {
+            counterparty: string;
+            /**
+             * @description The smallest income that matches, at least 0.
+             * @example 20000
+             */
+            min_amount: string;
         };
         /**
          * @description 4-digit bank account ID.
@@ -816,6 +869,11 @@ export interface components {
             overflow_destination: components["schemas"]["OverflowDestination"];
             priority: boolean;
             importance: number;
+            /**
+             * @description The bucket has been refilled in the active cycle (spec §6). A
+             *     bucket is refilled at most once per cycle.
+             */
+            refilled: boolean;
             /** Format: date-time */
             created_at: string;
         };
@@ -884,6 +942,8 @@ export interface components {
             counterparty: string;
             /** @description The effective tags, from the newest correction. */
             tags: string[];
+            /** @description An income that triggers the refill of its account's *on income* buckets, from the newest correction. */
+            triggers_refill: boolean;
             /** Format: date-time */
             created_at: string;
             /** @description The user who entered it (6-digit user ID), or null for the system. */
@@ -929,6 +989,14 @@ export interface components {
             counterparty?: string;
             /** @description Tag names. Existing tags are reused, ignoring case. */
             tags?: string[];
+            /**
+             * @description Only for an income: refill the *on income* buckets funded from
+             *     the account that haven't been refilled in this cycle (spec §6).
+             *     Omitted, the user's `income_refill_rules` decide; an explicit
+             *     value overrides them. `true` needs the income to be in the active
+             *     cycle (409 `refill_unavailable`).
+             */
+            triggers_refill?: boolean;
             /** @description The account of an income or expense, or the sending account of a transfer. */
             account_id: components["schemas"]["AccountId"];
             /** @description The receiving account of a transfer. */
@@ -959,6 +1027,13 @@ export interface components {
             counterparty?: string;
             /** @description Replaces all tags; an empty list removes them. */
             tags?: string[];
+            /**
+             * @description Only for an income. `true` refills its account's *on income*
+             *     buckets now, if the income is in the active cycle (409
+             *     `refill_unavailable` otherwise). `false` undoes the refills it
+             *     triggered in the active cycle.
+             */
+            triggers_refill?: boolean;
         };
         /** @description RFC 9457 problem details. */
         Problem: {
@@ -1700,6 +1775,32 @@ export interface operations {
                 };
             };
             400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    refillBucket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bucketId: components["parameters"]["BucketId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The refilled bucket. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Bucket"];
+                };
+            };
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];

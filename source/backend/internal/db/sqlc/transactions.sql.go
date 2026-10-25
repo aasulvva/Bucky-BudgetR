@@ -140,7 +140,7 @@ func (q *Queries) ListTagsFor(ctx context.Context, ids []string) ([]ListTagsForR
 }
 
 const listTransactionFamilies = `-- name: ListTransactionFamilies :many
-SELECT id, user_id, parent_id, correction_type, transaction_type, transaction_at, counterparty, created_at, created_by, replaces_id FROM transaction_headers
+SELECT id, user_id, parent_id, correction_type, transaction_type, transaction_at, counterparty, created_at, created_by, replaces_id, triggers_refill FROM transaction_headers
 WHERE user_id = $1
   AND (id = ANY($2::text[]) OR parent_id = ANY($2::text[]))
 ORDER BY correction_type <> 'none', created_at, id
@@ -173,6 +173,7 @@ func (q *Queries) ListTransactionFamilies(ctx context.Context, arg ListTransacti
 			&i.CreatedAt,
 			&i.CreatedBy,
 			&i.ReplacesID,
+			&i.TriggersRefill,
 		); err != nil {
 			return nil, err
 		}
@@ -185,7 +186,7 @@ func (q *Queries) ListTransactionFamilies(ctx context.Context, arg ListTransacti
 }
 
 const listTransactions = `-- name: ListTransactions :many
-SELECT h.id, h.user_id, h.parent_id, h.correction_type, h.transaction_type, h.transaction_at, h.counterparty, h.created_at, h.created_by, h.replaces_id FROM transaction_headers h
+SELECT h.id, h.user_id, h.parent_id, h.correction_type, h.transaction_type, h.transaction_at, h.counterparty, h.created_at, h.created_by, h.replaces_id, h.triggers_refill FROM transaction_headers h
 JOIN LATERAL (
     SELECT c.id, c.counterparty FROM transaction_headers c
     WHERE c.id = h.id OR c.parent_id = h.id
@@ -264,6 +265,7 @@ func (q *Queries) ListTransactions(ctx context.Context, arg ListTransactionsPara
 			&i.CreatedAt,
 			&i.CreatedBy,
 			&i.ReplacesID,
+			&i.TriggersRefill,
 		); err != nil {
 			return nil, err
 		}

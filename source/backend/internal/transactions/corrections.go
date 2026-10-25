@@ -50,6 +50,9 @@ type Changes struct {
 	SetBuckets   bool
 	Counterparty *string
 	Tags         *[]string
+	// TriggersRefill sets whether an income triggers a refill: true refills
+	// now, false undoes the refills it triggered in the active cycle.
+	TriggersRefill *bool
 }
 
 // Correct records an adjustment that turns the transaction into what c
@@ -112,12 +115,18 @@ func (s *Service) Correct(ctx context.Context, userID, id string, c Changes) (Tr
 		if _, err := s.ledger.Record(ctx, tx, ledger.Entry{
 			UserID: userID, CreatedBy: userID, Type: cur.Type, Correction: sqlc.CorrectionTypeAdjustment,
 			ParentID: cur.ID, At: cur.At, Counterparty: want.Counterparty, Tags: want.Tags,
-			BankLines: bank, BucketLines: buckets,
+			TriggersRefill: *want.TriggersRefill, BankLines: bank, BucketLines: buckets,
 		}); err != nil {
 			return correctionError(err)
 		}
 		outID = cur.ID
-		return nil
+		if s.refills == nil || *want.TriggersRefill == cur.TriggersRefill {
+			return nil
+		}
+		if *want.TriggersRefill {
+			return s.refills.OnIncome(ctx, tx, userID, cur.ID, want.AccountID, cur.At, true)
+		}
+		return s.refills.UndoIncome(ctx, tx, userID, cur.ID)
 	})
 	if err != nil {
 		return Transaction{}, err
@@ -152,7 +161,7 @@ func (s *Service) reverse(ctx context.Context, tx pgx.Tx, userID string, cur Tra
 	}
 	e := ledger.Entry{
 		UserID: userID, CreatedBy: userID, Type: cur.Type, Correction: sqlc.CorrectionTypeReversal,
-		ParentID: cur.ID, At: cur.At, Counterparty: cur.Counterparty, Tags: cur.Tags,
+		ParentID: cur.ID, At: cur.At, Counterparty: cur.Counterparty, Tags: cur.Tags, TriggersRefill: cur.TriggersRefill,
 	}
 	for _, l := range cur.BankLines {
 		e.BankLines = append(e.BankLines, ledger.BankLine{AccountID: l.AccountID, Amount: l.Amount.Neg()})
@@ -162,6 +171,10 @@ func (s *Service) reverse(ctx context.Context, tx pgx.Tx, userID string, cur Tra
 	}
 	if _, err := s.ledger.Record(ctx, tx, e); err != nil {
 		return correctionError(err)
+	}
+	// Reversing (or moving) an income undoes the refills it triggered.
+	if cur.TriggersRefill && s.refills != nil {
+		return s.refills.UndoIncome(ctx, tx, userID, cur.ID)
 	}
 	return nil
 }
@@ -201,7 +214,10 @@ func (s *Service) lock(ctx context.Context, tx pgx.Tx, userID, id string) (Trans
 // desired returns the transaction as c wants it, in New's terms (positive
 // amounts), checked against the rules that don't need the database.
 func desired(cur Transaction, c Changes) (New, error) {
-	n := New{Type: cur.Type, At: cur.At, Counterparty: cur.Counterparty, Tags: cur.Tags}
+	n := New{Type: cur.Type, At: cur.At, Counterparty: cur.Counterparty, Tags: cur.Tags, TriggersRefill: &cur.TriggersRefill}
+	if c.TriggersRefill != nil {
+		n.TriggersRefill = c.TriggersRefill
+	}
 	if c.Counterparty != nil {
 		n.Counterparty = *c.Counterparty
 	}
@@ -210,7 +226,7 @@ func desired(cur Transaction, c Changes) (New, error) {
 	}
 
 	if cur.Type == sqlc.TransactionTypeOPB || cur.Type == sqlc.TransactionTypeBLA {
-		if c.AccountID != nil || c.ToAccountID != nil || c.SetBuckets {
+		if c.AccountID != nil || c.ToAccountID != nil || c.SetBuckets || c.TriggersRefill != nil {
 			return New{}, fmt.Errorf("%w: only the amount, counterparty and tags of a %s can change", ErrInvalid, cur.Type)
 		}
 		// The account is the original line's; the effective line is gone
@@ -331,7 +347,7 @@ func diff(cur Transaction, want New) ([]ledger.BankLine, []ledger.BucketLine, er
 // sameHeader reports whether want has t's counterparty and tags, the way the
 // ledger stores them: trimmed, and tags reused by name ignoring case.
 func sameHeader(t Transaction, want New) bool {
-	if strings.TrimSpace(want.Counterparty) != t.Counterparty {
+	if strings.TrimSpace(want.Counterparty) != t.Counterparty || *want.TriggersRefill != t.TriggersRefill {
 		return false
 	}
 	norm := func(tags []string) []string {

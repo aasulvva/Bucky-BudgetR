@@ -25,6 +25,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ids"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/money"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/refill"
 )
 
 var (
@@ -64,6 +65,10 @@ type New struct {
 	// buckets. Each bucket must be funded from AccountID, and together they
 	// can't exceed Amount; the rest isn't tied to a bucket.
 	Buckets []BucketAmount
+	// TriggersRefill marks an income that refills its account's "On income"
+	// buckets (spec §6). Nil leaves it to the user's income rules; an
+	// explicit value overrides them.
+	TriggersRefill *bool
 }
 
 // BucketAmount is a positive amount for one bucket.
@@ -88,6 +93,8 @@ type Transaction struct {
 	// Replaces is the transaction this one replaced when it was moved to
 	// another account; ReplacedBy is the one that replaced it.
 	Replaces, ReplacedBy string
+	// TriggersRefill is set on an income that triggers a refill.
+	TriggersRefill bool
 	// BankLines and BucketLines are the effective amounts: each account's or
 	// bucket's lines summed over the original and its corrections. Lines
 	// that sum to zero are left out.
@@ -152,13 +159,16 @@ type Page struct {
 type Options struct {
 	// Now returns the current time. Defaults to time.Now.
 	Now func() time.Time
+	// Refills runs the "On income" refills. Nil means incomes never refill.
+	Refills *refill.Service
 }
 
 // Service creates and lists transactions.
 type Service struct {
-	pool   *pgxpool.Pool
-	ledger *ledger.Ledger
-	now    func() time.Time
+	pool    *pgxpool.Pool
+	ledger  *ledger.Ledger
+	now     func() time.Time
+	refills *refill.Service
 }
 
 // NewService returns a Service that records transactions in l.
@@ -166,7 +176,7 @@ func NewService(pool *pgxpool.Pool, l *ledger.Ledger, opts Options) *Service {
 	if opts.Now == nil {
 		opts.Now = time.Now
 	}
-	return &Service{pool: pool, ledger: l, now: opts.Now}
+	return &Service{pool: pool, ledger: l, now: opts.Now, refills: opts.Refills}
 }
 
 // Create records an income, expense or transfer.
@@ -197,7 +207,8 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Transaction
 }
 
 // record checks n and records it inside tx. replaces is the transaction it
-// replaces, if any.
+// replaces, if any. An income that triggers a refill refills its account's
+// "On income" buckets.
 func (s *Service) record(ctx context.Context, tx pgx.Tx, userID string, n New, replaces string) (*ledger.Transaction, error) {
 	bank, buckets, err := signedLines(n)
 	if err != nil {
@@ -210,10 +221,28 @@ func (s *Service) record(ctx context.Context, tx pgx.Tx, userID string, n New, r
 	if err := checkBuckets(ctx, q, userID, n); err != nil {
 		return nil, err
 	}
-	return s.ledger.Record(ctx, tx, ledger.Entry{
-		UserID: userID, CreatedBy: userID, Type: n.Type, At: n.At, ReplacesID: replaces,
+	triggers := n.TriggersRefill != nil && *n.TriggersRefill
+	if n.TriggersRefill == nil && n.Type == sqlc.TransactionTypeINC && s.refills != nil {
+		if triggers, err = refill.Triggers(ctx, tx, userID, n.Counterparty, n.Amount); err != nil {
+			return nil, err
+		}
+	}
+	t, err := s.ledger.Record(ctx, tx, ledger.Entry{
+		UserID: userID, CreatedBy: userID, Type: n.Type, At: n.At, ReplacesID: replaces, TriggersRefill: triggers,
 		Counterparty: n.Counterparty, Tags: n.Tags, BankLines: bank, BucketLines: buckets,
 	})
+	if err != nil {
+		return nil, err
+	}
+	if triggers && s.refills != nil {
+		// Only a flag the user just set must take effect; a moved income
+		// carries its flag along and refills only if it can.
+		strict := n.TriggersRefill != nil && replaces == ""
+		if err := s.refills.OnIncome(ctx, tx, userID, t.Header.ID, n.AccountID, t.Header.TransactionAt, strict); err != nil {
+			return nil, err
+		}
+	}
+	return t, nil
 }
 
 // signedLines checks n against the rules of its type that don't need the
@@ -221,6 +250,9 @@ func (s *Service) record(ctx context.Context, tx pgx.Tx, userID string, n New, r
 func signedLines(n New) ([]ledger.BankLine, []ledger.BucketLine, error) {
 	if err := positive("amount", n.Amount); err != nil {
 		return nil, nil, err
+	}
+	if n.TriggersRefill != nil && *n.TriggersRefill && n.Type != sqlc.TransactionTypeINC {
+		return nil, nil, fmt.Errorf("%w: only an income can trigger a refill", ErrInvalid)
 	}
 	switch n.Type {
 	case sqlc.TransactionTypeINC, sqlc.TransactionTypeEXP:
@@ -429,7 +461,8 @@ func merge(fam []sqlc.TransactionHeader, bank []sqlc.BankTransaction, buckets []
 	orig := fam[0]
 	t := Transaction{
 		ID: orig.ID, Type: orig.TransactionType, At: orig.TransactionAt, Counterparty: fam[len(fam)-1].Counterparty,
-		Tags: tags, CreatedAt: orig.CreatedAt, CreatedBy: orig.CreatedBy.String, Replaces: orig.ReplacesID.String,
+		TriggersRefill: fam[len(fam)-1].TriggersRefill,
+		Tags:           tags, CreatedAt: orig.CreatedAt, CreatedBy: orig.CreatedBy.String, Replaces: orig.ReplacesID.String,
 	}
 	if t.Tags == nil {
 		t.Tags = []string{}

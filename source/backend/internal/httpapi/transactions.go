@@ -57,7 +57,7 @@ func (s *server) CreateTransaction(ctx context.Context, req api.CreateTransactio
 	b := req.Body
 	n := transactions.New{
 		Type: sqlc.TransactionType(b.Type), Counterparty: deref(b.Counterparty),
-		AccountID: b.AccountId, ToAccountID: deref(b.ToAccountId),
+		AccountID: b.AccountId, ToAccountID: deref(b.ToAccountId), TriggersRefill: b.TriggersRefill,
 	}
 	if b.At != nil {
 		n.At = *b.At
@@ -102,7 +102,10 @@ func (s *server) CorrectTransaction(ctx context.Context, req api.CorrectTransact
 		return nil, err
 	}
 	b := req.Body
-	c := transactions.Changes{AccountID: b.AccountId, ToAccountID: b.ToAccountId, Counterparty: b.Counterparty, Tags: b.Tags}
+	c := transactions.Changes{
+		AccountID: b.AccountId, ToAccountID: b.ToAccountId, Counterparty: b.Counterparty, Tags: b.Tags,
+		TriggersRefill: b.TriggersRefill,
+	}
 	if b.Amount != nil {
 		d, err := parseAmount(*b.Amount)
 		if err != nil {
@@ -171,24 +174,25 @@ func transactionError(err error) error {
 		// a bucket given twice.
 		return &Error{Status: http.StatusBadRequest, Code: "invalid_request", Detail: invalidDetail(err, ledger.ErrInvalid), Err: err}
 	}
-	return ledgerError(err)
+	return refillError(err)
 }
 
 func toAPITransaction(t transactions.Transaction) api.Transaction {
 	out := api.Transaction{
-		Id:           t.ID,
-		Type:         api.TransactionType(t.Type),
-		At:           t.At.UTC(),
-		Counterparty: t.Counterparty,
-		Tags:         t.Tags,
-		CreatedAt:    t.CreatedAt.UTC(),
-		CreatedBy:    nullableString(t.CreatedBy),
-		Corrected:    t.Corrected,
-		Reversed:     t.Reversed,
-		Replaces:     nullableString(t.Replaces),
-		ReplacedBy:   nullableString(t.ReplacedBy),
-		BankLines:    toAPIBankLines(t.BankLines),
-		BucketLines:  toAPIBucketLines(t.BucketLines),
+		Id:             t.ID,
+		Type:           api.TransactionType(t.Type),
+		At:             t.At.UTC(),
+		Counterparty:   t.Counterparty,
+		Tags:           t.Tags,
+		TriggersRefill: t.TriggersRefill,
+		CreatedAt:      t.CreatedAt.UTC(),
+		CreatedBy:      nullableString(t.CreatedBy),
+		Corrected:      t.Corrected,
+		Reversed:       t.Reversed,
+		Replaces:       nullableString(t.Replaces),
+		ReplacedBy:     nullableString(t.ReplacedBy),
+		BankLines:      toAPIBankLines(t.BankLines),
+		BucketLines:    toAPIBucketLines(t.BucketLines),
 	}
 	if t.History != nil {
 		h := make([]api.TransactionVersion, len(t.History))
