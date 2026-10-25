@@ -20,13 +20,17 @@ import (
 
 func dec(s string) decimal.Decimal { return decimal.RequireFromString(s) }
 
-func date(s string) time.Time {
-	d, err := time.Parse(time.DateOnly, s)
+func at(s string) time.Time {
+	t, err := time.Parse(time.RFC3339Nano, s)
 	if err != nil {
 		panic(err)
 	}
-	return d
+	return t
 }
+
+// October 2026 in Oslo: from 1 October 00:00 (+02:00) up to 1 November
+// 00:00 (+01:00, after summer time ends).
+var octStart, octEnd = at("2026-09-30T22:00:00Z"), at("2026-10-31T23:00:00Z")
 
 // world is one user with two accounts, two buckets on the first account and
 // an active cycle for October 2026.
@@ -50,16 +54,16 @@ func setup(t *testing.T) world {
 	w.acc2 = ledgertest.Account(t, pool, w.user, "")
 	w.bucket1 = ledgertest.Bucket(t, pool, w.user, w.acc1)
 	w.bucket2 = ledgertest.Bucket(t, pool, w.user, w.acc1)
-	w.cycle = ledgertest.Cycle(t, pool, w.user, date("2026-10-01"), date("2026-10-31"), "active")
+	w.cycle = ledgertest.Cycle(t, pool, w.user, octStart, octEnd, "active")
 	w.otherUser = authtest.NewUser(t, pool, "bob").ID
 	w.otherAc = ledgertest.Account(t, pool, w.otherUser, "")
 	w.otherBucket = ledgertest.Bucket(t, pool, w.otherUser, w.otherAc)
-	ledgertest.Cycle(t, pool, w.otherUser, date("2026-10-01"), date("2026-10-31"), "active")
+	ledgertest.Cycle(t, pool, w.otherUser, octStart, octEnd, "active")
 	return w
 }
 
 func (w world) entry(typ sqlc.TransactionType) ledger.Entry {
-	return ledger.Entry{UserID: w.user, CreatedBy: w.user, Type: typ, Date: date("2026-10-15")}
+	return ledger.Entry{UserID: w.user, CreatedBy: w.user, Type: typ, At: at("2026-10-15T10:00:00Z")}
 }
 
 func bank(account, amount string) []ledger.BankLine {
@@ -86,7 +90,8 @@ func count(t *testing.T, pool *pgxpool.Pool, table string) int {
 func TestRecordExpense(t *testing.T) {
 	w := setup(t)
 	e := w.entry(sqlc.TransactionTypeEXP)
-	e.Date = time.Date(2026, 10, 15, 23, 30, 0, 0, time.FixedZone("CET", 3600)) // the calendar date counts
+	// 16 October 00:30 in Oslo is 15 October 22:30 UTC; the ID uses the UTC date.
+	e.At = time.Date(2026, 10, 16, 0, 30, 0, 123456789, time.FixedZone("CEST", 2*3600))
 	e.Counterparty = "  Rema 1000 "
 	e.Tags = []string{"food", " Groceries", "FOOD", ""}
 	e.BankLines = bank(w.acc1, "-250.40")
@@ -98,9 +103,9 @@ func TestRecordExpense(t *testing.T) {
 	}
 	h := tx.Header
 	if !strings.HasPrefix(h.ID, "20261015") || len(h.ID) != 16 {
-		t.Errorf("ID %s doesn't start with the transaction date", h.ID)
+		t.Errorf("ID %s doesn't start with the UTC transaction date", h.ID)
 	}
-	if !h.TransactionDate.Equal(date("2026-10-15")) || h.Counterparty != "Rema 1000" ||
+	if !h.TransactionAt.Equal(at("2026-10-15T22:30:00.123456Z")) || h.Counterparty != "Rema 1000" ||
 		h.CorrectionType != sqlc.CorrectionTypeNone || h.ParentID.Valid || h.CreatedBy.String != w.user {
 		t.Errorf("unexpected header %+v", h)
 	}
@@ -276,14 +281,15 @@ func TestCycles(t *testing.T) {
 	e := w.entry(sqlc.TransactionTypeREF)
 	e.BucketLines = buckets(w.bucket1, "100")
 
-	for _, d := range []string{"2026-10-01", "2026-10-31"} {
-		e.Date = date(d)
+	// The cycle includes its start and ends just before its end.
+	for _, d := range []time.Time{octStart, octEnd.Add(-time.Microsecond)} {
+		e.At = d
 		if _, err := w.ledger.Create(t.Context(), w.pool, e); err != nil {
 			t.Errorf("%s, inside the cycle: %v", d, err)
 		}
 	}
-	for _, d := range []string{"2026-09-30", "2026-11-01"} {
-		e.Date = date(d)
+	for _, d := range []time.Time{octStart.Add(-time.Microsecond), octEnd} {
+		e.At = d
 		if _, err := w.ledger.Create(t.Context(), w.pool, e); !errors.Is(err, ledger.ErrOutsideCycle) {
 			t.Errorf("%s, outside the cycle: %v", d, err)
 		}
@@ -293,9 +299,9 @@ func TestCycles(t *testing.T) {
 	carol := authtest.NewUser(t, w.pool, "carol").ID
 	acc := ledgertest.Account(t, w.pool, carol, "")
 	b := ledgertest.Bucket(t, w.pool, carol, acc)
-	ledgertest.Cycle(t, w.pool, carol, date("2026-09-01"), date("2026-09-30"), "finished")
-	ledgertest.Cycle(t, w.pool, carol, date("2026-11-01"), date("2026-11-30"), "future")
-	inc := ledger.Entry{UserID: carol, Type: sqlc.TransactionTypeINC, Date: date("2026-10-15"), BankLines: bank(acc, "100")}
+	ledgertest.Cycle(t, w.pool, carol, at("2026-08-31T22:00:00Z"), octStart, "finished")
+	ledgertest.Cycle(t, w.pool, carol, octEnd, at("2026-11-30T23:00:00Z"), "future")
+	inc := ledger.Entry{UserID: carol, Type: sqlc.TransactionTypeINC, At: at("2026-10-15T10:00:00Z"), BankLines: bank(acc, "100")}
 	if _, err := w.ledger.Create(t.Context(), w.pool, inc); err != nil {
 		t.Errorf("bank-only without a cycle: %v", err)
 	}

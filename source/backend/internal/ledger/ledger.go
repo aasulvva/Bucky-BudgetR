@@ -40,9 +40,9 @@ var (
 	// ErrNoActiveCycle means the entry has bucket lines but the user has no
 	// active cycle.
 	ErrNoActiveCycle = errors.New("no active cycle")
-	// ErrOutsideCycle means the entry has bucket lines but its date is
+	// ErrOutsideCycle means the entry has bucket lines but its time is
 	// outside the active cycle.
-	ErrOutsideCycle = errors.New("transaction date is outside the active cycle")
+	ErrOutsideCycle = errors.New("transaction time is outside the active cycle")
 	// ErrUnsupported means the transaction type isn't available yet.
 	ErrUnsupported = errors.New("transaction type not supported")
 )
@@ -64,9 +64,9 @@ type Entry struct {
 	// and reversals need ParentID.
 	Correction sqlc.CorrectionType
 	ParentID   string
-	// Date is the transaction's calendar date, read in Date's own location.
-	// The time of day is ignored.
-	Date         time.Time
+	// At is when the transaction happened. It is stored in UTC, to the
+	// microsecond.
+	At           time.Time
 	Counterparty string
 	Tags         []string
 	BankLines    []BankLine
@@ -179,7 +179,7 @@ func (l *Ledger) Record(ctx context.Context, tx pgx.Tx, e Entry) (*Transaction, 
 
 	createdBy := pgtype.Text{String: e.CreatedBy, Valid: e.CreatedBy != ""}
 	t := &Transaction{}
-	_, err = ids.Insert(ctx, ids.Transaction, func() string { return ids.NewTransaction(e.Date) },
+	_, err = ids.Insert(ctx, ids.Transaction, func() string { return ids.NewTransaction(e.At) },
 		func(ctx context.Context, id string) (bool, error) {
 			var err error
 			t.Header, err = q.CreateTransactionHeader(ctx, sqlc.CreateTransactionHeaderParams{
@@ -188,7 +188,7 @@ func (l *Ledger) Record(ctx context.Context, tx pgx.Tx, e Entry) (*Transaction, 
 				ParentID:        pgtype.Text{String: e.ParentID, Valid: e.ParentID != ""},
 				CorrectionType:  e.Correction,
 				TransactionType: e.Type,
-				TransactionDate: e.Date,
+				TransactionAt:   e.At,
 				Counterparty:    e.Counterparty,
 				CreatedBy:       createdBy,
 			})
@@ -305,11 +305,10 @@ func normalize(e Entry) (Entry, error) {
 	if e.CreatedBy != "" && !ids.User.Valid(e.CreatedBy) {
 		return invalid("created by %q", e.CreatedBy)
 	}
-	if e.Date.IsZero() {
-		return invalid("no transaction date")
+	if e.At.IsZero() {
+		return invalid("no transaction time")
 	}
-	y, m, d := e.Date.Date()
-	e.Date = time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+	e.At = e.At.UTC().Truncate(time.Microsecond)
 
 	if e.Type == sqlc.TransactionTypeINP {
 		return Entry{}, fmt.Errorf("%w: %s", ErrUnsupported, e.Type)
@@ -483,7 +482,7 @@ func firstMissing[R any](want []string, rows []R, id func(R) string) string {
 }
 
 // activeCycle returns the user's active cycle, locked against being ended,
-// after checking that the entry's date falls inside it.
+// after checking that the entry's time falls inside it.
 func activeCycle(ctx context.Context, q *sqlc.Queries, e Entry) (string, error) {
 	c, err := q.GetActiveCycle(ctx, e.UserID)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -492,9 +491,9 @@ func activeCycle(ctx context.Context, q *sqlc.Queries, e Entry) (string, error) 
 	if err != nil {
 		return "", err
 	}
-	if e.Date.Before(c.StartDate) || e.Date.After(c.EndDate) {
-		return "", fmt.Errorf("%w (%s to %s)", ErrOutsideCycle,
-			c.StartDate.Format(time.DateOnly), c.EndDate.Format(time.DateOnly))
+	if e.At.Before(c.StartAt) || !e.At.Before(c.EndAt) {
+		return "", fmt.Errorf("%w (%s up to %s)", ErrOutsideCycle,
+			c.StartAt.UTC().Format(time.RFC3339), c.EndAt.UTC().Format(time.RFC3339))
 	}
 	return c.ID, nil
 }

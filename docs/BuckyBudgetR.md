@@ -68,12 +68,13 @@ A budget period. Usually a month, but its start and end dates can be set freely,
 | ----- | ----- |
 | Cycle-ID | `<6-digit User-ID><6-digit random>` |
 | Owner | user |
-| Start date | starts 00:00:00 |
-| End date | ends 23:59:59 |
+| Start | the moment the cycle starts, stored in UTC |
+| End | the moment the cycle ends (exclusive), stored in UTC |
 | State | future / active / finished |
 
 **Rules**
 - Cycles apply to the whole user. A user has **at most one active cycle**.
+- The user picks start and end **dates**. They are stored as the UTC moments of local midnight: a cycle from 01.11 to 30.11 in Oslo runs from 31.10 23:00 UTC up to 30.11 23:00 UTC.
 - If no cycle is active, the user is prompted to create one.
 - Cycles are **ended manually**, and can be ended before their end date.
 - Future cycles can be set up in advance. When a cycle ends, the next applicable future cycle starts automatically.
@@ -116,11 +117,11 @@ Transactions are immutable. An edit creates a **correction** (e.g. 100 NOK corre
 
 | Field | Notes |
 | ----- | ----- |
-| Transaction-ID | `<YYYYMMDD><8-digit random>` |
+| Transaction-ID | `<YYYYMMDD><8-digit random>`, the UTC date of the transaction time |
 | Parent transaction | set on corrections |
 | Correction type | none / adjustment / reversal |
 | Transaction type | see 5.4 |
-| Transaction date | |
+| Transaction time | date and time, stored in UTC and shown in local time. The ID's date is the UTC date. |
 | Company/Person | counterparty for external transactions |
 | Tags | per-user, free text; reused by name (case-insensitive) |
 | Bank lines / bucket lines | links |
@@ -167,7 +168,7 @@ For foreign-currency transactions, record the amount in the account currency as 
 Only **INC, EXP, TRF and INP** can be created from the *Create transaction* screen.
 
 ### 5.5 Rules
-- A bucket line belongs to the **active cycle** of the bucket's owner, and the transaction date must fall inside that cycle.
+- A bucket line belongs to the **active cycle** of the bucket's owner, and the transaction time must fall inside that cycle.
 - **Corrections and reversals that affect buckets are only allowed inside the active cycle.** Once a cycle is finished, its bucket lines are locked.
 - An Internal Payment can only be created by the payer. Users cannot "request" money from other users.
 - **Math:** calculate with full precision. Stored amounts use 2 decimals, rounded half away from zero (0.005 → 0.01, −0.005 → −0.01). Exchange rates use 8 decimals.

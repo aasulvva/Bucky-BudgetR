@@ -195,8 +195,8 @@ type BucketTransaction struct {
 type Cycle struct {
 	ID         string
 	UserID     string
-	StartDate  time.Time
-	EndDate    time.Time
+	StartAt    time.Time
+	EndAt      time.Time
 	State      CycleState
 	CreatedAt  time.Time
 	ModifiedAt time.Time
@@ -225,7 +225,7 @@ type TransactionHeader struct {
 	ParentID        pgtype.Text
 	CorrectionType  CorrectionType
 	TransactionType TransactionType
-	TransactionDate time.Time
+	TransactionAt   time.Time
 	Counterparty    string
 	CreatedAt       time.Time
 	CreatedBy       pgtype.Text

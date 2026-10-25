@@ -25,12 +25,12 @@ func Account(t testing.TB, pool *pgxpool.Pool, userID, currency string) string {
 	})
 }
 
-// Cycle creates a cycle for userID from start to end (inclusive dates) in
+// Cycle creates a cycle for userID from start up to (not including) end, in
 // the given state ("future", "active" or "finished") and returns its ID.
 func Cycle(t testing.TB, pool *pgxpool.Pool, userID string, start, end time.Time, state string) string {
 	t.Helper()
 	return insert(t, ids.Cycle, func() string { return ids.NewCycle(userID) }, func(ctx context.Context, id string) error {
-		return pool.QueryRow(ctx, `INSERT INTO cycles (id, user_id, start_date, end_date, state) VALUES ($1, $2, $3, $4, $5)
+		return pool.QueryRow(ctx, `INSERT INTO cycles (id, user_id, start_at, end_at, state) VALUES ($1, $2, $3, $4, $5)
 			ON CONFLICT (id) DO NOTHING RETURNING id`, id, userID, start, end, state).Scan(&id)
 	})
 }
