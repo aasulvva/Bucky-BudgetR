@@ -13,6 +13,63 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+type AccountType string
+
+const (
+	AccountTypeUsage      AccountType = "usage"
+	AccountTypeSavings    AccountType = "savings"
+	AccountTypeBsu        AccountType = "bsu"
+	AccountTypeFund       AccountType = "fund"
+	AccountTypeInvestment AccountType = "investment"
+)
+
+func (e *AccountType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = AccountType(s)
+	case string:
+		*e = AccountType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for AccountType: %T", src)
+	}
+	return nil
+}
+
+type NullAccountType struct {
+	AccountType AccountType
+	Valid       bool // Valid is true if AccountType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullAccountType) Scan(value interface{}) error {
+	if value == nil {
+		ns.AccountType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.AccountType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullAccountType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.AccountType), nil
+}
+
+func (e AccountType) Valid() bool {
+	switch e {
+	case AccountTypeUsage,
+		AccountTypeSavings,
+		AccountTypeBsu,
+		AccountTypeFund,
+		AccountTypeInvestment:
+		return true
+	}
+	return false
+}
+
 type CorrectionType string
 
 const (
@@ -56,6 +113,16 @@ func (ns NullCorrectionType) Value() (driver.Value, error) {
 	return string(ns.CorrectionType), nil
 }
 
+func (e CorrectionType) Valid() bool {
+	switch e {
+	case CorrectionTypeNone,
+		CorrectionTypeAdjustment,
+		CorrectionTypeReversal:
+		return true
+	}
+	return false
+}
+
 type CycleState string
 
 const (
@@ -97,6 +164,16 @@ func (ns NullCycleState) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.CycleState), nil
+}
+
+func (e CycleState) Valid() bool {
+	switch e {
+	case CycleStateFuture,
+		CycleStateActive,
+		CycleStateFinished:
+		return true
+	}
+	return false
 }
 
 type TransactionType string
@@ -150,14 +227,33 @@ func (ns NullTransactionType) Value() (driver.Value, error) {
 	return string(ns.TransactionType), nil
 }
 
+func (e TransactionType) Valid() bool {
+	switch e {
+	case TransactionTypeOPB,
+		TransactionTypeBLA,
+		TransactionTypeINC,
+		TransactionTypeEXP,
+		TransactionTypeTRF,
+		TransactionTypeINP,
+		TransactionTypeOPF,
+		TransactionTypeREF,
+		TransactionTypeBUA,
+		TransactionTypeBAT,
+		TransactionTypeOVF:
+		return true
+	}
+	return false
+}
+
 type BankAccount struct {
-	ID         string
-	UserID     string
-	Name       string
-	Currency   string
-	Deleted    bool
-	CreatedAt  time.Time
-	ModifiedAt time.Time
+	ID          string
+	UserID      string
+	Name        string
+	Currency    string
+	Deleted     bool
+	CreatedAt   time.Time
+	ModifiedAt  time.Time
+	AccountType AccountType
 }
 
 type BankTransaction struct {

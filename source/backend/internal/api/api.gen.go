@@ -11,16 +11,64 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/oapi-codegen/nullable"
 	"github.com/oapi-codegen/runtime"
 )
+
+// Defines values for AccountDeleteRemainingFundsAction.
+const (
+	Adjust   AccountDeleteRemainingFundsAction = "adjust"
+	Transfer AccountDeleteRemainingFundsAction = "transfer"
+)
+
+// Valid indicates whether the value is a known member of the AccountDeleteRemainingFundsAction enum.
+func (e AccountDeleteRemainingFundsAction) Valid() bool {
+	switch e {
+	case Adjust:
+		return true
+	case Transfer:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccountType.
+const (
+	Bsu        AccountType = "bsu"
+	Fund       AccountType = "fund"
+	Investment AccountType = "investment"
+	Savings    AccountType = "savings"
+	Usage      AccountType = "usage"
+)
+
+// Valid indicates whether the value is a known member of the AccountType enum.
+func (e AccountType) Valid() bool {
+	switch e {
+	case Bsu:
+		return true
+	case Fund:
+		return true
+	case Investment:
+		return true
+	case Savings:
+		return true
+	case Usage:
+		return true
+	default:
+		return false
+	}
+}
 
 // Defines values for StatusStatus.
 const (
@@ -36,6 +84,114 @@ func (e StatusStatus) Valid() bool {
 		return false
 	}
 }
+
+// Account defines model for Account.
+type Account struct {
+	// Balance An amount with at most 2 decimals, as a string.
+	//
+	// Example: 1234.50
+	Balance   Amount    `json:"balance"`
+	CreatedAt time.Time `json:"created_at"`
+
+	// Currency ISO 4217 currency code.
+	//
+	// Example: NOK
+	Currency Currency `json:"currency"`
+
+	// Id 4-digit bank account ID.
+	//
+	// Example: 4821
+	Id   AccountId   `json:"id"`
+	Name string      `json:"name"`
+	Type AccountType `json:"type"`
+}
+
+// AccountCreate defines model for AccountCreate.
+type AccountCreate struct {
+	// Currency ISO 4217 currency code.
+	//
+	// Example: NOK
+	Currency *Currency `json:"currency,omitempty"`
+
+	// Name 1 to 100 characters after trimming. Unique among the user's accounts, ignoring case.
+	//
+	// Example: Main account
+	Name AccountName `json:"name"`
+
+	// OpeningAt When the opening balance applies. Defaults to now.
+	OpeningAt *time.Time `json:"opening_at,omitempty"`
+
+	// OpeningBalance An amount with at most 2 decimals, as a string.
+	//
+	// Example: 1234.50
+	OpeningBalance *Amount      `json:"opening_balance,omitempty"`
+	Type           *AccountType `json:"type,omitempty"`
+}
+
+// AccountDelete defines model for AccountDelete.
+type AccountDelete struct {
+	// BucketSources A new source account for every bucket funded from this account, as bucket ID (10 digits) → account ID.
+	//
+	// Example: {"4829131234":"5120"}
+	BucketSources *map[string]AccountId `json:"bucket_sources,omitempty"`
+
+	// RemainingFunds What happens to money left in the account. Only needed when the balance isn't 0.
+	RemainingFunds *struct {
+		// Action `transfer` moves it to `to_account_id` (TRF); `adjust` records a balance adjustment to 0 (BLA).
+		Action AccountDeleteRemainingFundsAction `json:"action"`
+
+		// ToAccountId 4-digit bank account ID.
+		//
+		// Example: 4821
+		ToAccountId *AccountId `json:"to_account_id,omitempty"`
+	} `json:"remaining_funds,omitempty"`
+}
+
+// AccountDeleteRemainingFundsAction `transfer` moves it to `to_account_id` (TRF); `adjust` records a balance adjustment to 0 (BLA).
+type AccountDeleteRemainingFundsAction string
+
+// AccountId 4-digit bank account ID.
+//
+// Example: 4821
+type AccountId = string
+
+// AccountName 1 to 100 characters after trimming. Unique among the user's accounts, ignoring case.
+//
+// Example: Main account
+type AccountName = string
+
+// AccountType defines model for AccountType.
+type AccountType string
+
+// AccountUpdate defines model for AccountUpdate.
+type AccountUpdate struct {
+	// Name 1 to 100 characters after trimming. Unique among the user's accounts, ignoring case.
+	//
+	// Example: Main account
+	Name *AccountName `json:"name,omitempty"`
+	Type *AccountType `json:"type,omitempty"`
+}
+
+// Amount An amount with at most 2 decimals, as a string.
+//
+// Example: 1234.50
+type Amount = string
+
+// BalanceAdjustment defines model for BalanceAdjustment.
+type BalanceAdjustment struct {
+	// At The moment the balance is correct for. Defaults to now.
+	At *time.Time `json:"at,omitempty"`
+
+	// TargetBalance An amount with at most 2 decimals, as a string.
+	//
+	// Example: 1234.50
+	TargetBalance Amount `json:"target_balance"`
+}
+
+// Currency ISO 4217 currency code.
+//
+// Example: NOK
+type Currency = string
 
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
@@ -128,6 +284,18 @@ type UserId = string
 // Error RFC 9457 problem details.
 type Error = Problem
 
+// CreateAccountJSONRequestBody defines body for CreateAccount for application/json ContentType.
+type CreateAccountJSONRequestBody = AccountCreate
+
+// UpdateAccountJSONRequestBody defines body for UpdateAccount for application/json ContentType.
+type UpdateAccountJSONRequestBody = AccountUpdate
+
+// AdjustAccountBalanceJSONRequestBody defines body for AdjustAccountBalance for application/json ContentType.
+type AdjustAccountBalanceJSONRequestBody = BalanceAdjustment
+
+// DeleteAccountJSONRequestBody defines body for DeleteAccount for application/json ContentType.
+type DeleteAccountJSONRequestBody = AccountDelete
+
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
 
@@ -139,6 +307,24 @@ type UpdatePreferencesJSONRequestBody = Preferences
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// ListAccounts List accounts
+	// (GET /api/v1/accounts)
+	ListAccounts(w http.ResponseWriter, r *http.Request)
+	// CreateAccount Create an account
+	// (POST /api/v1/accounts)
+	CreateAccount(w http.ResponseWriter, r *http.Request)
+	// GetAccount Get an account
+	// (GET /api/v1/accounts/{accountId})
+	GetAccount(w http.ResponseWriter, r *http.Request, accountId AccountId)
+	// UpdateAccount Rename an account or change its type
+	// (PATCH /api/v1/accounts/{accountId})
+	UpdateAccount(w http.ResponseWriter, r *http.Request, accountId AccountId)
+	// AdjustAccountBalance Adjust the balance
+	// (POST /api/v1/accounts/{accountId}/balance-adjustment)
+	AdjustAccountBalance(w http.ResponseWriter, r *http.Request, accountId AccountId)
+	// DeleteAccount Delete an account
+	// (POST /api/v1/accounts/{accountId}/delete)
+	DeleteAccount(w http.ResponseWriter, r *http.Request, accountId AccountId)
 	// Login Log in
 	// (POST /api/v1/auth/login)
 	Login(w http.ResponseWriter, r *http.Request)
@@ -170,6 +356,138 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListAccounts operation middleware
+func (siw *ServerInterfaceWrapper) ListAccounts(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAccounts(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateAccount operation middleware
+func (siw *ServerInterfaceWrapper) CreateAccount(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAccount(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAccount operation middleware
+func (siw *ServerInterfaceWrapper) GetAccount(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "accountId" -------------
+	var accountId AccountId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "accountId", r.PathValue("accountId"), &accountId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "accountId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAccount(w, r, accountId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateAccount operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAccount(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "accountId" -------------
+	var accountId AccountId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "accountId", r.PathValue("accountId"), &accountId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "accountId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateAccount(w, r, accountId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdjustAccountBalance operation middleware
+func (siw *ServerInterfaceWrapper) AdjustAccountBalance(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "accountId" -------------
+	var accountId AccountId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "accountId", r.PathValue("accountId"), &accountId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "accountId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdjustAccountBalance(w, r, accountId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteAccount operation middleware
+func (siw *ServerInterfaceWrapper) DeleteAccount(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "accountId" -------------
+	var accountId AccountId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "accountId", r.PathValue("accountId"), &accountId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "accountId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteAccount(w, r, accountId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // Login operation middleware
 func (siw *ServerInterfaceWrapper) Login(w http.ResponseWriter, r *http.Request) {
@@ -396,11 +714,497 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/me", wrapper.GetMe)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/me/password", wrapper.ChangePassword)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/me/preferences", wrapper.UpdatePreferences)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/accounts", wrapper.ListAccounts)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/accounts", wrapper.CreateAccount)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/accounts/{accountId}", wrapper.GetAccount)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/accounts/{accountId}", wrapper.UpdateAccount)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/accounts/{accountId}/balance-adjustment", wrapper.AdjustAccountBalance)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/accounts/{accountId}/delete", wrapper.DeleteAccount)
 
 	return m
 }
 
 type ErrorApplicationProblemPlusJSONResponse Problem
+
+type ListAccountsRequestObject struct {
+}
+
+type ListAccountsResponseObject interface {
+	VisitListAccountsResponse(w http.ResponseWriter) error
+}
+
+type ListAccounts200JSONResponse []Account
+
+func (response ListAccounts200JSONResponse) VisitListAccountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAccounts401ApplicationProblemPlusJSONResponse struct {
+	ErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListAccounts401ApplicationProblemPlusJSONResponse) VisitListAccountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAccountsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListAccountsdefaultApplicationProblemPlusJSONResponse) VisitListAccountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAccountRequestObject struct {
+	Body *CreateAccountJSONRequestBody
+}
+
+type CreateAccountResponseObject interface {
+	VisitCreateAccountResponse(w http.ResponseWriter) error
+}
+
+type CreateAccount201JSONResponse Account
+
+func (response CreateAccount201JSONResponse) VisitCreateAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAccount400ApplicationProblemPlusJSONResponse struct {
+	ErrorApplicationProblemPlusJSONResponse
+}
+
+func (response CreateAccount400ApplicationProblemPlusJSONResponse) VisitCreateAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAccount401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateAccount401ApplicationProblemPlusJSONResponse) VisitCreateAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAccount409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateAccount409ApplicationProblemPlusJSONResponse) VisitCreateAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAccountdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateAccountdefaultApplicationProblemPlusJSONResponse) VisitCreateAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAccountRequestObject struct {
+	AccountId AccountId `json:"accountId"`
+}
+
+type GetAccountResponseObject interface {
+	VisitGetAccountResponse(w http.ResponseWriter) error
+}
+
+type GetAccount200JSONResponse Account
+
+func (response GetAccount200JSONResponse) VisitGetAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAccount401ApplicationProblemPlusJSONResponse struct {
+	ErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetAccount401ApplicationProblemPlusJSONResponse) VisitGetAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAccount404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetAccount404ApplicationProblemPlusJSONResponse) VisitGetAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAccountdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetAccountdefaultApplicationProblemPlusJSONResponse) VisitGetAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAccountRequestObject struct {
+	AccountId AccountId `json:"accountId"`
+	Body      *UpdateAccountJSONRequestBody
+}
+
+type UpdateAccountResponseObject interface {
+	VisitUpdateAccountResponse(w http.ResponseWriter) error
+}
+
+type UpdateAccount200JSONResponse Account
+
+func (response UpdateAccount200JSONResponse) VisitUpdateAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAccount400ApplicationProblemPlusJSONResponse struct {
+	ErrorApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateAccount400ApplicationProblemPlusJSONResponse) VisitUpdateAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAccount401ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateAccount401ApplicationProblemPlusJSONResponse) VisitUpdateAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAccount404ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateAccount404ApplicationProblemPlusJSONResponse) VisitUpdateAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAccount409ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateAccount409ApplicationProblemPlusJSONResponse) VisitUpdateAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAccountdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateAccountdefaultApplicationProblemPlusJSONResponse) VisitUpdateAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdjustAccountBalanceRequestObject struct {
+	AccountId AccountId `json:"accountId"`
+	Body      *AdjustAccountBalanceJSONRequestBody
+}
+
+type AdjustAccountBalanceResponseObject interface {
+	VisitAdjustAccountBalanceResponse(w http.ResponseWriter) error
+}
+
+type AdjustAccountBalance200JSONResponse Account
+
+func (response AdjustAccountBalance200JSONResponse) VisitAdjustAccountBalanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdjustAccountBalance400ApplicationProblemPlusJSONResponse struct {
+	ErrorApplicationProblemPlusJSONResponse
+}
+
+func (response AdjustAccountBalance400ApplicationProblemPlusJSONResponse) VisitAdjustAccountBalanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdjustAccountBalance401ApplicationProblemPlusJSONResponse Problem
+
+func (response AdjustAccountBalance401ApplicationProblemPlusJSONResponse) VisitAdjustAccountBalanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdjustAccountBalance404ApplicationProblemPlusJSONResponse Problem
+
+func (response AdjustAccountBalance404ApplicationProblemPlusJSONResponse) VisitAdjustAccountBalanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AdjustAccountBalancedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AdjustAccountBalancedefaultApplicationProblemPlusJSONResponse) VisitAdjustAccountBalanceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAccountRequestObject struct {
+	AccountId AccountId `json:"accountId"`
+	Body      *DeleteAccountJSONRequestBody
+}
+
+type DeleteAccountResponseObject interface {
+	VisitDeleteAccountResponse(w http.ResponseWriter) error
+}
+
+type DeleteAccount204Response struct {
+}
+
+func (response DeleteAccount204Response) VisitDeleteAccountResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteAccount400ApplicationProblemPlusJSONResponse struct {
+	ErrorApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteAccount400ApplicationProblemPlusJSONResponse) VisitDeleteAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAccount401ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteAccount401ApplicationProblemPlusJSONResponse) VisitDeleteAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAccount404ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteAccount404ApplicationProblemPlusJSONResponse) VisitDeleteAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAccount409ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteAccount409ApplicationProblemPlusJSONResponse) VisitDeleteAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAccountdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteAccountdefaultApplicationProblemPlusJSONResponse) VisitDeleteAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type LoginRequestObject struct {
 	Body *LoginJSONRequestBody
@@ -825,6 +1629,24 @@ func (response GetReadyzdefaultApplicationProblemPlusJSONResponse) VisitGetReady
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// ListAccounts List accounts
+	// (GET /api/v1/accounts)
+	ListAccounts(ctx context.Context, request ListAccountsRequestObject) (ListAccountsResponseObject, error)
+	// CreateAccount Create an account
+	// (POST /api/v1/accounts)
+	CreateAccount(ctx context.Context, request CreateAccountRequestObject) (CreateAccountResponseObject, error)
+	// GetAccount Get an account
+	// (GET /api/v1/accounts/{accountId})
+	GetAccount(ctx context.Context, request GetAccountRequestObject) (GetAccountResponseObject, error)
+	// UpdateAccount Rename an account or change its type
+	// (PATCH /api/v1/accounts/{accountId})
+	UpdateAccount(ctx context.Context, request UpdateAccountRequestObject) (UpdateAccountResponseObject, error)
+	// AdjustAccountBalance Adjust the balance
+	// (POST /api/v1/accounts/{accountId}/balance-adjustment)
+	AdjustAccountBalance(ctx context.Context, request AdjustAccountBalanceRequestObject) (AdjustAccountBalanceResponseObject, error)
+	// DeleteAccount Delete an account
+	// (POST /api/v1/accounts/{accountId}/delete)
+	DeleteAccount(ctx context.Context, request DeleteAccountRequestObject) (DeleteAccountResponseObject, error)
 	// Login Log in
 	// (POST /api/v1/auth/login)
 	Login(ctx context.Context, request LoginRequestObject) (LoginResponseObject, error)
@@ -885,6 +1707,189 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// ListAccounts operation middleware
+func (sh *strictHandler) ListAccounts(w http.ResponseWriter, r *http.Request) {
+	var request ListAccountsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAccounts(ctx, request.(ListAccountsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAccounts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAccountsResponseObject); ok {
+		if err := validResponse.VisitListAccountsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateAccount operation middleware
+func (sh *strictHandler) CreateAccount(w http.ResponseWriter, r *http.Request) {
+	var request CreateAccountRequestObject
+
+	var body CreateAccountJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateAccount(ctx, request.(CreateAccountRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateAccount")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateAccountResponseObject); ok {
+		if err := validResponse.VisitCreateAccountResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAccount operation middleware
+func (sh *strictHandler) GetAccount(w http.ResponseWriter, r *http.Request, accountId AccountId) {
+	var request GetAccountRequestObject
+
+	request.AccountId = accountId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAccount(ctx, request.(GetAccountRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAccount")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAccountResponseObject); ok {
+		if err := validResponse.VisitGetAccountResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateAccount operation middleware
+func (sh *strictHandler) UpdateAccount(w http.ResponseWriter, r *http.Request, accountId AccountId) {
+	var request UpdateAccountRequestObject
+
+	request.AccountId = accountId
+
+	var body UpdateAccountJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateAccount(ctx, request.(UpdateAccountRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateAccount")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateAccountResponseObject); ok {
+		if err := validResponse.VisitUpdateAccountResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AdjustAccountBalance operation middleware
+func (sh *strictHandler) AdjustAccountBalance(w http.ResponseWriter, r *http.Request, accountId AccountId) {
+	var request AdjustAccountBalanceRequestObject
+
+	request.AccountId = accountId
+
+	var body AdjustAccountBalanceJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AdjustAccountBalance(ctx, request.(AdjustAccountBalanceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AdjustAccountBalance")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AdjustAccountBalanceResponseObject); ok {
+		if err := validResponse.VisitAdjustAccountBalanceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteAccount operation middleware
+func (sh *strictHandler) DeleteAccount(w http.ResponseWriter, r *http.Request, accountId AccountId) {
+	var request DeleteAccountRequestObject
+
+	request.AccountId = accountId
+
+	var body DeleteAccountJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		if !errors.Is(err, io.EOF) {
+			sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+			return
+		}
+	} else {
+		request.Body = &body
+	}
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteAccount(ctx, request.(DeleteAccountRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteAccount")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteAccountResponseObject); ok {
+		if err := validResponse.VisitDeleteAccountResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // Login operation middleware
@@ -1081,49 +2086,73 @@ func (sh *strictHandler) GetReadyz(w http.ResponseWriter, r *http.Request) {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

@@ -48,8 +48,8 @@ Self-hosted, envelope-style ("bucket") budgeting application.
 | ----- | ----- |
 | Account-ID | 4-digit random number |
 | Owner | user |
-| Name | |
-| Currency | e.g. NOK |
+| Name | unique per user (ignoring case) among accounts that aren't deleted |
+| Currency | e.g. NOK. Set when the account is created and can't be changed. |
 | Account type | usage, savings, BSU, fund/ASK, investment |
 | Deleted | soft-delete flag |
 | Created / Modified | audit |
@@ -58,7 +58,8 @@ Self-hosted, envelope-style ("bucket") budgeting application.
 - The balance is never stored. It is calculated from bank transactions. A balance at a point in time counts the transactions dated before it.
 - **Snapshots:** to keep this fast, pre-calculate the balance at fixed points (e.g. 1 January each year) and add only the transactions after that point. Bucket TF uses the same mechanism.
 - New accounts get an **Opening Balance (OPB)** transaction.
-- The balance can be corrected from the Accounts screen, which creates a **Balance Adjustment (BLA)** for the difference.
+- The balance can be corrected from the Accounts screen, which creates a **Balance Adjustment (BLA)** for the difference between the entered balance and the balance at that moment.
+- **Deleting** an account settles it first, all in one step. Money left in it is **transferred (TRF)** to another account or **adjusted to 0 (BLA)**, as the user chooses. Every bucket funded from it gets a **new source account**, or the user deletes those buckets in Bucket setup first. Money and buckets only move to an account in the same currency. The account's transactions are kept.
 
 ## 3. Cycles
 

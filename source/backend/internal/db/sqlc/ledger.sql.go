@@ -182,6 +182,7 @@ func (q *Queries) GetActiveCycle(ctx context.Context, userID string) (Cycle, err
 const getOwnedAccounts = `-- name: GetOwnedAccounts :many
 SELECT id, currency FROM bank_accounts
 WHERE id = ANY($1::text[]) AND user_id = $2 AND NOT deleted
+FOR SHARE
 `
 
 type GetOwnedAccountsParams struct {
@@ -194,6 +195,8 @@ type GetOwnedAccountsRow struct {
 	Currency string
 }
 
+// FOR SHARE: waits for a concurrent delete or balance adjustment of the
+// account, then sees whether it still exists.
 func (q *Queries) GetOwnedAccounts(ctx context.Context, arg GetOwnedAccountsParams) ([]GetOwnedAccountsRow, error) {
 	rows, err := q.db.Query(ctx, getOwnedAccounts, arg.Ids, arg.UserID)
 	if err != nil {
