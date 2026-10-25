@@ -24,7 +24,7 @@ DATABASE_URL      ?= postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@localhost:
 export
 
 .DEFAULT_GOAL := help
-.PHONY: help dev dev-backend dev-frontend db-up db-down db-reset psql migrate generate generate-check lint test
+.PHONY: help dev dev-backend dev-frontend db-up db-down db-reset psql migrate generate generate-check lint lint-spec test
 
 help: ## Show this help
 	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -92,8 +92,10 @@ generate-check: generate ## Fail if the committed generated code is out of date 
 		exit 1; \
 	fi
 
-lint: ## Lint the API spec (Redocly), backend (go vet, golangci-lint) and frontend (ESLint, tsc)
+lint-spec: ## Lint the OpenAPI spec (Redocly CLI)
 	$(REDOCLY) lint $(SPEC)
+
+lint: lint-spec ## Lint the API spec, backend (go vet, golangci-lint) and frontend (ESLint, tsc)
 ifneq ($(HAS_BACKEND),)
 	cd $(BACKEND) && go vet ./... && go tool golangci-lint run
 else

@@ -1,0 +1,101 @@
+# Lint, test and build on every pull request and on pushes to main.
+# Third-party actions are pinned to commit SHAs (Dependabot keeps them current).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Superseded PR runs are cancelled; every push to main runs to completion.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Matches Fedora's golang in docs/DEVELOPMENT.md; resolves to the latest patch.
+  GO_VERSION: "1.26"
+
+jobs:
+  backend:
+    name: Backend (vet, lint, test, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        # Same image as compose.yaml.
+        image: postgres:18.6-alpine
+        env:
+          POSTGRES_USER: bucky
+          POSTGRES_PASSWORD: bucky
+          POSTGRES_DB: bucky
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bucky -d bucky"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: source/backend
+    env:
+      # testdb creates a database per test on this server. CI=true (set by
+      # GitHub) makes DB tests fail instead of skip if it is unreachable.
+      DATABASE_URL: postgres://bucky:bucky@localhost:5432/bucky?sslmode=disable
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: source/backend/go.sum
+      - run: go mod verify
+      - run: go vet ./...
+      - run: go tool golangci-lint run
+      - run: go test -race ./...
+      - run: go build -o /dev/null ./cmd/server
+
+  frontend:
+    name: Frontend (lint, typecheck, test, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: source/frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: source/frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  api:
+    name: API contract (spec lint, generated code)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: source/backend/go.sum
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: source/frontend/package-lock.json
+      - run: npm ci
+        working-directory: source/frontend
+      - run: make lint-spec
+      # Regenerates the Go server, sqlc code and TS client, and fails if they
+      # differ from what is committed.
+      - run: make generate-check
