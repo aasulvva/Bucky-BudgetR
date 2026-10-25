@@ -77,6 +77,37 @@ func (q *Queries) ListBucketLinesFor(ctx context.Context, ids []string) ([]Bucke
 	return items, nil
 }
 
+const listReplacedBy = `-- name: ListReplacedBy :many
+SELECT id, replaces_id::text AS replaces_id FROM transaction_headers
+WHERE replaces_id = ANY($1::text[])
+`
+
+type ListReplacedByRow struct {
+	ID         string
+	ReplacesID string
+}
+
+// The transactions that replace any of these (after a move to another account).
+func (q *Queries) ListReplacedBy(ctx context.Context, ids []string) ([]ListReplacedByRow, error) {
+	rows, err := q.db.Query(ctx, listReplacedBy, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListReplacedByRow{}
+	for rows.Next() {
+		var i ListReplacedByRow
+		if err := rows.Scan(&i.ID, &i.ReplacesID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTagsFor = `-- name: ListTagsFor :many
 SELECT tt.transaction_id, t.name FROM transaction_tags tt JOIN tags t ON t.id = tt.tag_id
 WHERE tt.transaction_id = ANY($1::text[])
@@ -109,7 +140,7 @@ func (q *Queries) ListTagsFor(ctx context.Context, ids []string) ([]ListTagsForR
 }
 
 const listTransactionFamilies = `-- name: ListTransactionFamilies :many
-SELECT id, user_id, parent_id, correction_type, transaction_type, transaction_at, counterparty, created_at, created_by FROM transaction_headers
+SELECT id, user_id, parent_id, correction_type, transaction_type, transaction_at, counterparty, created_at, created_by, replaces_id FROM transaction_headers
 WHERE user_id = $1
   AND (id = ANY($2::text[]) OR parent_id = ANY($2::text[]))
 ORDER BY correction_type <> 'none', created_at, id
@@ -141,6 +172,7 @@ func (q *Queries) ListTransactionFamilies(ctx context.Context, arg ListTransacti
 			&i.Counterparty,
 			&i.CreatedAt,
 			&i.CreatedBy,
+			&i.ReplacesID,
 		); err != nil {
 			return nil, err
 		}
@@ -153,7 +185,13 @@ func (q *Queries) ListTransactionFamilies(ctx context.Context, arg ListTransacti
 }
 
 const listTransactions = `-- name: ListTransactions :many
-SELECT h.id, h.user_id, h.parent_id, h.correction_type, h.transaction_type, h.transaction_at, h.counterparty, h.created_at, h.created_by FROM transaction_headers h
+SELECT h.id, h.user_id, h.parent_id, h.correction_type, h.transaction_type, h.transaction_at, h.counterparty, h.created_at, h.created_by, h.replaces_id FROM transaction_headers h
+JOIN LATERAL (
+    SELECT c.id, c.counterparty FROM transaction_headers c
+    WHERE c.id = h.id OR c.parent_id = h.id
+    ORDER BY c.created_at DESC, c.id DESC
+    LIMIT 1
+) latest ON true
 WHERE h.user_id = $1 AND h.correction_type = 'none'
   AND ($2::text[] IS NULL OR h.transaction_type::text = ANY($2::text[]))
   AND ($3::timestamptz IS NULL OR h.transaction_at >= $3::timestamptz)
@@ -166,9 +204,9 @@ WHERE h.user_id = $1 AND h.correction_type = 'none'
       WHERE b.bucket_id = $6::text AND (c.id = h.id OR c.parent_id = h.id)))
   AND ($7::text IS NULL OR EXISTS (
       SELECT 1 FROM transaction_tags tt JOIN tags t ON t.id = tt.tag_id
-      WHERE tt.transaction_id = h.id AND lower(t.name) = lower($7::text)))
+      WHERE tt.transaction_id = latest.id AND lower(t.name) = lower($7::text)))
   -- counterparty is a LIKE pattern, escaped by the caller.
-  AND ($8::text IS NULL OR h.counterparty ILIKE $8::text)
+  AND ($8::text IS NULL OR latest.counterparty ILIKE $8::text)
   AND ($9::timestamptz IS NULL
        OR (h.transaction_at, h.id) < ($9::timestamptz, $10::text))
 ORDER BY h.transaction_at DESC, h.id DESC
@@ -191,8 +229,9 @@ type ListTransactionsParams struct {
 
 // A page of the user's original transactions (not corrections), newest first.
 // A null filter matches everything. The account and bucket filters also match
-// lines added by corrections. before_at/before_id is the keyset cursor: the
-// last row of the previous page.
+// lines added by corrections; the tag and counterparty filters use the
+// newest header of the family, which holds the effective values.
+// before_at/before_id is the keyset cursor: the last row of the previous page.
 func (q *Queries) ListTransactions(ctx context.Context, arg ListTransactionsParams) ([]TransactionHeader, error) {
 	rows, err := q.db.Query(ctx, listTransactions,
 		arg.UserID,
@@ -224,6 +263,7 @@ func (q *Queries) ListTransactions(ctx context.Context, arg ListTransactionsPara
 			&i.Counterparty,
 			&i.CreatedAt,
 			&i.CreatedBy,
+			&i.ReplacesID,
 		); err != nil {
 			return nil, err
 		}

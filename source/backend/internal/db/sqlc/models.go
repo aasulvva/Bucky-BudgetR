@@ -492,6 +492,7 @@ type TransactionHeader struct {
 	Counterparty    string
 	CreatedAt       time.Time
 	CreatedBy       pgtype.Text
+	ReplacesID      pgtype.Text
 }
 
 type TransactionTag struct {

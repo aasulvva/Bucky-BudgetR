@@ -130,6 +130,10 @@ Every transaction has a **header**. Each affected bank account or bucket gets it
 
 Transactions are immutable. An edit creates a **correction** (e.g. 100 NOK corrected to 150 NOK creates a +50 NOK adjustment, which the UI shows as a single 150 NOK transaction). A transaction entered by mistake can be **reversed**.
 
+- **What can be corrected:** INC, EXP and TRF, and the system types OPB and BLA. REF, OVF, OPF, BUA and BAT can't: the routines and Bucket setup own them. A reversed transaction can't be corrected or reversed again.
+- **What a correction changes:** amounts, bucket lines, counterparty and tags. Its lines hold the difference and keep the original time. Every correction carries the counterparty and tags, so the newest one's are the effective values; a change of only these is a correction without lines.
+- **Another account:** moving an INC, EXP or TRF to another account reverses it and records it again on the new account at the original time. The new transaction *replaces* the old one, and both point to each other.
+
 ### 5.1 Header
 
 | Field | Notes |
@@ -186,7 +190,7 @@ Only **INC, EXP, TRF and INP** can be created from the *Create transaction* scre
 
 ### 5.5 Rules
 - A bucket line belongs to the **active cycle** of the bucket's owner, and the transaction time must fall inside that cycle.
-- **Corrections and reversals that affect buckets are only allowed inside the active cycle.** Once a cycle is finished, its bucket lines are locked.
+- **Corrections and reversals that affect buckets are only allowed inside the active cycle.** Once a cycle is finished, its bucket lines are locked. The bank amount, counterparty and tags can still be corrected, as long as the bucket lines still fit within the amount.
 - An Internal Payment can only be created by the payer. Users cannot "request" money from other users.
 - **Signs:** INC lines are positive and EXP lines negative, on both bank and bucket lines. The user enters positive amounts; the type gives the sign. A TRF's two lines mirror each other.
 - **Bucket lines on INC/EXP:** each bucket must be funded from the transaction's bank account (this may change with cash support, #60). Together they can't exceed the bank amount; the remainder simply isn't tied to a bucket.

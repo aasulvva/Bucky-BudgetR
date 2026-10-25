@@ -115,10 +115,10 @@ func (q *Queries) CreateBucketLine(ctx context.Context, arg CreateBucketLinePara
 
 const createTransactionHeader = `-- name: CreateTransactionHeader :one
 INSERT INTO transaction_headers (
-    id, user_id, parent_id, correction_type, transaction_type, transaction_at, counterparty, created_by
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    id, user_id, parent_id, correction_type, transaction_type, transaction_at, counterparty, created_by, replaces_id
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 ON CONFLICT (id) DO NOTHING
-RETURNING id, user_id, parent_id, correction_type, transaction_type, transaction_at, counterparty, created_at, created_by
+RETURNING id, user_id, parent_id, correction_type, transaction_type, transaction_at, counterparty, created_at, created_by, replaces_id
 `
 
 type CreateTransactionHeaderParams struct {
@@ -130,6 +130,7 @@ type CreateTransactionHeaderParams struct {
 	TransactionAt   time.Time
 	Counterparty    string
 	CreatedBy       pgtype.Text
+	ReplacesID      pgtype.Text
 }
 
 // Use with ids.Insert: a taken ID returns no row.
@@ -143,6 +144,7 @@ func (q *Queries) CreateTransactionHeader(ctx context.Context, arg CreateTransac
 		arg.TransactionAt,
 		arg.Counterparty,
 		arg.CreatedBy,
+		arg.ReplacesID,
 	)
 	var i TransactionHeader
 	err := row.Scan(
@@ -155,6 +157,7 @@ func (q *Queries) CreateTransactionHeader(ctx context.Context, arg CreateTransac
 		&i.Counterparty,
 		&i.CreatedAt,
 		&i.CreatedBy,
+		&i.ReplacesID,
 	)
 	return i, err
 }
@@ -256,7 +259,7 @@ func (q *Queries) GetOwnedBuckets(ctx context.Context, arg GetOwnedBucketsParams
 }
 
 const getTransactionHeader = `-- name: GetTransactionHeader :one
-SELECT id, user_id, parent_id, correction_type, transaction_type, transaction_at, counterparty, created_at, created_by FROM transaction_headers WHERE id = $1 AND user_id = $2
+SELECT id, user_id, parent_id, correction_type, transaction_type, transaction_at, counterparty, created_at, created_by, replaces_id FROM transaction_headers WHERE id = $1 AND user_id = $2
 `
 
 type GetTransactionHeaderParams struct {
@@ -277,6 +280,7 @@ func (q *Queries) GetTransactionHeader(ctx context.Context, arg GetTransactionHe
 		&i.Counterparty,
 		&i.CreatedAt,
 		&i.CreatedBy,
+		&i.ReplacesID,
 	)
 	return i, err
 }
@@ -370,6 +374,36 @@ func (q *Queries) ListTransactionTags(ctx context.Context, transactionID string)
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockTransactionHeader = `-- name: LockTransactionHeader :one
+SELECT id, user_id, parent_id, correction_type, transaction_type, transaction_at, counterparty, created_at, created_by, replaces_id FROM transaction_headers WHERE id = $1 AND user_id = $2 FOR UPDATE
+`
+
+type LockTransactionHeaderParams struct {
+	ID     string
+	UserID string
+}
+
+// Locks an original transaction while it is corrected, so two corrections
+// can't work from the same state. A row lock doesn't fire the immutability
+// trigger.
+func (q *Queries) LockTransactionHeader(ctx context.Context, arg LockTransactionHeaderParams) (TransactionHeader, error) {
+	row := q.db.QueryRow(ctx, lockTransactionHeader, arg.ID, arg.UserID)
+	var i TransactionHeader
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.ParentID,
+		&i.CorrectionType,
+		&i.TransactionType,
+		&i.TransactionAt,
+		&i.Counterparty,
+		&i.CreatedAt,
+		&i.CreatedBy,
+		&i.ReplacesID,
+	)
+	return i, err
 }
 
 const upsertTag = `-- name: UpsertTag :one

@@ -333,13 +333,21 @@ func TestCorrections(t *testing.T) {
 		t.Errorf("unexpected correction header %+v", child.Header)
 	}
 
+	// An adjustment without lines changes only the header fields.
+	headerOnly := adj
+	headerOnly.BankLines, headerOnly.Counterparty = nil, "New name"
+	if _, err := w.ledger.Create(t.Context(), w.pool, headerOnly); err != nil {
+		t.Errorf("adjustment without lines: %v", err)
+	}
+
 	for name, mutate := range map[string]func(e *ledger.Entry){
-		"no lines":             func(e *ledger.Entry) { e.BankLines = nil },
-		"no parent":            func(e *ledger.Entry) { e.ParentID = "" },
-		"parent is correction": func(e *ledger.Entry) { e.ParentID = child.Header.ID },
-		"different type":       func(e *ledger.Entry) { e.Type = sqlc.TransactionTypeINC },
-		"too many bank lines":  func(e *ledger.Entry) { e.BankLines = append(e.BankLines, bank(w.acc2, "1")...) },
-		"original with parent": func(e *ledger.Entry) { e.Correction = sqlc.CorrectionTypeNone },
+		"reversal without lines": func(e *ledger.Entry) { e.Correction, e.BankLines = sqlc.CorrectionTypeReversal, nil },
+		"correction replaces":    func(e *ledger.Entry) { e.ReplacesID = parent.Header.ID },
+		"no parent":              func(e *ledger.Entry) { e.ParentID = "" },
+		"parent is correction":   func(e *ledger.Entry) { e.ParentID = child.Header.ID },
+		"different type":         func(e *ledger.Entry) { e.Type = sqlc.TransactionTypeINC },
+		"too many bank lines":    func(e *ledger.Entry) { e.BankLines = append(e.BankLines, bank(w.acc2, "1")...) },
+		"original with parent":   func(e *ledger.Entry) { e.Correction = sqlc.CorrectionTypeNone },
 	} {
 		e := adj
 		mutate(&e)

@@ -85,6 +85,9 @@ type Transaction struct {
 	// Corrected is set when it has adjustments, Reversed when it has been
 	// reversed.
 	Corrected, Reversed bool
+	// Replaces is the transaction this one replaced when it was moved to
+	// another account; ReplacedBy is the one that replaced it.
+	Replaces, ReplacedBy string
 	// BankLines and BucketLines are the effective amounts: each account's or
 	// bucket's lines summed over the original and its corrections. Lines
 	// that sum to zero are left out.
@@ -175,63 +178,9 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Transaction
 	if n.At.After(now.Add(ClockSkew)) {
 		return Transaction{}, fmt.Errorf("%w: the transaction time is in the future", ErrInvalid)
 	}
-	if err := positive("amount", n.Amount); err != nil {
-		return Transaction{}, err
-	}
-	e := ledger.Entry{
-		UserID: userID, CreatedBy: userID, Type: n.Type, At: n.At,
-		Counterparty: n.Counterparty, Tags: n.Tags,
-	}
-	switch n.Type {
-	case sqlc.TransactionTypeINC, sqlc.TransactionTypeEXP:
-		if n.ToAccountID != "" {
-			return Transaction{}, fmt.Errorf("%w: only a transfer has a receiving account", ErrInvalid)
-		}
-		sign := decimal.NewFromInt(1)
-		if n.Type == sqlc.TransactionTypeEXP {
-			sign = sign.Neg()
-		}
-		e.BankLines = []ledger.BankLine{{AccountID: n.AccountID, Amount: n.Amount.Mul(sign)}}
-		sum := decimal.Zero
-		for _, b := range n.Buckets {
-			if err := positive("bucket amount", b.Amount); err != nil {
-				return Transaction{}, err
-			}
-			sum = sum.Add(b.Amount)
-			e.BucketLines = append(e.BucketLines, ledger.BucketLine{BucketID: b.BucketID, Amount: b.Amount.Mul(sign)})
-		}
-		if sum.GreaterThan(n.Amount) {
-			return Transaction{}, fmt.Errorf("%w: the bucket amounts add up to %s, more than the amount %s",
-				ErrInvalid, sum.StringFixed(money.Places), n.Amount.StringFixed(money.Places))
-		}
-	case sqlc.TransactionTypeTRF:
-		if len(n.Buckets) > 0 {
-			return Transaction{}, fmt.Errorf("%w: a transfer can't have bucket lines", ErrInvalid)
-		}
-		if n.ToAccountID == "" {
-			return Transaction{}, fmt.Errorf("%w: a transfer needs a receiving account", ErrInvalid)
-		}
-		if n.ToAccountID == n.AccountID {
-			return Transaction{}, fmt.Errorf("%w: a transfer needs two different accounts", ErrInvalid)
-		}
-		e.BankLines = []ledger.BankLine{
-			{AccountID: n.AccountID, Amount: n.Amount.Neg()},
-			{AccountID: n.ToAccountID, Amount: n.Amount},
-		}
-	default:
-		return Transaction{}, fmt.Errorf("%w: transaction type %q can't be entered; use INC, EXP or TRF", ErrInvalid, n.Type)
-	}
-
 	var out Transaction
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		q := sqlc.New(tx)
-		if err := checkAccounts(ctx, q, userID, n); err != nil {
-			return err
-		}
-		if err := checkBuckets(ctx, q, userID, n); err != nil {
-			return err
-		}
-		t, err := s.ledger.Record(ctx, tx, e)
+		t, err := s.record(ctx, tx, userID, n, "")
 		if err != nil {
 			return err
 		}
@@ -242,6 +191,74 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Transaction
 		return Transaction{}, err
 	}
 	return out, nil
+}
+
+// record checks n and records it inside tx. replaces is the transaction it
+// replaces, if any.
+func (s *Service) record(ctx context.Context, tx pgx.Tx, userID string, n New, replaces string) (*ledger.Transaction, error) {
+	bank, buckets, err := signedLines(n)
+	if err != nil {
+		return nil, err
+	}
+	q := sqlc.New(tx)
+	if err := checkAccounts(ctx, q, userID, n); err != nil {
+		return nil, err
+	}
+	if err := checkBuckets(ctx, q, userID, n); err != nil {
+		return nil, err
+	}
+	return s.ledger.Record(ctx, tx, ledger.Entry{
+		UserID: userID, CreatedBy: userID, Type: n.Type, At: n.At, ReplacesID: replaces,
+		Counterparty: n.Counterparty, Tags: n.Tags, BankLines: bank, BucketLines: buckets,
+	})
+}
+
+// signedLines checks n against the rules of its type that don't need the
+// database, and returns its lines with their signs.
+func signedLines(n New) ([]ledger.BankLine, []ledger.BucketLine, error) {
+	if err := positive("amount", n.Amount); err != nil {
+		return nil, nil, err
+	}
+	switch n.Type {
+	case sqlc.TransactionTypeINC, sqlc.TransactionTypeEXP:
+		if n.ToAccountID != "" {
+			return nil, nil, fmt.Errorf("%w: only a transfer has a receiving account", ErrInvalid)
+		}
+		sign := decimal.NewFromInt(1)
+		if n.Type == sqlc.TransactionTypeEXP {
+			sign = sign.Neg()
+		}
+		bank := []ledger.BankLine{{AccountID: n.AccountID, Amount: n.Amount.Mul(sign)}}
+		var buckets []ledger.BucketLine
+		sum := decimal.Zero
+		for _, b := range n.Buckets {
+			if err := positive("bucket amount", b.Amount); err != nil {
+				return nil, nil, err
+			}
+			sum = sum.Add(b.Amount)
+			buckets = append(buckets, ledger.BucketLine{BucketID: b.BucketID, Amount: b.Amount.Mul(sign)})
+		}
+		if sum.GreaterThan(n.Amount) {
+			return nil, nil, fmt.Errorf("%w: the bucket amounts add up to %s, more than the amount %s",
+				ErrInvalid, sum.StringFixed(money.Places), n.Amount.StringFixed(money.Places))
+		}
+		return bank, buckets, nil
+	case sqlc.TransactionTypeTRF:
+		if len(n.Buckets) > 0 {
+			return nil, nil, fmt.Errorf("%w: a transfer can't have bucket lines", ErrInvalid)
+		}
+		if n.ToAccountID == "" {
+			return nil, nil, fmt.Errorf("%w: a transfer needs a receiving account", ErrInvalid)
+		}
+		if n.ToAccountID == n.AccountID {
+			return nil, nil, fmt.Errorf("%w: a transfer needs two different accounts", ErrInvalid)
+		}
+		return []ledger.BankLine{
+			{AccountID: n.AccountID, Amount: n.Amount.Neg()},
+			{AccountID: n.ToAccountID, Amount: n.Amount},
+		}, nil, nil
+	}
+	return nil, nil, fmt.Errorf("%w: transaction type %q can't be entered; use INC, EXP or TRF", ErrInvalid, n.Type)
 }
 
 // Get returns a transaction merged with its corrections, with its history.
@@ -362,7 +379,11 @@ func (s *Service) load(ctx context.Context, q *sqlc.Queries, userID string, orig
 	if err != nil {
 		return nil, err
 	}
-	tags, err := q.ListTagsFor(ctx, originals)
+	tags, err := q.ListTagsFor(ctx, all)
+	if err != nil {
+		return nil, err
+	}
+	replaced, err := q.ListReplacedBy(ctx, originals)
 	if err != nil {
 		return nil, err
 	}
@@ -376,27 +397,36 @@ func (s *Service) load(ctx context.Context, q *sqlc.Queries, userID string, orig
 		inFamily := func(txID string) bool {
 			return slices.ContainsFunc(fam, func(h sqlc.TransactionHeader) bool { return h.ID == txID })
 		}
+		// The newest header holds the effective tags.
+		newest := fam[len(fam)-1].ID
 		var famTags []string
 		for _, t := range tags {
-			if t.TransactionID == id {
+			if t.TransactionID == newest {
 				famTags = append(famTags, t.Name)
 			}
 		}
-		out = append(out, merge(fam,
+		t := merge(fam,
 			filter(bank, func(l sqlc.BankTransaction) bool { return inFamily(l.TransactionID) }),
 			filter(buckets, func(l sqlc.BucketTransaction) bool { return inFamily(l.TransactionID) }),
-			famTags, history))
+			famTags, history)
+		for _, r := range replaced {
+			if r.ReplacesID == id {
+				t.ReplacedBy = r.ID
+			}
+		}
+		out = append(out, t)
 	}
 	return out, nil
 }
 
 // merge builds a Transaction from a family: the original header first, then
-// its corrections, with all their lines.
+// its corrections, with all their lines. tags are the newest header's, which
+// like its counterparty are the effective ones: every correction carries them.
 func merge(fam []sqlc.TransactionHeader, bank []sqlc.BankTransaction, buckets []sqlc.BucketTransaction, tags []string, history bool) Transaction {
 	orig := fam[0]
 	t := Transaction{
-		ID: orig.ID, Type: orig.TransactionType, At: orig.TransactionAt, Counterparty: orig.Counterparty,
-		Tags: tags, CreatedAt: orig.CreatedAt, CreatedBy: orig.CreatedBy.String,
+		ID: orig.ID, Type: orig.TransactionType, At: orig.TransactionAt, Counterparty: fam[len(fam)-1].Counterparty,
+		Tags: tags, CreatedAt: orig.CreatedAt, CreatedBy: orig.CreatedBy.String, Replaces: orig.ReplacesID.String,
 	}
 	if t.Tags == nil {
 		t.Tags = []string{}

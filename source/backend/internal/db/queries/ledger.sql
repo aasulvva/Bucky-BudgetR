@@ -1,8 +1,8 @@
 -- name: CreateTransactionHeader :one
 -- Use with ids.Insert: a taken ID returns no row.
 INSERT INTO transaction_headers (
-    id, user_id, parent_id, correction_type, transaction_type, transaction_at, counterparty, created_by
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    id, user_id, parent_id, correction_type, transaction_type, transaction_at, counterparty, created_by, replaces_id
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 ON CONFLICT (id) DO NOTHING
 RETURNING *;
 
@@ -50,6 +50,12 @@ SELECT * FROM cycles WHERE user_id = $1 AND state = 'active' FOR SHARE;
 
 -- name: GetTransactionHeader :one
 SELECT * FROM transaction_headers WHERE id = $1 AND user_id = $2;
+
+-- name: LockTransactionHeader :one
+-- Locks an original transaction while it is corrected, so two corrections
+-- can't work from the same state. A row lock doesn't fire the immutability
+-- trigger.
+SELECT * FROM transaction_headers WHERE id = $1 AND user_id = $2 FOR UPDATE;
 
 -- name: ListBankLines :many
 SELECT * FROM bank_transactions WHERE transaction_id = $1 ORDER BY id;
