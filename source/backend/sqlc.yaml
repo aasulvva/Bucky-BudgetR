@@ -16,3 +16,12 @@ sql:
           # Timestamps are stored as UTC timestamptz; use plain time.Time in Go.
           - db_type: timestamptz
             go_type: time.Time
+          # Calendar dates (transaction and cycle dates): time.Time at UTC midnight.
+          - db_type: date
+            go_type: time.Time
+          # Money: exact decimals, never float64 (see internal/money).
+          - db_type: pg_catalog.numeric
+            go_type: github.com/shopspring/decimal.Decimal
+          - db_type: pg_catalog.numeric
+            nullable: true
+            go_type: github.com/shopspring/decimal.NullDecimal

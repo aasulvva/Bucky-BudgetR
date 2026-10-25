@@ -1,0 +1,507 @@
+// Package ledger records transactions (spec §5): a header plus one line per
+// affected bank account or bucket, written atomically.
+//
+// The ledger is append-only. Rows are never updated or deleted (a database
+// trigger enforces it); an edit is a new correction transaction pointing at
+// its parent. The ledger checks what holds for every transaction: the number
+// of lines per type (§5.4), ownership, amounts (internal/money) and that
+// bucket lines fall in the owner's active cycle (§5.5). Rules that belong to
+// one kind of transaction, like signs or which buckets an income may fund,
+// are up to its caller.
+package ledger
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"regexp"
+	"slices"
+	"strings"
+	"time"
+	"unicode/utf8"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/shopspring/decimal"
+
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ids"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/money"
+)
+
+// Errors returned by Record. They wrap a message that says what is wrong.
+var (
+	// ErrInvalid means the entry breaks a ledger rule.
+	ErrInvalid = errors.New("invalid transaction")
+	// ErrNotFound means an account, bucket or parent transaction doesn't
+	// exist, isn't the user's, or is deleted.
+	ErrNotFound = errors.New("not found")
+	// ErrNoActiveCycle means the entry has bucket lines but the user has no
+	// active cycle.
+	ErrNoActiveCycle = errors.New("no active cycle")
+	// ErrOutsideCycle means the entry has bucket lines but its date is
+	// outside the active cycle.
+	ErrOutsideCycle = errors.New("transaction date is outside the active cycle")
+	// ErrUnsupported means the transaction type isn't available yet.
+	ErrUnsupported = errors.New("transaction type not supported")
+)
+
+// Limits on the free-text fields.
+const (
+	MaxCounterparty = 200
+	MaxTags         = 20
+	MaxTagLength    = 50
+)
+
+// Entry is a transaction to record.
+type Entry struct {
+	UserID string
+	// CreatedBy is the user who made the transaction, or "" for the system.
+	CreatedBy string
+	Type      sqlc.TransactionType
+	// Correction is empty or none for an original transaction. Adjustments
+	// and reversals need ParentID.
+	Correction sqlc.CorrectionType
+	ParentID   string
+	// Date is the transaction's calendar date, read in Date's own location.
+	// The time of day is ignored.
+	Date         time.Time
+	Counterparty string
+	Tags         []string
+	BankLines    []BankLine
+	BucketLines  []BucketLine
+}
+
+// BankLine is an amount on a bank account, in the account's currency.
+type BankLine struct {
+	AccountID string
+	Amount    decimal.Decimal
+	// Original is set for a foreign-currency transaction.
+	Original *Foreign
+}
+
+// Foreign is the original amount of a foreign-currency transaction. The
+// exchange rate is derived from it and the line's amount.
+type Foreign struct {
+	Amount   decimal.Decimal
+	Currency string
+}
+
+// BucketLine is an amount on a bucket.
+type BucketLine struct {
+	BucketID string
+	Amount   decimal.Decimal
+}
+
+// Transaction is a recorded transaction.
+type Transaction struct {
+	Header      sqlc.TransactionHeader
+	BankLines   []sqlc.BankTransaction
+	BucketLines []sqlc.BucketTransaction
+	// Tags are sorted case-insensitively.
+	Tags []string
+}
+
+// Options configures a Ledger.
+type Options struct {
+	// AfterRecord runs after a transaction's rows are written, in the same
+	// database transaction. An error rolls everything back. The Money
+	// Allocation Routine (#17) hooks in here.
+	AfterRecord func(ctx context.Context, tx pgx.Tx, t *Transaction) error
+}
+
+// Ledger records transactions.
+type Ledger struct {
+	opts Options
+}
+
+// New returns a Ledger.
+func New(opts Options) *Ledger { return &Ledger{opts: opts} }
+
+// shape is how many lines an original transaction of a type has (§5.4).
+type shape struct {
+	bank                 int
+	minBucket, maxBucket int // maxBucket < 0: no limit
+}
+
+var shapes = map[sqlc.TransactionType]shape{
+	sqlc.TransactionTypeOPB: {bank: 1},
+	sqlc.TransactionTypeBLA: {bank: 1},
+	sqlc.TransactionTypeINC: {bank: 1, maxBucket: -1},
+	sqlc.TransactionTypeEXP: {bank: 1, maxBucket: -1},
+	sqlc.TransactionTypeTRF: {bank: 2},
+	sqlc.TransactionTypeOPF: {minBucket: 1, maxBucket: 1},
+	sqlc.TransactionTypeREF: {minBucket: 1, maxBucket: 1},
+	sqlc.TransactionTypeBUA: {minBucket: 1, maxBucket: 1},
+	sqlc.TransactionTypeBAT: {minBucket: 2, maxBucket: 2},
+	sqlc.TransactionTypeOVF: {minBucket: 1, maxBucket: 1},
+}
+
+// Create records e in a new database transaction.
+func (l *Ledger) Create(ctx context.Context, pool *pgxpool.Pool, e Entry) (*Transaction, error) {
+	var t *Transaction
+	err := pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
+		var err error
+		t, err = l.Record(ctx, tx, e)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
+// Record records e inside tx, so callers can combine it with other writes
+// (an account and its opening balance, the transactions of a cycle routine).
+// On error, roll tx back: some rows may have been written.
+func (l *Ledger) Record(ctx context.Context, tx pgx.Tx, e Entry) (*Transaction, error) {
+	e, err := normalize(e)
+	if err != nil {
+		return nil, err
+	}
+	q := sqlc.New(tx)
+
+	if e.Correction != sqlc.CorrectionTypeNone {
+		if err := checkParent(ctx, q, e); err != nil {
+			return nil, err
+		}
+	}
+	if err := checkOwned(ctx, q, e); err != nil {
+		return nil, err
+	}
+	var cycleID string
+	if len(e.BucketLines) > 0 {
+		if cycleID, err = activeCycle(ctx, q, e); err != nil {
+			return nil, err
+		}
+	}
+
+	createdBy := pgtype.Text{String: e.CreatedBy, Valid: e.CreatedBy != ""}
+	t := &Transaction{}
+	_, err = ids.Insert(ctx, ids.Transaction, func() string { return ids.NewTransaction(e.Date) },
+		func(ctx context.Context, id string) (bool, error) {
+			var err error
+			t.Header, err = q.CreateTransactionHeader(ctx, sqlc.CreateTransactionHeaderParams{
+				ID:              id,
+				UserID:          e.UserID,
+				ParentID:        pgtype.Text{String: e.ParentID, Valid: e.ParentID != ""},
+				CorrectionType:  e.Correction,
+				TransactionType: e.Type,
+				TransactionDate: e.Date,
+				Counterparty:    e.Counterparty,
+				CreatedBy:       createdBy,
+			})
+			return ids.Inserted(err)
+		})
+	if err != nil {
+		return nil, fmt.Errorf("create transaction header: %w", err)
+	}
+
+	for _, line := range e.BankLines {
+		params := sqlc.CreateBankLineParams{
+			TransactionID: t.Header.ID,
+			AccountID:     line.AccountID,
+			Amount:        line.Amount,
+			CreatedBy:     createdBy,
+		}
+		if f := line.Original; f != nil {
+			params.OriginalAmount = decimal.NewNullDecimal(f.Amount)
+			params.OriginalCurrency = pgtype.Text{String: f.Currency, Valid: true}
+			params.ExchangeRate = decimal.NewNullDecimal(money.Rate(line.Amount, f.Amount))
+		}
+		var row sqlc.BankTransaction
+		_, err := ids.Insert(ctx, ids.BankLine, func() string { return ids.NewBankLine(line.AccountID) },
+			func(ctx context.Context, id string) (bool, error) {
+				params.ID = id
+				var err error
+				row, err = q.CreateBankLine(ctx, params)
+				return ids.Inserted(err)
+			})
+		if err != nil {
+			return nil, fmt.Errorf("create bank line: %w", err)
+		}
+		t.BankLines = append(t.BankLines, row)
+	}
+
+	for _, line := range e.BucketLines {
+		var row sqlc.BucketTransaction
+		_, err := ids.Insert(ctx, ids.BucketLine, func() string { return ids.NewBucketLine(line.BucketID) },
+			func(ctx context.Context, id string) (bool, error) {
+				var err error
+				row, err = q.CreateBucketLine(ctx, sqlc.CreateBucketLineParams{
+					ID:            id,
+					TransactionID: t.Header.ID,
+					BucketID:      line.BucketID,
+					CycleID:       cycleID,
+					Amount:        line.Amount,
+					CreatedBy:     createdBy,
+				})
+				return ids.Inserted(err)
+			})
+		if err != nil {
+			return nil, fmt.Errorf("create bucket line: %w", err)
+		}
+		t.BucketLines = append(t.BucketLines, row)
+	}
+
+	for _, name := range e.Tags {
+		tag, err := q.UpsertTag(ctx, sqlc.UpsertTagParams{UserID: e.UserID, Name: name})
+		if err != nil {
+			return nil, fmt.Errorf("create tag: %w", err)
+		}
+		if err := q.AddTransactionTag(ctx, sqlc.AddTransactionTagParams{
+			TransactionID: t.Header.ID, TagID: tag.ID, UserID: e.UserID,
+		}); err != nil {
+			return nil, fmt.Errorf("tag transaction: %w", err)
+		}
+		t.Tags = append(t.Tags, tag.Name) // the stored spelling
+	}
+	sortTags(t.Tags)
+
+	if l.opts.AfterRecord != nil {
+		if err := l.opts.AfterRecord(ctx, tx, t); err != nil {
+			return nil, err
+		}
+	}
+	return t, nil
+}
+
+// Get returns the user's transaction with this ID, or ErrNotFound.
+func Get(ctx context.Context, db sqlc.DBTX, userID, id string) (*Transaction, error) {
+	q := sqlc.New(db)
+	header, err := q.GetTransactionHeader(ctx, sqlc.GetTransactionHeaderParams{ID: id, UserID: userID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("%w: transaction %s", ErrNotFound, id)
+	}
+	if err != nil {
+		return nil, err
+	}
+	t := &Transaction{Header: header}
+	if t.BankLines, err = q.ListBankLines(ctx, id); err != nil {
+		return nil, err
+	}
+	if t.BucketLines, err = q.ListBucketLines(ctx, id); err != nil {
+		return nil, err
+	}
+	if t.Tags, err = q.ListTransactionTags(ctx, id); err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
+var currencyRE = regexp.MustCompile(`^[A-Z]{3}$`)
+
+// normalize checks everything that doesn't need the database and returns e
+// in its stored form.
+func normalize(e Entry) (Entry, error) {
+	invalid := func(format string, args ...any) (Entry, error) {
+		return Entry{}, fmt.Errorf("%w: %s", ErrInvalid, fmt.Sprintf(format, args...))
+	}
+
+	if !ids.User.Valid(e.UserID) {
+		return invalid("user ID %q", e.UserID)
+	}
+	if e.CreatedBy != "" && !ids.User.Valid(e.CreatedBy) {
+		return invalid("created by %q", e.CreatedBy)
+	}
+	if e.Date.IsZero() {
+		return invalid("no transaction date")
+	}
+	y, m, d := e.Date.Date()
+	e.Date = time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+
+	if e.Type == sqlc.TransactionTypeINP {
+		return Entry{}, fmt.Errorf("%w: %s", ErrUnsupported, e.Type)
+	}
+	s, ok := shapes[e.Type]
+	if !ok {
+		return invalid("unknown transaction type %q", e.Type)
+	}
+
+	if e.Correction == "" {
+		e.Correction = sqlc.CorrectionTypeNone
+	}
+	switch e.Correction {
+	case sqlc.CorrectionTypeNone:
+		if e.ParentID != "" {
+			return invalid("only corrections have a parent transaction")
+		}
+		if len(e.BankLines) != s.bank {
+			return invalid("%s needs %d bank line(s), got %d", e.Type, s.bank, len(e.BankLines))
+		}
+		if n := len(e.BucketLines); n < s.minBucket || (s.maxBucket >= 0 && n > s.maxBucket) {
+			if s.minBucket == s.maxBucket {
+				return invalid("%s needs %d bucket line(s), got %d", e.Type, s.minBucket, n)
+			}
+			return invalid("%s can't have bucket lines", e.Type)
+		}
+	case sqlc.CorrectionTypeAdjustment, sqlc.CorrectionTypeReversal:
+		if !ids.Transaction.Valid(e.ParentID) {
+			return invalid("a %s needs a parent transaction", e.Correction)
+		}
+		// A correction changes some of its parent's lines, so it can have
+		// fewer lines than the type needs, but none of a kind the type lacks.
+		if len(e.BankLines)+len(e.BucketLines) == 0 {
+			return invalid("a %s needs at least one line", e.Correction)
+		}
+		if len(e.BankLines) > s.bank {
+			return invalid("%s has at most %d bank line(s)", e.Type, s.bank)
+		}
+		if s.maxBucket >= 0 && len(e.BucketLines) > s.maxBucket {
+			return invalid("%s has at most %d bucket line(s)", e.Type, s.maxBucket)
+		}
+	default:
+		return invalid("unknown correction type %q", e.Correction)
+	}
+
+	seen := map[string]bool{}
+	for _, line := range e.BankLines {
+		if !ids.Account.Valid(line.AccountID) {
+			return invalid("account ID %q", line.AccountID)
+		}
+		if seen[line.AccountID] {
+			return invalid("account %s appears twice", line.AccountID)
+		}
+		seen[line.AccountID] = true
+		if err := checkAmount(line.Amount); err != nil {
+			return Entry{}, err
+		}
+		if f := line.Original; f != nil {
+			if err := checkAmount(f.Amount); err != nil {
+				return Entry{}, fmt.Errorf("original %w", err)
+			}
+			if !currencyRE.MatchString(f.Currency) {
+				return invalid("currency %q", f.Currency)
+			}
+		}
+	}
+	for _, line := range e.BucketLines {
+		if !ids.Bucket.Valid(line.BucketID) {
+			return invalid("bucket ID %q", line.BucketID)
+		}
+		if seen[line.BucketID] {
+			return invalid("bucket %s appears twice", line.BucketID)
+		}
+		seen[line.BucketID] = true
+		if err := checkAmount(line.Amount); err != nil {
+			return Entry{}, err
+		}
+	}
+
+	e.Counterparty = strings.TrimSpace(e.Counterparty)
+	if utf8.RuneCountInString(e.Counterparty) > MaxCounterparty {
+		return invalid("counterparty is longer than %d characters", MaxCounterparty)
+	}
+
+	var tags []string
+	for _, tag := range e.Tags {
+		tag = strings.TrimSpace(tag)
+		if tag == "" {
+			continue
+		}
+		if utf8.RuneCountInString(tag) > MaxTagLength {
+			return invalid("tag %q is longer than %d characters", tag, MaxTagLength)
+		}
+		if !slices.ContainsFunc(tags, func(t string) bool { return strings.EqualFold(t, tag) }) {
+			tags = append(tags, tag)
+		}
+	}
+	if len(tags) > MaxTags {
+		return invalid("more than %d tags", MaxTags)
+	}
+	e.Tags = tags
+	return e, nil
+}
+
+func checkAmount(d decimal.Decimal) error {
+	if d.IsZero() {
+		return fmt.Errorf("%w: amount is zero", ErrInvalid)
+	}
+	if err := money.Valid(d); err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalid, err)
+	}
+	return nil
+}
+
+func checkParent(ctx context.Context, q *sqlc.Queries, e Entry) error {
+	parent, err := q.GetTransactionHeader(ctx, sqlc.GetTransactionHeaderParams{ID: e.ParentID, UserID: e.UserID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("%w: transaction %s", ErrNotFound, e.ParentID)
+	}
+	if err != nil {
+		return err
+	}
+	if parent.CorrectionType != sqlc.CorrectionTypeNone {
+		return fmt.Errorf("%w: correct the original transaction, not a correction", ErrInvalid)
+	}
+	if parent.TransactionType != e.Type {
+		return fmt.Errorf("%w: a correction of a %s must be a %s", ErrInvalid, parent.TransactionType, parent.TransactionType)
+	}
+	return nil
+}
+
+// checkOwned checks that the accounts and buckets exist, belong to the user
+// and aren't deleted.
+func checkOwned(ctx context.Context, q *sqlc.Queries, e Entry) error {
+	if len(e.BankLines) > 0 {
+		want := make([]string, len(e.BankLines))
+		for i, line := range e.BankLines {
+			want[i] = line.AccountID
+		}
+		rows, err := q.GetOwnedAccounts(ctx, sqlc.GetOwnedAccountsParams{Ids: want, UserID: e.UserID})
+		if err != nil {
+			return err
+		}
+		if missing := firstMissing(want, rows, func(r sqlc.GetOwnedAccountsRow) string { return r.ID }); missing != "" {
+			return fmt.Errorf("%w: account %s", ErrNotFound, missing)
+		}
+	}
+	if len(e.BucketLines) > 0 {
+		want := make([]string, len(e.BucketLines))
+		for i, line := range e.BucketLines {
+			want[i] = line.BucketID
+		}
+		rows, err := q.GetOwnedBuckets(ctx, sqlc.GetOwnedBucketsParams{Ids: want, UserID: e.UserID})
+		if err != nil {
+			return err
+		}
+		if missing := firstMissing(want, rows, func(r sqlc.GetOwnedBucketsRow) string { return r.ID }); missing != "" {
+			return fmt.Errorf("%w: bucket %s", ErrNotFound, missing)
+		}
+	}
+	return nil
+}
+
+func firstMissing[R any](want []string, rows []R, id func(R) string) string {
+	for _, w := range want {
+		if !slices.ContainsFunc(rows, func(r R) bool { return id(r) == w }) {
+			return w
+		}
+	}
+	return ""
+}
+
+// activeCycle returns the user's active cycle, locked against being ended,
+// after checking that the entry's date falls inside it.
+func activeCycle(ctx context.Context, q *sqlc.Queries, e Entry) (string, error) {
+	c, err := q.GetActiveCycle(ctx, e.UserID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNoActiveCycle
+	}
+	if err != nil {
+		return "", err
+	}
+	if e.Date.Before(c.StartDate) || e.Date.After(c.EndDate) {
+		return "", fmt.Errorf("%w (%s to %s)", ErrOutsideCycle,
+			c.StartDate.Format(time.DateOnly), c.EndDate.Format(time.DateOnly))
+	}
+	return c.ID, nil
+}
+
+// sortTags sorts like ListTransactionTags: case-insensitively, bytewise.
+func sortTags(tags []string) {
+	slices.SortFunc(tags, func(a, b string) int {
+		return strings.Compare(strings.ToLower(a), strings.ToLower(b))
+	})
+}

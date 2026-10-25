@@ -91,6 +91,21 @@ id, err := ids.Insert(ctx, ids.User, ids.NewUser, func(ctx context.Context, id s
 })
 ```
 
+### Money and the ledger
+
+- **Amounts** are `decimal.Decimal` ([shopspring/decimal](https://github.com/shopspring/decimal)) in Go and `NUMERIC(14,2)` in PostgreSQL. Exchange rates are `NUMERIC(18,8)`. Never use `float64` for money. pgx and sqlc map `numeric` to `decimal.Decimal` (`db.Configure`), and JSON carries amounts as strings.
+- **Rounding:** calculate at full precision, then round the result with `money.Round`, which rounds half away from zero, the same as PostgreSQL's numeric cast. The ledger rejects an amount with more than 2 decimals instead of rounding it, so round where you calculate.
+- **Recording:** `internal/ledger` writes a header and its lines in one go:
+  - `ledger.Create(ctx, pool, entry)` runs in its own DB transaction;
+  - `Record(ctx, tx, entry)` runs inside yours, for example to create an account together with its OPB.
+  - It checks the line counts per type (spec §5.4), that every account and bucket is the user's and not deleted, and that bucket lines fall within the user's active cycle (they get that cycle's ID).
+  - Sign rules and other per-type rules belong to the caller.
+  - Errors wrap `ledger.ErrInvalid`, `ErrNotFound`, `ErrNoActiveCycle`, `ErrOutsideCycle` or `ErrUnsupported`.
+- **Immutable:** a trigger rejects UPDATE, DELETE and TRUNCATE on `transaction_headers`, `bank_transactions`, `bucket_transactions` and `transaction_tags`. Change a transaction by recording a correction (`Correction` and `ParentID`).
+- **IDs:** a transaction ID starts with its transaction date (`YYYYMMDD`), and a CHECK constraint enforces this. Transaction and cycle dates are `date` columns, read into Go as `time.Time` at UTC midnight.
+- **Hook:** `ledger.Options.AfterRecord` runs after each recorded transaction, inside the same DB transaction. The Money Allocation Routine plugs in there.
+- **Tests:** `internal/ledgertest` creates bare accounts, cycles and buckets for tests.
+
 ### API contract
 
 `api/openapi.yaml` (OpenAPI 3.0.3, the version oapi-codegen supports) is the source of truth for the REST API. To add or change an endpoint:

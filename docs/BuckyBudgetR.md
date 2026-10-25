@@ -70,7 +70,7 @@ A budget period. Usually a month, but its start and end dates can be set freely,
 | Owner | user |
 | Start date | starts 00:00:00 |
 | End date | ends 23:59:59 |
-| Finished | bool |
+| State | future / active / finished |
 
 **Rules**
 - Cycles apply to the whole user. A user has **at most one active cycle**.
@@ -122,9 +122,9 @@ Transactions are immutable. An edit creates a **correction** (e.g. 100 NOK corre
 | Transaction type | see 5.4 |
 | Transaction date | |
 | Company/Person | counterparty for external transactions |
-| Tags | |
+| Tags | per-user, free text; reused by name (case-insensitive) |
 | Bank lines / bucket lines | links |
-| Created / Modified, User | audit |
+| Created, User | audit (immutable: never modified) |
 
 ### 5.2 Bank transaction (line)
 
@@ -134,7 +134,7 @@ Transactions are immutable. An edit creates a **correction** (e.g. 100 NOK corre
 | Bank account | |
 | Amount | **in the account currency – this is the amount that counts** |
 | Original amount, currency, exchange rate | for foreign-currency purchases. For reference only. The rate is derived from the amounts. |
-| Created / Modified, User | audit |
+| Created, User | audit (immutable: never modified) |
 
 For foreign-currency transactions, record the amount in the account currency as shown by your bank, fees included.
 
@@ -146,7 +146,7 @@ For foreign-currency transactions, record the amount in the account currency as 
 | Bucket | |
 | Amount | |
 | Cycle | the cycle this line belongs to |
-| Created / Modified, User | audit |
+| Created, User | audit (immutable: never modified) |
 
 ### 5.4 Transaction types
 
@@ -170,7 +170,7 @@ Only **INC, EXP, TRF and INP** can be created from the *Create transaction* scre
 - A bucket line belongs to the **active cycle** of the bucket's owner, and the transaction date must fall inside that cycle.
 - **Corrections and reversals that affect buckets are only allowed inside the active cycle.** Once a cycle is finished, its bucket lines are locked.
 - An Internal Payment can only be created by the payer. Users cannot "request" money from other users.
-- **Math:** calculate with full precision. Stored amounts use 2 decimals.
+- **Math:** calculate with full precision. Stored amounts use 2 decimals, rounded half away from zero (0.005 → 0.01, −0.005 → −0.01). Exchange rates use 8 decimals.
 
 ## 6. Cycle routines
 
