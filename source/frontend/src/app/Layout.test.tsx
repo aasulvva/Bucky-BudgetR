@@ -1,4 +1,5 @@
 import { screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
@@ -28,16 +29,44 @@ describe("routes", () => {
 });
 
 describe("desktop layout", () => {
-  it("lists every screen in the side menu", async () => {
+  it("shows the top-level screens and the open groups", async () => {
     renderRoute("/accounts");
     const nav = await screen.findByRole("navigation");
-    for (const item of navItems) {
-      expect(within(nav).getByRole("link", { name: item.label })).toHaveAttribute(
-        "href",
-        item.path,
-      );
+    for (const label of ["Dashboard", "Transactions", "New transaction", "Buckets", "Cycles"]) {
+      expect(within(nav).getByRole("link", { name: label })).toBeInTheDocument();
     }
     expect(within(nav).getByRole("link", { name: "Accounts" })).toHaveAttribute("data-active");
+    expect(within(nav).getByRole("link", { name: /Savings Later/ })).toHaveAttribute(
+      "href",
+      "/savings",
+    );
+    // Setup is closed until opened.
+    expect(within(nav).queryByRole("link", { name: "Account setup" })).not.toBeInTheDocument();
+    await userEvent.click(within(nav).getByText("Setup"));
+    expect(await within(nav).findByRole("link", { name: "Account setup" })).toHaveAttribute(
+      "href",
+      "/accounts/setup",
+    );
+  });
+
+  it("opens the group of the current screen", async () => {
+    renderRoute("/buckets/setup");
+    const nav = await screen.findByRole("navigation");
+    expect(within(nav).getByRole("link", { name: "Bucket setup" })).toHaveAttribute("data-active");
+  });
+
+  it("has the profile menu at the bottom", async () => {
+    renderRoute("/");
+    const nav = await screen.findByRole("navigation");
+    await userEvent.click(within(nav).getByRole("button", { name: /Profile/ }));
+    const menu = await screen.findByRole("menu");
+    expect(await within(menu).findByRole("menuitem", { name: /Settings/ })).toHaveAttribute(
+      "href",
+      "/settings",
+    );
+    expect(within(menu).getByRole("menuitem", { name: "Sign out" })).toBeInTheDocument();
+    // Admin is only for admins; without a session nobody is.
+    expect(within(menu).queryByRole("menuitem", { name: /Admin/ })).not.toBeInTheDocument();
   });
 });
 
@@ -46,18 +75,21 @@ describe("mobile layout", () => {
     viewport.width = 390;
   });
 
-  it("shows the bottom tabs and the sub-menu of the current tab", async () => {
-    renderRoute("/buckets");
-    await screen.findByRole("heading", { level: 2, name: "Buckets" });
+  it("shows the bottom tabs and the screen's name", async () => {
+    renderRoute("/transactions");
+    await screen.findByRole("heading", { level: 2, name: "Transactions" });
 
     expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Transactions" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Profile" })).toBeInTheDocument();
+
     const footer = screen.getByRole("contentinfo");
     for (const tab of navTabs.filter((t) => !t.action)) {
-      expect(
-        within(footer).getByRole("link", { name: tab.shortLabel ?? tab.label }),
-      ).toBeInTheDocument();
+      const name = tab.shortLabel ?? tab.label;
+      const role = tab.items.length > 1 ? "button" : "link";
+      expect(within(footer).getByRole(role, { name })).toBeInTheDocument();
     }
-    expect(within(footer).getByRole("link", { name: "Overview" })).toHaveAttribute(
+    expect(within(footer).getByRole("link", { name: "Transactions" })).toHaveAttribute(
       "aria-current",
       "page",
     );
@@ -65,15 +97,22 @@ describe("mobile layout", () => {
       "href",
       "/transactions/new",
     );
-
-    // Overview holds three screens, so it gets a sub-menu.
-    expect(screen.getByRole("link", { name: "Dashboard" })).toBeInTheDocument();
   });
 
-  it("has no sub-menu for single-screen tabs", async () => {
-    renderRoute("/transactions");
-    await screen.findByRole("heading", { level: 2, name: "Transactions" });
-    expect(screen.queryByRole("link", { name: "Dashboard" })).not.toBeInTheDocument();
+  it("opens a group's screens in a sheet", async () => {
+    renderRoute("/buckets");
+    await screen.findByRole("heading", { level: 2, name: "Buckets" });
+    const footer = screen.getByRole("contentinfo");
+    const budget = within(footer).getByRole("button", { name: "Budget" });
+    expect(budget).toHaveAttribute("data-active");
+
+    await userEvent.click(budget);
+    const sheet = await screen.findByRole("dialog", { name: "Budget & Reporting" });
+    expect(within(sheet).getByRole("link", { name: "Accounts" })).toHaveAttribute(
+      "href",
+      "/accounts",
+    );
+    expect(within(sheet).getByRole("link", { name: "Buckets" })).toHaveAttribute("data-active");
   });
 });
 
@@ -81,8 +120,14 @@ describe("findNav", () => {
   it("picks the most specific item", () => {
     expect(findNav("/")?.item.label).toBe("Dashboard");
     expect(findNav("/accounts/1234")?.item.label).toBe("Accounts");
-    expect(findNav("/accounts/setup")?.item.label).toBe("Account setup");
-    expect(findNav("/transactions/new")?.tab.id).toBe("new");
+    expect(findNav("/accounts/setup")?.tab?.id).toBe("setup");
+    expect(findNav("/transactions/new")?.tab?.id).toBe("new");
     expect(findNav("/accountsx")).toBeUndefined();
+  });
+
+  it("finds the profile menu's screens without a tab", () => {
+    const settings = findNav("/settings");
+    expect(settings?.item.label).toBe("Settings");
+    expect(settings?.tab).toBeUndefined();
   });
 });

@@ -10,8 +10,10 @@ import { theme } from "@/theme";
 
 function Providers({ children }: { children: ReactElement }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  // env="test" turns off Mantine's transitions and portals: in jsdom a
+  // transition never finishes, so a menu would stay hidden.
   return (
-    <MantineProvider theme={theme}>
+    <MantineProvider theme={theme} env="test">
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
     </MantineProvider>
   );

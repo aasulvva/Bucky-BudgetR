@@ -251,25 +251,42 @@ Funds the buckets: works out how much of each source account's money backs each 
 
 ## 9. UI
 
-**Desktop:** side menu. **Mobile:** bottom tabs `Overview · Transactions · (+ New) · Budget & Reporting · Settings`, with sub-menus instead of listing every screen.
+### Navigation
+
+Desktop and mobile use the same groups (decided in #8; wireframes in the design canvas linked there). Post-MVP screens are marked *later*.
+
+| Group | Screens |
+| ----- | ------- |
+| Overview | Dashboard |
+| Transactions | Transactions (list, filters, corrections) |
+| (+) New | Create transaction |
+| Budget & Reporting | Buckets, Accounts, Cycles, Savings *(later)*, Stats & reports *(later)* |
+| Setup | Account setup, Bucket setup, Budget setup, Savings setup *(later)* |
+| Profile menu | Settings, Admin (admins only), Sign out |
+
+- **Desktop:** a side menu. Dashboard and Transactions are links, New transaction is a button, and Budget & Reporting and Setup are groups that expand and collapse. Budget & Reporting and the group of the current screen start open. The profile button (avatar and username) sits at the bottom and opens the profile menu.
+- **Mobile:** bottom tabs `Overview · Transactions · (+ New) · Budget · Setup`. A tab with several screens opens them in a sheet. The header shows the screen's name and the profile avatar, which opens the profile menu.
+- **Notifications** (#57, later): above the profile button on desktop, a bell next to the avatar on mobile.
+- The day-to-day budget screen is **Cycles**. Budget setup is part of Setup.
+
+### Screens
 
 | Screen | Content |
 | ------ | ------- |
 | Dashboard | Customisable widgets: budget health, bucket status, account balances, recent transactions, graphs… |
-| Create transaction | INC, EXP, TRF, INP |
-| Buckets | CAF/TF per bucket, drill into transactions, manual refill button |
+| Create transaction | INC, EXP, TRF (INP later). An income has a "Triggers refill" checkbox (§6). |
+| Buckets | Per source account: used this cycle out of the budget, left (TF) and covered (CAF) per bucket, list or grid view, drill into transactions, manual refill button (once per cycle); a cog opens the bucket in Bucket setup |
 | Bucket setup | Create/edit (name, importance, priority, options)/delete buckets. **Adjust:** *Temporary* (set TF, may exceed BC → BUA) · *Future* (set RA, BC follows its rules, TF unchanged) · *Both* (set RA and change TF by the same relative amount → BUA). The same options are available for reallocating between buckets (→ BAT). |
 | Budget setup | All buckets at once: enter the expected monthly income per source account, set RAs, see the % allocated and the remainder |
-| Accounts | Balances, drill into transactions, balance adjustment (BLA) |
+| Accounts | Balances, drill into transactions, balance adjustment (BLA), register interest (INC); a cog opens the account in Account setup |
+| Cycles | The active cycle (extend, end) and planned cycles. Ending asks for confirmation, listing the buckets that will be emptied (OVF) and the Auto buckets the next cycle refills. Without an active cycle, a prompt offers to start the planned one or a new one. |
 | Account setup | Create/manage bank accounts |
 | Transactions | Filter by account, bucket, cycle…; corrections and reversals |
 | Savings | Expected deposits per savings target. "Done" creates the transfers |
 | Savings setup | Savings targets and priority rules |
 | Stats & reports | Spending and balance graphs over time; yearly PDF report; filter by bucket, tag, counterparty |
-| Settings | Password, preferences, data export/import |
-| Admin | User management, including password reset |
-
-Which screen sits under which mobile tab still has to be decided in a design session.
+| Settings | Profile menu. Password, preferences (locale, default refill mode, income rules), data export/import *(later)* |
+| Admin | Profile menu, admins only. User management, including password reset |
 
 ## 10. Roadmap
 
