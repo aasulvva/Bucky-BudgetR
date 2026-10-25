@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/accounts"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/api"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/auth"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
@@ -18,8 +19,9 @@ import (
 // server implements the operations in api/openapi.yaml. Gate has already
 // checked sessions and validated requests against the spec.
 type server struct {
-	db   Pinger
-	auth *auth.Service
+	db       Pinger
+	auth     *auth.Service
+	accounts *accounts.Service
 }
 
 var _ api.StrictServerInterface = (*server)(nil)

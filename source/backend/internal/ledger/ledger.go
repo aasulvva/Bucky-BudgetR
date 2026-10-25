@@ -14,7 +14,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -290,8 +289,6 @@ func Get(ctx context.Context, db sqlc.DBTX, userID, id string) (*Transaction, er
 	return t, nil
 }
 
-var currencyRE = regexp.MustCompile(`^[A-Z]{3}$`)
-
 // normalize checks everything that doesn't need the database and returns e
 // in its stored form.
 func normalize(e Entry) (Entry, error) {
@@ -370,8 +367,8 @@ func normalize(e Entry) (Entry, error) {
 			if err := checkAmount(f.Amount); err != nil {
 				return Entry{}, fmt.Errorf("original %w", err)
 			}
-			if !currencyRE.MatchString(f.Currency) {
-				return invalid("currency %q", f.Currency)
+			if err := money.ValidCurrency(f.Currency); err != nil {
+				return Entry{}, fmt.Errorf("%w: %w", ErrInvalid, err)
 			}
 		}
 	}

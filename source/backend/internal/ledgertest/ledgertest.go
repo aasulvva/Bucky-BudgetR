@@ -20,7 +20,7 @@ func Account(t testing.TB, pool *pgxpool.Pool, userID, currency string) string {
 		currency = "NOK"
 	}
 	return insert(t, ids.Account, ids.NewAccount, func(ctx context.Context, id string) error {
-		return pool.QueryRow(ctx, `INSERT INTO bank_accounts (id, user_id, name, currency) VALUES ($1, $2, 'Test account', $3)
+		return pool.QueryRow(ctx, `INSERT INTO bank_accounts (id, user_id, name, currency) VALUES ($1, $2, 'Account ' || $1, $3)
 			ON CONFLICT (id) DO NOTHING RETURNING id`, id, userID, currency).Scan(&id)
 	})
 }

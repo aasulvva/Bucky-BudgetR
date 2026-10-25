@@ -94,6 +94,7 @@ id, err := ids.Insert(ctx, ids.User, ids.NewUser, func(ctx context.Context, id s
 ### Money and the ledger
 
 - **Amounts** are `decimal.Decimal` ([shopspring/decimal](https://github.com/shopspring/decimal)) in Go and `NUMERIC(14,2)` in PostgreSQL. Exchange rates are `NUMERIC(18,8)`. Never use `float64` for money. pgx and sqlc map `numeric` to `decimal.Decimal` (`db.Configure`), and JSON carries amounts as strings.
+- **Currencies:** `money.ValidCurrency` accepts ISO 4217 codes (from `golang.org/x/text/currency`) for real currencies with at most 2 decimals. Use it wherever a currency comes in.
 - **Rounding:** calculate at full precision, then round the result with `money.Round`, which rounds half away from zero, the same as PostgreSQL's numeric cast. The ledger rejects an amount with more than 2 decimals instead of rounding it, so round where you calculate.
 - **Recording:** `internal/ledger` writes a header and its lines in one go:
   - `ledger.Create(ctx, pool, entry)` runs in its own DB transaction;
@@ -104,6 +105,7 @@ id, err := ids.Insert(ctx, ids.User, ids.NewUser, func(ctx context.Context, id s
 - **Immutable:** a trigger rejects UPDATE, DELETE and TRUNCATE on `transaction_headers`, `bank_transactions`, `bucket_transactions` and `transaction_tags`. Change a transaction by recording a correction (`Correction` and `ParentID`).
 - **Times:** a transaction's time (`transaction_at`) and a cycle's bounds (`start_at`, `end_at`) are UTC `timestamptz`. A cycle runs from `start_at` up to, but not including, `end_at`. The frontend turns the cycle dates the user picks into the UTC moments of local midnight: a cycle from 01.11 to 30.11 in Oslo is stored as 31.10 23:00 up to 30.11 23:00 UTC. Use the time zone (`Europe/Oslo`), not a fixed offset, because the offset changes with summer time.
 - **IDs:** a transaction ID starts with the UTC date of its time (`YYYYMMDD`), and a CHECK constraint enforces this. A purchase at 00:30 in Oslo gets the previous day's date.
+- **Services:** feature packages such as `internal/accounts` do their checks and writes in one DB transaction and record money movements with `ledger.Record` inside it, so an account never exists without its opening balance and is never deleted half-settled. They lock the rows they change (`FOR UPDATE`); the ledger locks the accounts it records on `FOR SHARE`, so it waits for them.
 - **Balances:** `internal/balance` calculates account balances (now, or before a moment), bucket TF and a bucket's figures for a cycle (start, budget, used, overflow, left; spec §4) from the ledger lines. Nothing is stored. Covering indexes on the line tables keep the sums cheap.
 - **Hook:** `ledger.Options.AfterRecord` runs after each recorded transaction, inside the same DB transaction. The Money Allocation Routine plugs in there.
 - **Tests:** `internal/ledgertest` creates bare accounts, cycles and buckets for tests.

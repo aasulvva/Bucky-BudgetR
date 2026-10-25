@@ -144,6 +144,111 @@ export interface paths {
         patch: operations["updatePreferences"];
         trace?: never;
     };
+    "/api/v1/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List accounts
+         * @description The user's accounts that aren't deleted, sorted by name, each with its current balance.
+         */
+        get: operations["listAccounts"];
+        put?: never;
+        /**
+         * Create an account
+         * @description Creates an account. A non-zero `opening_balance` is recorded as an
+         *     Opening Balance (OPB) transaction at `opening_at` (default now).
+         *     Names must be unique among the user's accounts (409 `name_taken`).
+         */
+        post: operations["createAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/accounts/{accountId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        /** Get an account */
+        get: operations["getAccount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Rename an account or change its type
+         * @description The currency can't be changed.
+         */
+        patch: operations["updateAccount"];
+        trace?: never;
+    };
+    "/api/v1/accounts/{accountId}/balance-adjustment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Adjust the balance
+         * @description Sets the balance as of `at` (default now) to `target_balance` by
+         *     recording a Balance Adjustment (BLA) for the difference. Transactions
+         *     at or before `at` count. 400 `no_change` if there is no difference.
+         */
+        post: operations["adjustAccountBalance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/accounts/{accountId}/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete an account
+         * @description Deletes the account after settling it, all at once:
+         *     - every bucket funded from it moves to the account given in
+         *       `bucket_sources`, otherwise 409 `account_has_buckets`;
+         *     - money left in it is transferred (TRF) or adjusted away (BLA) as
+         *       `remaining_funds` says, otherwise 409 `balance_not_zero`.
+         *
+         *     If either is refused, nothing changes. Money and buckets can only move
+         *     to another account in the same currency (400 `currency_mismatch`).
+         *     The account's transactions are kept.
+         *
+         *     This is a POST rather than DELETE because it carries a body.
+         */
+        post: operations["deleteAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -173,6 +278,81 @@ export interface components {
              * @example nb-NO
              */
             locale?: string | null;
+        };
+        /**
+         * @description 4-digit bank account ID.
+         * @example 4821
+         */
+        AccountId: string;
+        /**
+         * @description An amount with at most 2 decimals, as a string.
+         * @example 1234.50
+         */
+        Amount: string;
+        /**
+         * @description ISO 4217 currency code. Only real currencies with at most 2 decimals
+         *     are accepted (not e.g. XAU or KWD); others get 400 `invalid_request`.
+         * @example NOK
+         */
+        Currency: string;
+        /**
+         * @description 1 to 100 characters after trimming. Unique among the user's accounts, ignoring case.
+         * @example Main account
+         */
+        AccountName: string;
+        /** @enum {string} */
+        AccountType: "usage" | "savings" | "bsu" | "fund" | "investment";
+        Account: {
+            id: components["schemas"]["AccountId"];
+            name: string;
+            type: components["schemas"]["AccountType"];
+            currency: components["schemas"]["Currency"];
+            balance: components["schemas"]["Amount"];
+            /** Format: date-time */
+            created_at: string;
+        };
+        AccountCreate: {
+            name: components["schemas"]["AccountName"];
+            type?: components["schemas"]["AccountType"];
+            currency?: components["schemas"]["Currency"];
+            opening_balance?: components["schemas"]["Amount"];
+            /**
+             * Format: date-time
+             * @description When the opening balance applies. Defaults to now.
+             */
+            opening_at?: string;
+        };
+        AccountUpdate: {
+            name?: components["schemas"]["AccountName"];
+            type?: components["schemas"]["AccountType"];
+        };
+        BalanceAdjustment: {
+            target_balance: components["schemas"]["Amount"];
+            /**
+             * Format: date-time
+             * @description The moment the balance is correct for. Defaults to now.
+             */
+            at?: string;
+        };
+        AccountDelete: {
+            /** @description What happens to money left in the account. Only needed when the balance isn't 0. */
+            remaining_funds?: {
+                /**
+                 * @description `transfer` moves it to `to_account_id` (TRF); `adjust` records a balance adjustment to 0 (BLA).
+                 * @enum {string}
+                 */
+                action: "transfer" | "adjust";
+                to_account_id?: components["schemas"]["AccountId"];
+            };
+            /**
+             * @description A new source account for every bucket funded from this account, as bucket ID (10 digits) → account ID.
+             * @example {
+             *       "4829131234": "5120"
+             *     }
+             */
+            bucket_sources?: {
+                [key: string]: components["schemas"]["AccountId"];
+            };
         };
         LoginRequest: {
             username: string;
@@ -232,7 +412,9 @@ export interface components {
             };
         };
     };
-    parameters: never;
+    parameters: {
+        AccountId: components["schemas"]["AccountId"];
+    };
     requestBodies: never;
     headers: {
         /** @description Sets or clears the `__Host-bucky_session` cookie. */
@@ -423,6 +605,171 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listAccounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The accounts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"][];
+                };
+            };
+            401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountCreate"];
+            };
+        };
+        responses: {
+            /** @description The new account. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The account with its current balance. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    updateAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountUpdate"];
+            };
+        };
+        responses: {
+            /** @description The updated account. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    adjustAccountBalance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BalanceAdjustment"];
+            };
+        };
+        responses: {
+            /** @description The account with its current balance. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AccountDelete"];
+            };
+        };
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };

@@ -57,3 +57,28 @@ func TestRate(t *testing.T) {
 		}
 	}
 }
+
+func TestValidCurrency(t *testing.T) {
+	for code, ok := range map[string]bool{
+		"NOK": true,
+		"EUR": true,
+		"USD": true,
+		"JPY": true, // 0 decimals fit in 2
+		"XOF": true, // a real currency, despite the X
+		"nok": false,
+		"NO":  false,
+		"XYZ": false, // not ISO 4217
+		"XAU": false, // gold
+		"XTS": false, // testing code
+		"KWD": false, // 3 decimals
+		"":    false,
+	} {
+		err := money.ValidCurrency(code)
+		if (err == nil) != ok {
+			t.Errorf("ValidCurrency(%q) = %v, want ok=%v", code, err, ok)
+		}
+		if err != nil && !errors.Is(err, money.ErrCurrency) {
+			t.Errorf("ValidCurrency(%q) = %v, want ErrCurrency", code, err)
+		}
+	}
+}

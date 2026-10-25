@@ -31,8 +31,11 @@ RETURNING id, name;
 INSERT INTO transaction_tags (transaction_id, tag_id, user_id) VALUES ($1, $2, $3);
 
 -- name: GetOwnedAccounts :many
+-- FOR SHARE: waits for a concurrent delete or balance adjustment of the
+-- account, then sees whether it still exists.
 SELECT id, currency FROM bank_accounts
-WHERE id = ANY(sqlc.arg(ids)::text[]) AND user_id = sqlc.arg(user_id) AND NOT deleted;
+WHERE id = ANY(sqlc.arg(ids)::text[]) AND user_id = sqlc.arg(user_id) AND NOT deleted
+FOR SHARE;
 
 -- name: GetOwnedBuckets :many
 SELECT id, source_account_id FROM buckets

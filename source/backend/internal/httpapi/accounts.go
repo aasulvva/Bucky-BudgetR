@@ -1,0 +1,209 @@
+package httpapi
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"github.com/shopspring/decimal"
+
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/accounts"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/api"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/money"
+)
+
+func (s *server) ListAccounts(ctx context.Context, _ api.ListAccountsRequestObject) (api.ListAccountsResponseObject, error) {
+	svc, err := s.accountService()
+	if err != nil {
+		return nil, err
+	}
+	list, err := svc.List(ctx, sessionFrom(ctx).User.ID)
+	if err != nil {
+		return nil, err
+	}
+	out := make(api.ListAccounts200JSONResponse, len(list))
+	for i, a := range list {
+		out[i] = toAPIAccount(a)
+	}
+	return out, nil
+}
+
+func (s *server) CreateAccount(ctx context.Context, req api.CreateAccountRequestObject) (api.CreateAccountResponseObject, error) {
+	svc, err := s.accountService()
+	if err != nil {
+		return nil, err
+	}
+	b := req.Body
+	n := accounts.New{Name: b.Name}
+	if b.Type != nil {
+		n.Type = sqlc.AccountType(*b.Type)
+	}
+	if b.Currency != nil {
+		n.Currency = *b.Currency
+	}
+	if b.OpeningBalance != nil {
+		if n.OpeningBalance, err = parseAmount(*b.OpeningBalance); err != nil {
+			return nil, err
+		}
+	}
+	if b.OpeningAt != nil {
+		n.OpeningAt = *b.OpeningAt
+	}
+	a, err := svc.Create(ctx, sessionFrom(ctx).User.ID, n)
+	if err != nil {
+		return nil, accountError(err)
+	}
+	return api.CreateAccount201JSONResponse(toAPIAccount(a)), nil
+}
+
+func (s *server) GetAccount(ctx context.Context, req api.GetAccountRequestObject) (api.GetAccountResponseObject, error) {
+	svc, err := s.accountService()
+	if err != nil {
+		return nil, err
+	}
+	a, err := svc.Get(ctx, sessionFrom(ctx).User.ID, req.AccountId)
+	if err != nil {
+		return nil, accountError(err)
+	}
+	return api.GetAccount200JSONResponse(toAPIAccount(a)), nil
+}
+
+func (s *server) UpdateAccount(ctx context.Context, req api.UpdateAccountRequestObject) (api.UpdateAccountResponseObject, error) {
+	svc, err := s.accountService()
+	if err != nil {
+		return nil, err
+	}
+	c := accounts.Changes{Name: req.Body.Name}
+	if req.Body.Type != nil {
+		t := sqlc.AccountType(*req.Body.Type)
+		c.Type = &t
+	}
+	a, err := svc.Update(ctx, sessionFrom(ctx).User.ID, req.AccountId, c)
+	if err != nil {
+		return nil, accountError(err)
+	}
+	return api.UpdateAccount200JSONResponse(toAPIAccount(a)), nil
+}
+
+func (s *server) AdjustAccountBalance(ctx context.Context, req api.AdjustAccountBalanceRequestObject) (api.AdjustAccountBalanceResponseObject, error) {
+	svc, err := s.accountService()
+	if err != nil {
+		return nil, err
+	}
+	target, err := parseAmount(req.Body.TargetBalance)
+	if err != nil {
+		return nil, err
+	}
+	adj := accounts.Adjustment{Target: target}
+	if req.Body.At != nil {
+		adj.At = *req.Body.At
+	}
+	a, err := svc.AdjustBalance(ctx, sessionFrom(ctx).User.ID, req.AccountId, adj)
+	if err != nil {
+		return nil, accountError(err)
+	}
+	return api.AdjustAccountBalance200JSONResponse(toAPIAccount(a)), nil
+}
+
+func (s *server) DeleteAccount(ctx context.Context, req api.DeleteAccountRequestObject) (api.DeleteAccountResponseObject, error) {
+	svc, err := s.accountService()
+	if err != nil {
+		return nil, err
+	}
+	var st accounts.Settlement
+	if b := req.Body; b != nil {
+		if b.BucketSources != nil {
+			st.BucketSources = *b.BucketSources
+		}
+		if r := b.RemainingFunds; r != nil {
+			st.Remaining = &accounts.Remaining{Adjust: r.Action == api.Adjust}
+			if r.Action == api.Transfer {
+				if r.ToAccountId == nil {
+					return nil, NewError(http.StatusBadRequest, "invalid_request", "A transfer needs to_account_id.")
+				}
+				st.Remaining.TransferTo = *r.ToAccountId
+			}
+		}
+	}
+	if err := svc.Delete(ctx, sessionFrom(ctx).User.ID, req.AccountId, st); err != nil {
+		return nil, accountError(err)
+	}
+	return api.DeleteAccount204Response{}, nil
+}
+
+func (s *server) accountService() (*accounts.Service, error) {
+	if s.accounts == nil {
+		return nil, NewError(http.StatusServiceUnavailable, "accounts_unavailable", "")
+	}
+	return s.accounts, nil
+}
+
+// accountError maps errors from the accounts service to problems.
+func accountError(err error) error {
+	var notZero *accounts.BalanceNotZeroError
+	var hasBuckets *accounts.HasBucketsError
+	switch {
+	case errors.Is(err, accounts.ErrNotFound):
+		return &Error{Status: http.StatusNotFound, Code: "not_found", Detail: "Account not found.", Err: err}
+	case errors.Is(err, accounts.ErrNameTaken):
+		return &Error{Status: http.StatusConflict, Code: "name_taken", Detail: "You already have an account with this name."}
+	case errors.As(err, &notZero):
+		return &Error{Status: http.StatusConflict, Code: "balance_not_zero",
+			Detail: "The account still has " + notZero.Balance.StringFixed(money.Places) +
+				" in it. Transfer it to another account or adjust the balance to 0."}
+	case errors.As(err, &hasBuckets):
+		n := len(hasBuckets.BucketIDs)
+		what := strconv.Itoa(n) + " buckets use"
+		if n == 1 {
+			what = "1 bucket uses"
+		}
+		return &Error{Status: http.StatusConflict, Code: "account_has_buckets",
+			Detail: capitalize(what) + " this account as their source. Choose a new source account for each, or delete them in Bucket setup."}
+	case errors.Is(err, accounts.ErrNoChange):
+		return &Error{Status: http.StatusBadRequest, Code: "no_change", Detail: "The balance is already this amount."}
+	case errors.Is(err, accounts.ErrCurrencyMismatch):
+		return &Error{Status: http.StatusBadRequest, Code: "currency_mismatch",
+			Detail: "Money and buckets can only move to an account in the same currency."}
+	case errors.Is(err, accounts.ErrInvalid):
+		return &Error{Status: http.StatusBadRequest, Code: "invalid_request", Detail: invalidDetail(err, accounts.ErrInvalid), Err: err}
+	case errors.Is(err, ledger.ErrInvalid), errors.Is(err, ledger.ErrNotFound):
+		// The service checks first, so this is a race, e.g. a target account
+		// deleted meanwhile.
+		return &Error{Status: http.StatusBadRequest, Code: "invalid_request", Detail: "The transaction couldn't be recorded. Reload and try again.", Err: err}
+	}
+	return err
+}
+
+// invalidDetail returns the message an invalid-input error carries after the
+// sentinel's text, as a sentence.
+func invalidDetail(err, sentinel error) string {
+	msg := err.Error()
+	if i := strings.LastIndex(msg, sentinel.Error()+": "); i >= 0 {
+		msg = msg[i+len(sentinel.Error())+2:]
+	}
+	return capitalize(msg) + "."
+}
+
+// parseAmount parses an Amount. The gate has already checked its pattern.
+func parseAmount(s string) (decimal.Decimal, error) {
+	d, err := decimal.NewFromString(s)
+	if err != nil {
+		return decimal.Decimal{}, &Error{Status: http.StatusBadRequest, Code: "invalid_request", Detail: "Invalid amount " + strconv.Quote(s) + ".", Err: err}
+	}
+	return d, nil
+}
+
+func toAPIAccount(a accounts.Account) api.Account {
+	return api.Account{
+		Id:        a.ID,
+		Name:      a.Name,
+		Type:      api.AccountType(a.Type),
+		Currency:  a.Currency,
+		Balance:   a.Balance.StringFixed(money.Places),
+		CreatedAt: a.CreatedAt.UTC(),
+	}
+}
