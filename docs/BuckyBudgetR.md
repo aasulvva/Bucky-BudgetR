@@ -55,7 +55,7 @@ Self-hosted, envelope-style ("bucket") budgeting application.
 | Created / Modified | audit |
 
 **Rules**
-- The balance is never stored. It is calculated from bank transactions.
+- The balance is never stored. It is calculated from bank transactions. A balance at a point in time counts the transactions dated before it.
 - **Snapshots:** to keep this fast, pre-calculate the balance at fixed points (e.g. 1 January each year) and add only the transactions after that point. Bucket TF uses the same mechanism.
 - New accounts get an **Opening Balance (OPB)** transaction.
 - The balance can be corrected from the Accounts screen, which creates a **Balance Adjustment (BLA)** for the difference.
@@ -106,6 +106,15 @@ A budget period. Usually a month, but its start and end dates can be set freely,
 - New buckets get an **Opening Funds (OPF)** transaction.
 - The new user preference only sets the *default* refill mode. Each bucket decides for itself.
 - *Savings distribution* and *Specific savings target* become available with the savings module (§8). Until then, overflow is always *Unallocated* (the money stays in the source account).
+
+**Figures per cycle** (Buckets screen, "used X of Y"). Calculated from bucket lines, never stored:
+- **Start:** TF when the cycle began, the sum of the bucket's lines in earlier cycles.
+- **Budget:** start + this cycle's lines except EXP and OVF (REF, INC, OPF, BUA, BAT; reductions count negative).
+- **Used:** the cycle's EXP lines, net of corrections.
+- **Overflow:** the cycle's OVF lines, at cycle end or when a refill pushes TF above BC.
+- **Left:** budget − used − overflow. This is TF at the end of the cycle (the current TF while the cycle is active).
+
+A finished cycle keeps its figures: lines from later cycles don't change them.
 
 ## 5. Transactions
 
