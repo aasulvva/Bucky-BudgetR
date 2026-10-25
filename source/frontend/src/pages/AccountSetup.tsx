@@ -80,7 +80,9 @@ export default function AccountSetup() {
       </Group>
       <QueryState query={accounts}>
         {(list) => {
-          const editing = editId ? list.find((a) => a.id === editId) : undefined;
+          const editing = editId
+            ? list.find((a) => a.id === editId)
+            : undefined;
           return (
             <>
               {list.length === 0 ? (
@@ -141,13 +143,25 @@ function AccountDialog({
   const theme = useMantineTheme();
   const isDesktop = useMediaQuery(`(min-width: ${theme.breakpoints.sm})`, true);
   return (
-    <Modal opened={opened} onClose={onClose} title={title} fullScreen={!isDesktop} size="md">
+    <Modal
+      opened={opened}
+      onClose={onClose}
+      title={title}
+      fullScreen={!isDesktop}
+      size="md"
+    >
       {children}
     </Modal>
   );
 }
 
-function AccountTable({ accounts, onEdit }: { accounts: Account[]; onEdit: (id: string) => void }) {
+function AccountTable({
+  accounts,
+  onEdit,
+}: {
+  accounts: Account[];
+  onEdit: (id: string) => void;
+}) {
   return (
     <Card withBorder padding={0}>
       <Table.ScrollContainer minWidth={480}>
@@ -171,7 +185,7 @@ function AccountTable({ accounts, onEdit }: { accounts: Account[]; onEdit: (id: 
                     {a.name}
                   </Text>{" "}
                   <Text span c="dimmed">
-                    ({a.id})
+                    (#{a.id})
                   </Text>
                 </Table.Td>
                 <Table.Td>{accountTypeLabel(a.type)}</Table.Td>
@@ -235,14 +249,20 @@ function CreateAccount({ onDone }: { onDone: () => void }) {
             type,
             currency,
             ...(opening !== null && compareAmounts(opening, "0") !== 0
-              ? { opening_balance: opening, ...(openingAt ? { opening_at: openingAt } : {}) }
+              ? {
+                  opening_balance: opening,
+                  ...(openingAt ? { opening_at: openingAt } : {}),
+                }
               : {}),
           },
         }),
       ),
     meta: { silentError: true },
     onSuccess: async (account) => {
-      notifications.show({ color: "green", message: `${account.name} created.` });
+      notifications.show({
+        color: "green",
+        message: `${account.name} created.`,
+      });
       onDone();
       await refresh();
     },
@@ -309,7 +329,9 @@ function CreateAccount({ onDone }: { onDone: () => void }) {
             onChange={setOpeningAt}
           />
         )}
-        {create.error && !nameProblem(create.error) && <ErrorAlert error={create.error} />}
+        {create.error && !nameProblem(create.error) && (
+          <ErrorAlert error={create.error} />
+        )}
         <Group justify="flex-end" gap="xs">
           <Button variant="default" onClick={onDone}>
             Cancel
@@ -413,7 +435,9 @@ function EditAccount({
           readOnly
           variant="filled"
         />
-        {update.error && !nameProblem(update.error) && <ErrorAlert error={update.error} />}
+        {update.error && !nameProblem(update.error) && (
+          <ErrorAlert error={update.error} />
+        )}
         <Group justify="space-between" gap="xs">
           <Button
             variant="subtle"
@@ -428,7 +452,11 @@ function EditAccount({
             <Button variant="default" onClick={onDone}>
               Cancel
             </Button>
-            <Button type="submit" loading={update.isPending} disabled={!changed}>
+            <Button
+              type="submit"
+              loading={update.isPending}
+              disabled={!changed}
+            >
               Save
             </Button>
           </Group>
@@ -478,7 +506,10 @@ function DeleteAccount({
       ),
     meta: { silentError: true },
     onSuccess: async () => {
-      notifications.show({ color: "green", message: `${account.name} deleted.` });
+      notifications.show({
+        color: "green",
+        message: `${account.name} deleted.`,
+      });
       onDone();
       await refresh();
     },
@@ -487,7 +518,9 @@ function DeleteAccount({
   return (
     <QueryState query={buckets}>
       {(all) => {
-        const own: Bucket[] = all.filter((b) => b.source_account_id === account.id);
+        const own: Bucket[] = all.filter(
+          (b) => b.source_account_id === account.id,
+        );
         const blocked = own.length > 0 && others.length === 0;
         const submit = () => {
           setValidate(true);
@@ -502,7 +535,9 @@ function DeleteAccount({
                 : { action: "adjust" };
           }
           if (own.length > 0) {
-            body.bucket_sources = Object.fromEntries(own.map((b) => [b.id, sources[b.id] ?? ""]));
+            body.bucket_sources = Object.fromEntries(
+              own.map((b) => [b.id, sources[b.id] ?? ""]),
+            );
           }
           remove.mutate(Object.keys(body).length > 0 ? body : undefined);
         };
@@ -517,7 +552,8 @@ function DeleteAccount({
           >
             <Stack gap="md">
               <Text>
-                Delete <strong>{account.name}</strong>? Its transactions are kept.
+                Delete <strong>{account.name}</strong>? Its transactions are
+                kept.
               </Text>
               {hasMoney && (
                 <Radio.Group
@@ -544,7 +580,11 @@ function DeleteAccount({
                         data={others}
                         value={fundsTo}
                         onChange={setFundsTo}
-                        error={validate && !fundsTo ? "Choose an account." : undefined}
+                        error={
+                          validate && !fundsTo
+                            ? "Choose an account."
+                            : undefined
+                        }
                         ml="xl"
                       />
                     )}
@@ -559,13 +599,16 @@ function DeleteAccount({
               {own.length > 0 && (
                 <Stack gap="xs">
                   <Text size="sm" fw={500}>
-                    {own.length === 1 ? "A bucket is" : `${String(own.length)} buckets are`} funded
-                    from it. Choose a new source account:
+                    {own.length === 1
+                      ? "A bucket is"
+                      : `${String(own.length)} buckets are`}{" "}
+                    funded from it. Choose a new source account:
                   </Text>
                   {blocked ? (
                     <Alert color="orange">
-                      There&apos;s no other {account.currency} account to move them to. Create one,
-                      or delete the buckets in Bucket setup first.
+                      There&apos;s no other {account.currency} account to move
+                      them to. Create one, or delete the buckets in Bucket setup
+                      first.
                     </Alert>
                   ) : (
                     own.map((b) => (
@@ -577,7 +620,11 @@ function DeleteAccount({
                         onChange={(v) => {
                           setSources((s) => ({ ...s, [b.id]: v }));
                         }}
-                        error={validate && !sources[b.id] ? "Choose an account." : undefined}
+                        error={
+                          validate && !sources[b.id]
+                            ? "Choose an account."
+                            : undefined
+                        }
                       />
                     ))
                   )}
@@ -588,7 +635,12 @@ function DeleteAccount({
                 <Button variant="default" onClick={onCancel}>
                   Back
                 </Button>
-                <Button type="submit" color="red" loading={remove.isPending} disabled={blocked}>
+                <Button
+                  type="submit"
+                  color="red"
+                  loading={remove.isPending}
+                  disabled={blocked}
+                >
                   Delete account
                 </Button>
               </Group>
