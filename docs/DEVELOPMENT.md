@@ -48,6 +48,36 @@ docker run --rm hello-world   # must work without sudo
 - Open the repo folder. VS Code suggests the recommended extensions from `.vscode/extensions.json`.
 - `.vscode/settings.json` turns on format-on-save: gopls for Go (with import organising), Prettier for TS/JSON/CSS, and ESLint fixes on save. Markdown is not auto-formatted.
 
+## Backend
+
+The Go service lives in `source/backend`. `make dev-backend` runs it with live reload (air). The server applies pending migrations on startup.
+
+```bash
+go run ./cmd/server           # start the server
+go run ./cmd/server migrate   # apply migrations and exit
+```
+
+It is configured with environment variables. The Makefile exports everything in `.env`, so `make` targets pick them up.
+
+| Variable | Default | |
+| --- | --- | --- |
+| `DATABASE_URL` | (required) | The Makefile builds it from the `POSTGRES_*` values. |
+| `APP_ENV` | `production` | `development` or `production`. `.env.example` sets `development`. |
+| `API_HOST` | all interfaces | `.env.example` sets `127.0.0.1`. |
+| `API_PORT` | `8080` | |
+| `LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error`. |
+| `LOG_FORMAT` | `text` in development, `json` in production | |
+| `MIGRATE_ON_START` | `true` | |
+| `SHUTDOWN_TIMEOUT` | `10s` | How long to wait for in-flight requests on shutdown. |
+
+`GET /healthz` reports that the process is up. `GET /readyz` also checks the database. Every error response is an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem (`application/problem+json`) with extra `code` and `request_id` fields.
+
+Migrations are goose SQL files in `internal/db/migrations`, embedded in the binary. Create one with `go tool goose -dir internal/db/migrations create <name> sql`. Never edit a migration once it has been merged.
+
+### Tests
+
+`make test` starts the dev database and runs the tests. A test that needs PostgreSQL calls `testdb.New(t)` and gets its own database. That database is copied from a migrated template (`bucky_test_tmpl_<hash>`) and dropped when the test ends, so tests can commit and run in parallel. The template is rebuilt whenever the migrations change. Set `TEST_DATABASE_URL` to use another server. Without a database URL these tests are skipped, except when `CI` is set, where they fail.
+
 ## Troubleshooting
 
 - **`permission denied … /var/run/docker.sock`**: you haven't logged out and back in since being added to the `docker` group. As a temporary fix, run `newgrp docker` in the current shell.
