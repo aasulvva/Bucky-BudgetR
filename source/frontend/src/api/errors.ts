@@ -1,3 +1,6 @@
+import i18n from "@/i18n";
+import en from "@/i18n/locales/en.json";
+
 import type { components } from "./schema";
 
 /** RFC 9457 problem details, the body of every API error. */
@@ -6,11 +9,14 @@ export type Problem = components["schemas"]["Problem"];
 /** An API call that failed. Carries the server's problem details. */
 export class ApiError extends Error {
   readonly problem: Problem;
+  /** Seconds to wait before trying again, from a Retry-After header. */
+  readonly retryAfter?: number;
 
-  constructor(problem: Problem) {
+  constructor(problem: Problem, retryAfter?: number) {
     super(problem.detail ?? problem.title);
     this.name = "ApiError";
     this.problem = problem;
+    if (retryAfter !== undefined) this.retryAfter = retryAfter;
   }
 
   /** HTTP status, or 0 when the server could not be reached. */
@@ -47,7 +53,11 @@ export async function unwrap<R extends FetchResult>(request: Promise<R>): Promis
     });
   }
   if (result.error !== undefined || !result.response.ok) {
-    throw new ApiError(toProblem(result.error, result.response));
+    const retryAfter = Number(result.response.headers.get("Retry-After") ?? NaN);
+    throw new ApiError(
+      toProblem(result.error, result.response),
+      Number.isInteger(retryAfter) ? retryAfter : undefined,
+    );
   }
   return result.data as SuccessData<R>;
 }
@@ -73,6 +83,26 @@ function isProblem(value: unknown): value is Problem {
   );
 }
 
+type ErrorCode = keyof typeof en.errors.codes;
+type ErrorStatus = keyof typeof en.errors.status;
+
+const isErrorCode = (code: string): code is ErrorCode => Object.hasOwn(en.errors.codes, code);
+const isErrorStatus = (status: string): status is ErrorStatus =>
+  Object.hasOwn(en.errors.status, status);
+
+/**
+ * The error's message in the user's language, by its code. Undefined for a
+ * code without a translation: the server's detail (in English) then says it.
+ */
+export function errorMessage(error: ApiError): string | undefined {
+  const { code } = error;
+  if (code === "network_error") return i18n.t("errors.networkDetail");
+  if (code === "too_many_attempts" && error.retryAfter !== undefined) {
+    return i18n.t("errors.tooManyAttempts", { count: error.retryAfter });
+  }
+  return code && isErrorCode(code) ? i18n.t(`errors.codes.${code}`) : undefined;
+}
+
 /** What to show the user for any error: a title, an optional detail and request ID. */
 export function describeError(error: unknown): {
   title: string;
@@ -80,9 +110,16 @@ export function describeError(error: unknown): {
   requestId?: string;
 } {
   if (error instanceof ApiError) {
-    const { title, detail, request_id } = error.problem;
-    return { title, detail, requestId: request_id };
+    const { status, detail, request_id } = error.problem;
+    const key = String(status);
+    const title =
+      status === 0
+        ? i18n.t("errors.network")
+        : isErrorStatus(key)
+          ? i18n.t(`errors.status.${key}`)
+          : i18n.t("errors.generic");
+    return { title, detail: errorMessage(error) ?? detail, requestId: request_id };
   }
-  if (error instanceof Error) return { title: "Something went wrong", detail: error.message };
-  return { title: "Something went wrong" };
+  if (error instanceof Error) return { title: i18n.t("errors.generic"), detail: error.message };
+  return { title: i18n.t("errors.generic") };
 }

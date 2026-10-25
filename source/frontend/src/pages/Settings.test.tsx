@@ -16,7 +16,7 @@ function patchPreferences(initial: Record<string, unknown>) {
 
 describe("Settings", () => {
   it("saves a preference when it changes", async () => {
-    apiMock.on("PATCH /api/v1/me/preferences", patchPreferences({}));
+    apiMock.on("PATCH /api/v1/me/preferences", patchPreferences({ language: "en" }));
     renderRoute("/settings");
     await userEvent.click(await screen.findByRole("combobox", { name: /Number and date format/ }));
     await userEvent.click(await screen.findByRole("option", { name: "Norsk bokmål" }));
@@ -28,6 +28,36 @@ describe("Settings", () => {
     await userEvent.click(screen.getByRole("combobox", { name: /Number and date format/ }));
     await userEvent.click(await screen.findByRole("option", { name: "Browser default" }));
     expect(apiMock.calls("PATCH /api/v1/me/preferences")[1]?.body).toEqual({ locale: null });
+  });
+
+  it("switches the language, which follows the locale by default", async () => {
+    apiMock.on("PATCH /api/v1/me/preferences", patchPreferences({}));
+    renderRoute("/settings");
+
+    // A Norwegian locale brings bokmål along.
+    await userEvent.click(await screen.findByRole("combobox", { name: /Number and date format/ }));
+    await userEvent.click(await screen.findByRole("option", { name: "Norsk bokmål" }));
+    expect(await screen.findByRole("heading", { level: 2, name: "Innstillinger" })).toBeVisible();
+    expect(screen.getByRole("combobox", { name: /^Språk/ })).toHaveValue(
+      "Samme som tall- og datoformatet",
+    );
+    expect(document.documentElement.lang).toBe("nb");
+
+    // Nynorsk, chosen on its own.
+    await userEvent.click(screen.getByRole("combobox", { name: /^Språk/ }));
+    await userEvent.click(await screen.findByRole("option", { name: "Norsk nynorsk" }));
+    expect(apiMock.calls("PATCH /api/v1/me/preferences")[1]?.body).toEqual({ language: "nn" });
+    expect(await screen.findByRole("heading", { level: 2, name: "Innstillingar" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "Periodar" })).toBeInTheDocument();
+    expect(screen.getByText("Inntektsreglar")).toBeInTheDocument();
+
+    // And back to following the locale.
+    await userEvent.click(screen.getByRole("combobox", { name: /^Språk/ }));
+    await userEvent.click(
+      await screen.findByRole("option", { name: "Same som tal- og datoformatet" }),
+    );
+    expect(apiMock.calls("PATCH /api/v1/me/preferences")[2]?.body).toEqual({ language: null });
+    expect(await screen.findByRole("heading", { level: 2, name: "Innstillinger" })).toBeVisible();
   });
 
   it("edits the income rules", async () => {

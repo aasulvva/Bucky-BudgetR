@@ -1,9 +1,11 @@
 import { Button, PasswordInput, Stack } from "@mantine/core";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { api } from "@/api/client";
 import { ApiError, unwrap } from "@/api/errors";
+import i18n from "@/i18n";
 
 import { ErrorAlert } from "./ErrorAlert";
 
@@ -24,7 +26,8 @@ interface PasswordFormProps {
  * Changes the user's password: the current one, the new one twice. The
  * server ends the user's other sessions.
  */
-export function PasswordForm({ onChanged, submitLabel = "Change password" }: PasswordFormProps) {
+export function PasswordForm({ onChanged, submitLabel }: PasswordFormProps) {
+  const { t } = useTranslation();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -46,9 +49,10 @@ export function PasswordForm({ onChanged, submitLabel = "Change password" }: Pas
     },
     onError: (err) => {
       if (err instanceof ApiError && err.code === "wrong_password") {
-        setErrors({ current: err.problem.detail ?? "The current password is wrong." });
+        setErrors({ current: t("auth.wrongPassword") });
       } else if (err instanceof ApiError && err.code === "weak_password") {
-        setErrors({ next: err.problem.detail ?? "Choose a stronger password." });
+        // The checks below catch what the server would refuse.
+        setErrors({ next: t("auth.weakPassword") });
       }
     },
   });
@@ -71,7 +75,7 @@ export function PasswordForm({ onChanged, submitLabel = "Change password" }: Pas
     <form onSubmit={submit} noValidate>
       <Stack gap="sm">
         <PasswordInput
-          label="Current password"
+          label={t("auth.currentPassword")}
           autoComplete="current-password"
           value={current}
           onChange={(e) => {
@@ -81,8 +85,8 @@ export function PasswordForm({ onChanged, submitLabel = "Change password" }: Pas
           required
         />
         <PasswordInput
-          label="New password"
-          description={`At least ${MIN_CHARS} characters.`}
+          label={t("auth.newPassword")}
+          description={t("auth.newPasswordHint", { count: MIN_CHARS })}
           autoComplete="new-password"
           value={next}
           onChange={(e) => {
@@ -92,7 +96,7 @@ export function PasswordForm({ onChanged, submitLabel = "Change password" }: Pas
           required
         />
         <PasswordInput
-          label="Repeat the new password"
+          label={t("auth.repeatPassword")}
           autoComplete="new-password"
           value={confirm}
           onChange={(e) => {
@@ -103,7 +107,7 @@ export function PasswordForm({ onChanged, submitLabel = "Change password" }: Pas
         />
         {otherError && <ErrorAlert error={otherError} />}
         <Button type="submit" loading={change.isPending} style={{ alignSelf: "flex-start" }}>
-          {submitLabel}
+          {submitLabel ?? t("auth.changePassword")}
         </Button>
       </Stack>
     </form>
@@ -113,11 +117,12 @@ export function PasswordForm({ onChanged, submitLabel = "Change password" }: Pas
 function check(current: string, next: string, confirm: string) {
   const errors: { current?: string; next?: string; confirm?: string } = {};
   const bytes = new TextEncoder().encode(next).length;
-  if (current === "") errors.current = "Enter your current password.";
+  if (current === "") errors.current = i18n.t("auth.enterCurrent");
   // Characters as the API spec counts them: code points.
-  if (Array.from(next).length < MIN_CHARS) errors.next = `Use at least ${MIN_CHARS} characters.`;
-  else if (bytes > MAX_BYTES) errors.next = `Use at most ${MAX_BYTES} bytes (fewer with æ, ø, å).`;
-  else if (next === current) errors.next = "The new password must differ from the current one.";
-  if (confirm !== next) errors.confirm = "The passwords don't match.";
+  if (Array.from(next).length < MIN_CHARS) {
+    errors.next = i18n.t("auth.tooShort", { count: MIN_CHARS });
+  } else if (bytes > MAX_BYTES) errors.next = i18n.t("auth.tooLong", { count: MAX_BYTES });
+  else if (next === current) errors.next = i18n.t("auth.sameAsCurrent");
+  if (confirm !== next) errors.confirm = i18n.t("auth.noMatch");
   return errors;
 }

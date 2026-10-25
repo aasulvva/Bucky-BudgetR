@@ -5,6 +5,8 @@ import "@testing-library/jest-dom/vitest";
 import { notifications } from "@mantine/notifications";
 import { cleanup } from "@testing-library/react";
 
+import i18n from "@/i18n";
+
 import { apiMock, fakeFetch } from "./api";
 
 globalThis.fetch = fakeFetch as typeof fetch;
@@ -15,6 +17,10 @@ afterEach(() => {
   // The notification store is global; don't let one test's toasts show in the next.
   notifications.clean();
   notifications.cleanQueue();
+  // Tests are in English unless they switch.
+  void i18n.changeLanguage("en");
+  document.documentElement.lang = "en";
+  localStorage.clear();
 });
 
 /** Width the stubbed matchMedia answers for; tests can change it. */

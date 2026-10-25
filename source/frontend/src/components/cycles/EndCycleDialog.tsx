@@ -2,6 +2,7 @@ import { Alert, Button, Divider, Group, Radio, Stack, Text, Title } from "@manti
 import { notifications } from "@mantine/notifications";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { useBuckets } from "@/api/accounts";
 import { api } from "@/api/client";
@@ -27,12 +28,13 @@ interface EndCycleDialogProps {
  * cycle-end routine empties and what the next cycle's start refills.
  */
 export function EndCycleDialog({ opened, onClose, active, next }: EndCycleDialogProps) {
+  const { t } = useTranslation();
   const early = !isOverdue(active);
   return (
     <ResponsiveModal
       opened={opened}
       onClose={onClose}
-      title={early ? "End this cycle now?" : "End this cycle?"}
+      title={early ? t("cycles.endNowTitle") : t("cycles.endTitle")}
       size="lg"
     >
       <EndForm key={active.id} active={active} next={next} onDone={onClose} />
@@ -45,6 +47,7 @@ function EndForm({
   next,
   onDone,
 }: Omit<EndCycleDialogProps, "opened" | "onClose"> & { onDone: () => void }) {
+  const { t } = useTranslation();
   const refresh = useRefreshCycles();
   const buckets = useBuckets();
   const now = new Date();
@@ -71,8 +74,8 @@ function EndForm({
       notifications.show({
         color: "green",
         message: result.started
-          ? `Cycle ended. ${cycleRange(result.started)} has started.`
-          : "Cycle ended. There's no active cycle until you start one.",
+          ? t("cycles.endedStarted", { range: cycleRange(result.started) })
+          : t("cycles.ended"),
       });
       onDone();
       await refresh();
@@ -87,22 +90,22 @@ function EndForm({
         {cycleRange(active)}.{" "}
         {early
           ? days > 0
-            ? `It ends ${days === 1 ? "1 day" : `${String(days)} days`} early.`
-            : "It ends before its last day is over."
-          : `It keeps its planned end, ${formatDate(lastDay(active))}.`}
+            ? t("cycles.endsEarly", { count: days })
+            : t("cycles.endsBeforeLastDay")
+          : t("cycles.keepsEnd", { date: formatDate(lastDay(active)) })}
       </Text>
 
       {canChoose && (
         <Radio.Group
-          label={`The next cycle, ${cycleRange(next)}, is planned to start later.`}
+          label={t("cycles.nextStartsLater", { range: cycleRange(next) })}
           value={startNext ? "now" : "gap"}
           onChange={(v) => {
             setStartNext(v === "now");
           }}
         >
           <Stack gap="xs" mt="xs">
-            <Radio value="now" label="Start it now" />
-            <Radio value="gap" label="Leave a gap until it starts" />
+            <Radio value="now" label={t("cycles.startItNow")} />
+            <Radio value="gap" label={t("cycles.leaveGap")} />
           </Stack>
         </Radio.Group>
       )}
@@ -114,11 +117,11 @@ function EndForm({
             <Stack gap="md">
               <Stack gap={6}>
                 <Title order={3} size="h5">
-                  Emptied (Keep funds off)
+                  {t("cycles.emptied")}
                 </Title>
                 {preview.emptied.length === 0 ? (
                   <Text size="sm" c="dimmed">
-                    No buckets to empty.
+                    {t("cycles.noneToEmpty")}
                   </Text>
                 ) : (
                   <>
@@ -129,13 +132,13 @@ function EndForm({
                       </Group>
                     ))}
                     <Divider />
-                    {preview.backToUnallocated.map((t) => (
-                      <Group key={t.currency} justify="space-between" gap="sm">
+                    {preview.backToUnallocated.map((total) => (
+                      <Group key={total.currency} justify="space-between" gap="sm">
                         <Text size="sm" fw={600}>
-                          Back to unallocated
+                          {t("cycles.backToUnallocated")}
                         </Text>
                         <Text size="sm" fw={600}>
-                          {formatMoney(t.amount, t.currency)}
+                          {formatMoney(total.amount, total.currency)}
                         </Text>
                       </Group>
                     ))}
@@ -147,11 +150,11 @@ function EndForm({
                 <Alert
                   color="gray"
                   variant="light"
-                  title={`${cycleRange(next)} starts right after`}
+                  title={t("cycles.startsRightAfter", { range: cycleRange(next) })}
                 >
                   <Stack gap={4}>
                     {preview.refilled.length === 0 ? (
-                      <Text size="sm">No Auto buckets to refill.</Text>
+                      <Text size="sm">{t("cycles.noneToRefill")}</Text>
                     ) : (
                       preview.refilled.map((r) => (
                         <Group key={r.bucket.id} justify="space-between" gap="sm" wrap="nowrap">
@@ -160,29 +163,29 @@ function EndForm({
                             {compareAmounts(r.amount, "0") > 0 ? "+" : ""}
                             {formatMoney(r.amount, r.bucket.currency)}
                             {compareAmounts(r.overflow, "0") > 0 &&
-                              ` (${formatMoney(r.overflow, r.bucket.currency)} overflows)`}
+                              t("cycles.overflows", {
+                                amount: formatMoney(r.overflow, r.bucket.currency),
+                              })}
                           </Text>
                         </Group>
                       ))
                     )}
                     <Text size="sm" c="dimmed" mt={4}>
-                      Manual and On income buckets wait for their refill.
+                      {t("cycles.othersWait")}
                     </Text>
                   </Stack>
                 </Alert>
               ) : next ? (
-                <Alert color="orange" variant="light" title="No active cycle in the gap">
-                  Until {cycleRange(next)} starts, transactions can&apos;t be split into buckets and
-                  nothing is refilled.
+                <Alert color="orange" variant="light" title={t("cycles.gapTitle")}>
+                  {t("cycles.gapText", { range: cycleRange(next) })}
                 </Alert>
               ) : (
-                <Alert color="orange" variant="light" title="No cycle planned after this one">
-                  Plan one to refill your buckets. Until a cycle is active, transactions can&apos;t
-                  be split into buckets.
+                <Alert color="orange" variant="light" title={t("cycles.noneAfterTitle")}>
+                  {t("cycles.noneAfterText")}
                 </Alert>
               )}
               <Text size="xs" c="dimmed">
-                A preview: the amounts can change slightly, because the money is reallocated first.
+                {t("cycles.previewNote")}
               </Text>
             </Stack>
           );
@@ -192,7 +195,7 @@ function EndForm({
       {end.error && <ErrorAlert error={end.error} />}
       <Group justify="flex-end" gap="xs">
         <Button variant="default" onClick={onDone}>
-          Cancel
+          {t("common.cancel")}
         </Button>
         <Button
           loading={end.isPending}
@@ -200,7 +203,7 @@ function EndForm({
             end.mutate();
           }}
         >
-          End cycle
+          {t("cycles.end")}
         </Button>
       </Group>
     </Stack>

@@ -2,6 +2,7 @@ import { Anchor, Button, Group, Radio, Stack, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { api } from "@/api/client";
 import { useRefreshCycles, type Cycle } from "@/api/cycles";
@@ -37,8 +38,9 @@ interface StartCycleDialogProps {
  * start the planned one or a new one.
  */
 export function StartCycleDialog({ opened, onClose, next, cycles }: StartCycleDialogProps) {
+  const { t } = useTranslation();
   return (
-    <ResponsiveModal opened={opened} onClose={onClose} title="Start a budget cycle">
+    <ResponsiveModal opened={opened} onClose={onClose} title={t("cycles.startTitle")}>
       <StartCycleForm key={next?.id ?? "none"} next={next} cycles={cycles} onDone={onClose} />
     </ResponsiveModal>
   );
@@ -49,6 +51,7 @@ function StartCycleForm({
   cycles,
   onDone,
 }: Omit<StartCycleDialogProps, "opened" | "onClose"> & { onDone: () => void }) {
+  const { t } = useTranslation();
   const refresh = useRefreshCycles();
   const [choice, setChoice] = useState<"planned" | "new">(next ? "planned" : "new");
   const [range, setRange] = useState<DateRange>(() => monthFrom(today()));
@@ -73,7 +76,9 @@ function StartCycleForm({
     onSuccess: async (started) => {
       notifications.show({
         color: "green",
-        message: `Cycle ${formatDateRange(firstDay(started), lastDay(started))} started.`,
+        message: t("cycles.started", {
+          range: formatDateRange(firstDay(started), lastDay(started)),
+        }),
       });
       onDone();
       await refresh();
@@ -97,15 +102,14 @@ function StartCycleForm({
     >
       <Stack gap="md">
         <Text size="sm" c="dimmed">
-          You have no active cycle. Buckets, refills and bucket lines on transactions need one. A
-          cycle usually runs from one payday to the day before the next.
+          {t("cycles.startIntro")}
         </Text>
         <Radio.Group
           value={choice}
           onChange={(v) => {
             setChoice(v);
           }}
-          label="Which cycle"
+          label={t("cycles.whichCycle")}
           labelProps={{ className: "mantine-visually-hidden" }}
         >
           <Stack gap="sm">
@@ -114,10 +118,11 @@ function StartCycleForm({
                 <Group wrap="nowrap" align="flex-start">
                   <Radio.Indicator />
                   <div>
-                    <Text fw={600}>Start the planned cycle</Text>
+                    <Text fw={600}>{t("cycles.startPlanned")}</Text>
                     <Text size="sm" c="dimmed">
                       {cycleRange(next)}
-                      {startsLater && `, starts today instead of ${formatDate(firstDay(next))}`}
+                      {startsLater &&
+                        t("cycles.startsTodayInstead", { date: formatDate(firstDay(next)) })}
                     </Text>
                   </div>
                 </Group>
@@ -126,7 +131,7 @@ function StartCycleForm({
             <Radio.Card value="new" p="md" radius="md">
               <Group wrap="nowrap" align="flex-start">
                 <Radio.Indicator />
-                <Text fw={600}>Start a new cycle</Text>
+                <Text fw={600}>{t("cycles.startNew")}</Text>
               </Group>
             </Radio.Card>
           </Stack>
@@ -142,15 +147,15 @@ function StartCycleForm({
           />
         )}
         <Text size="sm" c="dimmed">
-          Starting the cycle refills your buckets set to Auto refill.
+          {t("cycles.startRefills")}
         </Text>
         {start.error && <ErrorAlert error={start.error} />}
         <Group justify="space-between" gap="sm">
           <Anchor component="button" type="button" size="sm" onClick={onDone}>
-            Not now, record without buckets
+            {t("cycles.notNow")}
           </Anchor>
           <Button type="submit" loading={start.isPending}>
-            Start cycle
+            {t("cycles.start")}
           </Button>
         </Group>
       </Stack>

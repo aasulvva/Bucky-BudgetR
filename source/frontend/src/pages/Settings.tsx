@@ -14,6 +14,7 @@ import { notifications } from "@mantine/notifications";
 import { IconPlus, IconTrash } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { api } from "@/api/client";
 import { unwrap } from "@/api/errors";
@@ -23,6 +24,8 @@ import { AmountInput } from "@/components/AmountInput";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { PasswordForm } from "@/components/PasswordForm";
 import { QueryState } from "@/components/QueryState";
+import i18n from "@/i18n";
+import { LANGUAGES } from "@/lib/language";
 import { LOCALE_OPTIONS } from "@/lib/locale";
 import { parseAmount } from "@/lib/money";
 
@@ -34,10 +37,11 @@ const MAX_RULES = 20;
 
 /** Settings (spec §9, canvas): preferences, income rules, password, status. */
 export default function Settings() {
+  const { t } = useTranslation();
   const user = useSession().data;
   return (
     <Stack gap="lg" maw={720}>
-      <Title order={2}>Settings</Title>
+      <Title order={2}>{t("nav.items.settings")}</Title>
       {user && (
         <>
           <PreferencesCard preferences={user.preferences} />
@@ -64,23 +68,35 @@ function useUpdatePreferences() {
 
 /** The value the locale select uses for "the browser's locale". */
 const BROWSER = "browser";
+/** The value the language select uses for "follow the locale". */
+const FOLLOW = "follow";
 
-const REFILL_MODES = [
-  { value: "auto", label: "Automatic, at the start of each cycle" },
-  { value: "manual", label: "Manual" },
-  { value: "on_income", label: "On income" },
-];
+const REFILL_MODES: RefillMode[] = ["auto", "manual", "on_income"];
 
 function PreferencesCard({ preferences }: { preferences: Preferences }) {
+  const { t } = useTranslation();
   const update = useUpdatePreferences();
   return (
     <Card withBorder>
       <Stack gap="md">
-        <Text fw={600}>Preferences</Text>
+        <Text fw={600}>{t("settings.preferences")}</Text>
         <Select
-          label="Number and date format"
-          description="How amounts and dates are written."
-          data={[{ value: BROWSER, label: "Browser default" }, ...LOCALE_OPTIONS]}
+          label={t("settings.language")}
+          description={t("settings.languageHint")}
+          data={[{ value: FOLLOW, label: t("settings.languageFollows") }, ...LANGUAGES]}
+          value={preferences.language ?? FOLLOW}
+          allowDeselect={false}
+          disabled={update.isPending}
+          onChange={(value) => {
+            update.mutate({
+              language: LANGUAGES.find((l) => l.value === value)?.value ?? null,
+            });
+          }}
+        />
+        <Select
+          label={t("settings.locale")}
+          description={t("settings.localeHint")}
+          data={[{ value: BROWSER, label: t("settings.browserDefault") }, ...LOCALE_OPTIONS]}
           value={preferences.locale ?? BROWSER}
           allowDeselect={false}
           disabled={update.isPending}
@@ -89,17 +105,17 @@ function PreferencesCard({ preferences }: { preferences: Preferences }) {
           }}
         />
         <Select
-          label="Default refill mode"
-          description="The refill mode new buckets start with."
-          data={REFILL_MODES}
+          label={t("settings.refillMode")}
+          description={t("settings.refillModeHint")}
+          data={REFILL_MODES.map((mode) => ({
+            value: mode,
+            label: t(`settings.refillModes.${mode}`),
+          }))}
           value={preferences.default_refill_mode ?? "auto"}
           allowDeselect={false}
           disabled={update.isPending}
           onChange={(value) => {
-            update.mutate({
-              default_refill_mode:
-                value === "auto" || value === null ? null : (value as RefillMode),
-            });
+            update.mutate({ default_refill_mode: value === "auto" ? null : value });
           }}
         />
       </Stack>
@@ -130,11 +146,16 @@ function ruleKey(row: RuleRow): [string, string | null] {
 
 function ruleErrors(row: RuleRow): { counterparty?: string; minAmount?: string } {
   const errors: { counterparty?: string; minAmount?: string } = {};
-  if (row.counterparty.trim() === "") errors.counterparty = "Enter the counterparty.";
-  else if (row.counterparty.length > 200) errors.counterparty = "Use at most 200 characters.";
-  if (row.minAmount === null) errors.minAmount = "Enter an amount.";
-  else if (row.minAmount.startsWith("-")) errors.minAmount = "Use 0 or more.";
-  else if (!/^\d{1,12}(\.|$)/.test(row.minAmount)) errors.minAmount = "That's too large.";
+  if (row.counterparty.trim() === "")
+    errors.counterparty = i18n.t("settings.rules.enterCounterparty");
+  else if (row.counterparty.length > 200) {
+    errors.counterparty = i18n.t("common.maxChars", { count: 200 });
+  }
+  if (row.minAmount === null) errors.minAmount = i18n.t("settings.rules.enterAmount");
+  else if (row.minAmount.startsWith("-")) errors.minAmount = i18n.t("settings.rules.notNegative");
+  else if (!/^\d{1,12}(\.|$)/.test(row.minAmount)) {
+    errors.minAmount = i18n.t("settings.rules.tooLarge");
+  }
   return errors;
 }
 
@@ -143,6 +164,7 @@ function ruleErrors(row: RuleRow): { counterparty?: string; minAmount?: string }
  * minimum refills the account's "on income" buckets.
  */
 function IncomeRulesCard({ rules }: { rules: components["schemas"]["IncomeRefillRule"][] }) {
+  const { t } = useTranslation();
   const update = useUpdatePreferences();
   const [rows, setRows] = useState(() => toRows(rules));
   const [validate, setValidate] = useState(false);
@@ -168,7 +190,7 @@ function IncomeRulesCard({ rules }: { rules: components["schemas"]["IncomeRefill
         onSuccess: (prefs) => {
           setRows(toRows(prefs.income_refill_rules ?? []));
           setValidate(false);
-          notifications.show({ color: "green", message: "Income rules saved." });
+          notifications.show({ color: "green", message: t("settings.rules.saved") });
         },
       },
     );
@@ -178,27 +200,20 @@ function IncomeRulesCard({ rules }: { rules: components["schemas"]["IncomeRefill
     <Card withBorder>
       <Stack gap="md">
         <Stack gap={6}>
-          <Text fw={600}>Income rules</Text>
+          <Text fw={600}>{t("settings.rules.title")}</Text>
           <Text size="sm" c="dimmed">
-            Buckets with the refill mode &ldquo;On income&rdquo; aren&apos;t refilled when a new
-            cycle starts. They wait until your income, such as your salary, arrives, so you only
-            budget money you have.
+            {t("settings.rules.intro1")}
           </Text>
           <Text size="sm" c="dimmed">
-            An income that matches a rule refills the &ldquo;On income&rdquo; buckets funded from
-            the account it&apos;s paid into. To match, it must come from the counterparty (case
-            doesn&apos;t matter) and be at least the minimum. Each bucket is refilled at most once
-            per cycle, so a second payment in the same cycle doesn&apos;t refill it again.
+            {t("settings.rules.intro2")}
           </Text>
           <Text size="sm" c="dimmed">
-            On each income you can also tick &ldquo;Triggers refill&rdquo; yourself, or untick it to
-            skip a rule that matches.
+            {t("settings.rules.intro3")}
           </Text>
         </Stack>
         {rows.length === 0 && (
           <Text size="sm" c="dimmed">
-            No rules yet. Without rules, &ldquo;On income&rdquo; buckets are only refilled by an
-            income where you tick &ldquo;Triggers refill&rdquo;.
+            {t("settings.rules.empty")}
           </Text>
         )}
         {rows.map((row, i) => {
@@ -206,8 +221,8 @@ function IncomeRulesCard({ rules }: { rules: components["schemas"]["IncomeRefill
           return (
             <Group key={row.key} align="flex-start" wrap="nowrap" gap="sm">
               <TextInput
-                label="Counterparty"
-                placeholder="Employer AS"
+                label={t("settings.rules.counterparty")}
+                placeholder={t("settings.rules.counterpartyExample")}
                 style={{ flex: 2 }}
                 value={row.counterparty}
                 maxLength={200}
@@ -217,7 +232,7 @@ function IncomeRulesCard({ rules }: { rules: components["schemas"]["IncomeRefill
                 error={errors.counterparty}
               />
               <AmountInput
-                label="At least"
+                label={t("settings.rules.atLeast")}
                 style={{ flex: 1 }}
                 value={row.minAmount}
                 onChange={(minAmount) => {
@@ -230,7 +245,7 @@ function IncomeRulesCard({ rules }: { rules: components["schemas"]["IncomeRefill
                 color="red"
                 size={36}
                 mt={25}
-                aria-label={`Remove rule ${String(i + 1)}`}
+                aria-label={t("settings.rules.remove", { number: i + 1 })}
                 onClick={() => {
                   setRows((rs) => rs.filter((r) => r.key !== row.key));
                 }}
@@ -250,10 +265,10 @@ function IncomeRulesCard({ rules }: { rules: components["schemas"]["IncomeRefill
               setRows((rs) => [...rs, { key: nextKey++, counterparty: "", minAmount: null }]);
             }}
           >
-            Add rule
+            {t("settings.rules.add")}
           </Button>
           <Button onClick={save} disabled={!dirty} loading={update.isPending}>
-            Save rules
+            {t("settings.rules.save")}
           </Button>
         </Group>
       </Stack>
@@ -262,16 +277,14 @@ function IncomeRulesCard({ rules }: { rules: components["schemas"]["IncomeRefill
 }
 
 function PasswordCard() {
+  const { t } = useTranslation();
   return (
     <Card withBorder>
       <Stack gap="md">
-        <Text fw={600}>Password</Text>
+        <Text fw={600}>{t("settings.password")}</Text>
         <PasswordForm
           onChanged={() => {
-            notifications.show({
-              color: "green",
-              message: "Password changed. Your other sessions were signed out.",
-            });
+            notifications.show({ color: "green", message: t("settings.passwordChanged") });
           }}
         />
       </Stack>
@@ -280,16 +293,17 @@ function PasswordCard() {
 }
 
 function DataCard() {
+  const { t } = useTranslation();
   return (
     <Card withBorder>
       <Group gap="xs">
-        <Text fw={600}>Data export and import</Text>
+        <Text fw={600}>{t("settings.data")}</Text>
         <Badge variant="light" color="gray">
-          Later
+          {t("common.later")}
         </Badge>
       </Group>
       <Text size="sm" c="dimmed" mt="xs">
-        Download all your data, or bring it into another server (#36).
+        {t("settings.dataText")}
       </Text>
     </Card>
   );
@@ -297,6 +311,7 @@ function DataCard() {
 
 /** Whether the backend and its database are reachable (GET /readyz). */
 function ApiStatus() {
+  const { t } = useTranslation();
   const query = useQuery({
     queryKey: ["readyz"],
     queryFn: () => unwrap(api.GET("/readyz")),
@@ -305,14 +320,14 @@ function ApiStatus() {
   return (
     <Card withBorder>
       <Text fw={600} mb="xs">
-        Server status
+        {t("settings.serverStatus")}
       </Text>
       <QueryState query={query}>
         {(data) => (
           <Group gap="xs">
             <Badge color="green">{data.status}</Badge>
             <Text size="sm" c="dimmed">
-              API and database are reachable.
+              {t("settings.serverReachable")}
             </Text>
           </Group>
         )}

@@ -2,6 +2,7 @@ import { Button, Group, Stack } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { api } from "@/api/client";
 import { useRefreshCycles, type Cycle } from "@/api/cycles";
@@ -34,11 +35,12 @@ interface PlanCycleDialogProps {
 
 /** Plans a future cycle, or moves a planned one. */
 export function PlanCycleDialog({ opened, onClose, cycles, cycle }: PlanCycleDialogProps) {
+  const { t } = useTranslation();
   return (
     <ResponsiveModal
       opened={opened}
       onClose={onClose}
-      title={cycle ? "Edit planned cycle" : "Plan a cycle"}
+      title={cycle ? t("cycles.editPlanned") : t("cycles.plan")}
     >
       <PlanCycleForm key={cycle?.id ?? "new"} cycles={cycles} cycle={cycle} onDone={onClose} />
     </ResponsiveModal>
@@ -57,6 +59,7 @@ function PlanCycleForm({
   cycle,
   onDone,
 }: Omit<PlanCycleDialogProps, "opened" | "onClose"> & { onDone: () => void }) {
+  const { t } = useTranslation();
   const refresh = useRefreshCycles();
   const [range, setRange] = useState<DateRange>(() =>
     cycle ? { start: firstDay(cycle), end: lastDay(cycle) } : nextMonth(cycles),
@@ -82,9 +85,10 @@ function PlanCycleForm({
     },
     meta: { silentError: true },
     onSuccess: async (saved) => {
+      const range = formatDateRange(firstDay(saved), lastDay(saved));
       notifications.show({
         color: "green",
-        message: `${formatDateRange(firstDay(saved), lastDay(saved))} ${cycle ? "saved" : "planned"}.`,
+        message: cycle ? t("cycles.rangeSaved", { range }) : t("cycles.rangePlanned", { range }),
       });
       onDone();
       await refresh();
@@ -119,16 +123,16 @@ function PlanCycleForm({
               setRange(nextMonth(cycles));
             }}
           >
-            Next month
+            {t("cycles.nextMonth")}
           </Button>
         )}
         {save.error && <ErrorAlert error={save.error} />}
         <Group justify="flex-end" gap="xs">
           <Button variant="default" onClick={onDone}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button type="submit" loading={save.isPending}>
-            {cycle ? "Save" : "Plan cycle"}
+            {cycle ? t("common.save") : t("cycles.planSubmit")}
           </Button>
         </Group>
       </Stack>

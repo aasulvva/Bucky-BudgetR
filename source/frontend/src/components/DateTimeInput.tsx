@@ -1,5 +1,6 @@
 import { DateTimePicker, type DateTimePickerProps } from "@mantine/dates";
 import dayjs from "dayjs";
+import { useTranslation } from "react-i18next";
 
 import { formatDateTime } from "@/lib/dates";
 
@@ -17,10 +18,11 @@ interface DateTimeInputProps extends Omit<
  * UTC timestamp for the API; empty means now. The future can't be picked.
  */
 export function DateTimeInput({ value, onChange, ...props }: DateTimeInputProps) {
+  const { t } = useTranslation();
   return (
     <DateTimePicker
       clearable
-      placeholder="Now"
+      placeholder={t("common.now")}
       maxDate={new Date()}
       valueFormat={(local) => formatDateTime(dayjs(local).toDate())}
       {...props}

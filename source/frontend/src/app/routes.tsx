@@ -43,7 +43,7 @@ export const routes: RouteObject[] = [
                   ? { path: item.path, lazy: lazyPage(load) }
                   : {
                       path: item.path,
-                      element: <Placeholder title={item.label} issue={item.issue} />,
+                      element: <Placeholder item={item} />,
                     };
               }),
               { path: "*", element: <NotFound /> },

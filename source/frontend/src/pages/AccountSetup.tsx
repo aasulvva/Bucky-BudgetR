@@ -16,11 +16,12 @@ import { notifications } from "@mantine/notifications";
 import { IconPencil, IconPlus } from "@tabler/icons-react";
 import { useMutation } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { Trans, useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router";
 
 import {
-  ACCOUNT_TYPES,
   accountTypeLabel,
+  accountTypeOptions,
   useAccounts,
   useBuckets,
   useRefreshMoney,
@@ -36,6 +37,7 @@ import { DateTimeInput } from "@/components/DateTimeInput";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { QueryState } from "@/components/QueryState";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
+import i18n from "@/i18n";
 import { CURRENCY } from "@/lib/locale";
 import { compareAmounts, currencyOptions, formatMoney } from "@/lib/money";
 
@@ -47,6 +49,7 @@ type AccountDelete = components["schemas"]["AccountDelete"];
  * screen does.
  */
 export default function AccountSetup() {
+  const { t } = useTranslation();
   const accounts = useAccounts();
   const [params, setParams] = useSearchParams();
   const [creating, setCreating] = useState(false);
@@ -66,14 +69,14 @@ export default function AccountSetup() {
   return (
     <Stack gap="lg">
       <Group justify="space-between">
-        <Title order={2}>Account setup</Title>
+        <Title order={2}>{t("nav.items.accountSetup")}</Title>
         <Button
           leftSection={<IconPlus size={16} />}
           onClick={() => {
             setCreating(true);
           }}
         >
-          New account
+          {t("accountSetup.newAccount")}
         </Button>
       </Group>
       <QueryState query={accounts}>
@@ -82,13 +85,13 @@ export default function AccountSetup() {
           return (
             <>
               {list.length === 0 ? (
-                <Text c="dimmed">No accounts yet. Create your first one.</Text>
+                <Text c="dimmed">{t("accountSetup.empty")}</Text>
               ) : (
                 <AccountTable accounts={list} onEdit={openEdit} />
               )}
               <ResponsiveModal
                 opened={editing !== undefined}
-                title="Edit account"
+                title={t("accountSetup.editAccount")}
                 onClose={() => {
                   openEdit(null);
                 }}
@@ -110,7 +113,7 @@ export default function AccountSetup() {
       </QueryState>
       <ResponsiveModal
         opened={creating}
-        title="New account"
+        title={t("accountSetup.newAccount")}
         onClose={() => {
           setCreating(false);
         }}
@@ -126,18 +129,19 @@ export default function AccountSetup() {
 }
 
 function AccountTable({ accounts, onEdit }: { accounts: Account[]; onEdit: (id: string) => void }) {
+  const { t } = useTranslation();
   return (
     <Card withBorder padding={0}>
       <Table.ScrollContainer minWidth={480}>
         <Table verticalSpacing="sm" highlightOnHover>
           <Table.Thead>
             <Table.Tr>
-              <Table.Th>Name</Table.Th>
-              <Table.Th>Type</Table.Th>
-              <Table.Th>Currency</Table.Th>
-              <Table.Th ta="right">Balance</Table.Th>
+              <Table.Th>{t("accountSetup.name")}</Table.Th>
+              <Table.Th>{t("accountSetup.type")}</Table.Th>
+              <Table.Th>{t("accountSetup.currency")}</Table.Th>
+              <Table.Th ta="right">{t("accountSetup.balance")}</Table.Th>
               <Table.Th w={56}>
-                <span className="mantine-visually-hidden">Edit</span>
+                <span className="mantine-visually-hidden">{t("accountSetup.edit")}</span>
               </Table.Th>
             </Table.Tr>
           </Table.Thead>
@@ -162,7 +166,7 @@ function AccountTable({ accounts, onEdit }: { accounts: Account[]; onEdit: (id: 
                     variant="subtle"
                     color="gray"
                     size={36}
-                    aria-label={`Edit ${a.name}`}
+                    aria-label={t("accountSetup.editName", { name: a.name })}
                     onClick={() => {
                       onEdit(a.id);
                     }}
@@ -182,19 +186,20 @@ function AccountTable({ accounts, onEdit }: { accounts: Account[]; onEdit: (id: 
 /** A problem that belongs on the name field, or undefined. */
 function nameProblem(error: unknown): string | undefined {
   if (error instanceof ApiError && error.code === "name_taken") {
-    return "You already have an account with this name.";
+    return i18n.t("accountSetup.nameTaken");
   }
   return undefined;
 }
 
 function checkName(name: string): string | undefined {
   const trimmed = name.trim();
-  if (trimmed === "") return "Enter a name.";
-  if (trimmed.length > 100) return "Use at most 100 characters.";
+  if (trimmed === "") return i18n.t("common.enterName");
+  if (trimmed.length > 100) return i18n.t("common.maxChars", { count: 100 });
   return undefined;
 }
 
 function CreateAccount({ onDone }: { onDone: () => void }) {
+  const { t } = useTranslation();
   const refresh = useRefreshMoney();
   const currencies = useMemo(() => currencyOptions(), []);
   const [name, setName] = useState("");
@@ -225,7 +230,7 @@ function CreateAccount({ onDone }: { onDone: () => void }) {
     onSuccess: async (account) => {
       notifications.show({
         color: "green",
-        message: `${account.name} created.`,
+        message: t("accountSetup.created", { name: account.name }),
       });
       onDone();
       await refresh();
@@ -247,8 +252,8 @@ function CreateAccount({ onDone }: { onDone: () => void }) {
     >
       <Stack gap="md">
         <TextInput
-          label="Name"
-          placeholder="Main account"
+          label={t("accountSetup.name")}
+          placeholder={t("accountSetup.namePlaceholder")}
           value={name}
           maxLength={100}
           onChange={(e) => {
@@ -259,8 +264,8 @@ function CreateAccount({ onDone }: { onDone: () => void }) {
           data-autofocus
         />
         <Select
-          label="Type"
-          data={ACCOUNT_TYPES}
+          label={t("accountSetup.type")}
+          data={accountTypeOptions()}
           value={type}
           allowDeselect={false}
           onChange={(v) => {
@@ -268,8 +273,8 @@ function CreateAccount({ onDone }: { onDone: () => void }) {
           }}
         />
         <Select
-          label="Currency"
-          description="Can't be changed later."
+          label={t("accountSetup.currency")}
+          description={t("accountSetup.currencyFixed")}
           data={currencies}
           value={currency}
           searchable
@@ -279,16 +284,16 @@ function CreateAccount({ onDone }: { onDone: () => void }) {
           }}
         />
         <AmountInput
-          label="Opening balance"
-          description="What the account holds today. Recorded as an opening balance."
+          label={t("accountSetup.openingBalance")}
+          description={t("accountSetup.openingHint")}
           currency={currency}
           value={opening}
           onChange={setOpening}
         />
         {opening !== null && compareAmounts(opening, "0") !== 0 && (
           <DateTimeInput
-            label="Opening balance as of"
-            description="Empty means now."
+            label={t("accountSetup.openingAt")}
+            description={t("common.emptyMeansNow")}
             value={openingAt}
             onChange={setOpeningAt}
           />
@@ -296,10 +301,10 @@ function CreateAccount({ onDone }: { onDone: () => void }) {
         {create.error && !nameProblem(create.error) && <ErrorAlert error={create.error} />}
         <Group justify="flex-end" gap="xs">
           <Button variant="default" onClick={onDone}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button type="submit" loading={create.isPending}>
-            Create account
+            {t("accountSetup.create")}
           </Button>
         </Group>
       </Stack>
@@ -316,6 +321,7 @@ function EditAccount({
   accounts: Account[];
   onDone: () => void;
 }) {
+  const { t } = useTranslation();
   const refresh = useRefreshMoney();
   const [deleting, setDeleting] = useState(false);
   const [name, setName] = useState(account.name);
@@ -338,7 +344,10 @@ function EditAccount({
       ),
     meta: { silentError: true },
     onSuccess: async (updated) => {
-      notifications.show({ color: "green", message: `${updated.name} saved.` });
+      notifications.show({
+        color: "green",
+        message: t("accountSetup.saved", { name: updated.name }),
+      });
       onDone();
       await refresh();
     },
@@ -372,7 +381,7 @@ function EditAccount({
     >
       <Stack gap="md">
         <TextInput
-          label="Name"
+          label={t("accountSetup.name")}
           value={name}
           maxLength={100}
           onChange={(e) => {
@@ -382,8 +391,8 @@ function EditAccount({
           required
         />
         <Select
-          label="Type"
-          data={ACCOUNT_TYPES}
+          label={t("accountSetup.type")}
+          data={accountTypeOptions()}
           value={type}
           allowDeselect={false}
           onChange={(v) => {
@@ -391,8 +400,8 @@ function EditAccount({
           }}
         />
         <TextInput
-          label="Currency"
-          description="Set when the account was created."
+          label={t("accountSetup.currency")}
+          description={t("accountSetup.currencySet")}
           value={account.currency}
           readOnly
           variant="filled"
@@ -406,14 +415,14 @@ function EditAccount({
               setDeleting(true);
             }}
           >
-            Delete…
+            {t("accountSetup.deleteMore")}
           </Button>
           <Group gap="xs">
             <Button variant="default" onClick={onDone}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button type="submit" loading={update.isPending} disabled={!changed}>
-              Save
+              {t("common.save")}
             </Button>
           </Group>
         </Group>
@@ -438,6 +447,7 @@ function DeleteAccount({
   onCancel: () => void;
   onDone: () => void;
 }) {
+  const { t } = useTranslation();
   const refresh = useRefreshMoney();
   const buckets = useBuckets();
   const others = accounts
@@ -464,7 +474,7 @@ function DeleteAccount({
     onSuccess: async () => {
       notifications.show({
         color: "green",
-        message: `${account.name} deleted.`,
+        message: t("accountSetup.deleted", { name: account.name }),
       });
       onDone();
       await refresh();
@@ -504,11 +514,17 @@ function DeleteAccount({
           >
             <Stack gap="md">
               <Text>
-                Delete <strong>{account.name}</strong>? Its transactions are kept.
+                <Trans
+                  i18nKey="accountSetup.deleteQuestion"
+                  values={{ name: account.name }}
+                  components={{ b: <strong /> }}
+                />
               </Text>
               {hasMoney && (
                 <Radio.Group
-                  label={`It still holds ${formatMoney(account.balance, account.currency)}`}
+                  label={t("accountSetup.stillHolds", {
+                    amount: formatMoney(account.balance, account.currency),
+                  })}
                   value={funds}
                   onChange={(v) => {
                     setFunds(v);
@@ -517,28 +533,28 @@ function DeleteAccount({
                   <Stack gap="xs" mt="xs">
                     <Radio
                       value="transfer"
-                      label="Transfer it to another account"
+                      label={t("accountSetup.transferIt")}
                       description={
                         others.length === 0
-                          ? `You have no other ${account.currency} account.`
+                          ? t("accountSetup.noOther", { currency: account.currency })
                           : undefined
                       }
                       disabled={others.length === 0}
                     />
                     {funds === "transfer" && others.length > 0 && (
                       <Select
-                        label="Transfer to"
+                        label={t("accountSetup.transferTo")}
                         data={others}
                         value={fundsTo}
                         onChange={setFundsTo}
-                        error={validate && !fundsTo ? "Choose an account." : undefined}
+                        error={validate && !fundsTo ? t("common.chooseAccount") : undefined}
                         ml="xl"
                       />
                     )}
                     <Radio
                       value="adjust"
-                      label="Adjust the balance to 0"
-                      description="For money that's gone, e.g. a closed fund."
+                      label={t("accountSetup.adjustToZero")}
+                      description={t("accountSetup.adjustToZeroHint")}
                     />
                   </Stack>
                 </Radio.Group>
@@ -546,13 +562,11 @@ function DeleteAccount({
               {own.length > 0 && (
                 <Stack gap="xs">
                   <Text size="sm" fw={500}>
-                    {own.length === 1 ? "A bucket is" : `${String(own.length)} buckets are`} funded
-                    from it. Choose a new source account:
+                    {t("accountSetup.bucketsFunded", { count: own.length })}
                   </Text>
                   {blocked ? (
                     <Alert color="orange">
-                      There&apos;s no other {account.currency} account to move them to. Create one,
-                      or delete the buckets in Bucket setup first.
+                      {t("accountSetup.noOtherForBuckets", { currency: account.currency })}
                     </Alert>
                   ) : (
                     own.map((b) => (
@@ -564,7 +578,7 @@ function DeleteAccount({
                         onChange={(v) => {
                           setSources((s) => ({ ...s, [b.id]: v }));
                         }}
-                        error={validate && !sources[b.id] ? "Choose an account." : undefined}
+                        error={validate && !sources[b.id] ? t("common.chooseAccount") : undefined}
                       />
                     ))
                   )}
@@ -573,10 +587,10 @@ function DeleteAccount({
               {remove.error && <ErrorAlert error={remove.error} />}
               <Group justify="flex-end" gap="xs">
                 <Button variant="default" onClick={onCancel}>
-                  Back
+                  {t("common.back")}
                 </Button>
                 <Button type="submit" color="red" loading={remove.isPending} disabled={blocked}>
-                  Delete account
+                  {t("accountSetup.deleteAccount")}
                 </Button>
               </Group>
             </Stack>

@@ -3,6 +3,7 @@ import { notifications } from "@mantine/notifications";
 import { IconPencil, IconTrash } from "@tabler/icons-react";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
+import { Trans, useTranslation } from "react-i18next";
 
 import { api } from "@/api/client";
 import { useCurrentCycles, useCycles, useRefreshCycles, type Cycle } from "@/api/cycles";
@@ -28,6 +29,7 @@ type Dialog =
  * End, the planned cycles to edit or delete, and the finished ones.
  */
 export default function Cycles() {
+  const { t } = useTranslation();
   const cycles = useCycles();
   const current = useCurrentCycles();
   const [dialog, setDialog] = useState<Dialog>(null);
@@ -39,14 +41,14 @@ export default function Cycles() {
   return (
     <Stack gap="lg" maw={860}>
       <Group justify="space-between">
-        <Title order={2}>Cycles</Title>
+        <Title order={2}>{t("nav.items.cycles")}</Title>
         <Button
           variant="default"
           onClick={() => {
             setDialog({ kind: "plan" });
           }}
         >
-          Plan a cycle
+          {t("cycles.plan")}
         </Button>
       </Group>
 
@@ -68,9 +70,9 @@ export default function Cycles() {
               <Card withBorder padding="lg">
                 <Group justify="space-between" gap="md">
                   <div>
-                    <Text fw={600}>No active cycle</Text>
+                    <Text fw={600}>{t("cycles.noActive")}</Text>
                     <Text size="sm" c="dimmed">
-                      Buckets, refills and bucket lines on transactions need one.
+                      {t("cycles.needed")}
                     </Text>
                   </div>
                   <Button
@@ -78,7 +80,7 @@ export default function Cycles() {
                       setDialog({ kind: "start" });
                     }}
                   >
-                    Start cycle
+                    {t("cycles.start")}
                   </Button>
                 </Group>
               </Card>
@@ -119,11 +121,11 @@ export default function Cycles() {
             <>
               <Stack gap="xs">
                 <Title order={3} size="h4">
-                  Planned
+                  {t("cycles.planned")}
                 </Title>
                 {planned.length === 0 ? (
                   <Text size="sm" c="dimmed">
-                    No cycles planned.
+                    {t("cycles.nonePlanned")}
                   </Text>
                 ) : (
                   <Card withBorder padding={0}>
@@ -131,14 +133,14 @@ export default function Cycles() {
                       <CycleRow key={c.id} cycle={c}>
                         {i === 0 && (
                           <Badge variant="light" size="sm">
-                            Next
+                            {t("cycles.next")}
                           </Badge>
                         )}
                         <ActionIcon
                           variant="subtle"
                           color="gray"
                           size={36}
-                          aria-label={`Edit ${cycleRange(c)}`}
+                          aria-label={t("cycles.editRange", { range: cycleRange(c) })}
                           onClick={() => {
                             setDialog({ kind: "edit", cycle: c });
                           }}
@@ -149,7 +151,7 @@ export default function Cycles() {
                           variant="subtle"
                           color="red"
                           size={36}
-                          aria-label={`Delete ${cycleRange(c)}`}
+                          aria-label={t("cycles.deleteRange", { range: cycleRange(c) })}
                           onClick={() => {
                             setDialog({ kind: "delete", cycle: c });
                           }}
@@ -165,7 +167,7 @@ export default function Cycles() {
               {finished.length > 0 && (
                 <Stack gap="xs">
                   <Title order={3} size="h4">
-                    Finished
+                    {t("cycles.finished")}
                   </Title>
                   <Card withBorder padding={0}>
                     {shown.map((c) => (
@@ -181,7 +183,9 @@ export default function Cycles() {
                         setShowAll((s) => !s);
                       }}
                     >
-                      {showAll ? "Show fewer" : `Show all ${String(finished.length)}`}
+                      {showAll
+                        ? t("cycles.showFewer")
+                        : t("cycles.showAll", { count: finished.length })}
                     </Button>
                   )}
                 </Stack>
@@ -216,36 +220,37 @@ function ActiveCard({
   onEnd: () => void;
   onExtend: () => void;
 }) {
+  const { t } = useTranslation();
   const overdue = isOverdue(active);
   return (
     <Card
       withBorder
       padding="lg"
       component="section"
-      aria-label="Active cycle"
+      aria-label={t("cycles.active")}
       style={overdue ? { borderColor: "var(--mantine-color-orange-5)" } : undefined}
     >
       <Group justify="space-between" gap="md">
         <Stack gap={4}>
           <Text size="sm" c="dimmed">
-            Active cycle
+            {t("cycles.active")}
           </Text>
           <Text fz={20} fw={700}>
             {cycleRange(active)}
           </Text>
           <Text size="sm" c={overdue ? "orange.8" : "dimmed"}>
             {overdue
-              ? `Overdue since ${formatDate(lastDay(active))}: bucket transactions are paused until you end or extend it.`
+              ? t("cycles.overdueSince", { date: formatDate(lastDay(active)) })
               : daysLeftLabel(active)}
-            {!overdue && next && ` · next: ${cycleRange(next)} (planned)`}
+            {!overdue && next && t("cycles.nextPlanned", { range: cycleRange(next) })}
           </Text>
         </Stack>
         <Group gap="xs">
           <Button variant="default" onClick={onExtend}>
-            Extend
+            {t("common.extend")}
           </Button>
           <Button variant="outline" onClick={onEnd}>
-            End cycle
+            {t("cycles.end")}
           </Button>
         </Group>
       </Group>
@@ -275,30 +280,34 @@ function CycleRow({ cycle, children }: { cycle: Cycle; children?: React.ReactNod
 }
 
 function DeleteCycleDialog({ cycle, onClose }: { cycle?: Cycle; onClose: () => void }) {
+  const { t } = useTranslation();
   const refresh = useRefreshCycles();
   const remove = useMutation({
     mutationFn: (c: Cycle) =>
       unwrap(api.DELETE("/api/v1/cycles/{cycleId}", { params: { path: { cycleId: c.id } } })),
     meta: { silentError: true },
     onSuccess: async () => {
-      notifications.show({ color: "green", message: "Planned cycle deleted." });
+      notifications.show({ color: "green", message: t("cycles.deleted") });
       onClose();
       await refresh();
     },
   });
 
   return (
-    <ResponsiveModal opened={cycle !== undefined} onClose={onClose} title="Delete planned cycle?">
+    <ResponsiveModal opened={cycle !== undefined} onClose={onClose} title={t("cycles.deleteTitle")}>
       {cycle && (
         <Stack gap="md">
           <Text>
-            Delete the cycle <strong>{cycleRange(cycle)}</strong>? It hasn&apos;t started, so
-            nothing else changes.
+            <Trans
+              i18nKey="cycles.deleteText"
+              values={{ range: cycleRange(cycle) }}
+              components={{ b: <strong /> }}
+            />
           </Text>
           {remove.error && <ErrorAlert error={remove.error} />}
           <Group justify="flex-end" gap="xs">
             <Button variant="default" onClick={onClose}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               color="red"
@@ -307,7 +316,7 @@ function DeleteCycleDialog({ cycle, onClose }: { cycle?: Cycle; onClose: () => v
                 remove.mutate(cycle);
               }}
             >
-              Delete
+              {t("common.delete")}
             </Button>
           </Group>
         </Stack>

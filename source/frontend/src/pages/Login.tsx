@@ -12,10 +12,11 @@ import {
 } from "@mantine/core";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Navigate, useSearchParams } from "react-router";
 
 import { api } from "@/api/client";
-import { ApiError, unwrap } from "@/api/errors";
+import { ApiError, errorMessage, unwrap } from "@/api/errors";
 import { SESSION_KEY, clearSessionEnded, sessionEnded, useSession } from "@/app/session";
 import { ErrorAlert } from "@/components/ErrorAlert";
 
@@ -25,6 +26,7 @@ function safeNext(next: string | null): string {
 }
 
 export default function Login() {
+  const { t } = useTranslation();
   const session = useSession();
   const client = useQueryClient();
   const [params] = useSearchParams();
@@ -74,11 +76,9 @@ export default function Login() {
             <Title order={1} size="h3">
               Bucky BudgetR
             </Title>
-            {ended && !login.error && (
-              <Alert color="blue">Your session has ended. Log in again.</Alert>
-            )}
+            {ended && !login.error && <Alert color="blue">{t("auth.sessionEnded")}</Alert>}
             <TextInput
-              label="Username"
+              label={t("auth.username")}
               autoComplete="username"
               autoFocus
               value={username}
@@ -88,7 +88,7 @@ export default function Login() {
               required
             />
             <PasswordInput
-              label="Password"
+              label={t("auth.password")}
               autoComplete="current-password"
               value={password}
               onChange={(e) => {
@@ -98,7 +98,7 @@ export default function Login() {
             />
             {login.error && <LoginError error={login.error} />}
             <Button type="submit" loading={login.isPending} disabled={!username || !password}>
-              Log in
+              {t("auth.logIn")}
             </Button>
           </Stack>
         </form>
@@ -114,7 +114,7 @@ function LoginError({ error }: { error: Error }) {
   ) {
     return (
       <Alert color="red">
-        <Text size="sm">{error.problem.detail}</Text>
+        <Text size="sm">{errorMessage(error) ?? error.problem.detail}</Text>
       </Alert>
     );
   }

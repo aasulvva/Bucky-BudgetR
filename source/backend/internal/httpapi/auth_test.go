@@ -368,7 +368,15 @@ func TestPreferences(t *testing.T) {
 		t.Errorf("reset: %d %s", w.Code, w.Body)
 	}
 
-	for _, body := range []string{`{"theme":"dark"}`, `{"locale":"not a locale!"}`, `{"locale":42}`, `[]`} {
+	// The language is separate from the locale.
+	if w := patch(`{"language":"nn"}`); w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != `{"language":"nn"}` {
+		t.Errorf("language: %d %s", w.Code, w.Body)
+	}
+	if w := patch(`{"language":null}`); w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != `{}` {
+		t.Errorf("language reset: %d %s", w.Code, w.Body)
+	}
+
+	for _, body := range []string{`{"theme":"dark"}`, `{"locale":"not a locale!"}`, `{"locale":42}`, `{"language":"de"}`, `[]`} {
 		w := patch(body)
 		if w.Code != http.StatusBadRequest || deref(decodeProblem(t, w).Code) != "invalid_request" {
 			t.Errorf("%s: got %d %s", body, w.Code, w.Body)
