@@ -109,7 +109,9 @@ A budget period. Usually a month, but its start and end dates can be set freely,
 
 **Rules**
 - RA can never be above BC. With a fixed BC, BC is raised automatically when RA exceeds it.
-- New buckets get an **Opening Funds (OPF)** transaction.
+- New buckets get an **Opening Funds (OPF)** transaction when the opening funds aren't 0. Like every bucket transaction, it needs an active cycle.
+- The source account can only change to an account in the same currency, since TF is an amount in that currency. CAF is reset to 0 and the allocation routine funds the bucket from the new account.
+- **Deleting** a bucket releases its remaining TF with a **BUA** to 0, so the money becomes unallocated in the source account (a negative TF is brought up to 0 the same way). That needs an active cycle unless TF is already 0. The bucket's transactions stay.
 - The new user preference only sets the *default* refill mode. Each bucket decides for itself.
 - *Savings distribution* and *Specific savings target* become available with the savings module (§8). Until then, overflow is always *Unallocated* (the money stays in the source account).
 

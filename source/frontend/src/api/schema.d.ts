@@ -388,6 +388,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/buckets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List buckets
+         * @description The user's buckets that aren't deleted, sorted by name, each with its TF and CAF.
+         */
+        get: operations["listBuckets"];
+        put?: never;
+        /**
+         * Create a bucket
+         * @description Creates a bucket funded from `source_account_id`, in that account's
+         *     currency. Names must be unique among the user's buckets (409
+         *     `name_taken`).
+         *
+         *     A non-zero `opening_funds` is recorded now as an Opening Funds (OPF)
+         *     transaction. Like every bucket transaction, that needs an active
+         *     cycle: without one the answer is 409 `no_active_cycle`, and with an
+         *     overdue one 409 `cycle_overdue`. Nothing is created then.
+         */
+        post: operations["createBucket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/buckets/{bucketId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bucketId: components["parameters"]["BucketId"];
+            };
+            cookie?: never;
+        };
+        /** Get a bucket */
+        get: operations["getBucket"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a bucket
+         * @description Releases the bucket's remaining TF with a Bucket Adjustment (BUA) to
+         *     0, so the money becomes unallocated in the source account, then
+         *     deletes the bucket. Its transactions stay.
+         *
+         *     Releasing TF needs an active cycle (409 `no_active_cycle` or
+         *     `cycle_overdue`); a bucket whose TF is already 0 can be deleted
+         *     without one.
+         */
+        delete: operations["deleteBucket"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a bucket's settings
+         * @description The source account can only change to an account in the same currency
+         *     (400 `currency_mismatch`). Changing it resets CAF to 0 until the
+         *     allocation routine funds the bucket from the new account.
+         *
+         *     Switching `cap_mode` without the new mode's value uses multiplier 1,
+         *     or a fixed amount equal to the refill amount. A fixed capacity below
+         *     the refill amount is raised to it.
+         */
+        patch: operations["updateBucket"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -417,6 +487,8 @@ export interface components {
              * @example nb-NO
              */
             locale?: string | null;
+            /** @description The refill mode new buckets get when none is given. Null means `auto`. */
+            default_refill_mode?: (string & components["schemas"]["RefillMode"]) | null;
         };
         /**
          * @description 4-digit bank account ID.
@@ -556,6 +628,92 @@ export interface components {
              */
             new_password: string;
         };
+        /**
+         * @description 10-digit bucket ID.
+         * @example 4829131234
+         */
+        BucketId: string;
+        /**
+         * @description 1 to 100 characters after trimming. Unique among the user's buckets, ignoring case.
+         * @example Groceries
+         */
+        BucketName: string;
+        /**
+         * @description How the Bucket Capacity (BC) is set: the refill amount times
+         *     `cap_multiplier`, or the fixed `cap_amount`.
+         * @enum {string}
+         */
+        CapMode: "multiplier" | "fixed";
+        /**
+         * @description 1.00 or more, with at most 2 decimals, as a string.
+         * @example 1.50
+         */
+        CapMultiplier: string;
+        /**
+         * @description `auto` refills at cycle start, `manual` with a button once per cycle, `on_income` when income arrives.
+         * @enum {string}
+         */
+        RefillMode: "auto" | "manual" | "on_income";
+        /**
+         * @description Where overflow goes. Only `unallocated` is available until the savings module; the others get 400.
+         * @enum {string}
+         */
+        OverflowDestination: "unallocated" | "savings_distribution" | "savings_target";
+        Bucket: {
+            id: components["schemas"]["BucketId"];
+            name: string;
+            source_account_id: components["schemas"]["AccountId"];
+            currency: components["schemas"]["Currency"];
+            refill_amount: components["schemas"]["Amount"];
+            cap_mode: components["schemas"]["CapMode"];
+            /** @description Set in the multiplier mode, otherwise null. */
+            cap_multiplier: (string & components["schemas"]["CapMultiplier"]) | null;
+            /** @description Set in the fixed mode, otherwise null. */
+            cap_amount: (string & components["schemas"]["Amount"]) | null;
+            /** @description The Bucket Capacity (BC), never below the refill amount. */
+            capacity: components["schemas"]["Amount"];
+            /** @description Target Funds (TF), the sum of the bucket's transactions. */
+            target_funds: components["schemas"]["Amount"];
+            /** @description Current Available Funds (CAF), what the source account actually backs. */
+            current_available_funds: components["schemas"]["Amount"];
+            keep_funds: boolean;
+            refill_mode: components["schemas"]["RefillMode"];
+            overflow_destination: components["schemas"]["OverflowDestination"];
+            priority: boolean;
+            importance: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        BucketCreate: {
+            name: components["schemas"]["BucketName"];
+            source_account_id: components["schemas"]["AccountId"];
+            refill_amount?: components["schemas"]["Amount"];
+            cap_mode?: components["schemas"]["CapMode"];
+            cap_multiplier?: components["schemas"]["CapMultiplier"];
+            cap_amount?: components["schemas"]["Amount"];
+            keep_funds?: boolean;
+            /** @description Defaults to the user's `default_refill_mode` preference, or `auto`. */
+            refill_mode?: components["schemas"]["RefillMode"];
+            overflow_destination?: components["schemas"]["OverflowDestination"];
+            priority?: boolean;
+            /** @default 5 */
+            importance: number;
+            /** @description Recorded now as an Opening Funds (OPF) transaction when not 0. Needs an active cycle. */
+            opening_funds?: components["schemas"]["Amount"];
+        };
+        BucketUpdate: {
+            name?: components["schemas"]["BucketName"];
+            source_account_id?: components["schemas"]["AccountId"];
+            refill_amount?: components["schemas"]["Amount"];
+            cap_mode?: components["schemas"]["CapMode"];
+            cap_multiplier?: components["schemas"]["CapMultiplier"];
+            cap_amount?: components["schemas"]["Amount"];
+            keep_funds?: boolean;
+            refill_mode?: components["schemas"]["RefillMode"];
+            overflow_destination?: components["schemas"]["OverflowDestination"];
+            priority?: boolean;
+            importance?: number;
+        };
         /** @description RFC 9457 problem details. */
         Problem: {
             /**
@@ -603,6 +761,7 @@ export interface components {
     parameters: {
         AccountId: components["schemas"]["AccountId"];
         CycleId: components["schemas"]["CycleId"];
+        BucketId: components["schemas"]["BucketId"];
     };
     requestBodies: never;
     headers: {
@@ -1164,6 +1323,136 @@ export interface operations {
                     "application/json": components["schemas"]["CycleEndResult"];
                 };
             };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listBuckets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The buckets. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Bucket"][];
+                };
+            };
+            401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createBucket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BucketCreate"];
+            };
+        };
+        responses: {
+            /** @description The new bucket. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Bucket"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getBucket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bucketId: components["parameters"]["BucketId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The bucket with its TF and CAF. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Bucket"];
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteBucket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bucketId: components["parameters"]["BucketId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    updateBucket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bucketId: components["parameters"]["BucketId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BucketUpdate"];
+            };
+        };
+        responses: {
+            /** @description The updated bucket. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Bucket"];
+                };
+            };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];

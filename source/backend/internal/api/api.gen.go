@@ -70,6 +70,24 @@ func (e AccountType) Valid() bool {
 	}
 }
 
+// Defines values for CapMode.
+const (
+	Fixed      CapMode = "fixed"
+	Multiplier CapMode = "multiplier"
+)
+
+// Valid indicates whether the value is a known member of the CapMode enum.
+func (e CapMode) Valid() bool {
+	switch e {
+	case Fixed:
+		return true
+	case Multiplier:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CycleState.
 const (
 	Active   CycleState = "active"
@@ -85,6 +103,48 @@ func (e CycleState) Valid() bool {
 	case Finished:
 		return true
 	case Future:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OverflowDestination.
+const (
+	SavingsDistribution OverflowDestination = "savings_distribution"
+	SavingsTarget       OverflowDestination = "savings_target"
+	Unallocated         OverflowDestination = "unallocated"
+)
+
+// Valid indicates whether the value is a known member of the OverflowDestination enum.
+func (e OverflowDestination) Valid() bool {
+	switch e {
+	case SavingsDistribution:
+		return true
+	case SavingsTarget:
+		return true
+	case Unallocated:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RefillMode.
+const (
+	Auto     RefillMode = "auto"
+	Manual   RefillMode = "manual"
+	OnIncome RefillMode = "on_income"
+)
+
+// Valid indicates whether the value is a known member of the RefillMode enum.
+func (e RefillMode) Valid() bool {
+	switch e {
+	case Auto:
+		return true
+	case Manual:
+		return true
+	case OnIncome:
 		return true
 	default:
 		return false
@@ -213,6 +273,165 @@ type BalanceAdjustment struct {
 	TargetBalance Amount `json:"target_balance"`
 }
 
+// Bucket defines model for Bucket.
+type Bucket struct {
+	// CapAmount Set in the fixed mode, otherwise null.
+	CapAmount nullable.Nullable[Amount] `json:"cap_amount"`
+
+	// CapMode How the Bucket Capacity (BC) is set: the refill amount times
+	// `cap_multiplier`, or the fixed `cap_amount`.
+	CapMode CapMode `json:"cap_mode"`
+
+	// CapMultiplier Set in the multiplier mode, otherwise null.
+	CapMultiplier nullable.Nullable[CapMultiplier] `json:"cap_multiplier"`
+
+	// Capacity The Bucket Capacity (BC), never below the refill amount.
+	Capacity  Amount    `json:"capacity"`
+	CreatedAt time.Time `json:"created_at"`
+
+	// Currency ISO 4217 currency code. Only real currencies with at most 2 decimals
+	// are accepted (not e.g. XAU or KWD); others get 400 `invalid_request`.
+	//
+	//
+	// Example: NOK
+	Currency Currency `json:"currency"`
+
+	// CurrentAvailableFunds Current Available Funds (CAF), what the source account actually backs.
+	CurrentAvailableFunds Amount `json:"current_available_funds"`
+
+	// Id 10-digit bucket ID.
+	//
+	// Example: 4829131234
+	Id         BucketId `json:"id"`
+	Importance int      `json:"importance"`
+	KeepFunds  bool     `json:"keep_funds"`
+	Name       string   `json:"name"`
+
+	// OverflowDestination Where overflow goes. Only `unallocated` is available until the savings module; the others get 400.
+	OverflowDestination OverflowDestination `json:"overflow_destination"`
+	Priority            bool                `json:"priority"`
+
+	// RefillAmount An amount with at most 2 decimals, as a string.
+	//
+	// Example: 1234.50
+	RefillAmount Amount `json:"refill_amount"`
+
+	// RefillMode `auto` refills at cycle start, `manual` with a button once per cycle, `on_income` when income arrives.
+	RefillMode RefillMode `json:"refill_mode"`
+
+	// SourceAccountId 4-digit bank account ID.
+	//
+	// Example: 4821
+	SourceAccountId AccountId `json:"source_account_id"`
+
+	// TargetFunds Target Funds (TF), the sum of the bucket's transactions.
+	TargetFunds Amount `json:"target_funds"`
+}
+
+// BucketCreate defines model for BucketCreate.
+type BucketCreate struct {
+	// CapAmount An amount with at most 2 decimals, as a string.
+	//
+	// Example: 1234.50
+	CapAmount *Amount `json:"cap_amount,omitempty"`
+
+	// CapMode How the Bucket Capacity (BC) is set: the refill amount times
+	// `cap_multiplier`, or the fixed `cap_amount`.
+	CapMode *CapMode `json:"cap_mode,omitempty"`
+
+	// CapMultiplier 1.00 or more, with at most 2 decimals, as a string.
+	//
+	// Example: 1.50
+	CapMultiplier *CapMultiplier `json:"cap_multiplier,omitempty"`
+	Importance    *int           `json:"importance,omitempty"`
+	KeepFunds     *bool          `json:"keep_funds,omitempty"`
+
+	// Name 1 to 100 characters after trimming. Unique among the user's buckets, ignoring case.
+	//
+	// Example: Groceries
+	Name BucketName `json:"name"`
+
+	// OpeningFunds Recorded now as an Opening Funds (OPF) transaction when not 0. Needs an active cycle.
+	OpeningFunds *Amount `json:"opening_funds,omitempty"`
+
+	// OverflowDestination Where overflow goes. Only `unallocated` is available until the savings module; the others get 400.
+	OverflowDestination *OverflowDestination `json:"overflow_destination,omitempty"`
+	Priority            *bool                `json:"priority,omitempty"`
+
+	// RefillAmount An amount with at most 2 decimals, as a string.
+	//
+	// Example: 1234.50
+	RefillAmount *Amount `json:"refill_amount,omitempty"`
+
+	// RefillMode Defaults to the user's `default_refill_mode` preference, or `auto`.
+	RefillMode *RefillMode `json:"refill_mode,omitempty"`
+
+	// SourceAccountId 4-digit bank account ID.
+	//
+	// Example: 4821
+	SourceAccountId AccountId `json:"source_account_id"`
+}
+
+// BucketId 10-digit bucket ID.
+//
+// Example: 4829131234
+type BucketId = string
+
+// BucketName 1 to 100 characters after trimming. Unique among the user's buckets, ignoring case.
+//
+// Example: Groceries
+type BucketName = string
+
+// BucketUpdate defines model for BucketUpdate.
+type BucketUpdate struct {
+	// CapAmount An amount with at most 2 decimals, as a string.
+	//
+	// Example: 1234.50
+	CapAmount *Amount `json:"cap_amount,omitempty"`
+
+	// CapMode How the Bucket Capacity (BC) is set: the refill amount times
+	// `cap_multiplier`, or the fixed `cap_amount`.
+	CapMode *CapMode `json:"cap_mode,omitempty"`
+
+	// CapMultiplier 1.00 or more, with at most 2 decimals, as a string.
+	//
+	// Example: 1.50
+	CapMultiplier *CapMultiplier `json:"cap_multiplier,omitempty"`
+	Importance    *int           `json:"importance,omitempty"`
+	KeepFunds     *bool          `json:"keep_funds,omitempty"`
+
+	// Name 1 to 100 characters after trimming. Unique among the user's buckets, ignoring case.
+	//
+	// Example: Groceries
+	Name *BucketName `json:"name,omitempty"`
+
+	// OverflowDestination Where overflow goes. Only `unallocated` is available until the savings module; the others get 400.
+	OverflowDestination *OverflowDestination `json:"overflow_destination,omitempty"`
+	Priority            *bool                `json:"priority,omitempty"`
+
+	// RefillAmount An amount with at most 2 decimals, as a string.
+	//
+	// Example: 1234.50
+	RefillAmount *Amount `json:"refill_amount,omitempty"`
+
+	// RefillMode `auto` refills at cycle start, `manual` with a button once per cycle, `on_income` when income arrives.
+	RefillMode *RefillMode `json:"refill_mode,omitempty"`
+
+	// SourceAccountId 4-digit bank account ID.
+	//
+	// Example: 4821
+	SourceAccountId *AccountId `json:"source_account_id,omitempty"`
+}
+
+// CapMode How the Bucket Capacity (BC) is set: the refill amount times
+// `cap_multiplier`, or the fixed `cap_amount`.
+type CapMode string
+
+// CapMultiplier 1.00 or more, with at most 2 decimals, as a string.
+//
+// Example: 1.50
+type CapMultiplier = string
+
 // Currency ISO 4217 currency code. Only real currencies with at most 2 decimals
 // are accepted (not e.g. XAU or KWD); others get 400 `invalid_request`.
 //
@@ -282,6 +501,9 @@ type LoginRequest struct {
 	Username string `json:"username"`
 }
 
+// OverflowDestination Where overflow goes. Only `unallocated` is available until the savings module; the others get 400.
+type OverflowDestination string
+
 // PasswordChange defines model for PasswordChange.
 type PasswordChange struct {
 	CurrentPassword string `json:"current_password"`
@@ -292,6 +514,9 @@ type PasswordChange struct {
 
 // Preferences Per-user settings. Missing or null fields use the default.
 type Preferences struct {
+	// DefaultRefillMode The refill mode new buckets get when none is given. Null means `auto`.
+	DefaultRefillMode nullable.Nullable[RefillMode] `json:"default_refill_mode,omitempty"`
+
 	// Locale BCP 47 language tag for number and date formats, e.g. `nb-NO`. Null means the browser's locale.
 	//
 	// Example: nb-NO
@@ -331,6 +556,9 @@ type Problem struct {
 	// Example: about:blank
 	Type string `json:"type"`
 }
+
+// RefillMode `auto` refills at cycle start, `manual` with a button once per cycle, `on_income` when income arrives.
+type RefillMode string
 
 // Status defines model for Status.
 type Status struct {
@@ -382,6 +610,12 @@ type DeleteAccountJSONRequestBody = AccountDelete
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
 
+// CreateBucketJSONRequestBody defines body for CreateBucket for application/json ContentType.
+type CreateBucketJSONRequestBody = BucketCreate
+
+// UpdateBucketJSONRequestBody defines body for UpdateBucket for application/json ContentType.
+type UpdateBucketJSONRequestBody = BucketUpdate
+
 // CreateCycleJSONRequestBody defines body for CreateCycle for application/json ContentType.
 type CreateCycleJSONRequestBody = CycleTimes
 
@@ -423,6 +657,21 @@ type ServerInterface interface {
 	// Logout Log out
 	// (POST /api/v1/auth/logout)
 	Logout(w http.ResponseWriter, r *http.Request)
+	// ListBuckets List buckets
+	// (GET /api/v1/buckets)
+	ListBuckets(w http.ResponseWriter, r *http.Request)
+	// CreateBucket Create a bucket
+	// (POST /api/v1/buckets)
+	CreateBucket(w http.ResponseWriter, r *http.Request)
+	// DeleteBucket Delete a bucket
+	// (DELETE /api/v1/buckets/{bucketId})
+	DeleteBucket(w http.ResponseWriter, r *http.Request, bucketId BucketId)
+	// GetBucket Get a bucket
+	// (GET /api/v1/buckets/{bucketId})
+	GetBucket(w http.ResponseWriter, r *http.Request, bucketId BucketId)
+	// UpdateBucket Change a bucket's settings
+	// (PATCH /api/v1/buckets/{bucketId})
+	UpdateBucket(w http.ResponseWriter, r *http.Request, bucketId BucketId)
 	// ListCycles List cycles
 	// (GET /api/v1/cycles)
 	ListCycles(w http.ResponseWriter, r *http.Request)
@@ -624,6 +873,112 @@ func (siw *ServerInterfaceWrapper) Logout(w http.ResponseWriter, r *http.Request
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Logout(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListBuckets operation middleware
+func (siw *ServerInterfaceWrapper) ListBuckets(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListBuckets(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateBucket operation middleware
+func (siw *ServerInterfaceWrapper) CreateBucket(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateBucket(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteBucket operation middleware
+func (siw *ServerInterfaceWrapper) DeleteBucket(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "bucketId" -------------
+	var bucketId BucketId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "bucketId", r.PathValue("bucketId"), &bucketId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "bucketId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteBucket(w, r, bucketId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetBucket operation middleware
+func (siw *ServerInterfaceWrapper) GetBucket(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "bucketId" -------------
+	var bucketId BucketId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "bucketId", r.PathValue("bucketId"), &bucketId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "bucketId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetBucket(w, r, bucketId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateBucket operation middleware
+func (siw *ServerInterfaceWrapper) UpdateBucket(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "bucketId" -------------
+	var bucketId BucketId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "bucketId", r.PathValue("bucketId"), &bucketId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "bucketId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateBucket(w, r, bucketId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1016,6 +1371,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/cycles/{cycleId}", wrapper.UpdateCycle)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/cycles/{cycleId}/start", wrapper.StartCycle)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/cycles/{cycleId}/end", wrapper.EndCycle)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/buckets", wrapper.ListBuckets)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/buckets", wrapper.CreateBucket)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/buckets/{bucketId}", wrapper.DeleteBucket)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/buckets/{bucketId}", wrapper.GetBucket)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/buckets/{bucketId}", wrapper.UpdateBucket)
 
 	return m
 }
@@ -1636,6 +1996,387 @@ type LogoutdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response LogoutdefaultApplicationProblemPlusJSONResponse) VisitLogoutResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListBucketsRequestObject struct {
+}
+
+type ListBucketsResponseObject interface {
+	VisitListBucketsResponse(w http.ResponseWriter) error
+}
+
+type ListBuckets200JSONResponse []Bucket
+
+func (response ListBuckets200JSONResponse) VisitListBucketsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListBuckets401ApplicationProblemPlusJSONResponse struct {
+	ErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ListBuckets401ApplicationProblemPlusJSONResponse) VisitListBucketsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListBucketsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListBucketsdefaultApplicationProblemPlusJSONResponse) VisitListBucketsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateBucketRequestObject struct {
+	Body *CreateBucketJSONRequestBody
+}
+
+type CreateBucketResponseObject interface {
+	VisitCreateBucketResponse(w http.ResponseWriter) error
+}
+
+type CreateBucket201JSONResponse Bucket
+
+func (response CreateBucket201JSONResponse) VisitCreateBucketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateBucket400ApplicationProblemPlusJSONResponse struct {
+	ErrorApplicationProblemPlusJSONResponse
+}
+
+func (response CreateBucket400ApplicationProblemPlusJSONResponse) VisitCreateBucketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateBucket401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateBucket401ApplicationProblemPlusJSONResponse) VisitCreateBucketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateBucket409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateBucket409ApplicationProblemPlusJSONResponse) VisitCreateBucketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateBucketdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateBucketdefaultApplicationProblemPlusJSONResponse) VisitCreateBucketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteBucketRequestObject struct {
+	BucketId BucketId `json:"bucketId"`
+}
+
+type DeleteBucketResponseObject interface {
+	VisitDeleteBucketResponse(w http.ResponseWriter) error
+}
+
+type DeleteBucket204Response struct {
+}
+
+func (response DeleteBucket204Response) VisitDeleteBucketResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteBucket401ApplicationProblemPlusJSONResponse struct {
+	ErrorApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteBucket401ApplicationProblemPlusJSONResponse) VisitDeleteBucketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteBucket404ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteBucket404ApplicationProblemPlusJSONResponse) VisitDeleteBucketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteBucket409ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteBucket409ApplicationProblemPlusJSONResponse) VisitDeleteBucketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteBucketdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteBucketdefaultApplicationProblemPlusJSONResponse) VisitDeleteBucketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBucketRequestObject struct {
+	BucketId BucketId `json:"bucketId"`
+}
+
+type GetBucketResponseObject interface {
+	VisitGetBucketResponse(w http.ResponseWriter) error
+}
+
+type GetBucket200JSONResponse Bucket
+
+func (response GetBucket200JSONResponse) VisitGetBucketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBucket401ApplicationProblemPlusJSONResponse struct {
+	ErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetBucket401ApplicationProblemPlusJSONResponse) VisitGetBucketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBucket404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetBucket404ApplicationProblemPlusJSONResponse) VisitGetBucketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBucketdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetBucketdefaultApplicationProblemPlusJSONResponse) VisitGetBucketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateBucketRequestObject struct {
+	BucketId BucketId `json:"bucketId"`
+	Body     *UpdateBucketJSONRequestBody
+}
+
+type UpdateBucketResponseObject interface {
+	VisitUpdateBucketResponse(w http.ResponseWriter) error
+}
+
+type UpdateBucket200JSONResponse Bucket
+
+func (response UpdateBucket200JSONResponse) VisitUpdateBucketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateBucket400ApplicationProblemPlusJSONResponse struct {
+	ErrorApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateBucket400ApplicationProblemPlusJSONResponse) VisitUpdateBucketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateBucket401ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateBucket401ApplicationProblemPlusJSONResponse) VisitUpdateBucketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateBucket404ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateBucket404ApplicationProblemPlusJSONResponse) VisitUpdateBucketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateBucket409ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateBucket409ApplicationProblemPlusJSONResponse) VisitUpdateBucketResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateBucketdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateBucketdefaultApplicationProblemPlusJSONResponse) VisitUpdateBucketResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -2551,6 +3292,21 @@ type StrictServerInterface interface {
 	// Logout Log out
 	// (POST /api/v1/auth/logout)
 	Logout(ctx context.Context, request LogoutRequestObject) (LogoutResponseObject, error)
+	// ListBuckets List buckets
+	// (GET /api/v1/buckets)
+	ListBuckets(ctx context.Context, request ListBucketsRequestObject) (ListBucketsResponseObject, error)
+	// CreateBucket Create a bucket
+	// (POST /api/v1/buckets)
+	CreateBucket(ctx context.Context, request CreateBucketRequestObject) (CreateBucketResponseObject, error)
+	// DeleteBucket Delete a bucket
+	// (DELETE /api/v1/buckets/{bucketId})
+	DeleteBucket(ctx context.Context, request DeleteBucketRequestObject) (DeleteBucketResponseObject, error)
+	// GetBucket Get a bucket
+	// (GET /api/v1/buckets/{bucketId})
+	GetBucket(ctx context.Context, request GetBucketRequestObject) (GetBucketResponseObject, error)
+	// UpdateBucket Change a bucket's settings
+	// (PATCH /api/v1/buckets/{bucketId})
+	UpdateBucket(ctx context.Context, request UpdateBucketRequestObject) (UpdateBucketResponseObject, error)
 	// ListCycles List cycles
 	// (GET /api/v1/cycles)
 	ListCycles(ctx context.Context, request ListCyclesRequestObject) (ListCyclesResponseObject, error)
@@ -2862,6 +3618,146 @@ func (sh *strictHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(LogoutResponseObject); ok {
 		if err := validResponse.VisitLogoutResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListBuckets operation middleware
+func (sh *strictHandler) ListBuckets(w http.ResponseWriter, r *http.Request) {
+	var request ListBucketsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListBuckets(ctx, request.(ListBucketsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListBuckets")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListBucketsResponseObject); ok {
+		if err := validResponse.VisitListBucketsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateBucket operation middleware
+func (sh *strictHandler) CreateBucket(w http.ResponseWriter, r *http.Request) {
+	var request CreateBucketRequestObject
+
+	var body CreateBucketJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateBucket(ctx, request.(CreateBucketRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateBucket")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateBucketResponseObject); ok {
+		if err := validResponse.VisitCreateBucketResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteBucket operation middleware
+func (sh *strictHandler) DeleteBucket(w http.ResponseWriter, r *http.Request, bucketId BucketId) {
+	var request DeleteBucketRequestObject
+
+	request.BucketId = bucketId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteBucket(ctx, request.(DeleteBucketRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteBucket")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteBucketResponseObject); ok {
+		if err := validResponse.VisitDeleteBucketResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetBucket operation middleware
+func (sh *strictHandler) GetBucket(w http.ResponseWriter, r *http.Request, bucketId BucketId) {
+	var request GetBucketRequestObject
+
+	request.BucketId = bucketId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetBucket(ctx, request.(GetBucketRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetBucket")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetBucketResponseObject); ok {
+		if err := validResponse.VisitGetBucketResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateBucket operation middleware
+func (sh *strictHandler) UpdateBucket(w http.ResponseWriter, r *http.Request, bucketId BucketId) {
+	var request UpdateBucketRequestObject
+
+	request.BucketId = bucketId
+
+	var body UpdateBucketJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateBucket(ctx, request.(UpdateBucketRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateBucket")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateBucketResponseObject); ok {
+		if err := validResponse.VisitUpdateBucketResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -3234,97 +4130,119 @@ func (sh *strictHandler) GetReadyz(w http.ResponseWriter, r *http.Request) {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"YNnKWULJ5BiXv31X+xFw27l9d/u/AQAA//8=",
+	"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",
+	"QfwfWXHvhhSKynCUV9RZ/HPiunX78fZ/AwAA//8=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

@@ -12,7 +12,6 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/accounts"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/api"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
-	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/money"
 )
 
@@ -170,12 +169,8 @@ func accountError(err error) error {
 			Detail: "Money and buckets can only move to an account in the same currency."}
 	case errors.Is(err, accounts.ErrInvalid):
 		return &Error{Status: http.StatusBadRequest, Code: "invalid_request", Detail: invalidDetail(err, accounts.ErrInvalid), Err: err}
-	case errors.Is(err, ledger.ErrInvalid), errors.Is(err, ledger.ErrNotFound):
-		// The service checks first, so this is a race, e.g. a target account
-		// deleted meanwhile.
-		return &Error{Status: http.StatusBadRequest, Code: "invalid_request", Detail: "The transaction couldn't be recorded. Reload and try again.", Err: err}
 	}
-	return err
+	return ledgerError(err)
 }
 
 // invalidDetail returns the message an invalid-input error carries after the
