@@ -12,3 +12,7 @@ sql:
         sql_package: pgx/v5
         emit_json_tags: false
         emit_empty_slices: true
+        overrides:
+          # Timestamps are stored as UTC timestamptz; use plain time.Time in Go.
+          - db_type: timestamptz
+            go_type: time.Time

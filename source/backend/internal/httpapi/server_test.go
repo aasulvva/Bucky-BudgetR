@@ -24,6 +24,15 @@ var dbUp = pingFunc(func(context.Context) error { return nil })
 
 func discard() *slog.Logger { return slog.New(slog.DiscardHandler) }
 
+func newHandler(t *testing.T, logger *slog.Logger, db httpapi.Pinger, opts httpapi.Options) http.Handler {
+	t.Helper()
+	h, err := httpapi.NewHandler(logger, db, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return h
+}
+
 func serve(t *testing.T, h http.Handler, method, path string) *httptest.ResponseRecorder {
 	t.Helper()
 	w := httptest.NewRecorder()
@@ -57,20 +66,20 @@ func decodeProblem(t *testing.T, w *httptest.ResponseRecorder) api.Problem {
 }
 
 func TestHealthz(t *testing.T) {
-	w := serve(t, httpapi.NewHandler(discard(), dbUp, httpapi.Options{}), http.MethodGet, "/healthz")
+	w := serve(t, newHandler(t, discard(), dbUp, httpapi.Options{}), http.MethodGet, "/healthz")
 	if w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != `{"status":"ok"}` {
 		t.Errorf("got %d %s", w.Code, w.Body)
 	}
 }
 
 func TestReadyz(t *testing.T) {
-	w := serve(t, httpapi.NewHandler(discard(), dbUp, httpapi.Options{}), http.MethodGet, "/readyz")
+	w := serve(t, newHandler(t, discard(), dbUp, httpapi.Options{}), http.MethodGet, "/readyz")
 	if w.Code != http.StatusOK {
 		t.Errorf("db up: got %d %s", w.Code, w.Body)
 	}
 
 	down := pingFunc(func(context.Context) error { return errors.New("connection refused") })
-	w = serve(t, httpapi.NewHandler(discard(), down, httpapi.Options{}), http.MethodGet, "/readyz")
+	w = serve(t, newHandler(t, discard(), down, httpapi.Options{}), http.MethodGet, "/readyz")
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("db down: got %d", w.Code)
 	}
@@ -81,14 +90,14 @@ func TestReadyz(t *testing.T) {
 
 func TestReadyzWithDatabase(t *testing.T) {
 	pool := testdb.New(t)
-	w := serve(t, httpapi.NewHandler(discard(), pool, httpapi.Options{}), http.MethodGet, "/readyz")
+	w := serve(t, newHandler(t, discard(), pool, httpapi.Options{}), http.MethodGet, "/readyz")
 	if w.Code != http.StatusOK {
 		t.Errorf("got %d %s", w.Code, w.Body)
 	}
 }
 
 func TestDocs(t *testing.T) {
-	h := httpapi.NewHandler(discard(), dbUp, httpapi.Options{Docs: true})
+	h := newHandler(t, discard(), dbUp, httpapi.Options{Docs: true})
 
 	w := serve(t, h, http.MethodGet, "/api/docs")
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "createApiReference") {
@@ -108,7 +117,7 @@ func TestDocs(t *testing.T) {
 	}
 
 	// Off unless asked for.
-	h = httpapi.NewHandler(discard(), dbUp, httpapi.Options{})
+	h = newHandler(t, discard(), dbUp, httpapi.Options{})
 	for _, path := range []string{"/api/docs", "/api/openapi.json"} {
 		if w := serve(t, h, http.MethodGet, path); w.Code != http.StatusNotFound {
 			t.Errorf("%s without docs: got %d", path, w.Code)
@@ -117,7 +126,7 @@ func TestDocs(t *testing.T) {
 }
 
 func TestUnmatchedRoutes(t *testing.T) {
-	h := httpapi.NewHandler(discard(), dbUp, httpapi.Options{})
+	h := newHandler(t, discard(), dbUp, httpapi.Options{})
 
 	w := serve(t, h, http.MethodGet, "/nope")
 	if w.Code != http.StatusNotFound {
@@ -195,7 +204,7 @@ func TestRecover(t *testing.T) {
 func TestAccessLog(t *testing.T) {
 	var logs bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	h := httpapi.NewHandler(logger, dbUp, httpapi.Options{})
+	h := newHandler(t, logger, dbUp, httpapi.Options{})
 
 	r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/nope", nil)
 	r.Header.Set(httpapi.RequestIDHeader, "req-1")

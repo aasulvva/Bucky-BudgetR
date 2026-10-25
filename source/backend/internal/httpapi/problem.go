@@ -12,9 +12,10 @@ import (
 // problem response; any other error becomes a 500.
 type Error struct {
 	Status int
-	Code   string // machine-readable, e.g. "not_found"
-	Detail string // shown to the client, so never include internals
-	Err    error  // cause, logged but not sent
+	Code   string      // machine-readable, e.g. "not_found"
+	Detail string      // shown to the client, so never include internals
+	Err    error       // cause, logged but not sent
+	Header http.Header // extra response headers, e.g. Retry-After
 }
 
 // NewError returns an *Error without an underlying cause.

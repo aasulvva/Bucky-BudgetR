@@ -3,9 +3,6 @@ extends:
   - recommended
 
 rules:
-  # The probes and (for now) the whole API rely on network-level access
-  # control (LAN/Tailscale); auth arrives with #9.
-  security-defined: off
   # Every operation has `default: Error` (a Problem), which covers 4xx too.
   operation-4xx-response: off
   # Private, unlicensed project.

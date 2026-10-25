@@ -22,6 +22,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/auth"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/config"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/httpapi"
@@ -68,9 +69,25 @@ func run(ctx context.Context, args []string, getenv func(string) string, logOut 
 		return nil
 	}
 
+	if err := auth.EnsureInitialAdmin(ctx, pool, cfg.InitialAdminPassword, logger); err != nil {
+		return err
+	}
+	authSvc := auth.NewService(pool, logger, auth.Options{
+		IdleTimeout: cfg.SessionIdleTimeout,
+		MaxAge:      cfg.SessionMaxAge,
+	})
+	go authSvc.CleanupLoop(ctx, time.Hour)
+
+	handler, err := httpapi.NewHandler(logger, pool, httpapi.Options{
+		Auth: authSvc,
+		Docs: cfg.Env == config.EnvDevelopment,
+	})
+	if err != nil {
+		return err
+	}
 	srv := &http.Server{
 		Addr:              cfg.Addr(),
-		Handler:           httpapi.NewHandler(logger, pool, httpapi.Options{Docs: cfg.Env == config.EnvDevelopment}),
+		Handler:           handler,
 		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelWarn),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
