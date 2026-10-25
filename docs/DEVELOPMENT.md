@@ -72,12 +72,14 @@ It is configured with environment variables. The Makefile exports everything in 
 
 `GET /healthz` reports that the process is up. `GET /readyz` also checks the database. Every error response is an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem (`application/problem+json`) with extra `code` and `request_id` fields.
 
+Migrations are goose SQL files in `internal/db/migrations`, embedded in the binary. Create one with `go tool goose -dir internal/db/migrations create <name> sql`. Never edit a migration once it has been merged.
+
 ### API contract
 
 `api/openapi.yaml` (OpenAPI 3.0.3, the version oapi-codegen supports) is the source of truth for the REST API. To add or change an endpoint:
 
 1. Edit the spec. Resources go under `/api/v1`. IDs and amounts are strings, as described in the spec's conventions.
-2. Run `make generate`. oapi-codegen regenerates `internal/api/api.gen.go`: the models, the routes and a `StrictServerInterface`.
+2. Run `make generate`. oapi-codegen regenerates `internal/api/api.gen.go` (the models, the routes and a `StrictServerInterface`), and openapi-typescript regenerates the frontend's `src/api/schema.d.ts`.
 3. Implement the new method on `server` in `internal/httpapi/handlers.go`. The build fails until you do. To answer with an error, return an `*httpapi.Error`. It becomes a problem response with its status and code. Any other error is logged and becomes a 500.
 4. Run `make lint`. It lints the spec with Redocly CLI (via `npx`, so it needs Node.js) as well as the Go code.
 
@@ -85,11 +87,38 @@ Commit the generated code. `make generate-check` fails if it is out of date, and
 
 With `APP_ENV=development`, the interactive docs (Scalar) are at <http://localhost:8080/api/docs> and the spec as JSON at `/api/openapi.json`. Neither is served in production.
 
-Migrations are goose SQL files in `internal/db/migrations`, embedded in the binary. Create one with `go tool goose -dir internal/db/migrations create <name> sql`. Never edit a migration once it has been merged.
-
 ### Tests
 
 `make test` starts the dev database and runs the tests. A test that needs PostgreSQL calls `testdb.New(t)` and gets its own database. That database is copied from a migrated template (`bucky_test_tmpl_<hash>`) and dropped when the test ends, so tests can commit and run in parallel. The template is rebuilt whenever the migrations change. Set `TEST_DATABASE_URL` to use another server. Without a database URL these tests are skipped, except when `CI` is set, where they fail.
+
+## Frontend
+
+The React app lives in `source/frontend`. It uses Vite, TypeScript (strict), Mantine, React Router and TanStack Query. `make dev-frontend` (or `npm run dev` there) serves it at <http://localhost:5173>. Vite forwards `/api`, `/healthz` and `/readyz` to the backend, so API calls are same-origin.
+
+| npm script | |
+| --- | --- |
+| `dev` | Vite dev server |
+| `build` | Type-check and build into `dist/` |
+| `generate` | Regenerate the typed API client from the spec (part of `make generate`) |
+| `lint` / `typecheck` | ESLint / `tsc` (part of `make lint`) |
+| `test` | Vitest (part of `make test`) |
+| `format` | Prettier |
+
+Layout of `src/`:
+
+- `app/nav.ts` is the navigation in one place: tabs, the screens in each tab, and the issue that builds each screen. The side menu (desktop), the bottom tabs and sub-menus (mobile) and the routes are all built from it. A screen without a page component gets a placeholder. To build a screen, add its page to `pages` in `app/routes.tsx`.
+- `api/` holds the API client.
+  - `client.ts` is the typed client. Always call it through `unwrap()`, which returns the data or throws an `ApiError` carrying the server's problem details.
+  - `queryClient.ts` sets the query defaults. Queries retry twice, but never on 4xx. A failed mutation shows an error notification unless it sets `meta: { silentError: true }`.
+- `components/QueryState.tsx` is the standard way to render a query: a spinner while loading, an error with its request ID and a Retry button, otherwise the data.
+- `lib/` holds the formatting helpers. Their locale and currency settings are in `lib/locale.ts`: the browser's locale, and NOK.
+
+Money is never a JS `number`. The API sends and receives amounts as decimal strings (`"1234.50"`):
+- `formatMoney()` formats one exactly.
+- `<AmountInput>` takes what the user types (`1 234,5`) and emits the canonical string, or `null` if the input is invalid.
+- API dates (`YYYY-MM-DD`) go through `lib/dates.ts`, so they don't shift a day in other time zones.
+
+Tests run in jsdom. `src/test/render.tsx` has helpers that render a component with the app's providers, or the whole app at a given path. `viewport.width` from `src/test/setup.ts` switches between the desktop and mobile layouts.
 
 ## Troubleshooting
 

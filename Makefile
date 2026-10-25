@@ -7,7 +7,7 @@ MIGRATIONS := internal/db/migrations
 SPEC       := api/openapi.yaml
 REDOCLY    := npx --yes @redocly/cli@2.62.1
 # Generated files, committed so CI can check that they are up to date.
-GENERATED  := $(BACKEND)/internal/api/api.gen.go $(BACKEND)/internal/db/sqlc
+GENERATED  := $(BACKEND)/internal/api/api.gen.go $(BACKEND)/internal/db/sqlc $(FRONTEND)/src/api/schema.d.ts
 
 HAS_BACKEND  := $(wildcard $(BACKEND)/go.mod)
 HAS_QUERIES  := $(wildcard $(BACKEND)/internal/db/queries/*.sql)
