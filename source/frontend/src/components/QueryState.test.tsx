@@ -33,7 +33,7 @@ describe("QueryState", () => {
       .mockResolvedValueOnce("ok");
     renderWithProviders(<Status fetch={fetch} />);
 
-    expect(await screen.findByText("Service Unavailable")).toBeInTheDocument();
+    expect(await screen.findByText("Service unavailable")).toBeInTheDocument();
     expect(screen.getByText("The database is not reachable.")).toBeInTheDocument();
     expect(screen.getByText("REQ123")).toBeInTheDocument();
 

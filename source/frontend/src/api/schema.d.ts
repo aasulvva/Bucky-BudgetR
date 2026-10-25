@@ -654,6 +654,8 @@ export interface components {
              * @example nb-NO
              */
             locale?: string | null;
+            /** @description The web app's language. Null follows `locale` (`nb-NO` → `nb`, `nn-NO` → `nn`, others → `en`), or the browser's language when that's null too. */
+            language?: (string & components["schemas"]["Language"]) | null;
             /** @description The refill mode new buckets get when none is given. Null means `auto`. */
             default_refill_mode?: (string & components["schemas"]["RefillMode"]) | null;
             /**
@@ -664,6 +666,11 @@ export interface components {
              */
             income_refill_rules?: components["schemas"]["IncomeRefillRule"][] | null;
         };
+        /**
+         * @description A web app language: English, Norwegian bokmål or Norwegian nynorsk.
+         * @enum {string}
+         */
+        Language: "en" | "nb" | "nn";
         IncomeRefillRule: {
             counterparty: string;
             /**

@@ -1,5 +1,6 @@
 import { Group } from "@mantine/core";
 import { DatePickerInput } from "@mantine/dates";
+import { useTranslation } from "react-i18next";
 
 import type { DateRange, LocalDate } from "@/lib/cycles";
 
@@ -13,10 +14,11 @@ interface CycleDatesProps {
 
 /** The first and last day of a cycle, as local dates. */
 export function CycleDates({ value, onChange, error, minStart }: CycleDatesProps) {
+  const { t } = useTranslation();
   return (
     <Group grow align="flex-start" gap="sm">
       <DatePickerInput
-        label="Start date"
+        label={t("cycles.startDate")}
         valueFormat="D MMM YYYY"
         value={value.start}
         minDate={minStart}
@@ -25,7 +27,7 @@ export function CycleDates({ value, onChange, error, minStart }: CycleDatesProps
         }}
       />
       <DatePickerInput
-        label="Last day"
+        label={t("cycles.lastDate")}
         valueFormat="D MMM YYYY"
         value={value.end}
         minDate={value.start}

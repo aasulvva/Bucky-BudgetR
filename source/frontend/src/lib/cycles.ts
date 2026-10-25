@@ -4,6 +4,8 @@
 
 import dayjs from "dayjs";
 
+import i18n from "@/i18n";
+
 import { parseDate } from "./dates";
 import { getLocale } from "./locale";
 
@@ -71,17 +73,16 @@ export function isOverdue(cycle: CycleTimes, now = new Date()): boolean {
 
 /** "6 days left", "Last day" or "Overdue". */
 export function daysLeftLabel(cycle: CycleTimes, now = new Date()): string {
-  if (isOverdue(cycle, now)) return "Overdue";
+  if (isOverdue(cycle, now)) return i18n.t("cycles.overdue");
   const days = daysLeft(cycle, now);
-  if (days <= 0) return "Last day";
-  return days === 1 ? "1 day left" : `${String(days)} days left`;
+  return days <= 0 ? i18n.t("cycles.lastDay") : i18n.t("cycles.daysLeft", { count: days });
 }
 
 /** The same, short for the mobile header: "6 d left". */
 export function daysLeftShort(cycle: CycleTimes, now = new Date()): string {
-  if (isOverdue(cycle, now)) return "Overdue";
+  if (isOverdue(cycle, now)) return i18n.t("cycles.overdue");
   const days = daysLeft(cycle, now);
-  return days <= 0 ? "Last day" : `${String(days)} d left`;
+  return days <= 0 ? i18n.t("cycles.lastDay") : i18n.t("cycles.daysLeftShort", { count: days });
 }
 
 /** A month from `start`: from that date to the day before the same date next month. */
@@ -102,8 +103,8 @@ export interface DateRange {
 
 /** What's wrong with the dates of a cycle that must still lie ahead, if anything. */
 export function rangeProblem(range: DateRange, now = new Date()): string | undefined {
-  if (range.end < range.start) return "The last day can't be before the start.";
-  if (range.end < today(now)) return "The cycle must end in the future.";
+  if (range.end < range.start) return i18n.t("cycles.endBeforeStart");
+  if (range.end < today(now)) return i18n.t("cycles.endInFuture");
   return undefined;
 }
 

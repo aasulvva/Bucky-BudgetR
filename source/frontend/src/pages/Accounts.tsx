@@ -21,6 +21,7 @@ import { notifications } from "@mantine/notifications";
 import { IconDots, IconSettings } from "@tabler/icons-react";
 import { useMutation } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
+import { Trans, useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
 import {
@@ -37,6 +38,7 @@ import { AmountInput } from "@/components/AmountInput";
 import { DateTimeInput } from "@/components/DateTimeInput";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { QueryState } from "@/components/QueryState";
+import i18n from "@/i18n";
 import {
   addAmounts,
   canonicalAmount,
@@ -52,6 +54,7 @@ type Panel = { kind: "adjust" | "interest"; accountId: string } | null;
  * buckets at a glance, and the balance adjustment and interest actions.
  */
 export default function Accounts() {
+  const { t } = useTranslation();
   const theme = useMantineTheme();
   const isDesktop = useMediaQuery(`(min-width: ${theme.breakpoints.sm})`, true);
   const accounts = useAccounts();
@@ -81,16 +84,15 @@ export default function Accounts() {
         return (
           <Stack gap="lg">
             <Group justify="space-between" align="flex-end" wrap="wrap">
-              <Title order={2}>Accounts</Title>
+              <Title order={2}>{t("nav.items.accounts")}</Title>
               <Totals accounts={list} />
             </Group>
             {list.length === 0 ? (
               <Text c="dimmed">
-                No accounts yet.{" "}
-                <Anchor component={Link} to="/accounts/setup">
-                  Create one in Account setup
-                </Anchor>
-                .
+                <Trans
+                  i18nKey="accounts.empty"
+                  components={{ setup: <Anchor component={Link} to="/accounts/setup" /> }}
+                />
               </Text>
             ) : isDesktop ? (
               <Group align="flex-start" wrap="wrap" gap="lg">
@@ -150,13 +152,14 @@ export default function Accounts() {
 
 /** The total balance per currency. */
 function Totals({ accounts }: { accounts: Account[] }) {
+  const { t } = useTranslation();
   const currencies = [...new Set(accounts.map((a) => a.currency))];
   if (currencies.length === 0) return null;
   return (
     <Group gap="md">
       {currencies.map((currency) => (
         <Text key={currency} size="sm" c="dimmed">
-          Total{" "}
+          {t("accounts.total")}{" "}
           <Text span fw={700} size="lg" c="var(--mantine-color-text)">
             {formatMoney(
               addAmounts(...accounts.filter((a) => a.currency === currency).map((a) => a.balance)),
@@ -175,8 +178,8 @@ function Totals({ accounts }: { accounts: Account[] }) {
  */
 function bucketSummary(account: Account, buckets: Bucket[]): string {
   const own = buckets.filter((b) => b.source_account_id === account.id);
-  if (own.length === 0) return "No buckets";
-  const count = `${String(own.length)} bucket${own.length === 1 ? "" : "s"}`;
+  if (own.length === 0) return i18n.t("accounts.noBuckets");
+  const count = i18n.t("accounts.bucketCount", { count: own.length });
   const short = addAmounts(
     ...own.map((b) =>
       compareAmounts(b.target_funds, "0") > 0
@@ -185,10 +188,16 @@ function bucketSummary(account: Account, buckets: Bucket[]): string {
     ),
   );
   if (compareAmounts(short, "0") > 0) {
-    return `${count} · ${formatMoney(short, account.currency)} short`;
+    return i18n.t("accounts.bucketsShort", {
+      buckets: count,
+      amount: formatMoney(short, account.currency),
+    });
   }
   if (compareAmounts(account.unallocated, "0") > 0) {
-    return `${count} · ${formatMoney(account.unallocated, account.currency)} unallocated`;
+    return i18n.t("accounts.bucketsUnallocated", {
+      buckets: count,
+      amount: formatMoney(account.unallocated, account.currency),
+    });
   }
   return count;
 }
@@ -199,6 +208,7 @@ interface ActionsProps {
 }
 
 function SetupLink({ account, size }: { account: Account; size: number }) {
+  const { t } = useTranslation();
   return (
     <ActionIcon
       component={Link}
@@ -206,8 +216,8 @@ function SetupLink({ account, size }: { account: Account; size: number }) {
       variant="subtle"
       color="gray"
       size={size}
-      aria-label={`Account setup for ${account.name}`}
-      title="Account setup"
+      aria-label={t("accounts.setupFor", { name: account.name })}
+      title={t("nav.items.accountSetup")}
     >
       <IconSettings size={18} />
     </ActionIcon>
@@ -221,6 +231,7 @@ function AccountCard({
   onAdjust,
   onInterest,
 }: ActionsProps & { account: Account; summary?: string; selected: boolean }) {
+  const { t } = useTranslation();
   return (
     <Card
       withBorder
@@ -261,13 +272,13 @@ function AccountCard({
             size="xs"
             variant="light"
           >
-            Transactions
+            {t("nav.items.transactions")}
           </Button>
           <Button size="xs" variant="default" onClick={onAdjust}>
-            Adjust balance
+            {t("accounts.adjust")}
           </Button>
           <Button size="xs" variant="default" onClick={onInterest}>
-            Register interest
+            {t("accounts.interest")}
           </Button>
         </Group>
       </Stack>
@@ -276,6 +287,7 @@ function AccountCard({
 }
 
 function AccountRow({ account, onAdjust, onInterest }: ActionsProps & { account: Account }) {
+  const { t } = useTranslation();
   return (
     <Group
       gap={0}
@@ -291,7 +303,7 @@ function AccountRow({ account, onAdjust, onInterest }: ActionsProps & { account:
         pl="md"
         pr={4}
         mih={64}
-        aria-label={`${account.name} transactions`}
+        aria-label={t("accounts.transactionsOf", { name: account.name })}
       >
         <Group justify="space-between" wrap="nowrap" gap="xs">
           <div style={{ minWidth: 0 }}>
@@ -314,14 +326,14 @@ function AccountRow({ account, onAdjust, onInterest }: ActionsProps & { account:
             variant="subtle"
             color="gray"
             size={44}
-            aria-label={`More for ${account.name}`}
+            aria-label={t("accounts.moreFor", { name: account.name })}
           >
             <IconDots size={20} />
           </ActionIcon>
         </Menu.Target>
         <Menu.Dropdown>
-          <Menu.Item onClick={onAdjust}>Adjust balance</Menu.Item>
-          <Menu.Item onClick={onInterest}>Register interest</Menu.Item>
+          <Menu.Item onClick={onAdjust}>{t("accounts.adjust")}</Menu.Item>
+          <Menu.Item onClick={onInterest}>{t("accounts.interest")}</Menu.Item>
         </Menu.Dropdown>
       </Menu>
     </Group>
@@ -337,14 +349,15 @@ function PanelContent({
   account: Account;
   onClose: () => void;
 }) {
-  const title = kind === "adjust" ? "Adjust balance" : "Register interest";
+  const { t } = useTranslation();
+  const title = kind === "adjust" ? t("accounts.adjust") : t("accounts.interest");
   return (
     <Stack gap="md" component="section" aria-label={title}>
       <Group justify="space-between">
         <Title order={3} size="h4">
           {title}
         </Title>
-        <CloseButton aria-label="Close" onClick={onClose} />
+        <CloseButton aria-label={t("common.close")} onClick={onClose} />
       </Group>
       <Text size="sm" c="dimmed">
         {account.name} · {accountTypeLabel(account.type)}
@@ -368,10 +381,11 @@ function FormButtons({
   submit: ReactNode;
   loading: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <Group justify="flex-end" gap="xs">
       <Button variant="default" onClick={onCancel}>
-        Cancel
+        {t("common.cancel")}
       </Button>
       <Button type="submit" loading={loading}>
         {submit}
@@ -382,6 +396,7 @@ function FormButtons({
 
 /** Records a balance adjustment (BLA) to the balance the bank shows. */
 function AdjustForm({ account, onDone }: { account: Account; onDone: () => void }) {
+  const { t } = useTranslation();
   const refresh = useRefreshMoney();
   const balance = canonicalAmount(account.balance);
   const [actual, setActual] = useState<string | null>(balance);
@@ -398,13 +413,16 @@ function AdjustForm({ account, onDone }: { account: Account; onDone: () => void 
       ),
     meta: { silentError: true },
     onSuccess: async () => {
-      notifications.show({ color: "green", message: `Balance of ${account.name} adjusted.` });
+      notifications.show({
+        color: "green",
+        message: t("accounts.adjusted", { name: account.name }),
+      });
       onDone();
       await refresh();
     },
     onError: (err) => {
       if (err instanceof ApiError && err.code === "no_change") {
-        setError("That's already the balance.");
+        setError(t("accounts.alreadyBalance"));
       }
     },
   });
@@ -418,19 +436,19 @@ function AdjustForm({ account, onDone }: { account: Account; onDone: () => void 
       onSubmit={(e) => {
         e.preventDefault();
         setError(undefined);
-        if (actual === null) setError("Enter the balance your bank shows.");
+        if (actual === null) setError(t("accounts.enterBalance"));
         else adjust.mutate(actual);
       }}
     >
       <Stack gap="md">
         <Group justify="space-between">
-          <Text size="sm">Balance in the app</Text>
+          <Text size="sm">{t("accounts.appBalance")}</Text>
           <Text size="sm" fw={700}>
             {formatMoney(balance, account.currency)}
           </Text>
         </Group>
         <AmountInput
-          label="Actual balance"
+          label={t("accounts.actualBalance")}
           currency={account.currency}
           value={actual}
           onChange={setActual}
@@ -438,36 +456,46 @@ function AdjustForm({ account, onDone }: { account: Account; onDone: () => void 
           data-autofocus
         />
         <DateTimeInput
-          label="Date and time"
-          description="When the bank showed this balance. Empty means now."
+          label={t("common.dateTime")}
+          description={t("accounts.adjustWhen")}
           value={at}
           onChange={setAt}
         />
         {diff !== null && (
           <Alert color="gray" variant="light">
             {at
-              ? "Records a balance adjustment for the difference to the balance at that time."
+              ? t("accounts.adjustAtTime")
               : compareAmounts(diff, "0") === 0
-                ? "That matches the balance in the app."
-                : `Records a balance adjustment of ${sign}${formatMoney(diff, account.currency)}.`}
+                ? t("accounts.adjustMatches")
+                : t("accounts.adjustRecords", {
+                    amount: sign + formatMoney(diff, account.currency),
+                  })}
           </Alert>
         )}
         {adjust.error &&
           !(adjust.error instanceof ApiError && adjust.error.code === "no_change") && (
             <ErrorAlert error={adjust.error} />
           )}
-        <FormButtons onCancel={onDone} submit="Record adjustment" loading={adjust.isPending} />
+        <FormButtons
+          onCancel={onDone}
+          submit={t("accounts.adjustSubmit")}
+          loading={adjust.isPending}
+        />
       </Stack>
     </form>
   );
 }
 
+/** The tag on interest incomes; a fixed word, so it's the same in every language. */
+const INTEREST_TAG = "interest";
+
 /**
- * Registers interest as an income (INC) with counterparty "Interest" and the
- * tag "interest". It never triggers a refill. (The counterparty becomes the
- * account's bank with #70.)
+ * Registers interest as an income (INC) with counterparty "Interest" (in the
+ * user's language) and the tag "interest". It never triggers a refill. (The
+ * counterparty becomes the account's bank with #70.)
  */
 function InterestForm({ account, onDone }: { account: Account; onDone: () => void }) {
+  const { t } = useTranslation();
   const refresh = useRefreshMoney();
   const [amount, setAmount] = useState<string | null>(null);
   const [at, setAt] = useState<string | null>(null);
@@ -481,8 +509,8 @@ function InterestForm({ account, onDone }: { account: Account; onDone: () => voi
             type: "INC",
             account_id: account.id,
             amount: value,
-            counterparty: "Interest",
-            tags: ["interest"],
+            counterparty: t("accounts.interestCounterparty"),
+            tags: [INTEREST_TAG],
             triggers_refill: false,
             ...(at ? { at } : {}),
           },
@@ -490,7 +518,10 @@ function InterestForm({ account, onDone }: { account: Account; onDone: () => voi
       ),
     meta: { silentError: true },
     onSuccess: async () => {
-      notifications.show({ color: "green", message: `Interest on ${account.name} registered.` });
+      notifications.show({
+        color: "green",
+        message: t("accounts.interestRegistered", { name: account.name }),
+      });
       onDone();
       await refresh();
     },
@@ -502,14 +533,14 @@ function InterestForm({ account, onDone }: { account: Account; onDone: () => voi
       onSubmit={(e) => {
         e.preventDefault();
         setError(undefined);
-        if (amount === null) setError("Enter the interest.");
-        else if (compareAmounts(amount, "0") <= 0) setError("Interest must be more than 0.");
+        if (amount === null) setError(t("accounts.enterInterest"));
+        else if (compareAmounts(amount, "0") <= 0) setError(t("accounts.interestPositive"));
         else register.mutate(amount);
       }}
     >
       <Stack gap="md">
         <AmountInput
-          label="Interest amount"
+          label={t("accounts.interestAmount")}
           currency={account.currency}
           value={amount}
           onChange={setAmount}
@@ -517,17 +548,24 @@ function InterestForm({ account, onDone }: { account: Account; onDone: () => voi
           data-autofocus
         />
         <DateTimeInput
-          label="Date and time"
-          description="When it was paid. Empty means now."
+          label={t("common.dateTime")}
+          description={t("accounts.interestWhen")}
           value={at}
           onChange={setAt}
         />
         <Alert color="gray" variant="light">
-          Recorded as an income with the counterparty <strong>Interest</strong> and the tag{" "}
-          <strong>interest</strong>. It stays unallocated and doesn&apos;t trigger refills.
+          <Trans
+            i18nKey="accounts.interestNote"
+            values={{ counterparty: t("accounts.interestCounterparty"), tag: INTEREST_TAG }}
+            components={{ b: <strong /> }}
+          />
         </Alert>
         {register.error && <ErrorAlert error={register.error} />}
-        <FormButtons onCancel={onDone} submit="Register interest" loading={register.isPending} />
+        <FormButtons
+          onCancel={onDone}
+          submit={t("accounts.interest")}
+          loading={register.isPending}
+        />
       </Stack>
     </form>
   );

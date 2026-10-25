@@ -1,5 +1,6 @@
 import { Text, TextInput, type TextInputProps } from "@mantine/core";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { currencySymbol, formatAmountInput, parseAmount } from "@/lib/money";
 
@@ -24,6 +25,7 @@ export function AmountInput({
   currency,
   ...props
 }: AmountInputProps) {
+  const { t } = useTranslation();
   const [text, setText] = useState(() => (value === null ? "" : formatAmountInput(value)));
   const [touched, setTouched] = useState(false);
 
@@ -47,9 +49,7 @@ export function AmountInput({
       }
       {...props}
       value={text}
-      error={
-        error ?? (touched && invalid ? "Enter an amount with at most two decimals" : undefined)
-      }
+      error={error ?? (touched && invalid ? t("common.invalidAmount") : undefined)}
       onChange={(e) => {
         setText(e.currentTarget.value);
         onChange(e.currentTarget.value.trim() === "" ? null : parseAmount(e.currentTarget.value));

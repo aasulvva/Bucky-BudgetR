@@ -3,6 +3,7 @@ import { DatePickerInput } from "@mantine/dates";
 import { notifications } from "@mantine/notifications";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { api } from "@/api/client";
 import { useRefreshCycles, type Cycle } from "@/api/cycles";
@@ -21,8 +22,9 @@ interface ExtendCycleDialogProps {
 
 /** Moves the active cycle's end later, e.g. when it's overdue. */
 export function ExtendCycleDialog({ opened, onClose, active, next }: ExtendCycleDialogProps) {
+  const { t } = useTranslation();
   return (
-    <ResponsiveModal opened={opened} onClose={onClose} title="Extend the cycle">
+    <ResponsiveModal opened={opened} onClose={onClose} title={t("cycles.extendTitle")}>
       <ExtendForm key={active.end_at} active={active} next={next} onDone={onClose} />
     </ResponsiveModal>
   );
@@ -33,6 +35,7 @@ function ExtendForm({
   next,
   onDone,
 }: Omit<ExtendCycleDialogProps, "opened" | "onClose"> & { onDone: () => void }) {
+  const { t } = useTranslation();
   const refresh = useRefreshCycles();
   const now = today();
   const current = lastDay(active);
@@ -53,7 +56,10 @@ function ExtendForm({
       ),
     meta: { silentError: true },
     onSuccess: async (updated) => {
-      notifications.show({ color: "green", message: `The cycle now runs ${cycleRange(updated)}.` });
+      notifications.show({
+        color: "green",
+        message: t("cycles.extended", { range: cycleRange(updated) }),
+      });
       onDone();
       await refresh();
     },
@@ -68,9 +74,9 @@ function ExtendForm({
         e.preventDefault();
         const found =
           end < now
-            ? "The cycle must end in the future."
+            ? t("cycles.endInFuture")
             : end <= current
-              ? "Pick a day after the current last day."
+              ? t("cycles.afterCurrent")
               : undefined;
         setProblem(found);
         if (!found) extend.mutate();
@@ -78,10 +84,10 @@ function ExtendForm({
     >
       <Stack gap="md">
         <Text size="sm" c="dimmed">
-          {cycleRange(active)}. Pick its new last day.
+          {t("cycles.extendIntro", { range: cycleRange(active) })}
         </Text>
         <DatePickerInput
-          label="New last day"
+          label={t("cycles.newLastDay")}
           valueFormat="D MMM YYYY"
           value={end}
           minDate={now > current ? now : addDays(current, 1)}
@@ -93,17 +99,19 @@ function ExtendForm({
         />
         {pushesNext && (
           <Alert color="blue" variant="light">
-            The next planned cycle ({cycleRange(next)}) then starts on {formatDate(addDays(end, 1))}{" "}
-            instead.
+            {t("cycles.pushesNext", {
+              range: cycleRange(next),
+              date: formatDate(addDays(end, 1)),
+            })}
           </Alert>
         )}
         {extend.error && <ErrorAlert error={extend.error} />}
         <Group justify="flex-end" gap="xs">
           <Button variant="default" onClick={onDone}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button type="submit" loading={extend.isPending}>
-            Extend
+            {t("common.extend")}
           </Button>
         </Group>
       </Stack>

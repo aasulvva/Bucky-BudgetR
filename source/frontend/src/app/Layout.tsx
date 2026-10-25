@@ -21,6 +21,7 @@ import { useMediaQuery } from "@mantine/hooks";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { IconLogout, IconMoon, IconShield, IconSettings, IconSun } from "@tabler/icons-react";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link, Outlet, useLocation } from "react-router";
 
 import { CycleBanners } from "@/components/cycles/CycleBanners";
@@ -37,6 +38,7 @@ import { useSession, useSignOut } from "./session";
  * them in a sheet.
  */
 export function Layout() {
+  const { t } = useTranslation();
   const theme = useMantineTheme();
   const isDesktop = useMediaQuery(`(min-width: ${theme.breakpoints.sm})`, true);
   const current = findNav(useLocation().pathname);
@@ -52,7 +54,7 @@ export function Layout() {
         <AppShell.Header>
           <Group h="100%" pl="md" pr="xs" justify="space-between" wrap="nowrap">
             <Title order={1} size="h4" lineClamp={1}>
-              {current?.item.label ?? "Bucky BudgetR"}
+              {current ? t(`nav.items.${current.item.key}`) : "Bucky BudgetR"}
             </Title>
             <Group gap={4} wrap="nowrap">
               <CycleStatus placement="header" />
@@ -88,6 +90,7 @@ export function Layout() {
 type Current = ReturnType<typeof findNav>;
 
 function SideNav({ current }: { current: Current }) {
+  const { t } = useTranslation();
   // Groups the user opened or closed; otherwise Budget & Reporting and the
   // group of the current screen are open.
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
@@ -116,7 +119,7 @@ function SideNav({ current }: { current: Current }) {
                   leftSection={<tab.icon size={18} />}
                   mb="xs"
                 >
-                  {first?.label}
+                  {first && t(`nav.items.${first.key}`)}
                 </Button>
               );
             }
@@ -126,7 +129,7 @@ function SideNav({ current }: { current: Current }) {
                   key={tab.id}
                   component={Link}
                   to={first.path}
-                  label={first.label}
+                  label={t(`nav.items.${first.key}`)}
                   leftSection={<tab.icon size={18} />}
                   active={first.path === pathname}
                 />
@@ -136,7 +139,7 @@ function SideNav({ current }: { current: Current }) {
             return (
               <NavLink
                 key={tab.id}
-                label={tab.label}
+                label={t(`nav.tabs.${tab.id}`)}
                 leftSection={<tab.icon size={18} />}
                 opened={opened}
                 onChange={(open) => {
@@ -167,18 +170,21 @@ function SideNav({ current }: { current: Current }) {
 }
 
 function ItemLabel({ item }: { item: NavItem }) {
-  if (!item.later) return item.label;
+  const { t } = useTranslation();
+  const label = t(`nav.items.${item.key}`);
+  if (!item.later) return label;
   return (
     <Group gap={6} wrap="nowrap">
-      {item.label}
+      {label}
       <Badge size="xs" variant="light" color="gray">
-        Later
+        {t("common.later")}
       </Badge>
     </Group>
   );
 }
 
 function BottomTabs({ current, pathname }: { current: NavTab | undefined; pathname?: string }) {
+  const { t } = useTranslation();
   const [sheet, setSheet] = useState<NavTab | undefined>();
 
   return (
@@ -195,7 +201,7 @@ function BottomTabs({ current, pathname }: { current: NavTab | undefined; pathna
                 size={52}
                 radius="xl"
                 className={classes.actionButton}
-                aria-label={first?.label}
+                aria-label={first && t(`nav.items.${first.key}`)}
               >
                 <tab.icon size={28} />
               </ActionIcon>
@@ -206,7 +212,7 @@ function BottomTabs({ current, pathname }: { current: NavTab | undefined; pathna
         const content = (
           <>
             <tab.icon size={22} />
-            <span className={classes.tabLabel}>{tab.shortLabel ?? tab.label}</span>
+            <span className={classes.tabLabel}>{t(`nav.tabs.${tab.short ?? tab.id}`)}</span>
           </>
         );
         if (tab.items.length === 1) {
@@ -245,7 +251,7 @@ function BottomTabs({ current, pathname }: { current: NavTab | undefined; pathna
         }}
         position="bottom"
         size="auto"
-        title={sheet?.label}
+        title={sheet && t(`nav.tabs.${sheet.id}`)}
       >
         <Stack gap={4} pb="md">
           {sheet?.items.map((item) => (
@@ -273,6 +279,7 @@ function BottomTabs({ current, pathname }: { current: NavTab | undefined; pathna
  * header an avatar.
  */
 function ProfileMenu({ placement }: { placement: "sidebar" | "header" }) {
+  const { t } = useTranslation();
   const user = useSession().data;
   const avatar = (
     <Avatar size={32} radius="xl" color="blue" aria-hidden>
@@ -288,15 +295,15 @@ function ProfileMenu({ placement }: { placement: "sidebar" | "header" }) {
             {avatar}
             <span className={classes.profileText}>
               <Text fw={600} size="sm" truncate>
-                {user?.username ?? "Profile"}
+                {user?.username ?? t("nav.profile")}
               </Text>
               <Text size="xs" c="dimmed">
-                Profile &amp; settings
+                {t("nav.profileAndSettings")}
               </Text>
             </span>
           </UnstyledButton>
         ) : (
-          <ActionIcon variant="subtle" size={44} radius="xl" aria-label="Profile">
+          <ActionIcon variant="subtle" size={44} radius="xl" aria-label={t("nav.profile")}>
             {avatar}
           </ActionIcon>
         )}
@@ -304,7 +311,7 @@ function ProfileMenu({ placement }: { placement: "sidebar" | "header" }) {
       <Menu.Dropdown>
         {user && (
           <Menu.Label>
-            {user.username} · {user.admin ? "Admin" : "User"}
+            {user.username} · {user.admin ? t("nav.roleAdmin") : t("nav.roleUser")}
           </Menu.Label>
         )}
         {profileItems
@@ -316,9 +323,9 @@ function ProfileMenu({ placement }: { placement: "sidebar" | "header" }) {
               to={item.path}
               leftSection={item.adminOnly ? <IconShield size={18} /> : <IconSettings size={18} />}
             >
-              <Text size="sm">{item.label}</Text>
+              <Text size="sm">{t(`nav.items.${item.key}`)}</Text>
               <Text size="xs" c="dimmed">
-                {item.description}
+                {t(`nav.descriptions.${item.key}`)}
               </Text>
             </Menu.Item>
           ))}
@@ -331,6 +338,7 @@ function ProfileMenu({ placement }: { placement: "sidebar" | "header" }) {
 }
 
 function ColorSchemeItem() {
+  const { t } = useTranslation();
   const { setColorScheme } = useMantineColorScheme();
   const computed = useComputedColorScheme("light");
   const next = computed === "dark" ? "light" : "dark";
@@ -341,16 +349,17 @@ function ColorSchemeItem() {
         setColorScheme(next);
       }}
     >
-      {next === "dark" ? "Dark mode" : "Light mode"}
+      {next === "dark" ? t("nav.darkMode") : t("nav.lightMode")}
     </Menu.Item>
   );
 }
 
 function SignOutItem() {
+  const { t } = useTranslation();
   const signOut = useSignOut();
   return (
     <Menu.Item leftSection={<IconLogout size={18} />} onClick={signOut}>
-      Sign out
+      {t("nav.signOut")}
     </Menu.Item>
   );
 }

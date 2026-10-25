@@ -2,6 +2,7 @@ import { notifications } from "@mantine/notifications";
 import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
 
 import { handleSessionError } from "@/app/session";
+import i18n from "@/i18n";
 
 import { ApiError, describeError } from "./errors";
 
@@ -36,7 +37,9 @@ export function createQueryClient(): QueryClient {
         notifications.show({
           color: "red",
           title,
-          message: [detail, requestId && `Request ID: ${requestId}`].filter(Boolean).join(" · "),
+          message: [detail, requestId && `${i18n.t("common.requestId")}: ${requestId}`]
+            .filter(Boolean)
+            .join(" · "),
         });
       },
     }),

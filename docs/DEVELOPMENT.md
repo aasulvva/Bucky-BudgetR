@@ -180,6 +180,14 @@ Layout of `src/`:
 - `components/DateTimeInput.tsx` picks when something happened, in local time. Its value is the UTC timestamp the API takes, or null for now. It can't pick the future.
 - `lib/` holds the formatting helpers. Their locale and currency settings are in `lib/locale.ts`: the user's locale preference (or the browser's), and NOK. The guard calls `setLocale()` from the session. When the locale changes, the guard remounts the screens so that they format again.
 
+All UI text is translated: English, Norwegian bokmål and nynorsk (`src/i18n/`).
+- Text lives in `src/i18n/locales/en.json`, `nb.json` and `nn.json`, under the same keys. Components get it with `const { t } = useTranslation()` and `t("cycles.end")`; code outside components uses `i18n.t` from `@/i18n`. Keys are typed from `en.json`, so a missing key fails the typecheck. `locales.test.ts` checks that nb and nn have every English key, with the same placeholders.
+- A new text goes into all three files. Counts use plural keys (`daysLeft_one`, `daysLeft_other`) with `t("cycles.daysLeft", { count })`. Text with markup, such as bold or a link, uses `<Trans>` with tags like `<b>` in the text.
+- The words for the domain (bøtte, periode, påfyll, …) are in `src/i18n/README.md`. Keep new text consistent with them.
+- `lib/language.ts` picks the language. The `language` preference wins; null follows the locale (`nb-NO` gives bokmål, `nn-NO` nynorsk, any other English), and without a locale, the browser's language. The guard applies it with `applyLanguage()` and remounts the screens, as it does for the locale. The login page uses the last language used in that browser.
+- API errors are translated by their `code` (`errors.codes` in the resources), through `describeError()` and `errorMessage()`. For a code without a translation, the server's (English) `detail` is shown.
+- Tests run in English. To check another language, a test switches with `i18n.changeLanguage()` or a preference, and `setup.ts` switches back afterwards.
+
 Money is never a JS `number`. The API sends and receives amounts as decimal strings (`"1234.50"`):
 - `formatMoney()` formats one exactly, in NOK or the currency given (an account's or bucket's).
 - `addAmounts()`, `subtractAmounts()` and `compareAmounts()` calculate with them exactly, in BigInt cents.

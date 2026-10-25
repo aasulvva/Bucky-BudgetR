@@ -3,6 +3,8 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
+import i18n from "@/i18n";
+
 import { api } from "./client";
 import { unwrap } from "./errors";
 import type { components } from "./schema";
@@ -14,16 +16,15 @@ export type Bucket = components["schemas"]["Bucket"];
 export const ACCOUNTS_KEY = ["accounts"] as const;
 export const BUCKETS_KEY = ["buckets"] as const;
 
-export const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
-  { value: "usage", label: "Usage" },
-  { value: "savings", label: "Savings" },
-  { value: "bsu", label: "BSU" },
-  { value: "fund", label: "Fund/ASK" },
-  { value: "investment", label: "Investment" },
-];
+const ACCOUNT_TYPES: AccountType[] = ["usage", "savings", "bsu", "fund", "investment"];
 
 export function accountTypeLabel(type: AccountType): string {
-  return ACCOUNT_TYPES.find((t) => t.value === type)?.label ?? type;
+  return i18n.t(`accounts.types.${type}`);
+}
+
+/** The account types, for a select. */
+export function accountTypeOptions(): { value: AccountType; label: string }[] {
+  return ACCOUNT_TYPES.map((value) => ({ value, label: accountTypeLabel(value) }));
 }
 
 /** The user's accounts, sorted by name, with their balances. */

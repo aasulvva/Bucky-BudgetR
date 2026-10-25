@@ -1,7 +1,9 @@
 import { Center, Loader } from "@mantine/core";
+import { DatesProvider } from "@mantine/dates";
 import { Navigate, Outlet, useLocation } from "react-router";
 
 import { ErrorAlert } from "@/components/ErrorAlert";
+import { applyLanguage, resolveLanguage } from "@/lib/language";
 import { setLocale } from "@/lib/locale";
 
 import { useSession } from "./session";
@@ -9,7 +11,7 @@ import { useSession } from "./session";
 /**
  * Guards the app's screens: without a session it sends the user to the login
  * page (coming back here afterwards), and a user who must change the password
- * to the password page. It also applies the user's locale.
+ * to the password page. It also applies the user's locale and language.
  */
 export function RequireSession() {
   const session = useSession();
@@ -37,8 +39,16 @@ export function RequireSession() {
   }
   if (user.must_change_password) return <Navigate to="/change-password" replace />;
 
-  // The formatters read the locale on every call; remounting the screens when
-  // it changes makes them all format again.
-  setLocale(user.preferences.locale);
-  return <Outlet key={user.preferences.locale ?? ""} />;
+  // The formatters and translations are read on every call; remounting the
+  // screens when the locale or language changes makes them all render again.
+  const { locale } = user.preferences;
+  const language = resolveLanguage(user.preferences);
+  setLocale(locale);
+  applyLanguage(language);
+  return (
+    // The date pickers' month and day names.
+    <DatesProvider settings={{ locale: language }}>
+      <Outlet key={`${locale ?? ""}/${language}`} />
+    </DatesProvider>
+  );
 }

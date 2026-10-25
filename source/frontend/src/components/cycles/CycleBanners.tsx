@@ -1,6 +1,7 @@
 import { Alert, Button, Group, Text } from "@mantine/core";
 import { IconAlertTriangle, IconCalendarOff } from "@tabler/icons-react";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useLocation } from "react-router";
 
 import { useCurrentCycles, useCycles } from "@/api/cycles";
@@ -19,6 +20,7 @@ import { StartCycleDialog } from "./StartCycleDialog";
  * stay off it.
  */
 export function CycleBanners() {
+  const { t } = useTranslation();
   const current = useCurrentCycles();
   const cycles = useCycles();
   const onCycles = useLocation().pathname === "/cycles";
@@ -42,16 +44,14 @@ export function CycleBanners() {
       {active === null && !onCycles && (
         <Alert color="blue" mb="md" icon={<IconCalendarOff size={20} />}>
           <Group justify="space-between" gap="sm">
-            <Text size="sm">
-              No active cycle. Buckets, refills and bucket lines on transactions need one.
-            </Text>
+            <Text size="sm">{t("cycles.bannerNone")}</Text>
             <Button
               size="xs"
               onClick={() => {
                 setDialog("start");
               }}
             >
-              Start cycle
+              {t("cycles.start")}
             </Button>
           </Group>
         </Alert>
@@ -60,8 +60,7 @@ export function CycleBanners() {
         <Alert color="orange" mb="md" icon={<IconAlertTriangle size={20} />}>
           <Group justify="space-between" gap="sm">
             <Text size="sm">
-              The cycle ended on {formatDate(lastDay(active))}. Bucket transactions are paused until
-              you end or extend it.
+              {t("cycles.bannerOverdue", { date: formatDate(lastDay(active)) })}
             </Text>
             <Group gap="xs">
               <Button
@@ -71,7 +70,7 @@ export function CycleBanners() {
                   setDialog("extend");
                 }}
               >
-                Extend
+                {t("common.extend")}
               </Button>
               <Button
                 size="xs"
@@ -79,7 +78,7 @@ export function CycleBanners() {
                   setDialog("end");
                 }}
               >
-                End cycle
+                {t("cycles.end")}
               </Button>
             </Group>
           </Group>

@@ -1,6 +1,7 @@
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import i18n from "@/i18n";
 import { apiMock, problem, testUser } from "@/test/api";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
@@ -18,7 +19,7 @@ describe("routes", () => {
     async (item) => {
       renderRoute(item.path);
       expect(
-        await screen.findByRole("heading", { level: 2, name: item.label }),
+        await screen.findByRole("heading", { level: 2, name: i18n.t(`nav.items.${item.key}`) }),
       ).toBeInTheDocument();
       expect(screen.getByRole("link", { name: `#${item.issue}` })).toBeInTheDocument();
     },
@@ -110,7 +111,7 @@ describe("mobile layout", () => {
 
     const footer = screen.getByRole("contentinfo");
     for (const tab of navTabs.filter((t) => !t.action)) {
-      const name = tab.shortLabel ?? tab.label;
+      const name = i18n.t(`nav.tabs.${tab.short ?? tab.id}`);
       const role = tab.items.length > 1 ? "button" : "link";
       expect(within(footer).getByRole(role, { name })).toBeInTheDocument();
     }
@@ -143,8 +144,8 @@ describe("mobile layout", () => {
 
 describe("findNav", () => {
   it("picks the most specific item", () => {
-    expect(findNav("/")?.item.label).toBe("Dashboard");
-    expect(findNav("/accounts/1234")?.item.label).toBe("Accounts");
+    expect(findNav("/")?.item.key).toBe("dashboard");
+    expect(findNav("/accounts/1234")?.item.key).toBe("accounts");
     expect(findNav("/accounts/setup")?.tab?.id).toBe("setup");
     expect(findNav("/transactions/new")?.tab?.id).toBe("new");
     expect(findNav("/accountsx")).toBeUndefined();
@@ -152,7 +153,7 @@ describe("findNav", () => {
 
   it("finds the profile menu's screens without a tab", () => {
     const settings = findNav("/settings");
-    expect(settings?.item.label).toBe("Settings");
+    expect(settings?.item.key).toBe("settings");
     expect(settings?.tab).toBeUndefined();
   });
 });

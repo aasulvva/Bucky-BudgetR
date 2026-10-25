@@ -12,9 +12,12 @@ import {
   type Icon,
 } from "@tabler/icons-react";
 
+import type en from "@/i18n/locales/en.json";
+
 export interface NavItem {
   path: string;
-  label: string;
+  /** Its name, under nav.items in the translations. */
+  key: keyof typeof en.nav.items;
   /** The issue that builds this screen, shown on its placeholder. */
   issue: number;
   /** Comes after the MVP; shown as "Later". */
@@ -22,10 +25,10 @@ export interface NavItem {
 }
 
 export interface NavTab {
-  id: string;
-  label: string;
-  /** Label for the narrow mobile tab bar, if `label` is too long. */
-  shortLabel?: string;
+  /** Also its name, under nav.tabs in the translations. */
+  id: keyof typeof en.nav.tabs;
+  /** The name for the narrow mobile tab bar, if the name is too long. */
+  short?: keyof typeof en.nav.tabs;
   icon: Icon;
   items: NavItem[];
   /** The raised centre action on mobile, a button on desktop. */
@@ -35,59 +38,54 @@ export interface NavTab {
 export const navTabs: NavTab[] = [
   {
     id: "overview",
-    label: "Overview",
     icon: IconHome,
-    items: [{ path: "/", label: "Dashboard", issue: 29 }],
+    items: [{ path: "/", key: "dashboard", issue: 29 }],
   },
   {
     id: "transactions",
-    label: "Transactions",
     icon: IconListDetails,
-    items: [{ path: "/transactions", label: "Transactions", issue: 25 }],
+    items: [{ path: "/transactions", key: "transactions", issue: 25 }],
   },
   {
     id: "new",
-    label: "New",
     icon: IconPlus,
     action: true,
-    items: [{ path: "/transactions/new", label: "New transaction", issue: 24 }],
+    items: [{ path: "/transactions/new", key: "newTransaction", issue: 24 }],
   },
   {
     id: "budget",
-    label: "Budget & Reporting",
-    shortLabel: "Budget",
+    short: "budgetShort",
     icon: IconChartPie,
     items: [
-      { path: "/buckets", label: "Buckets", issue: 23 },
-      { path: "/accounts", label: "Accounts", issue: 21 },
-      { path: "/cycles", label: "Cycles", issue: 22 },
-      { path: "/savings", label: "Savings", issue: 35, later: true },
-      { path: "/stats", label: "Stats & reports", issue: 34, later: true },
+      { path: "/buckets", key: "buckets", issue: 23 },
+      { path: "/accounts", key: "accounts", issue: 21 },
+      { path: "/cycles", key: "cycles", issue: 22 },
+      { path: "/savings", key: "savings", issue: 35, later: true },
+      { path: "/stats", key: "stats", issue: 34, later: true },
     ],
   },
   {
     id: "setup",
-    label: "Setup",
     icon: IconAdjustments,
     items: [
-      { path: "/accounts/setup", label: "Account setup", issue: 21 },
-      { path: "/buckets/setup", label: "Bucket setup", issue: 23 },
-      { path: "/budget", label: "Budget setup", issue: 28 },
-      { path: "/savings/setup", label: "Savings setup", issue: 35, later: true },
+      { path: "/accounts/setup", key: "accountSetup", issue: 21 },
+      { path: "/buckets/setup", key: "bucketSetup", issue: 23 },
+      { path: "/budget", key: "budgetSetup", issue: 28 },
+      { path: "/savings/setup", key: "savingsSetup", issue: 35, later: true },
     ],
   },
 ];
 
-/** The profile menu's screens. Admin is only shown to admins. */
-export const profileItems: (NavItem & { adminOnly?: boolean; description: string })[] = [
-  { path: "/settings", label: "Settings", issue: 20, description: "Password, preferences, data" },
-  {
-    path: "/admin",
-    label: "Admin",
-    issue: 30,
-    adminOnly: true,
-    description: "Users, password resets",
-  },
+/**
+ * The profile menu's screens, with a description under nav.descriptions.
+ * Admin is only shown to admins.
+ */
+export const profileItems: (NavItem & {
+  key: keyof typeof en.nav.descriptions;
+  adminOnly?: boolean;
+})[] = [
+  { path: "/settings", key: "settings", issue: 20 },
+  { path: "/admin", key: "admin", issue: 30, adminOnly: true },
 ];
 
 export const navItems: NavItem[] = [...navTabs.flatMap((t) => t.items), ...profileItems];

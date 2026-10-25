@@ -1,0 +1,32 @@
+# Translations
+
+`locales/en.json`, `nb.json` (Norwegian bokmål) and `nn.json` (Norwegian nynorsk) hold the app's text under the same keys. See _Frontend_ in `docs/DEVELOPMENT.md` for how to add text.
+
+## Glossary
+
+The words for the app's concepts, so the same thing is called the same everywhere.
+
+| English                     | Bokmål                                            | Nynorsk                               |
+| --------------------------- | ------------------------------------------------- | ------------------------------------- |
+| bucket                      | bøtte (bøtta, bøtter)                             | bøtte (bøtta, bøtter)                 |
+| cycle                       | periode; _budsjettperiode_ where it needs context | periode (periodar); _budsjettperiode_ |
+| account                     | konto (kontoer)                                   | konto (kontoar)                       |
+| refill (noun / verb)        | påfyll / fylle på                                 | påfyll / fylle på                     |
+| refill mode                 | påfyllingsmåte                                    | påfyllingsmåte                        |
+| Auto / Manual / On income   | Automatisk / Manuelt / Ved inntekt                | Automatisk / Manuelt / Ved inntekt    |
+| overflow                    | overløp                                           | overløp                               |
+| unallocated                 | ufordelt                                          | ufordelt                              |
+| Keep funds                  | Behold midler                                     | Behald midlar                         |
+| income / expense / transfer | inntekt / utgift / overføring                     | inntekt / utgift / overføring         |
+| balance                     | saldo                                             | saldo                                 |
+| balance adjustment          | saldojustering                                    | saldojustering                        |
+| opening balance             | startsaldo                                        | startsaldo                            |
+| counterparty                | motpart                                           | motpart                               |
+| source account              | kildekonto                                        | kjeldekonto                           |
+| bucket line                 | bøttelinje                                        | bøttelinje                            |
+| overdue                     | på overtid                                        | på overtid                            |
+| settings                    | innstillinger                                     | innstillingar                         |
+| sign out / log in           | logg ut / logg inn                                | logg ut / logg inn                    |
+| session                     | økt                                               | økt                                   |
+
+Nynorsk uses the _a_-endings and _vert_ for the passive (_vert fylt på_), and _han/ho_ for masculine and feminine nouns (_perioden … han_).

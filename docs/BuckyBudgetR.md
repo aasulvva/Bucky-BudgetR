@@ -37,7 +37,7 @@ Self-hosted, envelope-style ("bucket") budgeting application.
 | Password | bcrypt hash |
 | Active | bool |
 | Admin | bool |
-| Preferences | JSON: default refill mode for new buckets, income rules for *On income* refills (§6), locale |
+| Preferences | JSON: default refill mode for new buckets, income rules for *On income* refills (§6), locale (number and date format), language (English, Norwegian bokmål or nynorsk; follows the locale by default) |
 | Created / Modified, Created by | audit |
 
 **Initial setup:** on first start a default admin account is created with password `BuckyBudgetR_ADMIN_Pa$$w0rd`. The user must change it at first login. The default can be overridden with an environment variable.
@@ -285,7 +285,7 @@ Desktop and mobile use the same groups (decided in #8; wireframes in the design 
 | Savings | Expected deposits per savings target. "Done" creates the transfers |
 | Savings setup | Savings targets and priority rules |
 | Stats & reports | Spending and balance graphs over time; yearly PDF report; filter by bucket, tag, counterparty |
-| Settings | Profile menu. Password, preferences (locale, default refill mode, income rules), data export/import *(later)* |
+| Settings | Profile menu. Password, preferences (locale, language, default refill mode, income rules), data export/import *(later)* |
 | Admin | Profile menu, admins only. User management, including password reset |
 
 ## 10. Roadmap
