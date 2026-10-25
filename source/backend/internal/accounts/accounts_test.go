@@ -109,13 +109,15 @@ func TestCreate(t *testing.T) {
 		n    accounts.New
 		want error
 	}{
-		"empty name":        {accounts.New{Name: "   "}, accounts.ErrInvalid},
-		"long name":         {accounts.New{Name: strings.Repeat("x", 101)}, accounts.ErrInvalid},
-		"bad type":          {accounts.New{Name: "x", Type: "cash"}, accounts.ErrInvalid},
-		"bad currency":      {accounts.New{Name: "x", Currency: "nok"}, accounts.ErrInvalid},
-		"3 decimals":        {accounts.New{Name: "x", OpeningBalance: dec("1.005")}, accounts.ErrInvalid},
-		"name taken":        {accounts.New{Name: "MAIN ACCOUNT"}, accounts.ErrNameTaken},
-		"name taken, typed": {accounts.New{Name: "savings", Type: sqlc.AccountTypeBsu}, accounts.ErrNameTaken},
+		"empty name":         {accounts.New{Name: "   "}, accounts.ErrInvalid},
+		"long name":          {accounts.New{Name: strings.Repeat("x", 101)}, accounts.ErrInvalid},
+		"bad type":           {accounts.New{Name: "x", Type: "cash"}, accounts.ErrInvalid},
+		"bad currency":       {accounts.New{Name: "x", Currency: "nok"}, accounts.ErrInvalid},
+		"unknown currency":   {accounts.New{Name: "x", Currency: "XYZ"}, accounts.ErrInvalid},
+		"3-decimal currency": {accounts.New{Name: "x", Currency: "KWD"}, accounts.ErrInvalid},
+		"3 decimals":         {accounts.New{Name: "x", OpeningBalance: dec("1.005")}, accounts.ErrInvalid},
+		"name taken":         {accounts.New{Name: "MAIN ACCOUNT"}, accounts.ErrNameTaken},
+		"name taken, typed":  {accounts.New{Name: "savings", Type: sqlc.AccountTypeBsu}, accounts.ErrNameTaken},
 	} {
 		if _, err := e.svc.Create(t.Context(), e.user, tc.n); !errors.Is(err, tc.want) {
 			t.Errorf("%s: got %v, want %v", name, err, tc.want)

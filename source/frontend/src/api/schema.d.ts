@@ -290,7 +290,8 @@ export interface components {
          */
         Amount: string;
         /**
-         * @description ISO 4217 currency code.
+         * @description ISO 4217 currency code. Only real currencies with at most 2 decimals
+         *     are accepted (not e.g. XAU or KWD); others get 400 `invalid_request`.
          * @example NOK
          */
         Currency: string;

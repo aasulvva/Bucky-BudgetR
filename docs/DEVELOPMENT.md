@@ -94,6 +94,7 @@ id, err := ids.Insert(ctx, ids.User, ids.NewUser, func(ctx context.Context, id s
 ### Money and the ledger
 
 - **Amounts** are `decimal.Decimal` ([shopspring/decimal](https://github.com/shopspring/decimal)) in Go and `NUMERIC(14,2)` in PostgreSQL. Exchange rates are `NUMERIC(18,8)`. Never use `float64` for money. pgx and sqlc map `numeric` to `decimal.Decimal` (`db.Configure`), and JSON carries amounts as strings.
+- **Currencies:** `money.ValidCurrency` accepts ISO 4217 codes (from `golang.org/x/text/currency`) for real currencies with at most 2 decimals. Use it wherever a currency comes in.
 - **Rounding:** calculate at full precision, then round the result with `money.Round`, which rounds half away from zero, the same as PostgreSQL's numeric cast. The ledger rejects an amount with more than 2 decimals instead of rounding it, so round where you calculate.
 - **Recording:** `internal/ledger` writes a header and its lines in one go:
   - `ledger.Create(ctx, pool, entry)` runs in its own DB transaction;

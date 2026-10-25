@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -187,8 +186,8 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Account, er
 	if n.Currency == "" {
 		n.Currency = DefaultCurrency
 	}
-	if !currencyRE.MatchString(n.Currency) {
-		return Account{}, fmt.Errorf("%w: currency %q", ErrInvalid, n.Currency)
+	if err := money.ValidCurrency(n.Currency); err != nil {
+		return Account{}, fmt.Errorf("%w: %w", ErrInvalid, err)
 	}
 	if err := money.Valid(n.OpeningBalance); err != nil {
 		return Account{}, fmt.Errorf("%w: opening balance: %w", ErrInvalid, err)
@@ -424,8 +423,6 @@ func toAccount(r sqlc.BankAccount, bal decimal.Decimal) Account {
 		Balance: bal, CreatedAt: r.CreatedAt,
 	}
 }
-
-var currencyRE = regexp.MustCompile(`^[A-Z]{3}$`)
 
 func checkName(name string) (string, error) {
 	name = strings.TrimSpace(name)

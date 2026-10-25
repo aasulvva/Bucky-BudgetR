@@ -49,7 +49,7 @@ Self-hosted, envelope-style ("bucket") budgeting application.
 | Account-ID | 4-digit random number |
 | Owner | user |
 | Name | unique per user (ignoring case) among accounts that aren't deleted |
-| Currency | e.g. NOK. Set when the account is created and can't be changed. |
+| Currency | ISO 4217 code, e.g. NOK. Only real currencies with at most 2 decimals (not gold, test codes or e.g. KWD). Set when the account is created and can't be changed. |
 | Account type | usage, savings, BSU, fund/ASK, investment |
 | Deleted | soft-delete flag |
 | Created / Modified | audit |

@@ -475,7 +475,9 @@ components:
 
     Currency:
       type: string
-      description: ISO 4217 currency code.
+      description: |
+        ISO 4217 currency code. Only real currencies with at most 2 decimals
+        are accepted (not e.g. XAU or KWD); others get 400 `invalid_request`.
       pattern: "^[A-Z]{3}$"
       example: NOK
 

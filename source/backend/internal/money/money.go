@@ -14,8 +14,11 @@ package money
 import (
 	"errors"
 	"fmt"
+	"regexp"
+	"slices"
 
 	"github.com/shopspring/decimal"
+	"golang.org/x/text/currency"
 )
 
 const (
@@ -30,6 +33,8 @@ var (
 	ErrPrecision = errors.New("amount has more than 2 decimals")
 	// ErrRange means an amount doesn't fit NUMERIC(14,2).
 	ErrRange = errors.New("amount is too large")
+	// ErrCurrency means a currency code isn't supported.
+	ErrCurrency = errors.New("unsupported currency")
 
 	limit = decimal.New(1, 12) // NUMERIC(14,2) holds |x| < 10^12
 )
@@ -44,6 +49,32 @@ func Valid(d decimal.Decimal) error {
 	}
 	if d.Abs().GreaterThanOrEqual(limit) {
 		return fmt.Errorf("%w: %s", ErrRange, d)
+	}
+	return nil
+}
+
+var currencyRE = regexp.MustCompile(`^[A-Z]{3}$`)
+
+// notCurrencies are ISO 4217 codes for things that aren't money you hold in
+// an account: precious metals, SDRs, bond-market units and testing codes.
+var notCurrencies = []string{
+	"XAG", "XAU", "XBA", "XBB", "XBC", "XBD", "XDR", "XPD", "XPT", "XSU", "XTS", "XUA", "XXX",
+}
+
+// ValidCurrency reports whether code is an ISO 4217 currency that amounts
+// can be stored in: upper case, a real currency (not gold or a test code),
+// with at most Places decimals. Currencies with 3 decimals, such as KWD,
+// are rejected because their amounts can't be stored exactly.
+func ValidCurrency(code string) error {
+	if !currencyRE.MatchString(code) || slices.Contains(notCurrencies, code) {
+		return fmt.Errorf("%w: %q", ErrCurrency, code)
+	}
+	unit, err := currency.ParseISO(code)
+	if err != nil {
+		return fmt.Errorf("%w: %q", ErrCurrency, code)
+	}
+	if scale, _ := currency.Standard.Rounding(unit); scale > Places {
+		return fmt.Errorf("%w: %s uses %d decimals, at most %d are supported", ErrCurrency, code, scale, Places)
 	}
 	return nil
 }
