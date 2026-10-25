@@ -6,7 +6,12 @@ import { defineConfig } from "vite";
 
 // Ports come from the repo's .env, which the Makefile exports.
 const webPort = Number(process.env.WEB_PORT ?? 5173);
-const apiTarget = `http://localhost:${process.env.API_PORT ?? "8080"}`;
+// Keep the browser's Host header: the backend's CSRF check compares it with
+// Origin. (A plain string target would turn on changeOrigin.)
+const apiTarget = {
+  target: `http://localhost:${process.env.API_PORT ?? "8080"}`,
+  changeOrigin: false,
+};
 
 export default defineConfig({
   plugins: [react()],
