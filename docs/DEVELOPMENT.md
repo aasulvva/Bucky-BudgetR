@@ -174,18 +174,21 @@ Layout of `src/`:
   - When any query or mutation gets 401 `unauthenticated`, the session is reset and the guard takes over. The login page then says the session has ended. A 403 `password_change_required` refetches the session instead. Neither shows an error notification.
 - `api/` holds the API client.
   - `client.ts` is the typed client. Always call it through `unwrap()`, which returns the data or throws an `ApiError` carrying the server's problem details.
+  - `accounts.ts` and the like hold the queries the screens share (`useAccounts()`, `useBuckets()`), with their query keys. `useRefreshMoney()` refetches everything a transaction or account change can move: balances, unallocated, the buckets' TF and CAF, and transaction lists.
   - `queryClient.ts` sets the query defaults. Queries retry twice, but never on 4xx. A failed mutation shows an error notification unless it sets `meta: { silentError: true }`.
 - `components/QueryState.tsx` is the standard way to render a query: a spinner while loading, an error with its request ID and a Retry button, otherwise the data.
+- `components/DateTimeInput.tsx` picks when something happened, in local time. Its value is the UTC timestamp the API takes, or null for now. It can't pick the future.
 - `lib/` holds the formatting helpers. Their locale and currency settings are in `lib/locale.ts`: the user's locale preference (or the browser's), and NOK. The guard calls `setLocale()` from the session. When the locale changes, the guard remounts the screens so that they format again.
 
 Money is never a JS `number`. The API sends and receives amounts as decimal strings (`"1234.50"`):
-- `formatMoney()` formats one exactly.
+- `formatMoney()` formats one exactly, in NOK or the currency given (an account's or bucket's).
+- `addAmounts()`, `subtractAmounts()` and `compareAmounts()` calculate with them exactly, in BigInt cents.
 - `<AmountInput>` takes what the user types (`1 234,5`) and emits the canonical string, or `null` if the input is invalid.
 - API dates (`YYYY-MM-DD`) go through `lib/dates.ts`, so they don't shift a day in other time zones.
 
 Tests run in jsdom. `src/test/render.tsx` has helpers that render a component with the app's providers (the real query client, minus retries), or the whole app at a given path. `viewport.width` from `src/test/setup.ts` switches between the desktop and mobile layouts.
 
-Tests never reach a server. `src/test/api.ts` is a fake backend that `setup.ts` installs as `fetch`. By default it answers as a logged-in normal user, `testUser`. A test changes an answer with `apiMock.on("PATCH /api/v1/me/preferences", { body: … })`, or with a function of the request; `problem(status, code, detail)` builds an error. The test then checks what was sent with `apiMock.calls(route)`. The answers reset after each test.
+Tests never reach a server. `src/test/fixtures.ts` builds sample accounts and buckets. `src/test/api.ts` is a fake backend that `setup.ts` installs as `fetch`. By default it answers as a logged-in normal user, `testUser`. A test changes an answer with `apiMock.on("PATCH /api/v1/me/preferences", { body: … })`, or with a function of the request; `problem(status, code, detail)` builds an error. The test then checks what was sent with `apiMock.calls(route)`. The answers reset after each test.
 
 ## Workflow and CI
 

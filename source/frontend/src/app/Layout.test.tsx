@@ -6,13 +6,14 @@ import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
 
 import { findNav, navItems, navTabs } from "./nav";
+import { builtPaths } from "./routes";
 
 afterEach(() => {
   viewport.width = 1280;
 });
 
 describe("routes", () => {
-  it.each(navItems.filter((i) => i.path !== "/settings"))(
+  it.each(navItems.filter((i) => !builtPaths.includes(i.path)))(
     "$path shows its placeholder",
     async (item) => {
       renderRoute(item.path);
