@@ -74,6 +74,20 @@ It is configured with environment variables. The Makefile exports everything in 
 
 Migrations are goose SQL files in `internal/db/migrations`, embedded in the binary. Create one with `go tool goose -dir internal/db/migrations create <name> sql`. Never edit a migration once it has been merged.
 
+### IDs
+
+Entities use the spec's random numeric IDs, made by `internal/ids`. The generators are `ids.NewUser()`, `ids.NewCycle(userID)`, `ids.NewBucketLine(bucketID)` and so on, and they draw from `crypto/rand`. IDs are digit strings of a fixed length, and composite IDs start with their owner's ID.
+
+- **Storage:** a `text` column with `CHECK (id ~ '<ids.Kind.Pattern>')`. For a composite ID, also check its prefix, e.g. `CHECK (left(id, 6) = user_id)`. JSON carries IDs as strings, because some don't fit in a JavaScript number.
+- **Inserting:** write the query as `INSERT … ON CONFLICT (id) DO NOTHING RETURNING id` and run it through `ids.Insert`, passing its error through `ids.Inserted`. If the ID is taken, `ids.Insert` draws a new one, up to `ids.MaxAttempts` times. It then gives up with `ids.ErrIDSpaceExhausted`, which can happen with the 9,000 account IDs. A skipped conflict doesn't abort the surrounding transaction.
+
+```go
+id, err := ids.Insert(ctx, ids.User, ids.NewUser, func(ctx context.Context, id string) (bool, error) {
+	_, err := q.CreateUser(ctx, sqlc.CreateUserParams{ID: id /* … */})
+	return ids.Inserted(err)
+})
+```
+
 ### API contract
 
 `api/openapi.yaml` (OpenAPI 3.0.3, the version oapi-codegen supports) is the source of truth for the REST API. To add or change an endpoint:
