@@ -249,6 +249,145 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cycles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List cycles
+         * @description All of the user's cycles, oldest first.
+         */
+        get: operations["listCycles"];
+        put?: never;
+        /**
+         * Plan a cycle
+         * @description Creates a future cycle from `start_at` up to, but not including,
+         *     `end_at`. The UI sends the UTC moments of local midnight. The cycle
+         *     must end in the future and can't overlap another of the user's
+         *     cycles (409 `cycle_overlap`); it may start exactly where another ends.
+         */
+        post: operations["createCycle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cycles/active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The active and next cycle
+         * @description The active cycle and the next planned one; either can be null. With no
+         *     active cycle, the UI prompts the user to start `next` or plan a cycle.
+         */
+        get: operations["getCurrentCycles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cycles/{cycleId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycleId: components["parameters"]["CycleId"];
+            };
+            cookie?: never;
+        };
+        /** Get a cycle */
+        get: operations["getCycle"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a planned cycle
+         * @description Only future cycles can be deleted (409 `cycle_not_future`).
+         */
+        delete: operations["deleteCycle"];
+        options?: never;
+        head?: never;
+        /**
+         * Move or extend a cycle
+         * @description A future cycle can change its start and end. The active cycle can only
+         *     change its end, to a moment in the future and after its last bucket
+         *     transaction: this is how an overdue cycle is extended. If the next
+         *     planned cycle starts before the new end, its start moves to the new
+         *     end (409 `cycle_overlap` if it would have no time left). Finished
+         *     cycles can't change (409 `cycle_finished`).
+         */
+        patch: operations["updateCycle"];
+        trace?: never;
+    };
+    "/api/v1/cycles/{cycleId}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycleId: components["parameters"]["CycleId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a planned cycle
+         * @description Starts the next planned cycle when the user has no active cycle (409
+         *     `active_cycle_exists`). Only the earliest future cycle can be started
+         *     (409 `not_next_cycle`). Started before its planned start, it starts
+         *     now; otherwise it keeps its planned start. Runs the cycle-start
+         *     routine.
+         */
+        post: operations["startCycle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cycles/{cycleId}/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycleId: components["parameters"]["CycleId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * End the active cycle
+         * @description Runs the cycle-end routine and finishes the active cycle (409
+         *     `cycle_not_active` otherwise).
+         *
+         *     - **On time or late:** the cycle keeps its planned end. Cycles end on
+         *       their intended dates.
+         *     - **Early:** the cycle ends now (or just after its last bucket
+         *       transaction, if that is later).
+         *
+         *     The next planned cycle then starts if it begins where this one ended.
+         *     If it begins later, it starts right away (its start moves to where
+         *     this one ended) only with `start_next`; otherwise there is a gap with
+         *     no active cycle, in which transactions can't have bucket lines.
+         */
+        post: operations["endCycle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -354,6 +493,55 @@ export interface components {
                 [key: string]: components["schemas"]["AccountId"];
             };
         };
+        /**
+         * @description 12-digit cycle ID (the owner's user ID, then 6 digits).
+         * @example 482913000417
+         */
+        CycleId: string;
+        /** @enum {string} */
+        CycleState: "future" | "active" | "finished";
+        Cycle: {
+            id: components["schemas"]["CycleId"];
+            /** Format: date-time */
+            start_at: string;
+            /**
+             * Format: date-time
+             * @description Exclusive. For the active cycle this is the planned end; once it has passed, bucket transactions are refused until the cycle is extended or ended.
+             */
+            end_at: string;
+            state: components["schemas"]["CycleState"];
+            /** Format: date-time */
+            created_at: string;
+        };
+        CycleTimes: {
+            /** Format: date-time */
+            start_at: string;
+            /** Format: date-time */
+            end_at: string;
+        };
+        CycleUpdate: {
+            /** Format: date-time */
+            start_at?: string;
+            /** Format: date-time */
+            end_at?: string;
+        };
+        CycleEnd: {
+            /**
+             * @description When the next planned cycle begins later than this one ends, start it right away instead of leaving a gap.
+             * @default false
+             */
+            start_next: boolean;
+        };
+        CycleEndResult: {
+            ended: components["schemas"]["Cycle"];
+            /** @description The cycle that started, or null if none did. */
+            started: components["schemas"]["Cycle"] | null;
+        };
+        CurrentCycles: {
+            active: components["schemas"]["Cycle"] | null;
+            /** @description The earliest planned cycle. */
+            next: components["schemas"]["Cycle"] | null;
+        };
         LoginRequest: {
             username: string;
             /** Format: password */
@@ -414,6 +602,7 @@ export interface components {
     };
     parameters: {
         AccountId: components["schemas"]["AccountId"];
+        CycleId: components["schemas"]["CycleId"];
     };
     requestBodies: never;
     headers: {
@@ -767,6 +956,214 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listCycles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The cycles. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cycle"][];
+                };
+            };
+            401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createCycle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CycleTimes"];
+            };
+        };
+        responses: {
+            /** @description The planned cycle. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cycle"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getCurrentCycles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current cycles. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrentCycles"];
+                };
+            };
+            401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getCycle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycleId: components["parameters"]["CycleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The cycle. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cycle"];
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteCycle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycleId: components["parameters"]["CycleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    updateCycle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycleId: components["parameters"]["CycleId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CycleUpdate"];
+            };
+        };
+        responses: {
+            /** @description The updated cycle. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cycle"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    startCycle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycleId: components["parameters"]["CycleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The started cycle. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cycle"];
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    endCycle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycleId: components["parameters"]["CycleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CycleEnd"];
+            };
+        };
+        responses: {
+            /** @description The ended cycle and the one that started, if any. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CycleEndResult"];
+                };
+            };
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];

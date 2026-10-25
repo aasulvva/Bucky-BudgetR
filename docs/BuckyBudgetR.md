@@ -76,10 +76,15 @@ A budget period. Usually a month, but its start and end dates can be set freely,
 **Rules**
 - Cycles apply to the whole user. A user has **at most one active cycle**.
 - The user picks start and end **dates**. They are stored as the UTC moments of local midnight: a cycle from 01.11 to 30.11 in Oslo runs from 31.10 23:00 UTC up to 30.11 23:00 UTC.
-- If no cycle is active, the user is prompted to create one.
-- Cycles are **ended manually**, and can be ended before their end date.
-- Future cycles can be set up in advance. When a cycle ends, the next applicable future cycle starts automatically.
-- Ending a cycle runs the **cycle-end routine**, then the **cycle-start routine** of the next cycle (see §6).
+- A user's cycles **never overlap**. One may start exactly where another ends.
+- If no cycle is active, the user is prompted to start the next planned cycle or create one. Only the earliest planned cycle can be started. Started before its planned start, it starts now; otherwise it keeps its planned start.
+- Cycles are **ended manually**, and **end on their intended dates**:
+  - Once the active cycle's planned end has passed, bucket transactions are refused until the user **extends** the cycle (moves its end later) or **ends** it. Ended late, it keeps its planned end.
+  - Ended **early**, it ends now. If the next planned cycle begins later, the user chooses to **start it now** (its start moves to where the ended cycle ended) or to **leave a gap**. In a gap there is no active cycle, so transactions can't have bucket lines; the UI says so.
+  - A next planned cycle that begins where the ended one ended starts automatically.
+- Extending the active cycle pushes the next planned cycle's start along if they would overlap. The active cycle's start can't change, and its end can't move before now or before its last bucket transaction.
+- Future cycles can be planned, edited and deleted in advance. Finished cycles are read-only.
+- Ending a cycle runs the **cycle-end routine**, then the **cycle-start routine** of the cycle that starts (see §6).
 
 ## 4. Buckets
 

@@ -44,6 +44,8 @@ tags:
     description: Login, logout and the current user.
   - name: accounts
     description: Bank accounts and their balances.
+  - name: cycles
+    description: Budget cycles and their lifecycle.
 
 paths:
   /healthz:
@@ -385,6 +387,218 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/v1/cycles:
+    get:
+      operationId: listCycles
+      tags: [cycles]
+      summary: List cycles
+      description: All of the user's cycles, oldest first.
+      responses:
+        "200":
+          description: The cycles.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Cycle"
+        "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+    post:
+      operationId: createCycle
+      tags: [cycles]
+      summary: Plan a cycle
+      description: |
+        Creates a future cycle from `start_at` up to, but not including,
+        `end_at`. The UI sends the UTC moments of local midnight. The cycle
+        must end in the future and can't overlap another of the user's
+        cycles (409 `cycle_overlap`); it may start exactly where another ends.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CycleTimes"
+      responses:
+        "201":
+          description: The planned cycle.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cycle"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/cycles/active:
+    get:
+      operationId: getCurrentCycles
+      tags: [cycles]
+      summary: The active and next cycle
+      description: |
+        The active cycle and the next planned one; either can be null. With no
+        active cycle, the UI prompts the user to start `next` or plan a cycle.
+      responses:
+        "200":
+          description: The current cycles.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentCycles"
+        "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/cycles/{cycleId}:
+    parameters:
+      - $ref: "#/components/parameters/CycleId"
+    get:
+      operationId: getCycle
+      tags: [cycles]
+      summary: Get a cycle
+      responses:
+        "200":
+          description: The cycle.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cycle"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+    patch:
+      operationId: updateCycle
+      tags: [cycles]
+      summary: Move or extend a cycle
+      description: |
+        A future cycle can change its start and end. The active cycle can only
+        change its end, to a moment in the future and after its last bucket
+        transaction: this is how an overdue cycle is extended. If the next
+        planned cycle starts before the new end, its start moves to the new
+        end (409 `cycle_overlap` if it would have no time left). Finished
+        cycles can't change (409 `cycle_finished`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CycleUpdate"
+      responses:
+        "200":
+          description: The updated cycle.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cycle"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+    delete:
+      operationId: deleteCycle
+      tags: [cycles]
+      summary: Delete a planned cycle
+      description: Only future cycles can be deleted (409 `cycle_not_future`).
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/cycles/{cycleId}/start:
+    parameters:
+      - $ref: "#/components/parameters/CycleId"
+    post:
+      operationId: startCycle
+      tags: [cycles]
+      summary: Start a planned cycle
+      description: |
+        Starts the next planned cycle when the user has no active cycle (409
+        `active_cycle_exists`). Only the earliest future cycle can be started
+        (409 `not_next_cycle`). Started before its planned start, it starts
+        now; otherwise it keeps its planned start. Runs the cycle-start
+        routine.
+      responses:
+        "200":
+          description: The started cycle.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cycle"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/cycles/{cycleId}/end:
+    parameters:
+      - $ref: "#/components/parameters/CycleId"
+    post:
+      operationId: endCycle
+      tags: [cycles]
+      summary: End the active cycle
+      description: |
+        Runs the cycle-end routine and finishes the active cycle (409
+        `cycle_not_active` otherwise).
+
+        - **On time or late:** the cycle keeps its planned end. Cycles end on
+          their intended dates.
+        - **Early:** the cycle ends now (or just after its last bucket
+          transaction, if that is later).
+
+        The next planned cycle then starts if it begins where this one ended.
+        If it begins later, it starts right away (its start moves to where
+        this one ended) only with `start_next`; otherwise there is a gap with
+        no active cycle, in which transactions can't have bucket lines.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CycleEnd"
+      responses:
+        "200":
+          description: The ended cycle and the one that started, if any.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CycleEndResult"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
 components:
   securitySchemes:
     cookieAuth:
@@ -406,6 +620,13 @@ components:
       required: true
       schema:
         $ref: "#/components/schemas/AccountId"
+
+    CycleId:
+      name: cycleId
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/CycleId"
 
   responses:
     Error:
@@ -574,6 +795,100 @@ components:
             $ref: "#/components/schemas/AccountId"
           example:
             "4829131234": "5120"
+
+    CycleId:
+      type: string
+      description: 12-digit cycle ID (the owner's user ID, then 6 digits).
+      pattern: "^[1-9][0-9]{11}$"
+      example: "482913000417"
+
+    CycleState:
+      type: string
+      enum: [future, active, finished]
+
+    Cycle:
+      type: object
+      additionalProperties: false
+      required: [id, start_at, end_at, state, created_at]
+      properties:
+        id:
+          $ref: "#/components/schemas/CycleId"
+        start_at:
+          type: string
+          format: date-time
+        end_at:
+          type: string
+          format: date-time
+          description: Exclusive. For the active cycle this is the planned end; once it has passed, bucket transactions are refused until the cycle is extended or ended.
+        state:
+          $ref: "#/components/schemas/CycleState"
+        created_at:
+          type: string
+          format: date-time
+
+    CycleTimes:
+      type: object
+      additionalProperties: false
+      required: [start_at, end_at]
+      properties:
+        start_at:
+          type: string
+          format: date-time
+        end_at:
+          type: string
+          format: date-time
+
+    CycleUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        start_at:
+          type: string
+          format: date-time
+        end_at:
+          type: string
+          format: date-time
+
+    CycleEnd:
+      type: object
+      additionalProperties: false
+      properties:
+        start_next:
+          type: boolean
+          default: false
+          description: When the next planned cycle begins later than this one ends, start it right away instead of leaving a gap.
+
+    CycleEndResult:
+      type: object
+      additionalProperties: false
+      required: [ended, started]
+      properties:
+        ended:
+          $ref: "#/components/schemas/Cycle"
+        started:
+          type: object
+          allOf:
+            - $ref: "#/components/schemas/Cycle"
+          nullable: true
+          description: The cycle that started, or null if none did.
+
+    CurrentCycles:
+      type: object
+      additionalProperties: false
+      required: [active, next]
+      properties:
+        active:
+          type: object
+          allOf:
+            - $ref: "#/components/schemas/Cycle"
+          nullable: true
+        next:
+          type: object
+          allOf:
+            - $ref: "#/components/schemas/Cycle"
+          nullable: true
+          description: The earliest planned cycle.
 
     LoginRequest:
       type: object
