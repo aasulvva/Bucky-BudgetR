@@ -228,16 +228,25 @@ func TestUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// These settings don't change how the money is split: CAF stays.
 	got, err := e.svc.Update(t.Context(), e.user, b.ID, buckets.Changes{
 		Name: ptr("Car"), RefillAmount: ptr(dec("1200")), KeepFunds: ptr(true), RefillMode: ptr(sqlc.RefillModeManual),
-		Priority: ptr(true), Importance: ptr(8),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got.Name != "Car" || !got.Capacity.Equal(dec("2400")) || !got.KeepFunds || got.RefillMode != sqlc.RefillModeManual ||
-		!got.Priority || got.Importance != 8 || !got.Caf.Equal(dec("700")) {
+		!got.Caf.Equal(dec("700")) {
 		t.Errorf("updated %+v", got)
+	}
+	// Priority and importance recalculate the account at once (TF is 0
+	// here, so CAF is too).
+	got, err = e.svc.Update(t.Context(), e.user, b.ID, buckets.Changes{Priority: ptr(true), Importance: ptr(8)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Priority || got.Importance != 8 || !got.Caf.IsZero() {
+		t.Errorf("priority and importance %+v", got)
 	}
 
 	// Switching to fixed without an amount: BC = RA.

@@ -24,6 +24,7 @@ import (
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ids"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
 )
 
 // Errors returned by the service. They may wrap a message saying more.
@@ -152,6 +153,9 @@ func (s *Service) Create(ctx context.Context, userID string, start, end time.Tim
 func (s *Service) Update(ctx context.Context, userID, id string, ch Changes) (sqlc.Cycle, error) {
 	var out sqlc.Cycle
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := ledger.LockUser(ctx, tx, userID); err != nil {
+			return err
+		}
 		q := sqlc.New(tx)
 		c, err := q.GetCycleForUpdate(ctx, sqlc.GetCycleForUpdateParams{ID: id, UserID: userID})
 		if err != nil {
@@ -227,6 +231,9 @@ func pushNext(ctx context.Context, q *sqlc.Queries, userID string, end time.Time
 // Delete deletes a future cycle.
 func (s *Service) Delete(ctx context.Context, userID, id string) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := ledger.LockUser(ctx, tx, userID); err != nil {
+			return err
+		}
 		q := sqlc.New(tx)
 		c, err := q.GetCycleForUpdate(ctx, sqlc.GetCycleForUpdateParams{ID: id, UserID: userID})
 		if err != nil {
@@ -245,6 +252,9 @@ func (s *Service) Delete(ctx context.Context, userID, id string) error {
 func (s *Service) Start(ctx context.Context, userID, id string) (sqlc.Cycle, error) {
 	var out sqlc.Cycle
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := ledger.LockUser(ctx, tx, userID); err != nil {
+			return err
+		}
 		q := sqlc.New(tx)
 		c, err := q.GetCycleForUpdate(ctx, sqlc.GetCycleForUpdateParams{ID: id, UserID: userID})
 		if err != nil {
@@ -287,6 +297,9 @@ func (s *Service) Start(ctx context.Context, userID, id string) (sqlc.Cycle, err
 func (s *Service) End(ctx context.Context, userID, id string, startNext bool) (Ended, error) {
 	var out Ended
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := ledger.LockUser(ctx, tx, userID); err != nil {
+			return err
+		}
 		q := sqlc.New(tx)
 		c, err := q.GetCycleForUpdate(ctx, sqlc.GetCycleForUpdateParams{ID: id, UserID: userID})
 		if err != nil {

@@ -60,6 +60,9 @@ type Changes struct {
 func (s *Service) Correct(ctx context.Context, userID, id string, c Changes) (Transaction, error) {
 	var outID string
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := ledger.LockUser(ctx, tx, userID); err != nil {
+			return err
+		}
 		cur, err := s.lock(ctx, tx, userID, id)
 		if err != nil {
 			return err
@@ -127,6 +130,9 @@ func (s *Service) Correct(ctx context.Context, userID, id string, c Changes) (Tr
 func (s *Service) Reverse(ctx context.Context, userID, id string) (Transaction, error) {
 	var root string
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := ledger.LockUser(ctx, tx, userID); err != nil {
+			return err
+		}
 		cur, err := s.lock(ctx, tx, userID, id)
 		if err != nil {
 			return err

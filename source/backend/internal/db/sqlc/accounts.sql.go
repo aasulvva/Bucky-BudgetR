@@ -177,7 +177,7 @@ func (q *Queries) ListSourceBuckets(ctx context.Context, arg ListSourceBucketsPa
 }
 
 const setBucketSource = `-- name: SetBucketSource :exec
-UPDATE buckets SET source_account_id = $3, modified_at = now() WHERE id = $1 AND user_id = $2
+UPDATE buckets SET source_account_id = $3, caf = 0, modified_at = now() WHERE id = $1 AND user_id = $2
 `
 
 type SetBucketSourceParams struct {
@@ -186,6 +186,7 @@ type SetBucketSourceParams struct {
 	SourceAccountID string
 }
 
+// CAF resets: the bucket is funded from the new account from now on.
 func (q *Queries) SetBucketSource(ctx context.Context, arg SetBucketSourceParams) error {
 	_, err := q.db.Exec(ctx, setBucketSource, arg.ID, arg.UserID, arg.SourceAccountID)
 	return err

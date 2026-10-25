@@ -406,6 +406,17 @@ func (q *Queries) LockTransactionHeader(ctx context.Context, arg LockTransaction
 	return i, err
 }
 
+const lockUser = `-- name: LockUser :exec
+SELECT pg_advisory_xact_lock(1, ($1::text)::int)
+`
+
+// Serializes a user's money writes until the transaction ends (see
+// ledger.LockUser).
+func (q *Queries) LockUser(ctx context.Context, userID string) error {
+	_, err := q.db.Exec(ctx, lockUser, userID)
+	return err
+}
+
 const upsertTag = `-- name: UpsertTag :one
 INSERT INTO tags (user_id, name) VALUES ($1, $2)
 ON CONFLICT (user_id, lower(name)) DO UPDATE SET name = tags.name

@@ -21,6 +21,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shopspring/decimal"
 
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/allocation"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/balance"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ids"
@@ -76,12 +77,14 @@ const DefaultCurrency = "NOK"
 
 // Account is a bank account with its calculated balance.
 type Account struct {
-	ID        string
-	Name      string
-	Type      sqlc.AccountType
-	Currency  string
-	Balance   decimal.Decimal
-	CreatedAt time.Time
+	ID       string
+	Name     string
+	Type     sqlc.AccountType
+	Currency string
+	Balance  decimal.Decimal
+	// Unallocated is the part of the balance no bucket's CAF uses (spec §7).
+	Unallocated decimal.Decimal
+	CreatedAt   time.Time
 }
 
 // New describes an account to create.
@@ -159,9 +162,13 @@ func (s *Service) List(ctx context.Context, userID string) ([]Account, error) {
 	if err != nil {
 		return nil, err
 	}
+	allocated, err := allocatedByAccount(ctx, s.pool, userID)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]Account, len(rows))
 	for i, r := range rows {
-		out[i] = toAccount(r, balances[r.ID])
+		out[i] = toAccount(r, balances[r.ID], allocated[r.ID])
 	}
 	return out, nil
 }
@@ -198,6 +205,9 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Account, er
 
 	var out Account
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := ledger.LockUser(ctx, tx, userID); err != nil {
+			return err
+		}
 		q := sqlc.New(tx)
 		var row sqlc.BankAccount
 		_, err := ids.Insert(ctx, ids.Account, ids.NewAccount, func(ctx context.Context, id string) (bool, error) {
@@ -218,7 +228,7 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Account, er
 				return fmt.Errorf("record opening balance: %w", err)
 			}
 		}
-		out = toAccount(row, n.OpeningBalance)
+		out = toAccount(row, n.OpeningBalance, decimal.Zero)
 		return nil
 	})
 	if err != nil {
@@ -231,6 +241,9 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Account, er
 func (s *Service) Update(ctx context.Context, userID, id string, c Changes) (Account, error) {
 	var out Account
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := ledger.LockUser(ctx, tx, userID); err != nil {
+			return err
+		}
 		q := sqlc.New(tx)
 		row, err := q.GetAccountForUpdate(ctx, sqlc.GetAccountForUpdateParams{ID: id, UserID: userID})
 		if err != nil {
@@ -274,6 +287,9 @@ func (s *Service) AdjustBalance(ctx context.Context, userID, id string, a Adjust
 
 	var out Account
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := ledger.LockUser(ctx, tx, userID); err != nil {
+			return err
+		}
 		if _, err := sqlc.New(tx).GetAccountForUpdate(ctx, sqlc.GetAccountForUpdateParams{ID: id, UserID: userID}); err != nil {
 			return notFound(err, id)
 		}
@@ -307,6 +323,9 @@ func (s *Service) AdjustBalance(ctx context.Context, userID, id string, a Adjust
 // *BalanceNotZeroError and changes nothing. The account's transactions stay.
 func (s *Service) Delete(ctx context.Context, userID, id string, st Settlement) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := ledger.LockUser(ctx, tx, userID); err != nil {
+			return err
+		}
 		q := sqlc.New(tx)
 		acc, err := q.GetAccountForUpdate(ctx, sqlc.GetAccountForUpdateParams{ID: id, UserID: userID})
 		if err != nil {
@@ -354,7 +373,12 @@ func (s *Service) Delete(ctx context.Context, userID, id string, st Settlement) 
 				return err
 			}
 		}
-		return q.DeleteAccount(ctx, sqlc.DeleteAccountParams{ID: id, UserID: userID})
+		if err := q.DeleteAccount(ctx, sqlc.DeleteAccountParams{ID: id, UserID: userID}); err != nil {
+			return err
+		}
+		// The moved buckets are funded from their new accounts now.
+		moved := slices.Sorted(maps.Values(st.BucketSources))
+		return allocation.Run(ctx, tx, userID, slices.Compact(moved), true)
 	})
 }
 
@@ -414,14 +438,31 @@ func (s *Service) get(ctx context.Context, db sqlc.DBTX, userID, id string) (Acc
 	if err != nil {
 		return Account{}, err
 	}
-	return toAccount(row, balances[id]), nil
+	allocated, err := allocatedByAccount(ctx, db, userID)
+	if err != nil {
+		return Account{}, err
+	}
+	return toAccount(row, balances[id], allocated[id]), nil
 }
 
-func toAccount(r sqlc.BankAccount, bal decimal.Decimal) Account {
+func toAccount(r sqlc.BankAccount, bal, allocated decimal.Decimal) Account {
 	return Account{
 		ID: r.ID, Name: r.Name, Type: r.AccountType, Currency: r.Currency,
-		Balance: bal, CreatedAt: r.CreatedAt,
+		Balance: bal, Unallocated: bal.Sub(allocated), CreatedAt: r.CreatedAt,
 	}
+}
+
+// allocatedByAccount returns Σ CAF of the live buckets per source account.
+func allocatedByAccount(ctx context.Context, db sqlc.DBTX, userID string) (map[string]decimal.Decimal, error) {
+	rows, err := sqlc.New(db).AllocatedByAccount(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]decimal.Decimal, len(rows))
+	for _, r := range rows {
+		out[r.SourceAccountID] = r.Allocated
+	}
+	return out, nil
 }
 
 func checkName(name string) (string, error) {

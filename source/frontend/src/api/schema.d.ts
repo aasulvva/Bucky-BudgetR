@@ -648,6 +648,8 @@ export interface components {
             type: components["schemas"]["AccountType"];
             currency: components["schemas"]["Currency"];
             balance: components["schemas"]["Amount"];
+            /** @description The part of the balance that backs no bucket, balance − Σ CAF of its buckets (spec §7). Negative when the account is overdrawn. */
+            unallocated: components["schemas"]["Amount"];
             /** Format: date-time */
             created_at: string;
         };
@@ -803,7 +805,11 @@ export interface components {
             capacity: components["schemas"]["Amount"];
             /** @description Target Funds (TF), the sum of the bucket's transactions. */
             target_funds: components["schemas"]["Amount"];
-            /** @description Current Available Funds (CAF), what the source account actually backs. */
+            /**
+             * @description Current Available Funds (CAF), what the source account actually
+             *     backs. Set by the Money Allocation Routine (spec §7): below TF when
+             *     the account can't cover all its buckets.
+             */
             current_available_funds: components["schemas"]["Amount"];
             keep_funds: boolean;
             refill_mode: components["schemas"]["RefillMode"];

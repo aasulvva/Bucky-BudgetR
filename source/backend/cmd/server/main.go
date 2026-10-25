@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/accounts"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/allocation"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/auth"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/buckets"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/config"
@@ -83,7 +84,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, logOut 
 	})
 	go authSvc.CleanupLoop(ctx, time.Hour)
 
-	ledgerSvc := ledger.New(ledger.Options{})
+	ledgerSvc := ledger.New(ledger.Options{AfterRecord: allocation.AfterRecord})
 	handler, err := httpapi.NewHandler(logger, pool, httpapi.Options{
 		Auth:         authSvc,
 		Accounts:     accounts.NewService(pool, ledgerSvc, accounts.Options{}),
