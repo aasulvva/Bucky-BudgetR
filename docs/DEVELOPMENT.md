@@ -120,6 +120,18 @@ Money is never a JS `number`. The API sends and receives amounts as decimal stri
 
 Tests run in jsdom. `src/test/render.tsx` has helpers that render a component with the app's providers, or the whole app at a given path. `viewport.width` from `src/test/setup.ts` switches between the desktop and mobile layouts.
 
+## Workflow and CI
+
+- Work on a branch and merge to `main` through a pull request. The repo is private on GitHub's free plan, which doesn't enforce branch protection, so this is a convention: **merge only when CI is green**.
+- `.github/workflows/ci.yml` runs on every PR and on every push to `main`. It has three jobs:
+  - **Backend:** `go mod verify`, `go vet`, golangci-lint, then `go test -race` against a PostgreSQL service container, then a build.
+  - **Frontend:** `npm ci`, ESLint, `tsc`, Vitest and `vite build`.
+  - **API contract:** `make lint-spec` and `make generate-check`, which fails if the committed generated code is out of date.
+- To reproduce CI locally, run `make lint test generate-check`.
+- Dependabot (`.github/dependabot.yml`) opens weekly PRs for Go modules, npm, GitHub Actions and the Compose image. Minor and patch updates are grouped, and a release must be a week old first.
+  - Actions are pinned to commit SHAs. Dependabot updates the SHA and its version comment together.
+  - A few versions are outside Dependabot's reach and are bumped by hand. They're listed at the top of `dependabot.yml`.
+
 ## Troubleshooting
 
 - **`permission denied … /var/run/docker.sock`**: you haven't logged out and back in since being added to the `docker` group. As a temporary fix, run `newgrp docker` in the current shell.

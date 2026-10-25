@@ -1,0 +1,49 @@
+# Weekly dependency updates. Minor and patch updates are grouped into one PR
+# per ecosystem; majors come one PR each. New releases must be a week old
+# before Dependabot proposes them (supply-chain safety).
+#
+# Not covered, bump by hand: Redocly CLI (Makefile), Scalar (internal/httpapi/docs.html),
+# GO_VERSION (.github/workflows/ci.yml) and Node.js (.nvmrc).
+version: 2
+
+updates:
+  - package-ecosystem: gomod
+    directory: /source/backend
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      go-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /source/frontend
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      npm-minor-patch:
+        update-types: [minor, patch]
+    ignore:
+      # typescript-eslint supports only TypeScript < 6.1 so far.
+      - dependency-name: typescript
+        versions: [">=6.1.0"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
