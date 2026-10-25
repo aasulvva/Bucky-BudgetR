@@ -188,6 +188,11 @@ Only **INC, EXP, TRF and INP** can be created from the *Create transaction* scre
 - A bucket line belongs to the **active cycle** of the bucket's owner, and the transaction time must fall inside that cycle.
 - **Corrections and reversals that affect buckets are only allowed inside the active cycle.** Once a cycle is finished, its bucket lines are locked.
 - An Internal Payment can only be created by the payer. Users cannot "request" money from other users.
+- **Signs:** INC lines are positive and EXP lines negative, on both bank and bucket lines. The user enters positive amounts; the type gives the sign. A TRF's two lines mirror each other.
+- **Bucket lines on INC/EXP:** each bucket must be funded from the transaction's bank account (this may change with cash support, #60). Together they can't exceed the bank amount; the remainder simply isn't tied to a bucket.
+- **TRF** goes between two of the user's accounts in the same currency. Transfers between currencies come with multi-currency (#33).
+- **No future dates:** a transaction records what has happened, so its time can't be later than now. Planned payments are scheduled transactions (#31).
+- **Reading:** the transaction list shows each transaction merged with its corrections (effective amounts, flagged as corrected or reversed); a transaction's history shows the original and each correction.
 - **Math:** calculate with full precision. Stored amounts use 2 decimals, rounded half away from zero (0.005 → 0.01, −0.005 → −0.01). Exchange rates use 8 decimals.
 
 ## 6. Cycle routines

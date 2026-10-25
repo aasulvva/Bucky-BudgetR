@@ -16,16 +16,18 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/buckets"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/cycles"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/transactions"
 )
 
 // server implements the operations in api/openapi.yaml. Gate has already
 // checked sessions and validated requests against the spec.
 type server struct {
-	db       Pinger
-	auth     *auth.Service
-	accounts *accounts.Service
-	cycles   *cycles.Service
-	buckets  *buckets.Service
+	db           Pinger
+	auth         *auth.Service
+	accounts     *accounts.Service
+	cycles       *cycles.Service
+	buckets      *buckets.Service
+	transactions *transactions.Service
 }
 
 var _ api.StrictServerInterface = (*server)(nil)

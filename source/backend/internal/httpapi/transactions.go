@@ -1,0 +1,185 @@
+package httpapi
+
+import (
+	"context"
+	"errors"
+	"net/http"
+
+	"github.com/oapi-codegen/nullable"
+
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/api"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/money"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/transactions"
+)
+
+func (s *server) ListTransactions(ctx context.Context, req api.ListTransactionsRequestObject) (api.ListTransactionsResponseObject, error) {
+	svc, err := s.transactionService()
+	if err != nil {
+		return nil, err
+	}
+	p := req.Params
+	f := transactions.Filter{
+		AccountID: deref(p.AccountId), BucketID: deref(p.BucketId), CycleID: deref(p.CycleId),
+		Tag: deref(p.Tag), Counterparty: deref(p.Counterparty), Limit: deref(p.Limit), Cursor: deref(p.Cursor),
+	}
+	if p.Type != nil {
+		for _, t := range *p.Type {
+			f.Types = append(f.Types, sqlc.TransactionType(t))
+		}
+	}
+	if p.From != nil {
+		f.From = *p.From
+	}
+	if p.To != nil {
+		f.To = *p.To
+	}
+	page, err := svc.List(ctx, sessionFrom(ctx).User.ID, f)
+	if err != nil {
+		return nil, transactionError(err)
+	}
+	out := api.ListTransactions200JSONResponse{Items: make([]api.Transaction, len(page.Items)), NextCursor: nullable.NewNullNullable[string]()}
+	for i, t := range page.Items {
+		out.Items[i] = toAPITransaction(t)
+	}
+	if page.Next != "" {
+		out.NextCursor.Set(page.Next)
+	}
+	return out, nil
+}
+
+func (s *server) CreateTransaction(ctx context.Context, req api.CreateTransactionRequestObject) (api.CreateTransactionResponseObject, error) {
+	svc, err := s.transactionService()
+	if err != nil {
+		return nil, err
+	}
+	b := req.Body
+	n := transactions.New{
+		Type: sqlc.TransactionType(b.Type), Counterparty: deref(b.Counterparty),
+		AccountID: b.AccountId, ToAccountID: deref(b.ToAccountId),
+	}
+	if b.At != nil {
+		n.At = *b.At
+	}
+	if b.Tags != nil {
+		n.Tags = *b.Tags
+	}
+	if n.Amount, err = parseAmount(b.Amount); err != nil {
+		return nil, err
+	}
+	if b.BucketLines != nil {
+		for _, l := range *b.BucketLines {
+			amount, err := parseAmount(l.Amount)
+			if err != nil {
+				return nil, err
+			}
+			n.Buckets = append(n.Buckets, transactions.BucketAmount{BucketID: l.BucketId, Amount: amount})
+		}
+	}
+	t, err := svc.Create(ctx, sessionFrom(ctx).User.ID, n)
+	if err != nil {
+		return nil, transactionError(err)
+	}
+	return api.CreateTransaction201JSONResponse(toAPITransaction(t)), nil
+}
+
+func (s *server) GetTransaction(ctx context.Context, req api.GetTransactionRequestObject) (api.GetTransactionResponseObject, error) {
+	svc, err := s.transactionService()
+	if err != nil {
+		return nil, err
+	}
+	t, err := svc.Get(ctx, sessionFrom(ctx).User.ID, req.TransactionId)
+	if err != nil {
+		return nil, transactionError(err)
+	}
+	return api.GetTransaction200JSONResponse(toAPITransaction(t)), nil
+}
+
+func (s *server) transactionService() (*transactions.Service, error) {
+	if s.transactions == nil {
+		return nil, NewError(http.StatusServiceUnavailable, "transactions_unavailable", "")
+	}
+	return s.transactions, nil
+}
+
+// transactionError maps errors from the transactions service to problems.
+func transactionError(err error) error {
+	switch {
+	case errors.Is(err, transactions.ErrNotFound):
+		return &Error{Status: http.StatusNotFound, Code: "not_found", Detail: "Transaction not found.", Err: err}
+	case errors.Is(err, transactions.ErrCurrencyMismatch):
+		return &Error{Status: http.StatusBadRequest, Code: "currency_mismatch",
+			Detail: "A transfer can only go between accounts in the same currency."}
+	case errors.Is(err, transactions.ErrInvalid):
+		return &Error{Status: http.StatusBadRequest, Code: "invalid_request", Detail: invalidDetail(err, transactions.ErrInvalid), Err: err}
+	case errors.Is(err, ledger.ErrInvalid):
+		// The ledger checks what the user entered too: tags, counterparty,
+		// a bucket given twice.
+		return &Error{Status: http.StatusBadRequest, Code: "invalid_request", Detail: invalidDetail(err, ledger.ErrInvalid), Err: err}
+	}
+	return ledgerError(err)
+}
+
+func toAPITransaction(t transactions.Transaction) api.Transaction {
+	out := api.Transaction{
+		Id:           t.ID,
+		Type:         api.TransactionType(t.Type),
+		At:           t.At.UTC(),
+		Counterparty: t.Counterparty,
+		Tags:         t.Tags,
+		CreatedAt:    t.CreatedAt.UTC(),
+		CreatedBy:    nullableString(t.CreatedBy),
+		Corrected:    t.Corrected,
+		Reversed:     t.Reversed,
+		BankLines:    toAPIBankLines(t.BankLines),
+		BucketLines:  toAPIBucketLines(t.BucketLines),
+	}
+	if t.History != nil {
+		h := make([]api.TransactionVersion, len(t.History))
+		for i, v := range t.History {
+			h[i] = api.TransactionVersion{
+				Id:             v.ID,
+				CorrectionType: api.CorrectionType(v.Correction),
+				CreatedAt:      v.CreatedAt.UTC(),
+				CreatedBy:      nullableString(v.CreatedBy),
+				BankLines:      toAPIBankLines(v.BankLines),
+				BucketLines:    toAPIBucketLines(v.BucketLines),
+			}
+		}
+		out.History = &h
+	}
+	return out
+}
+
+func toAPIBankLines(lines []transactions.BankLine) []api.TransactionBankLine {
+	out := make([]api.TransactionBankLine, len(lines))
+	for i, l := range lines {
+		out[i] = api.TransactionBankLine{AccountId: l.AccountID, Amount: l.Amount.StringFixed(money.Places)}
+	}
+	return out
+}
+
+func toAPIBucketLines(lines []transactions.BucketLine) []api.TransactionBucketLine {
+	out := make([]api.TransactionBucketLine, len(lines))
+	for i, l := range lines {
+		out[i] = api.TransactionBucketLine{BucketId: l.BucketID, CycleId: l.CycleID, Amount: l.Amount.StringFixed(money.Places)}
+	}
+	return out
+}
+
+// nullableString is null for "".
+func nullableString(s string) nullable.Nullable[string] {
+	if s == "" {
+		return nullable.NewNullNullable[string]()
+	}
+	return nullable.NewNullableWithValue(s)
+}
+
+func deref[T any](p *T) T {
+	var zero T
+	if p == nil {
+		return zero
+	}
+	return *p
+}
