@@ -1,0 +1,12 @@
+{
+  "recommendations": [
+    "golang.go",
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "ms-azuretools.vscode-containers",
+    "ms-ossdata.vscode-pgsql",
+    "42Crunch.vscode-openapi",
+    "redhat.vscode-yaml",
+    "EditorConfig.EditorConfig"
+  ]
+}
