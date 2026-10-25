@@ -1,11 +1,16 @@
-// Vitest setup: jest-dom matchers and the browser APIs Mantine needs that
-// jsdom lacks.
+// Vitest setup: jest-dom matchers, the fake backend (test/api.ts) and the
+// browser APIs Mantine needs that jsdom lacks.
 import "@testing-library/jest-dom/vitest";
 
 import { cleanup } from "@testing-library/react";
 
+import { apiMock, fakeFetch } from "./api";
+
+globalThis.fetch = fakeFetch as typeof fetch;
+
 afterEach(() => {
   cleanup();
+  apiMock.reset();
 });
 
 /** Width the stubbed matchMedia answers for; tests can change it. */

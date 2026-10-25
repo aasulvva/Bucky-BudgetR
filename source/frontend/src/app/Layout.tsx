@@ -18,17 +18,14 @@ import {
   useMantineTheme,
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { IconLogout, IconMoon, IconShield, IconSettings, IconSun } from "@tabler/icons-react";
 import { useState } from "react";
 import { Link, Outlet, useLocation } from "react-router";
 
-import { api } from "@/api/client";
-import { unwrap } from "@/api/errors";
-
 import classes from "./Layout.module.css";
 import { findNav, navTabs, profileItems, type NavItem, type NavTab } from "./nav";
+import { useSession, useSignOut } from "./session";
 
 /**
  * The app shell (spec §9). Desktop: a side menu with collapsible groups and
@@ -266,13 +263,7 @@ function BottomTabs({ current, pathname }: { current: NavTab | undefined; pathna
  * header an avatar.
  */
 function ProfileMenu({ placement }: { placement: "sidebar" | "header" }) {
-  const me = useQuery({
-    queryKey: ["me"],
-    queryFn: () => unwrap(api.GET("/api/v1/me")),
-    retry: false,
-    staleTime: 5 * 60_000,
-  });
-  const user = me.data;
+  const user = useSession().data;
   const avatar = (
     <Avatar size={32} radius="xl" color="blue" aria-hidden>
       {user?.username.slice(0, 1).toUpperCase()}
@@ -345,22 +336,10 @@ function ColorSchemeItem() {
   );
 }
 
-/**
- * Ends the session and reloads the app. Until the login screen exists (#20),
- * the app then shows its screens without a session.
- */
 function SignOutItem() {
-  const queryClient = useQueryClient();
+  const signOut = useSignOut();
   return (
-    <Menu.Item
-      leftSection={<IconLogout size={18} />}
-      onClick={() => {
-        void api.POST("/api/v1/auth/logout").finally(() => {
-          queryClient.clear();
-          window.location.assign("/");
-        });
-      }}
-    >
+    <Menu.Item leftSection={<IconLogout size={18} />} onClick={signOut}>
       Sign out
     </Menu.Item>
   );

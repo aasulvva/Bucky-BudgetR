@@ -1,19 +1,27 @@
 import { MantineProvider } from "@mantine/core";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Notifications } from "@mantine/notifications";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { render } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { useState, type ReactElement } from "react";
 import { createMemoryRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
 
+import { createQueryClient } from "@/api/queryClient";
 import { routes } from "@/app/routes";
 import { theme } from "@/theme";
 
 function Providers({ children }: { children: ReactElement }) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  // The app's client, with its session and error handling, minus retries.
+  const [client] = useState(() => {
+    const c = createQueryClient();
+    c.setDefaultOptions({ queries: { ...c.getDefaultOptions().queries, retry: false } });
+    return c;
+  });
   // env="test" turns off Mantine's transitions and portals: in jsdom a
   // transition never finishes, so a menu would stay hidden.
   return (
     <MantineProvider theme={theme} env="test">
+      <Notifications />
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
     </MantineProvider>
   );

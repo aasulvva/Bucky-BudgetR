@@ -1,4 +1,4 @@
-import { LOCALE } from "./locale";
+import { getLocale } from "./locale";
 
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -13,13 +13,13 @@ export function parseDate(value: string): Date {
 }
 
 /** Formats a date (API date string, timestamp or Date) as a short date. */
-export function formatDate(value: string | Date, locale = LOCALE): string {
+export function formatDate(value: string | Date, locale = getLocale()): string {
   const date = typeof value === "string" ? parseDate(value) : value;
   return new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(date);
 }
 
 /** Formats a timestamp with date and time. */
-export function formatDateTime(value: string | Date, locale = LOCALE): string {
+export function formatDateTime(value: string | Date, locale = getLocale()): string {
   const date = typeof value === "string" ? new Date(value) : value;
   return new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
