@@ -8,14 +8,24 @@ ON CONFLICT (id) DO NOTHING
 RETURNING *;
 
 -- name: ListBuckets :many
-SELECT sqlc.embed(b), a.currency
+SELECT sqlc.embed(b), a.currency,
+    -- Whether the bucket has been refilled in the active cycle.
+    EXISTS (
+        SELECT 1 FROM refills r JOIN cycles c ON c.id = r.cycle_id
+        WHERE r.bucket_id = b.id AND c.state = 'active'
+    ) AS refilled
 FROM buckets b
 JOIN bank_accounts a ON a.id = b.source_account_id
 WHERE b.user_id = $1 AND NOT b.deleted
 ORDER BY lower(b.name), b.id;
 
 -- name: GetBucket :one
-SELECT sqlc.embed(b), a.currency
+SELECT sqlc.embed(b), a.currency,
+    -- Whether the bucket has been refilled in the active cycle.
+    EXISTS (
+        SELECT 1 FROM refills r JOIN cycles c ON c.id = r.cycle_id
+        WHERE r.bucket_id = b.id AND c.state = 'active'
+    ) AS refilled
 FROM buckets b
 JOIN bank_accounts a ON a.id = b.source_account_id
 WHERE b.id = $1 AND b.user_id = $2 AND NOT b.deleted;

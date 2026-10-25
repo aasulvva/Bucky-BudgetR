@@ -13,6 +13,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/money"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/refill"
 )
 
 func (s *server) ListBuckets(ctx context.Context, _ api.ListBucketsRequestObject) (api.ListBucketsResponseObject, error) {
@@ -146,6 +147,41 @@ func (s *server) DeleteBucket(ctx context.Context, req api.DeleteBucketRequestOb
 	return api.DeleteBucket204Response{}, nil
 }
 
+func (s *server) RefillBucket(ctx context.Context, req api.RefillBucketRequestObject) (api.RefillBucketResponseObject, error) {
+	svc, err := s.bucketService()
+	if err != nil {
+		return nil, err
+	}
+	if s.refills == nil {
+		return nil, NewError(http.StatusServiceUnavailable, "refills_unavailable", "")
+	}
+	userID := sessionFrom(ctx).User.ID
+	if err := s.refills.Manual(ctx, userID, req.BucketId); err != nil {
+		return nil, refillError(err)
+	}
+	out, err := svc.Get(ctx, userID, req.BucketId)
+	if err != nil {
+		return nil, bucketError(err)
+	}
+	return api.RefillBucket200JSONResponse(toAPIBucket(out)), nil
+}
+
+// refillError maps errors from the refill routines to problems.
+func refillError(err error) error {
+	switch {
+	case errors.Is(err, refill.ErrNotFound):
+		return &Error{Status: http.StatusNotFound, Code: "not_found", Detail: "Bucket not found.", Err: err}
+	case errors.Is(err, refill.ErrAlreadyRefilled):
+		return &Error{Status: http.StatusConflict, Code: "already_refilled", Detail: "The bucket has already been refilled in this cycle."}
+	case errors.Is(err, refill.ErrWrongMode):
+		return &Error{Status: http.StatusConflict, Code: "wrong_refill_mode", Detail: "Only buckets with the manual refill mode can be refilled by hand."}
+	case errors.Is(err, refill.ErrUnavailable):
+		return &Error{Status: http.StatusConflict, Code: "refill_unavailable",
+			Detail: "Only income in the active cycle can trigger a refill.", Err: err}
+	}
+	return ledgerError(err)
+}
+
 func (s *server) bucketService() (*buckets.Service, error) {
 	if s.buckets == nil {
 		return nil, NewError(http.StatusServiceUnavailable, "buckets_unavailable", "")
@@ -204,6 +240,7 @@ func toAPIBucket(b buckets.Bucket) api.Bucket {
 		OverflowDestination:   api.OverflowDestination(b.OverflowDestination),
 		Priority:              b.Priority,
 		Importance:            int(b.Importance),
+		Refilled:              b.Refilled,
 		CreatedAt:             b.CreatedAt.UTC(),
 	}
 	if b.CapMultiplier.Valid {

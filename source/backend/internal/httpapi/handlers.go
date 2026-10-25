@@ -16,6 +16,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/buckets"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/cycles"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/refill"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/transactions"
 )
 
@@ -28,6 +29,7 @@ type server struct {
 	cycles       *cycles.Service
 	buckets      *buckets.Service
 	transactions *transactions.Service
+	refills      *refill.Service
 }
 
 var _ api.StrictServerInterface = (*server)(nil)

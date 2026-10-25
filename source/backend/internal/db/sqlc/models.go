@@ -465,6 +465,17 @@ type Cycle struct {
 	ModifiedAt time.Time
 }
 
+type Refill struct {
+	BucketID  string
+	CycleID   string
+	UserID    string
+	Trigger   RefillMode
+	RefID     pgtype.Text
+	OvfID     pgtype.Text
+	IncomeID  pgtype.Text
+	CreatedAt time.Time
+}
+
 type Session struct {
 	TokenHash  []byte
 	UserID     string
@@ -493,6 +504,7 @@ type TransactionHeader struct {
 	CreatedAt       time.Time
 	CreatedBy       pgtype.Text
 	ReplacesID      pgtype.Text
+	TriggersRefill  bool
 }
 
 type TransactionTag struct {

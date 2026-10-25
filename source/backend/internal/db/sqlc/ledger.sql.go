@@ -115,10 +115,11 @@ func (q *Queries) CreateBucketLine(ctx context.Context, arg CreateBucketLinePara
 
 const createTransactionHeader = `-- name: CreateTransactionHeader :one
 INSERT INTO transaction_headers (
-    id, user_id, parent_id, correction_type, transaction_type, transaction_at, counterparty, created_by, replaces_id
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    id, user_id, parent_id, correction_type, transaction_type, transaction_at, counterparty, created_by, replaces_id,
+    triggers_refill
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT (id) DO NOTHING
-RETURNING id, user_id, parent_id, correction_type, transaction_type, transaction_at, counterparty, created_at, created_by, replaces_id
+RETURNING id, user_id, parent_id, correction_type, transaction_type, transaction_at, counterparty, created_at, created_by, replaces_id, triggers_refill
 `
 
 type CreateTransactionHeaderParams struct {
@@ -131,6 +132,7 @@ type CreateTransactionHeaderParams struct {
 	Counterparty    string
 	CreatedBy       pgtype.Text
 	ReplacesID      pgtype.Text
+	TriggersRefill  bool
 }
 
 // Use with ids.Insert: a taken ID returns no row.
@@ -145,6 +147,7 @@ func (q *Queries) CreateTransactionHeader(ctx context.Context, arg CreateTransac
 		arg.Counterparty,
 		arg.CreatedBy,
 		arg.ReplacesID,
+		arg.TriggersRefill,
 	)
 	var i TransactionHeader
 	err := row.Scan(
@@ -158,6 +161,7 @@ func (q *Queries) CreateTransactionHeader(ctx context.Context, arg CreateTransac
 		&i.CreatedAt,
 		&i.CreatedBy,
 		&i.ReplacesID,
+		&i.TriggersRefill,
 	)
 	return i, err
 }
@@ -259,7 +263,7 @@ func (q *Queries) GetOwnedBuckets(ctx context.Context, arg GetOwnedBucketsParams
 }
 
 const getTransactionHeader = `-- name: GetTransactionHeader :one
-SELECT id, user_id, parent_id, correction_type, transaction_type, transaction_at, counterparty, created_at, created_by, replaces_id FROM transaction_headers WHERE id = $1 AND user_id = $2
+SELECT id, user_id, parent_id, correction_type, transaction_type, transaction_at, counterparty, created_at, created_by, replaces_id, triggers_refill FROM transaction_headers WHERE id = $1 AND user_id = $2
 `
 
 type GetTransactionHeaderParams struct {
@@ -281,6 +285,7 @@ func (q *Queries) GetTransactionHeader(ctx context.Context, arg GetTransactionHe
 		&i.CreatedAt,
 		&i.CreatedBy,
 		&i.ReplacesID,
+		&i.TriggersRefill,
 	)
 	return i, err
 }
@@ -377,7 +382,7 @@ func (q *Queries) ListTransactionTags(ctx context.Context, transactionID string)
 }
 
 const lockTransactionHeader = `-- name: LockTransactionHeader :one
-SELECT id, user_id, parent_id, correction_type, transaction_type, transaction_at, counterparty, created_at, created_by, replaces_id FROM transaction_headers WHERE id = $1 AND user_id = $2 FOR UPDATE
+SELECT id, user_id, parent_id, correction_type, transaction_type, transaction_at, counterparty, created_at, created_by, replaces_id, triggers_refill FROM transaction_headers WHERE id = $1 AND user_id = $2 FOR UPDATE
 `
 
 type LockTransactionHeaderParams struct {
@@ -402,6 +407,7 @@ func (q *Queries) LockTransactionHeader(ctx context.Context, arg LockTransaction
 		&i.CreatedAt,
 		&i.CreatedBy,
 		&i.ReplacesID,
+		&i.TriggersRefill,
 	)
 	return i, err
 }

@@ -66,6 +66,9 @@ type Entry struct {
 	// ReplacesID is set on an original that replaces a reversed transaction
 	// (moved to another account).
 	ReplacesID string
+	// TriggersRefill marks an income that refills its account's "On income"
+	// buckets (spec §6). Only INC may set it; corrections carry it along.
+	TriggersRefill bool
 	// At is when the transaction happened. It is stored in UTC, to the
 	// microsecond.
 	At           time.Time
@@ -197,6 +200,7 @@ func (l *Ledger) Record(ctx context.Context, tx pgx.Tx, e Entry) (*Transaction, 
 				Counterparty:    e.Counterparty,
 				CreatedBy:       createdBy,
 				ReplacesID:      pgtype.Text{String: e.ReplacesID, Valid: e.ReplacesID != ""},
+				TriggersRefill:  e.TriggersRefill,
 			})
 			return ids.Inserted(err)
 		})
@@ -334,6 +338,10 @@ func normalize(e Entry) (Entry, error) {
 	s, ok := shapes[e.Type]
 	if !ok {
 		return invalid("unknown transaction type %q", e.Type)
+	}
+
+	if e.TriggersRefill && e.Type != sqlc.TransactionTypeINC {
+		return invalid("only an income triggers a refill")
 	}
 
 	if e.Correction == "" {

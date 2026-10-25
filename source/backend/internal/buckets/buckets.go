@@ -57,6 +57,8 @@ type Bucket struct {
 	Currency    string
 	TargetFunds decimal.Decimal
 	Capacity    decimal.Decimal
+	// Refilled is set when the bucket has been refilled in the active cycle.
+	Refilled bool
 }
 
 // New describes a bucket to create. Zero values get the defaults.
@@ -136,7 +138,7 @@ func (s *Service) List(ctx context.Context, userID string) ([]Bucket, error) {
 	}
 	out := make([]Bucket, len(rows))
 	for i, r := range rows {
-		out[i] = toBucket(r.Bucket, r.Currency, tf[r.Bucket.ID])
+		out[i] = toBucket(r.Bucket, r.Currency, tf[r.Bucket.ID], r.Refilled)
 	}
 	return out, nil
 }
@@ -348,7 +350,7 @@ func (s *Service) get(ctx context.Context, db sqlc.DBTX, userID, id string) (Buc
 	if err != nil {
 		return Bucket{}, err
 	}
-	return toBucket(row.Bucket, row.Currency, tf[id]), nil
+	return toBucket(row.Bucket, row.Currency, tf[id], row.Refilled), nil
 }
 
 // Capacity is a bucket's BC: RA × multiplier, rounded, or the fixed amount.
@@ -359,8 +361,8 @@ func Capacity(b sqlc.Bucket) decimal.Decimal {
 	return money.Round(b.RefillAmount.Mul(b.CapMultiplier.Decimal))
 }
 
-func toBucket(r sqlc.Bucket, currency string, tf decimal.Decimal) Bucket {
-	return Bucket{Bucket: r, Currency: currency, TargetFunds: tf, Capacity: Capacity(r)}
+func toBucket(r sqlc.Bucket, currency string, tf decimal.Decimal, refilled bool) Bucket {
+	return Bucket{Bucket: r, Currency: currency, TargetFunds: tf, Capacity: Capacity(r), Refilled: refilled}
 }
 
 // settings are a bucket's refill and allocation settings, checked together.

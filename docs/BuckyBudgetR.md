@@ -37,7 +37,7 @@ Self-hosted, envelope-style ("bucket") budgeting application.
 | Password | bcrypt hash |
 | Active | bool |
 | Admin | bool |
-| Preferences | JSON (e.g. default refill mode for new buckets) |
+| Preferences | JSON: default refill mode for new buckets, income rules for *On income* refills (§6), locale |
 | Created / Modified, Created by | audit |
 
 **Initial setup:** on first start a default admin account is created with password `BuckyBudgetR_ADMIN_Pa$$w0rd`. The user must change it at first login. The default can be overridden with an environment variable.
@@ -100,10 +100,11 @@ A budget period. Usually a month, but its start and end dates can be set freely,
 | TF | derived from bucket transactions |
 | CAF | stored result of the Money Allocation Routine |
 | Keep funds | bool – roll leftover funds over to the next cycle. If enabled, BC should normally be higher than RA so leftovers have room to roll over. |
-| Refill mode | *Auto* (at cycle start) / *Manual* (button, once per cycle) / *On income* (see §6) |
+| Refill mode | *Auto* (at cycle start) / *Manual* (button, once per cycle) / *On income* (when an income triggers it, see §6) |
 | Overflow destination | *Unallocated* / *Savings distribution* / *Specific savings target* |
 | Priority | bool – funded before non-priority buckets (housing, transport, groceries…) |
 | Importance | 1–10, weight in the allocation routine |
+| Refilled | derived: whether the bucket has been refilled in the active cycle (§6) |
 | Deleted | soft-delete flag |
 | Created / Modified | audit |
 
@@ -201,19 +202,28 @@ Only **INC, EXP, TRF and INP** can be created from the *Create transaction* scre
 
 ## 6. Cycle routines
 
+The routines run in the same database transaction as ending or starting the cycle, so they happen exactly once.
+
 ### Cycle end
-1. Run the Money Allocation Routine so CAF is up to date.
-2. For each bucket with **Keep funds off**, remove the remaining **CAF** with an **OVF** transaction and send it to the bucket's overflow destination.
+1. Run the Money Allocation Routine (forced) so CAF is up to date.
+2. For each bucket with **Keep funds off**, an **OVF** transaction brings a positive TF to 0. Only the funded part (CAF) is real money for the overflow destination; the unfunded rest simply disappears. A negative TF stays until the next refill.
+3. The OVF is dated now, or just before the cycle's end if it is ended late, so it belongs to the ending cycle.
 
 ### Cycle start / refill
 A refill happens according to each bucket's **refill mode**:
-- **Auto:** at cycle start.
-- **Manual:** via a button on the Buckets screen, once per cycle.
-- **On income:** when an income transaction triggers the refill *(exact trigger TBD, see open questions)*.
+- **Auto:** at cycle start, dated at the cycle's start.
+- **Manual:** via a button on the Buckets screen (`POST /buckets/{id}/refill`), dated now. Only buckets with this mode.
+- **On income:** when an income (INC) triggers it. It refills every *On income* bucket funded from the income's account that hasn't been refilled in this cycle, dated at the income's time. An income triggers it when:
+  - its **"Triggers refill"** flag is set (the UI pre-checks it when the account has *On income* buckets left to refill, or a rule matches), or
+  - the flag isn't given and one of the user's **income rules** (preferences) matches: the same counterparty, ignoring case, and an amount of at least the rule's minimum (e.g. the employer, ≥ 20 000). An explicit flag overrides the rules.
 
-A bucket is refilled **at most once per cycle**. The REF amount depends on Keep funds:
-- **Keep funds off:** TF is set to RA, so REF = RA − current TF.
+  The income must fall inside the active cycle; an explicit flag on an income outside it is refused. The flag can also be set or cleared later with a correction. **Reversing** the income (or moving it to another account) undoes its refills: their REF and OVF are reversed and the buckets can be refilled again. Refills in a finished cycle stay.
+
+A bucket is refilled **at most once per cycle** (tracked per bucket and cycle). The REF amount depends on Keep funds:
+- **Keep funds off:** TF is set to RA, so REF = RA − current TF (a negative TF is cleared).
 - **Keep funds on:** RA is added to TF. If the new TF is above BC, the excess is removed with an **OVF** transaction and sent to the overflow destination.
+
+A REF or OVF of 0 isn't recorded, but the refill still counts.
 
 ## 7. Money Allocation Routine
 
@@ -269,7 +279,6 @@ Which screen sits under which mobile tab still has to be decided in a design ses
 
 ## 11. Open questions & future ideas
 
-- What exactly counts as an "On income" refill trigger? (e.g. a flag on the income transaction, or any income to the source account)
 - Credit card transactions.
 - Basic spending analysis (e.g. warnings to slow down in a category).
 - Better investment tracking.
