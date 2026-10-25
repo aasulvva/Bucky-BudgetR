@@ -102,7 +102,8 @@ id, err := ids.Insert(ctx, ids.User, ids.NewUser, func(ctx context.Context, id s
   - Sign rules and other per-type rules belong to the caller.
   - Errors wrap `ledger.ErrInvalid`, `ErrNotFound`, `ErrNoActiveCycle`, `ErrOutsideCycle` or `ErrUnsupported`.
 - **Immutable:** a trigger rejects UPDATE, DELETE and TRUNCATE on `transaction_headers`, `bank_transactions`, `bucket_transactions` and `transaction_tags`. Change a transaction by recording a correction (`Correction` and `ParentID`).
-- **IDs:** a transaction ID starts with its transaction date (`YYYYMMDD`), and a CHECK constraint enforces this. Transaction and cycle dates are `date` columns, read into Go as `time.Time` at UTC midnight.
+- **Times:** a transaction's time (`transaction_at`) and a cycle's bounds (`start_at`, `end_at`) are UTC `timestamptz`. A cycle runs from `start_at` up to, but not including, `end_at`. The frontend turns the cycle dates the user picks into the UTC moments of local midnight: a cycle from 01.11 to 30.11 in Oslo is stored as 31.10 23:00 up to 30.11 23:00 UTC. Use the time zone (`Europe/Oslo`), not a fixed offset, because the offset changes with summer time.
+- **IDs:** a transaction ID starts with the UTC date of its time (`YYYYMMDD`), and a CHECK constraint enforces this. A purchase at 00:30 in Oslo gets the previous day's date.
 - **Hook:** `ledger.Options.AfterRecord` runs after each recorded transaction, inside the same DB transaction. The Money Allocation Routine plugs in there.
 - **Tests:** `internal/ledgertest` creates bare accounts, cycles and buckets for tests.
 

@@ -1,7 +1,7 @@
 -- name: CreateTransactionHeader :one
 -- Use with ids.Insert: a taken ID returns no row.
 INSERT INTO transaction_headers (
-    id, user_id, parent_id, correction_type, transaction_type, transaction_date, counterparty, created_by
+    id, user_id, parent_id, correction_type, transaction_type, transaction_at, counterparty, created_by
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 ON CONFLICT (id) DO NOTHING
 RETURNING *;

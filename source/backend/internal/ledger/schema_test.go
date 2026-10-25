@@ -60,24 +60,24 @@ func TestSchemaConstraints(t *testing.T) {
 		args []any
 		code string
 	}{
-		"ID doesn't match the date": {
-			`INSERT INTO transaction_headers (id, user_id, transaction_type, transaction_date) VALUES ('2026101612345678', $1, 'INC', '2026-10-15')`,
+		"ID doesn't match the UTC date": {
+			`INSERT INTO transaction_headers (id, user_id, transaction_type, transaction_at) VALUES ('2026101612345678', $1, 'INC', '2026-10-16 00:30+02')`,
 			[]any{w.user}, "23514",
 		},
 		"correction without parent": {
-			`INSERT INTO transaction_headers (id, user_id, transaction_type, transaction_date, correction_type) VALUES ('2026101512345678', $1, 'INC', '2026-10-15', 'reversal')`,
+			`INSERT INTO transaction_headers (id, user_id, transaction_type, transaction_at, correction_type) VALUES ('2026101512345678', $1, 'INC', '2026-10-15 12:00Z', 'reversal')`,
 			[]any{w.user}, "23514",
 		},
 		"second active cycle": {
-			`INSERT INTO cycles (id, user_id, start_date, end_date, state) VALUES ($1 || '000001', $1, '2026-11-01', '2026-11-30', 'active')`,
+			`INSERT INTO cycles (id, user_id, start_at, end_at, state) VALUES ($1 || '000001', $1, '2026-10-31 23:00Z', '2026-11-30 23:00Z', 'active')`,
 			[]any{w.user}, "23505",
 		},
-		"cycle ending before it starts": {
-			`INSERT INTO cycles (id, user_id, start_date, end_date) VALUES ($1 || '000002', $1, '2026-11-30', '2026-11-01')`,
+		"cycle ending when it starts": {
+			`INSERT INTO cycles (id, user_id, start_at, end_at) VALUES ($1 || '000002', $1, '2026-11-01 00:00+01', '2026-11-01 00:00+01')`,
 			[]any{w.user}, "23514",
 		},
 		"cycle ID of another user": {
-			`INSERT INTO cycles (id, user_id, start_date, end_date) VALUES ($2 || '000003', $1, '2026-11-01', '2026-11-30')`,
+			`INSERT INTO cycles (id, user_id, start_at, end_at) VALUES ($2 || '000003', $1, '2026-10-31 23:00Z', '2026-11-30 23:00Z')`,
 			[]any{w.user, w.otherUser}, "23514",
 		},
 		"bucket on another user's account": {
@@ -85,17 +85,17 @@ func TestSchemaConstraints(t *testing.T) {
 			[]any{w.user, w.otherAc}, "23503",
 		},
 		"bucket line in another user's cycle": {
-			`WITH h AS (INSERT INTO transaction_headers (id, user_id, transaction_type, transaction_date) VALUES ('2026101500000001', $1, 'REF', '2026-10-15') RETURNING id)
+			`WITH h AS (INSERT INTO transaction_headers (id, user_id, transaction_type, transaction_at) VALUES ('2026101500000001', $1, 'REF', '2026-10-15 12:00Z') RETURNING id)
 			 INSERT INTO bucket_transactions (id, transaction_id, bucket_id, cycle_id, amount) SELECT $2 || '00000000000001', h.id, $2, $3, 1 FROM h`,
 			[]any{w.user, w.bucket1, w.otherUser + "000000"}, "23514",
 		},
 		"zero amount": {
-			`WITH h AS (INSERT INTO transaction_headers (id, user_id, transaction_type, transaction_date) VALUES ('2026101500000002', $1, 'INC', '2026-10-15') RETURNING id)
+			`WITH h AS (INSERT INTO transaction_headers (id, user_id, transaction_type, transaction_at) VALUES ('2026101500000002', $1, 'INC', '2026-10-15 12:00Z') RETURNING id)
 			 INSERT INTO bank_transactions (id, transaction_id, account_id, amount) SELECT $2 || '000000000001', h.id, $2, 0 FROM h`,
 			[]any{w.user, w.acc1}, "23514",
 		},
 		"currency without original amount": {
-			`WITH h AS (INSERT INTO transaction_headers (id, user_id, transaction_type, transaction_date) VALUES ('2026101500000003', $1, 'INC', '2026-10-15') RETURNING id)
+			`WITH h AS (INSERT INTO transaction_headers (id, user_id, transaction_type, transaction_at) VALUES ('2026101500000003', $1, 'INC', '2026-10-15 12:00Z') RETURNING id)
 			 INSERT INTO bank_transactions (id, transaction_id, account_id, amount, original_currency) SELECT $2 || '000000000002', h.id, $2, 1, 'EUR' FROM h`,
 			[]any{w.user, w.acc1}, "23514",
 		},
@@ -112,7 +112,7 @@ func TestSchemaConstraints(t *testing.T) {
 	if _, err := w.ledger.Create(t.Context(), w.pool, e); err != nil {
 		t.Fatal(err)
 	}
-	other := ledger.Entry{UserID: w.otherUser, Type: sqlc.TransactionTypeINC, Date: date("2026-10-15"), BankLines: bank(w.otherAc, "1")}
+	other := ledger.Entry{UserID: w.otherUser, Type: sqlc.TransactionTypeINC, At: at("2026-10-15T10:00:00Z"), BankLines: bank(w.otherAc, "1")}
 	otherTx, err := w.ledger.Create(t.Context(), w.pool, other)
 	if err != nil {
 		t.Fatal(err)

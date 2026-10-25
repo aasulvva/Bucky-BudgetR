@@ -115,10 +115,10 @@ func (q *Queries) CreateBucketLine(ctx context.Context, arg CreateBucketLinePara
 
 const createTransactionHeader = `-- name: CreateTransactionHeader :one
 INSERT INTO transaction_headers (
-    id, user_id, parent_id, correction_type, transaction_type, transaction_date, counterparty, created_by
+    id, user_id, parent_id, correction_type, transaction_type, transaction_at, counterparty, created_by
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 ON CONFLICT (id) DO NOTHING
-RETURNING id, user_id, parent_id, correction_type, transaction_type, transaction_date, counterparty, created_at, created_by
+RETURNING id, user_id, parent_id, correction_type, transaction_type, transaction_at, counterparty, created_at, created_by
 `
 
 type CreateTransactionHeaderParams struct {
@@ -127,7 +127,7 @@ type CreateTransactionHeaderParams struct {
 	ParentID        pgtype.Text
 	CorrectionType  CorrectionType
 	TransactionType TransactionType
-	TransactionDate time.Time
+	TransactionAt   time.Time
 	Counterparty    string
 	CreatedBy       pgtype.Text
 }
@@ -140,7 +140,7 @@ func (q *Queries) CreateTransactionHeader(ctx context.Context, arg CreateTransac
 		arg.ParentID,
 		arg.CorrectionType,
 		arg.TransactionType,
-		arg.TransactionDate,
+		arg.TransactionAt,
 		arg.Counterparty,
 		arg.CreatedBy,
 	)
@@ -151,7 +151,7 @@ func (q *Queries) CreateTransactionHeader(ctx context.Context, arg CreateTransac
 		&i.ParentID,
 		&i.CorrectionType,
 		&i.TransactionType,
-		&i.TransactionDate,
+		&i.TransactionAt,
 		&i.Counterparty,
 		&i.CreatedAt,
 		&i.CreatedBy,
@@ -160,7 +160,7 @@ func (q *Queries) CreateTransactionHeader(ctx context.Context, arg CreateTransac
 }
 
 const getActiveCycle = `-- name: GetActiveCycle :one
-SELECT id, user_id, start_date, end_date, state, created_at, modified_at FROM cycles WHERE user_id = $1 AND state = 'active' FOR SHARE
+SELECT id, user_id, start_at, end_at, state, created_at, modified_at FROM cycles WHERE user_id = $1 AND state = 'active' FOR SHARE
 `
 
 // Locks the cycle until the transaction ends, so it can't be ended meanwhile.
@@ -170,8 +170,8 @@ func (q *Queries) GetActiveCycle(ctx context.Context, userID string) (Cycle, err
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
-		&i.StartDate,
-		&i.EndDate,
+		&i.StartAt,
+		&i.EndAt,
 		&i.State,
 		&i.CreatedAt,
 		&i.ModifiedAt,
@@ -250,7 +250,7 @@ func (q *Queries) GetOwnedBuckets(ctx context.Context, arg GetOwnedBucketsParams
 }
 
 const getTransactionHeader = `-- name: GetTransactionHeader :one
-SELECT id, user_id, parent_id, correction_type, transaction_type, transaction_date, counterparty, created_at, created_by FROM transaction_headers WHERE id = $1 AND user_id = $2
+SELECT id, user_id, parent_id, correction_type, transaction_type, transaction_at, counterparty, created_at, created_by FROM transaction_headers WHERE id = $1 AND user_id = $2
 `
 
 type GetTransactionHeaderParams struct {
@@ -267,7 +267,7 @@ func (q *Queries) GetTransactionHeader(ctx context.Context, arg GetTransactionHe
 		&i.ParentID,
 		&i.CorrectionType,
 		&i.TransactionType,
-		&i.TransactionDate,
+		&i.TransactionAt,
 		&i.Counterparty,
 		&i.CreatedAt,
 		&i.CreatedBy,
