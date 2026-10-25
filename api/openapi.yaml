@@ -1,0 +1,118 @@
+openapi: 3.0.3
+# 3.0.x, not 3.1: oapi-codegen only supports 3.0.
+
+info:
+  title: Bucky BudgetR API
+  version: 0.1.0
+  description: |
+    REST API of Bucky BudgetR, a self-hosted envelope-style budgeting app.
+
+    This file is the contract. The Go server code and the TypeScript client
+    are generated from it (`make generate`), so change the API here first.
+
+    Conventions:
+    - Resources live under `/api/v1`. The health probes `/healthz` and
+      `/readyz` are at the root.
+    - IDs are JSON **strings** of digits. Some are too large for a JavaScript
+      number.
+    - Amounts are decimal **strings** such as `"1234.50"`, never floats.
+    - Every error response is an RFC 9457 problem (`application/problem+json`,
+      schema `Problem`).
+
+servers:
+  - url: /
+
+tags:
+  - name: system
+    description: Health and readiness probes.
+
+paths:
+  /healthz:
+    get:
+      operationId: getHealthz
+      tags: [system]
+      summary: Liveness probe
+      description: Reports that the process is up. Checks nothing else.
+      security: []
+      responses:
+        "200":
+          description: The server is running.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /readyz:
+    get:
+      operationId: getReadyz
+      tags: [system]
+      summary: Readiness probe
+      description: Reports whether the server can handle requests, that is, whether the database is reachable.
+      security: []
+      responses:
+        "200":
+          description: The server is ready.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+        "503":
+          description: The database is not reachable.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        default:
+          $ref: "#/components/responses/Error"
+
+components:
+  responses:
+    Error:
+      description: Any error.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+  schemas:
+    Status:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+
+    Problem:
+      type: object
+      description: RFC 9457 problem details.
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          description: URI identifying the problem type. `about:blank` means the HTTP status says it all.
+          example: about:blank
+        title:
+          type: string
+          description: Short summary of the problem type. For `about:blank` this is the HTTP status text.
+          example: Not Found
+        status:
+          type: integer
+          description: HTTP status code.
+          example: 404
+        detail:
+          type: string
+          description: Human-readable explanation of this occurrence.
+        instance:
+          type: string
+          description: Request path the problem occurred on.
+          example: /api/v1/accounts/1234
+        code:
+          type: string
+          description: Stable, machine-readable error code, such as `not_found` or `invalid_request`.
+          example: not_found
+        request_id:
+          type: string
+          description: Same as the `X-Request-ID` response header. Quote it when reporting a bug.

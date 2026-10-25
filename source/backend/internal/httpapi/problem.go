@@ -2,33 +2,47 @@ package httpapi
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/api"
 )
 
-// Problem is an RFC 9457 problem details object, the body of every error
-// response. Code is a stable, machine-readable error code and RequestID matches
-// the X-Request-ID response header.
-type Problem struct {
-	Type      string `json:"type"`
-	Title     string `json:"title"`
-	Status    int    `json:"status"`
-	Detail    string `json:"detail,omitempty"`
-	Instance  string `json:"instance,omitempty"`
-	Code      string `json:"code,omitempty"`
-	RequestID string `json:"request_id,omitempty"`
+// Error is an error with an HTTP status. A handler returns it to answer with a
+// problem response; any other error becomes a 500.
+type Error struct {
+	Status int
+	Code   string // machine-readable, e.g. "not_found"
+	Detail string // shown to the client, so never include internals
+	Err    error  // cause, logged but not sent
 }
 
-// WriteProblem writes an application/problem+json response with the standard
-// status text as its title. code and detail may be empty.
+// NewError returns an *Error without an underlying cause.
+func NewError(status int, code, detail string) *Error {
+	return &Error{Status: status, Code: code, Detail: detail}
+}
+
+func (e *Error) Error() string {
+	if e.Err != nil {
+		return fmt.Sprintf("%d %s: %v", e.Status, e.Code, e.Err)
+	}
+	return fmt.Sprintf("%d %s", e.Status, e.Code)
+}
+
+func (e *Error) Unwrap() error { return e.Err }
+
+// WriteProblem writes an RFC 9457 application/problem+json response (schema
+// Problem in api/openapi.yaml) with the standard status text as its title.
+// code and detail may be empty.
 func WriteProblem(w http.ResponseWriter, r *http.Request, status int, code, detail string) {
-	p := Problem{
+	p := api.Problem{
 		Type:      "about:blank",
 		Title:     http.StatusText(status),
 		Status:    status,
-		Detail:    detail,
-		Instance:  r.URL.Path,
-		Code:      code,
-		RequestID: RequestIDFromContext(r.Context()),
+		Detail:    optional(detail),
+		Instance:  optional(r.URL.Path),
+		Code:      optional(code),
+		RequestId: optional(RequestIDFromContext(r.Context())),
 	}
 	writeJSON(w, "application/problem+json", status, p)
 }
@@ -38,4 +52,11 @@ func writeJSON(w http.ResponseWriter, contentType string, status int, v any) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+func optional(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }

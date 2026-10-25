@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/api"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/httpapi"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/testdb"
 )
@@ -30,63 +31,99 @@ func serve(t *testing.T, h http.Handler, method, path string) *httptest.Response
 	return w
 }
 
-func decodeProblem(t *testing.T, w *httptest.ResponseRecorder) httpapi.Problem {
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+func decodeProblem(t *testing.T, w *httptest.ResponseRecorder) api.Problem {
 	t.Helper()
 	if ct := w.Header().Get("Content-Type"); ct != "application/problem+json" {
 		t.Fatalf("Content-Type = %q, want application/problem+json", ct)
 	}
-	var p httpapi.Problem
+	var p api.Problem
 	if err := json.NewDecoder(w.Body).Decode(&p); err != nil {
 		t.Fatal(err)
 	}
 	if p.Status != w.Code {
 		t.Errorf("problem status %d != response status %d", p.Status, w.Code)
 	}
-	if p.RequestID == "" || p.RequestID != w.Header().Get(httpapi.RequestIDHeader) {
-		t.Errorf("problem request_id %q does not match header %q", p.RequestID, w.Header().Get(httpapi.RequestIDHeader))
+	if id := deref(p.RequestId); id == "" || id != w.Header().Get(httpapi.RequestIDHeader) {
+		t.Errorf("problem request_id %q does not match header %q", id, w.Header().Get(httpapi.RequestIDHeader))
 	}
 	return p
 }
 
 func TestHealthz(t *testing.T) {
-	w := serve(t, httpapi.NewHandler(discard(), dbUp), http.MethodGet, "/healthz")
+	w := serve(t, httpapi.NewHandler(discard(), dbUp, httpapi.Options{}), http.MethodGet, "/healthz")
 	if w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != `{"status":"ok"}` {
 		t.Errorf("got %d %s", w.Code, w.Body)
 	}
 }
 
 func TestReadyz(t *testing.T) {
-	w := serve(t, httpapi.NewHandler(discard(), dbUp), http.MethodGet, "/readyz")
+	w := serve(t, httpapi.NewHandler(discard(), dbUp, httpapi.Options{}), http.MethodGet, "/readyz")
 	if w.Code != http.StatusOK {
 		t.Errorf("db up: got %d %s", w.Code, w.Body)
 	}
 
 	down := pingFunc(func(context.Context) error { return errors.New("connection refused") })
-	w = serve(t, httpapi.NewHandler(discard(), down), http.MethodGet, "/readyz")
+	w = serve(t, httpapi.NewHandler(discard(), down, httpapi.Options{}), http.MethodGet, "/readyz")
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("db down: got %d", w.Code)
 	}
-	if p := decodeProblem(t, w); p.Code != "database_unavailable" || strings.Contains(p.Detail, "refused") {
+	if p := decodeProblem(t, w); deref(p.Code) != "database_unavailable" || strings.Contains(deref(p.Detail), "refused") {
 		t.Errorf("unexpected problem %+v", p)
 	}
 }
 
 func TestReadyzWithDatabase(t *testing.T) {
 	pool := testdb.New(t)
-	w := serve(t, httpapi.NewHandler(discard(), pool), http.MethodGet, "/readyz")
+	w := serve(t, httpapi.NewHandler(discard(), pool, httpapi.Options{}), http.MethodGet, "/readyz")
 	if w.Code != http.StatusOK {
 		t.Errorf("got %d %s", w.Code, w.Body)
 	}
 }
 
+func TestDocs(t *testing.T) {
+	h := httpapi.NewHandler(discard(), dbUp, httpapi.Options{Docs: true})
+
+	w := serve(t, h, http.MethodGet, "/api/docs")
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "createApiReference") {
+		t.Errorf("docs page: got %d %s", w.Code, w.Body)
+	}
+
+	w = serve(t, h, http.MethodGet, "/api/openapi.json")
+	var spec struct {
+		OpenAPI string         `json:"openapi"`
+		Paths   map[string]any `json:"paths"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&spec); err != nil {
+		t.Fatal(err)
+	}
+	if spec.OpenAPI != "3.0.3" || spec.Paths["/healthz"] == nil {
+		t.Errorf("unexpected spec: %+v", spec)
+	}
+
+	// Off unless asked for.
+	h = httpapi.NewHandler(discard(), dbUp, httpapi.Options{})
+	for _, path := range []string{"/api/docs", "/api/openapi.json"} {
+		if w := serve(t, h, http.MethodGet, path); w.Code != http.StatusNotFound {
+			t.Errorf("%s without docs: got %d", path, w.Code)
+		}
+	}
+}
+
 func TestUnmatchedRoutes(t *testing.T) {
-	h := httpapi.NewHandler(discard(), dbUp)
+	h := httpapi.NewHandler(discard(), dbUp, httpapi.Options{})
 
 	w := serve(t, h, http.MethodGet, "/nope")
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("got %d", w.Code)
 	}
-	if p := decodeProblem(t, w); p.Code != "not_found" || p.Title != "Not Found" || p.Instance != "/nope" {
+	if p := decodeProblem(t, w); deref(p.Code) != "not_found" || p.Title != "Not Found" || deref(p.Instance) != "/nope" {
 		t.Errorf("unexpected problem %+v", p)
 	}
 
@@ -97,7 +134,7 @@ func TestUnmatchedRoutes(t *testing.T) {
 	if allow := w.Header().Get("Allow"); !strings.Contains(allow, http.MethodGet) {
 		t.Errorf("Allow = %q", allow)
 	}
-	if p := decodeProblem(t, w); p.Code != "method_not_allowed" {
+	if p := decodeProblem(t, w); deref(p.Code) != "method_not_allowed" {
 		t.Errorf("unexpected problem %+v", p)
 	}
 }
@@ -147,7 +184,7 @@ func TestRecover(t *testing.T) {
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("got %d", w.Code)
 	}
-	if p := decodeProblem(t, w); p.Code != "internal_error" || strings.Contains(w.Body.String(), "boom") {
+	if p := decodeProblem(t, w); deref(p.Code) != "internal_error" || strings.Contains(w.Body.String(), "boom") {
 		t.Errorf("unexpected problem %+v", p)
 	}
 	if !strings.Contains(logs.String(), `"panic":"boom"`) || !strings.Contains(logs.String(), `"stack"`) {
@@ -158,7 +195,7 @@ func TestRecover(t *testing.T) {
 func TestAccessLog(t *testing.T) {
 	var logs bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	h := httpapi.NewHandler(logger, dbUp)
+	h := httpapi.NewHandler(logger, dbUp, httpapi.Options{})
 
 	r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/nope", nil)
 	r.Header.Set(httpapi.RequestIDHeader, "req-1")

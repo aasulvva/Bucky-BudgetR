@@ -70,7 +70,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, logOut 
 
 	srv := &http.Server{
 		Addr:              cfg.Addr(),
-		Handler:           httpapi.NewHandler(logger, pool),
+		Handler:           httpapi.NewHandler(logger, pool, httpapi.Options{Docs: cfg.Env == config.EnvDevelopment}),
 		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelWarn),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
