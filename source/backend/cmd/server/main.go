@@ -31,6 +31,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/httpapi"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/logging"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/transactions"
 )
 
 func main() {
@@ -84,11 +85,12 @@ func run(ctx context.Context, args []string, getenv func(string) string, logOut 
 
 	ledgerSvc := ledger.New(ledger.Options{})
 	handler, err := httpapi.NewHandler(logger, pool, httpapi.Options{
-		Auth:     authSvc,
-		Accounts: accounts.NewService(pool, ledgerSvc, accounts.Options{}),
-		Cycles:   cycles.NewService(pool, cycles.Options{}), // routines: #19
-		Buckets:  buckets.NewService(pool, ledgerSvc, buckets.Options{}),
-		Docs:     cfg.Env == config.EnvDevelopment,
+		Auth:         authSvc,
+		Accounts:     accounts.NewService(pool, ledgerSvc, accounts.Options{}),
+		Cycles:       cycles.NewService(pool, cycles.Options{}), // routines: #19
+		Buckets:      buckets.NewService(pool, ledgerSvc, buckets.Options{}),
+		Transactions: transactions.NewService(pool, ledgerSvc, transactions.Options{}),
+		Docs:         cfg.Env == config.EnvDevelopment,
 	})
 	if err != nil {
 		return err

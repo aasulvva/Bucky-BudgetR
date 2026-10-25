@@ -14,6 +14,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/auth"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/buckets"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/cycles"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/transactions"
 )
 
 // Pinger reports whether a dependency is reachable. *pgxpool.Pool implements it.
@@ -32,6 +33,9 @@ type Options struct {
 	Cycles *cycles.Service
 	// Buckets manages buckets. Nil answers its endpoints with 503.
 	Buckets *buckets.Service
+	// Transactions creates and lists transactions. Nil answers its endpoints
+	// with 503.
+	Transactions *transactions.Service
 	// Docs serves the interactive API docs at /api/docs and the spec at
 	// /api/openapi.json. Meant for development only.
 	Docs bool
@@ -41,7 +45,7 @@ type Options struct {
 func NewHandler(logger *slog.Logger, db Pinger, opts Options) (http.Handler, error) {
 	mux := http.NewServeMux()
 
-	strict := api.NewStrictHandlerWithOptions(&server{db: db, auth: opts.Auth, accounts: opts.Accounts, cycles: opts.Cycles, buckets: opts.Buckets}, nil, api.StrictHTTPServerOptions{
+	strict := api.NewStrictHandlerWithOptions(&server{db: db, auth: opts.Auth, accounts: opts.Accounts, cycles: opts.Cycles, buckets: opts.Buckets, transactions: opts.Transactions}, nil, api.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc:  badRequest,
 		ResponseErrorHandlerFunc: responseError(logger),
 	})

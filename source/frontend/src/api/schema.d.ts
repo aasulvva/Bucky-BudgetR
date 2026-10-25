@@ -458,6 +458,67 @@ export interface paths {
         patch: operations["updateBucket"];
         trace?: never;
     };
+    "/api/v1/transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List transactions
+         * @description The user's transactions, newest first, one page at a time. Each is
+         *     merged with its corrections: the lines show the effective amounts,
+         *     and `corrected` and `reversed` say what happened to it. Filters
+         *     combine with AND. Pass `next_cursor` as `cursor` to get the next page.
+         */
+        get: operations["listTransactions"];
+        put?: never;
+        /**
+         * Create an income, expense or transfer
+         * @description Amounts are positive; the type gives the sign. An income (INC) adds
+         *     `amount` to `account_id` and each bucket line to its bucket; an
+         *     expense (EXP) takes them away. A transfer (TRF) moves `amount` from
+         *     `account_id` to `to_account_id`, which must have the same currency
+         *     (400 `currency_mismatch`), and has no bucket lines.
+         *
+         *     Each bucket must be funded from `account_id`, and the bucket lines
+         *     together can't exceed `amount`; the rest isn't tied to a bucket.
+         *     Bucket lines need an active cycle that `at` falls in (409
+         *     `no_active_cycle` or `cycle_overdue`, 400 `invalid_request` if `at` is
+         *     outside it). `at` defaults to now and can't be in the future.
+         */
+        post: operations["createTransaction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/transactions/{transactionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                transactionId: components["parameters"]["TransactionId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Get a transaction
+         * @description The transaction merged with its corrections, plus its `history`: the
+         *     original and each correction with its own lines. A correction's ID
+         *     returns the transaction it corrects.
+         */
+        get: operations["getTransaction"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -714,6 +775,93 @@ export interface components {
             priority?: boolean;
             importance?: number;
         };
+        /**
+         * @description 16-digit transaction ID. The first 8 digits are the UTC date of the transaction time.
+         * @example 2026102512345678
+         */
+        TransactionId: string;
+        /**
+         * @description See spec §5.4. Only INC, EXP and TRF can be created with `POST /transactions`.
+         * @enum {string}
+         */
+        TransactionType: "OPB" | "BLA" | "INC" | "EXP" | "TRF" | "INP" | "OPF" | "REF" | "BUA" | "BAT" | "OVF";
+        /** @enum {string} */
+        CorrectionType: "none" | "adjustment" | "reversal";
+        TransactionBankLine: {
+            account_id: components["schemas"]["AccountId"];
+            /** @description Signed, in the account's currency. */
+            amount: components["schemas"]["Amount"];
+        };
+        TransactionBucketLine: {
+            bucket_id: components["schemas"]["BucketId"];
+            cycle_id: components["schemas"]["CycleId"];
+            /** @description Signed, in the bucket's currency. */
+            amount: components["schemas"]["Amount"];
+        };
+        Transaction: {
+            id: components["schemas"]["TransactionId"];
+            type: components["schemas"]["TransactionType"];
+            /**
+             * Format: date-time
+             * @description When the transaction happened.
+             */
+            at: string;
+            counterparty: string;
+            tags: string[];
+            /** Format: date-time */
+            created_at: string;
+            /** @description The user who entered it (6-digit user ID), or null for the system. */
+            created_by: string | null;
+            /** @description The transaction has adjustments. */
+            corrected: boolean;
+            /** @description The transaction has been reversed. Its effective lines are then empty. */
+            reversed: boolean;
+            /** @description Effective amounts per account, the original plus its corrections. Lines that sum to 0 are left out. */
+            bank_lines: components["schemas"]["TransactionBankLine"][];
+            /** @description Effective amounts per bucket, the original plus its corrections. Lines that sum to 0 are left out. */
+            bucket_lines: components["schemas"]["TransactionBucketLine"][];
+            /** @description Only from `GET /transactions/{id}`. The original and its corrections, oldest first. */
+            history?: components["schemas"]["TransactionVersion"][];
+        };
+        TransactionVersion: {
+            id: components["schemas"]["TransactionId"];
+            correction_type: components["schemas"]["CorrectionType"];
+            /** Format: date-time */
+            created_at: string;
+            created_by: string | null;
+            bank_lines: components["schemas"]["TransactionBankLine"][];
+            bucket_lines: components["schemas"]["TransactionBucketLine"][];
+        };
+        TransactionPage: {
+            items: components["schemas"]["Transaction"][];
+            /** @description Pass as `cursor` for the next page. Null on the last page. */
+            next_cursor: string | null;
+        };
+        TransactionCreate: {
+            /** @enum {string} */
+            type: "INC" | "EXP" | "TRF";
+            /**
+             * Format: date-time
+             * @description When it happened. Defaults to now; can't be in the future.
+             */
+            at?: string;
+            /** @description The company or person on the other side. */
+            counterparty?: string;
+            /** @description Tag names. Existing tags are reused, ignoring case. */
+            tags?: string[];
+            /** @description The account of an income or expense, or the sending account of a transfer. */
+            account_id: components["schemas"]["AccountId"];
+            /** @description The receiving account of a transfer. */
+            to_account_id?: components["schemas"]["AccountId"];
+            /** @description Positive. */
+            amount: components["schemas"]["Amount"];
+            /** @description For an income or expense, the parts that go to or come from buckets. */
+            bucket_lines?: {
+                bucket_id: components["schemas"]["BucketId"];
+                /** @description Positive. */
+                amount: components["schemas"]["Amount"];
+            }[];
+        };
         /** @description RFC 9457 problem details. */
         Problem: {
             /**
@@ -762,6 +910,7 @@ export interface components {
         AccountId: components["schemas"]["AccountId"];
         CycleId: components["schemas"]["CycleId"];
         BucketId: components["schemas"]["BucketId"];
+        TransactionId: components["schemas"]["TransactionId"];
     };
     requestBodies: never;
     headers: {
@@ -1456,6 +1605,103 @@ export interface operations {
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listTransactions: {
+        parameters: {
+            query?: {
+                /** @description Only these types. Repeat for several (`?type=INC&type=EXP`). */
+                type?: components["schemas"]["TransactionType"][];
+                /** @description Only transactions with a line on this account. */
+                account_id?: components["schemas"]["AccountId"];
+                /** @description Only transactions with a line on this bucket. */
+                bucket_id?: components["schemas"]["BucketId"];
+                /** @description Only transactions dated within this cycle. */
+                cycle_id?: components["schemas"]["CycleId"];
+                /** @description Only transactions at or after this moment. */
+                from?: string;
+                /** @description Only transactions before this moment. */
+                to?: string;
+                /** @description Only transactions with this tag, ignoring case. */
+                tag?: string;
+                /** @description Only transactions whose counterparty contains this text, ignoring case. */
+                counterparty?: string;
+                /** @description The page size. */
+                limit?: number;
+                /** @description The previous page's `next_cursor`. */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of transactions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionPage"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createTransaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransactionCreate"];
+            };
+        };
+        responses: {
+            /** @description The new transaction. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transaction"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getTransaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                transactionId: components["parameters"]["TransactionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The transaction. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transaction"];
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };

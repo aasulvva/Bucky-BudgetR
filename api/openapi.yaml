@@ -48,6 +48,8 @@ tags:
     description: Budget cycles and their lifecycle.
   - name: buckets
     description: Buckets, their settings and their funds.
+  - name: transactions
+    description: Income, expenses and transfers, and the transaction list.
 
 paths:
   /healthz:
@@ -734,6 +736,155 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/v1/transactions:
+    get:
+      operationId: listTransactions
+      tags: [transactions]
+      summary: List transactions
+      description: |
+        The user's transactions, newest first, one page at a time. Each is
+        merged with its corrections: the lines show the effective amounts,
+        and `corrected` and `reversed` say what happened to it. Filters
+        combine with AND. Pass `next_cursor` as `cursor` to get the next page.
+      parameters:
+        - name: type
+          in: query
+          description: Only these types. Repeat for several (`?type=INC&type=EXP`).
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/TransactionType"
+          style: form
+          explode: true
+        - name: account_id
+          in: query
+          description: Only transactions with a line on this account.
+          schema:
+            $ref: "#/components/schemas/AccountId"
+        - name: bucket_id
+          in: query
+          description: Only transactions with a line on this bucket.
+          schema:
+            $ref: "#/components/schemas/BucketId"
+        - name: cycle_id
+          in: query
+          description: Only transactions dated within this cycle.
+          schema:
+            $ref: "#/components/schemas/CycleId"
+        - name: from
+          in: query
+          description: Only transactions at or after this moment.
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: Only transactions before this moment.
+          schema:
+            type: string
+            format: date-time
+        - name: tag
+          in: query
+          description: Only transactions with this tag, ignoring case.
+          schema:
+            type: string
+            maxLength: 50
+        - name: counterparty
+          in: query
+          description: Only transactions whose counterparty contains this text, ignoring case.
+          schema:
+            type: string
+            maxLength: 200
+        - name: limit
+          in: query
+          description: The page size.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          description: The previous page's `next_cursor`.
+          schema:
+            type: string
+            maxLength: 100
+      responses:
+        "200":
+          description: A page of transactions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionPage"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+    post:
+      operationId: createTransaction
+      tags: [transactions]
+      summary: Create an income, expense or transfer
+      description: |
+        Amounts are positive; the type gives the sign. An income (INC) adds
+        `amount` to `account_id` and each bucket line to its bucket; an
+        expense (EXP) takes them away. A transfer (TRF) moves `amount` from
+        `account_id` to `to_account_id`, which must have the same currency
+        (400 `currency_mismatch`), and has no bucket lines.
+
+        Each bucket must be funded from `account_id`, and the bucket lines
+        together can't exceed `amount`; the rest isn't tied to a bucket.
+        Bucket lines need an active cycle that `at` falls in (409
+        `no_active_cycle` or `cycle_overdue`, 400 `invalid_request` if `at` is
+        outside it). `at` defaults to now and can't be in the future.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransactionCreate"
+      responses:
+        "201":
+          description: The new transaction.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/transactions/{transactionId}:
+    parameters:
+      - $ref: "#/components/parameters/TransactionId"
+    get:
+      operationId: getTransaction
+      tags: [transactions]
+      summary: Get a transaction
+      description: |
+        The transaction merged with its corrections, plus its `history`: the
+        original and each correction with its own lines. A correction's ID
+        returns the transaction it corrects.
+      responses:
+        "200":
+          description: The transaction.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
 components:
   securitySchemes:
     cookieAuth:
@@ -769,6 +920,13 @@ components:
       required: true
       schema:
         $ref: "#/components/schemas/BucketId"
+
+    TransactionId:
+      name: transactionId
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/TransactionId"
 
   responses:
     Error:
@@ -1246,6 +1404,183 @@ components:
           type: integer
           minimum: 1
           maximum: 10
+
+    TransactionId:
+      type: string
+      description: 16-digit transaction ID. The first 8 digits are the UTC date of the transaction time.
+      pattern: "^[0-9]{16}$"
+      example: "2026102512345678"
+
+    TransactionType:
+      type: string
+      enum: [OPB, BLA, INC, EXP, TRF, INP, OPF, REF, BUA, BAT, OVF]
+      description: See spec §5.4. Only INC, EXP and TRF can be created with `POST /transactions`.
+
+    CorrectionType:
+      type: string
+      enum: [none, adjustment, reversal]
+
+    TransactionBankLine:
+      type: object
+      additionalProperties: false
+      required: [account_id, amount]
+      properties:
+        account_id:
+          $ref: "#/components/schemas/AccountId"
+        amount:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Signed, in the account's currency.
+
+    TransactionBucketLine:
+      type: object
+      additionalProperties: false
+      required: [bucket_id, cycle_id, amount]
+      properties:
+        bucket_id:
+          $ref: "#/components/schemas/BucketId"
+        cycle_id:
+          $ref: "#/components/schemas/CycleId"
+        amount:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Signed, in the bucket's currency.
+
+    Transaction:
+      type: object
+      additionalProperties: false
+      required: [id, type, at, counterparty, tags, created_at, created_by, corrected, reversed, bank_lines, bucket_lines]
+      properties:
+        id:
+          $ref: "#/components/schemas/TransactionId"
+        type:
+          $ref: "#/components/schemas/TransactionType"
+        at:
+          type: string
+          format: date-time
+          description: When the transaction happened.
+        counterparty:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        created_by:
+          type: string
+          nullable: true
+          description: The user who entered it (6-digit user ID), or null for the system.
+        corrected:
+          type: boolean
+          description: The transaction has adjustments.
+        reversed:
+          type: boolean
+          description: The transaction has been reversed. Its effective lines are then empty.
+        bank_lines:
+          type: array
+          description: Effective amounts per account, the original plus its corrections. Lines that sum to 0 are left out.
+          items:
+            $ref: "#/components/schemas/TransactionBankLine"
+        bucket_lines:
+          type: array
+          description: Effective amounts per bucket, the original plus its corrections. Lines that sum to 0 are left out.
+          items:
+            $ref: "#/components/schemas/TransactionBucketLine"
+        history:
+          type: array
+          description: Only from `GET /transactions/{id}`. The original and its corrections, oldest first.
+          items:
+            $ref: "#/components/schemas/TransactionVersion"
+
+    TransactionVersion:
+      type: object
+      additionalProperties: false
+      required: [id, correction_type, created_at, created_by, bank_lines, bucket_lines]
+      properties:
+        id:
+          $ref: "#/components/schemas/TransactionId"
+        correction_type:
+          $ref: "#/components/schemas/CorrectionType"
+        created_at:
+          type: string
+          format: date-time
+        created_by:
+          type: string
+          nullable: true
+        bank_lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransactionBankLine"
+        bucket_lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransactionBucketLine"
+
+    TransactionPage:
+      type: object
+      additionalProperties: false
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Transaction"
+        next_cursor:
+          type: string
+          nullable: true
+          description: Pass as `cursor` for the next page. Null on the last page.
+
+    TransactionCreate:
+      type: object
+      additionalProperties: false
+      required: [type, account_id, amount]
+      properties:
+        type:
+          type: string
+          enum: [INC, EXP, TRF]
+        at:
+          type: string
+          format: date-time
+          description: When it happened. Defaults to now; can't be in the future.
+        counterparty:
+          type: string
+          maxLength: 200
+          description: The company or person on the other side.
+        tags:
+          type: array
+          maxItems: 20
+          description: Tag names. Existing tags are reused, ignoring case.
+          items:
+            type: string
+            maxLength: 50
+        account_id:
+          allOf:
+            - $ref: "#/components/schemas/AccountId"
+          description: The account of an income or expense, or the sending account of a transfer.
+        to_account_id:
+          allOf:
+            - $ref: "#/components/schemas/AccountId"
+          description: The receiving account of a transfer.
+        amount:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Positive.
+        bucket_lines:
+          type: array
+          description: For an income or expense, the parts that go to or come from buckets.
+          items:
+            type: object
+            additionalProperties: false
+            required: [bucket_id, amount]
+            properties:
+              bucket_id:
+                $ref: "#/components/schemas/BucketId"
+              amount:
+                allOf:
+                  - $ref: "#/components/schemas/Amount"
+                description: Positive.
 
     Problem:
       type: object
