@@ -78,9 +78,9 @@ describe("Settings", () => {
     // Removing them all clears the rules.
     await userEvent.click(screen.getByRole("button", { name: "Remove rule 2" }));
     await userEvent.click(screen.getByRole("button", { name: "Remove rule 1" }));
-    expect(screen.getByText("No rules yet.")).toBeInTheDocument();
+    expect(screen.getByText(/No rules yet\./)).toBeInTheDocument();
     await userEvent.click(save);
-    await screen.findByText("No rules yet.");
+    await screen.findByText(/No rules yet\./);
     expect(apiMock.calls("PATCH /api/v1/me/preferences")[1]?.body).toEqual({
       income_refill_rules: null,
     });

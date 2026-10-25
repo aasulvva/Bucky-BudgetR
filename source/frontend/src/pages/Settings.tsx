@@ -177,17 +177,28 @@ function IncomeRulesCard({ rules }: { rules: components["schemas"]["IncomeRefill
   return (
     <Card withBorder>
       <Stack gap="md">
-        <div>
+        <Stack gap={6}>
           <Text fw={600}>Income rules</Text>
           <Text size="sm" c="dimmed">
-            An income from one of these counterparties, of at least the minimum, refills its
-            account&apos;s &ldquo;on income&rdquo; buckets. Once per cycle. You can also tick
-            &ldquo;Triggers refill&rdquo; on the income itself.
+            Buckets with the refill mode &ldquo;On income&rdquo; aren&apos;t refilled when a new
+            cycle starts. They wait until your income, such as your salary, arrives, so you only
+            budget money you have.
           </Text>
-        </div>
+          <Text size="sm" c="dimmed">
+            An income that matches a rule refills the &ldquo;On income&rdquo; buckets funded from
+            the account it&apos;s paid into. To match, it must come from the counterparty (case
+            doesn&apos;t matter) and be at least the minimum. Each bucket is refilled at most once
+            per cycle, so a second payment in the same cycle doesn&apos;t refill it again.
+          </Text>
+          <Text size="sm" c="dimmed">
+            On each income you can also tick &ldquo;Triggers refill&rdquo; yourself, or untick it to
+            skip a rule that matches.
+          </Text>
+        </Stack>
         {rows.length === 0 && (
           <Text size="sm" c="dimmed">
-            No rules yet.
+            No rules yet. Without rules, &ldquo;On income&rdquo; buckets are only refilled by an
+            income where you tick &ldquo;Triggers refill&rdquo;.
           </Text>
         )}
         {rows.map((row, i) => {
