@@ -1,0 +1,38 @@
+import type { ComponentType } from "react";
+import type { RouteObject } from "react-router";
+
+import NotFound from "@/pages/NotFound";
+import { Placeholder } from "@/pages/Placeholder";
+
+import { Layout } from "./Layout";
+import { navItems } from "./nav";
+import { RouteError } from "./RouteError";
+
+type PageModule = Promise<{ default: ComponentType }>;
+
+/** Screens that exist. Every other nav item gets a placeholder. */
+const pages: Partial<Record<string, () => PageModule>> = {
+  "/settings": () => import("@/pages/Settings"),
+};
+
+const lazyPage = (load: () => PageModule) => async () => ({ Component: (await load()).default });
+
+export const routes: RouteObject[] = [
+  {
+    element: <Layout />,
+    children: [
+      {
+        errorElement: <RouteError />,
+        children: [
+          ...navItems.map((item): RouteObject => {
+            const load = pages[item.path];
+            return load
+              ? { path: item.path, lazy: lazyPage(load) }
+              : { path: item.path, element: <Placeholder title={item.label} issue={item.issue} /> };
+          }),
+          { path: "*", element: <NotFound /> },
+        ],
+      },
+    ],
+  },
+];

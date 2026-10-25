@@ -1,0 +1,49 @@
+.footer {
+  display: flex;
+  align-items: stretch;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.tab {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-size: var(--mantine-font-size-xs);
+  color: var(--mantine-color-dimmed);
+  text-decoration: none;
+
+  &[data-active] {
+    color: var(--mantine-primary-color-filled);
+  }
+}
+
+.tabLabel {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.action {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.actionButton {
+  margin-top: calc(-1 * var(--mantine-spacing-lg));
+  box-shadow: var(--mantine-shadow-md);
+}
+
+.subnav {
+  margin-bottom: var(--mantine-spacing-md);
+}
+
+/* Keep full labels and scroll sideways instead of squeezing. */
+.subnavItem {
+  flex: none;
+}
