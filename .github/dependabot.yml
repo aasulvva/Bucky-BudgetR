@@ -30,6 +30,9 @@ updates:
       # typescript-eslint supports only TypeScript < 6.1 so far.
       - dependency-name: typescript
         versions: [">=6.1.0"]
+      # Node types must match the Node.js major we run (.nvmrc); bump together.
+      - dependency-name: "@types/node"
+        versions: [">=25"]
 
   - package-ecosystem: github-actions
     directory: /

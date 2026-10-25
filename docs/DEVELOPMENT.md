@@ -69,6 +69,9 @@ It is configured with environment variables. The Makefile exports everything in 
 | `LOG_FORMAT` | `text` in development, `json` in production | |
 | `MIGRATE_ON_START` | `true` | |
 | `SHUTDOWN_TIMEOUT` | `10s` | How long to wait for in-flight requests on shutdown. |
+| `SESSION_IDLE_TIMEOUT` | `168h` | A session ends after this long without use. |
+| `SESSION_MAX_AGE` | `720h` | A session ends this long after login, however much it's used. At least `SESSION_IDLE_TIMEOUT`. |
+| `BUCKY_INITIAL_ADMIN_PASSWORD` | `BuckyBudgetR_ADMIN_Pa$$w0rd` | Password of the `admin` account created on first start. Must meet the password policy. |
 
 `GET /healthz` reports that the process is up. `GET /readyz` also checks the database. Every error response is an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem (`application/problem+json`) with extra `code` and `request_id` fields.
 
@@ -100,6 +103,26 @@ id, err := ids.Insert(ctx, ids.User, ids.NewUser, func(ctx context.Context, id s
 Commit the generated code. `make generate-check` fails if it is out of date, and CI runs it.
 
 With `APP_ENV=development`, the interactive docs (Scalar) are at <http://localhost:8080/api/docs> and the spec as JSON at `/api/openapi.json`. Neither is served in production.
+
+### Auth
+
+`internal/auth` handles passwords, sessions and rate limiting. `internal/httpapi` applies them to requests.
+
+- **First start:** when there are no users, the server creates `admin` with `BUCKY_INITIAL_ADMIN_PASSWORD`, or the default above, and logs a warning if the default is used. The account must change its password before it can do anything except `GET /api/v1/me`, `POST /api/v1/me/password` and logout (403 `password_change_required`). Because `.env` values can't contain `$`, the default password can't be set there; use it as-is or pick another.
+- **Passwords:** bcrypt at cost 12, 12–72 bytes long. A new password must differ from the current one.
+- **Sessions:** login sets the `__Host-bucky_session` cookie (`HttpOnly; Secure; SameSite=Lax; Path=/`). The token is 32 random bytes; the database stores only its SHA-256. A session ends after `SESSION_IDLE_TIMEOUT` without use or `SESSION_MAX_AGE` after login. Changing the password ends the user's other sessions. Browsers accept `Secure` cookies on `http://localhost`, so dev works through the Vite proxy without TLS.
+- **Access rules come from the spec:** an operation is public only if it has `security: []`, and `x-allowed-before-password-change: true` lets a user who must change their password call it. Requests are also validated against the spec (parameters, body schema, no unknown fields) before the handler runs: 400 `invalid_request`, or 413 above 1 MB.
+- **CSRF:** every POST, PUT, PATCH and DELETE under `/api/` must send `X-Bucky-CSRF: 1`, and its `Origin`, if present, must match the host (403 `csrf` otherwise). The frontend's `api` client adds the header. Other clients, such as curl or scripts, must add it themselves.
+- **Rate limiting:** after 5 failed logins within 15 minutes for a username or a client IP, logins are refused with 429 `too_many_attempts` and `Retry-After`. The lockout starts at 1 minute and doubles up to 15. The counters are in memory and reset on restart. The client IP is the connection's address; `X-Forwarded-For` is ignored until a trusted proxy is configured (#26).
+- **Tests:** `internal/authtest` creates users (`authtest.NewUser`) and logs them in (`authtest.Login`) against a real handler. Every feature that stores user data should have a test that one user can't see or change another's.
+
+Trying it with curl:
+
+```bash
+curl -c jar -H 'X-Bucky-CSRF: 1' -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"BuckyBudgetR_ADMIN_Pa$$w0rd"}' localhost:8080/api/v1/auth/login
+curl -b jar localhost:8080/api/v1/me
+```
 
 ### Tests
 

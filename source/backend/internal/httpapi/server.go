@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/api"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/auth"
 )
 
 // Pinger reports whether a dependency is reachable. *pgxpool.Pool implements it.
@@ -17,18 +18,21 @@ type Pinger interface {
 	Ping(ctx context.Context) error
 }
 
-// Options toggles optional parts of the handler.
+// Options configures the handler.
 type Options struct {
+	// Auth handles logins and sessions. Nil means nobody can log in, which is
+	// only useful in tests of the public endpoints.
+	Auth *auth.Service
 	// Docs serves the interactive API docs at /api/docs and the spec at
 	// /api/openapi.json. Meant for development only.
 	Docs bool
 }
 
 // NewHandler returns the root handler with all routes and middleware.
-func NewHandler(logger *slog.Logger, db Pinger, opts Options) http.Handler {
+func NewHandler(logger *slog.Logger, db Pinger, opts Options) (http.Handler, error) {
 	mux := http.NewServeMux()
 
-	strict := api.NewStrictHandlerWithOptions(&server{db: db}, nil, api.StrictHTTPServerOptions{
+	strict := api.NewStrictHandlerWithOptions(&server{db: db, auth: opts.Auth}, nil, api.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc:  badRequest,
 		ResponseErrorHandlerFunc: responseError(logger),
 	})
@@ -42,11 +46,21 @@ func NewHandler(logger *slog.Logger, db Pinger, opts Options) http.Handler {
 		mux.HandleFunc("GET /api/openapi.json", serveSpec(logger))
 	}
 
+	gate, err := Gate()
+	if err != nil {
+		return nil, err
+	}
+
+	// Outermost first: request ID, access log, panic recovery, CSRF, session,
+	// then the spec-driven gate (auth and validation) and the routes.
 	h := problemOnUnmatched(mux)
+	h = gate(h)
+	h = Sessions(opts.Auth, logger)(h)
+	h = CSRF(h)
 	h = Recover(logger)(h)
 	h = AccessLog(logger)(h)
 	h = RequestID(h)
-	return h
+	return h, nil
 }
 
 // badRequest answers requests whose parameters or body don't match the spec.
@@ -72,6 +86,9 @@ func responseError(logger *slog.Logger) func(http.ResponseWriter, *http.Request,
 				slog.String("code", e.Code),
 				slog.Any("error", e.Err),
 				slog.String("request_id", RequestIDFromContext(r.Context())))
+		}
+		for k, v := range e.Header {
+			w.Header()[k] = v
 		}
 		WriteProblem(w, r, e.Status, e.Code, e.Detail)
 	}

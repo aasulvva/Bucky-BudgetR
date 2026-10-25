@@ -10,8 +10,15 @@ import (
 )
 
 // Open creates a connection pool for url and checks that the database answers.
+// Sessions use the UTC time zone, so now() and timestamps read as text are UTC
+// whatever the server's setting.
 func Open(ctx context.Context, url string) (*pgxpool.Pool, error) {
-	pool, err := pgxpool.New(ctx, url)
+	cfg, err := pgxpool.ParseConfig(url)
+	if err != nil {
+		return nil, fmt.Errorf("open database: %w", err)
+	}
+	cfg.ConnConfig.RuntimeParams["timezone"] = "UTC"
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}

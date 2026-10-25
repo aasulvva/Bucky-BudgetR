@@ -18,13 +18,30 @@ info:
     - Amounts are decimal **strings** such as `"1234.50"`, never floats.
     - Every error response is an RFC 9457 problem (`application/problem+json`,
       schema `Problem`).
+    - Timestamps are RFC 3339 in UTC (`2026-10-25T14:03:00Z`). Clients show
+      them in local time.
+
+    Authentication: log in with `POST /api/v1/auth/login`. The session is an
+    HttpOnly cookie (`__Host-bucky_session`) that the browser sends by itself.
+    **Every POST, PUT, PATCH and DELETE must also carry the header
+    `X-Bucky-CSRF: 1`** (CSRF protection), or it is rejected with 403.
+
+    A user whose `must_change_password` is set may only call operations
+    marked `x-allowed-before-password-change`; everything else gets 403
+    `password_change_required`.
 
 servers:
   - url: /
 
+# Everything requires a session unless an operation says otherwise.
+security:
+  - cookieAuth: []
+
 tags:
   - name: system
     description: Health and readiness probes.
+  - name: auth
+    description: Login, logout and the current user.
 
 paths:
   /healthz:
@@ -67,7 +84,149 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/v1/auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Log in
+      description: |
+        Checks the credentials and starts a session (sets the session cookie).
+        Wrong username, wrong password and inactive users all get the same 401.
+        Repeated failures are rate limited with 429.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Logged in. If `must_change_password` is set, only changing the password is allowed until it is done.
+          headers:
+            Set-Cookie:
+              $ref: "#/components/headers/SessionCookie"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Error"
+        "429":
+          description: Too many failed attempts. Try again after `Retry-After` seconds.
+          headers:
+            Retry-After:
+              description: Seconds until the next attempt is allowed.
+              schema:
+                type: integer
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/auth/logout:
+    post:
+      operationId: logout
+      x-allowed-before-password-change: true
+      tags: [auth]
+      summary: Log out
+      description: Ends the current session and clears the cookie.
+      responses:
+        "204":
+          description: Logged out.
+          headers:
+            Set-Cookie:
+              $ref: "#/components/headers/SessionCookie"
+        "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/me:
+    get:
+      operationId: getMe
+      x-allowed-before-password-change: true
+      tags: [auth]
+      summary: The current user
+      responses:
+        "200":
+          description: The logged-in user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/me/password:
+    post:
+      operationId: changePassword
+      x-allowed-before-password-change: true
+      tags: [auth]
+      summary: Change the password
+      description: |
+        Changes the current user's password, clears `must_change_password` and
+        ends all of the user's other sessions.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordChange"
+      responses:
+        "204":
+          description: Password changed.
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/me/preferences:
+    patch:
+      operationId: updatePreferences
+      tags: [auth]
+      summary: Update preferences
+      description: Merges the given fields into the stored preferences. `null` resets a field to its default.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Preferences"
+      responses:
+        "200":
+          description: The preferences after the update.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Preferences"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
 components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: __Host-bucky_session
+      description: Session cookie set by `POST /api/v1/auth/login`. HttpOnly, so scripts can't read it.
+
+  headers:
+    SessionCookie:
+      description: Sets or clears the `__Host-bucky_session` cookie.
+      schema:
+        type: string
+
   responses:
     Error:
       description: Any error.
@@ -84,6 +243,75 @@ components:
         status:
           type: string
           enum: [ok]
+
+    UserId:
+      type: string
+      description: 6-digit user ID.
+      pattern: "^[1-9][0-9]{5}$"
+      example: "482913"
+
+    User:
+      type: object
+      additionalProperties: false
+      required: [id, username, admin, must_change_password, preferences]
+      properties:
+        id:
+          $ref: "#/components/schemas/UserId"
+        username:
+          type: string
+          example: admin
+        admin:
+          type: boolean
+        must_change_password:
+          type: boolean
+          description: When true, the API refuses everything except changing the password (and `GET /me`, logout).
+        preferences:
+          $ref: "#/components/schemas/Preferences"
+
+    Preferences:
+      type: object
+      additionalProperties: false
+      description: Per-user settings. Missing or null fields use the default.
+      properties:
+        locale:
+          type: string
+          nullable: true
+          description: BCP 47 language tag for number and date formats, e.g. `nb-NO`. Null means the browser's locale.
+          pattern: "^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$"
+          maxLength: 35
+          example: nb-NO
+
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          minLength: 1
+          maxLength: 64
+        password:
+          type: string
+          minLength: 1
+          maxLength: 1024
+          format: password
+
+    PasswordChange:
+      type: object
+      additionalProperties: false
+      required: [current_password, new_password]
+      properties:
+        current_password:
+          type: string
+          minLength: 1
+          maxLength: 1024
+          format: password
+        new_password:
+          type: string
+          description: 12 to 72 bytes (UTF-8), different from the current password.
+          minLength: 12
+          maxLength: 72
+          format: password
 
     Problem:
       type: object

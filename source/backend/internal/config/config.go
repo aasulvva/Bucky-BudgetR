@@ -28,6 +28,14 @@ type Config struct {
 	LogFormat       string // "text" or "json"
 	MigrateOnStart  bool
 	ShutdownTimeout time.Duration
+
+	// SessionIdleTimeout ends a session that hasn't been used for this long;
+	// SessionMaxAge ends every session this long after login.
+	SessionIdleTimeout time.Duration
+	SessionMaxAge      time.Duration
+	// InitialAdminPassword overrides the spec's default password for the admin
+	// account created on first start. Empty means the default.
+	InitialAdminPassword string
 }
 
 // Addr is the listen address for the HTTP server.
@@ -48,9 +56,10 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 
 	cfg := Config{
-		Env:         Env(get("APP_ENV", string(EnvProduction))),
-		DatabaseURL: getenv("DATABASE_URL"),
-		Host:        getenv("API_HOST"),
+		Env:                  Env(get("APP_ENV", string(EnvProduction))),
+		DatabaseURL:          getenv("DATABASE_URL"),
+		Host:                 getenv("API_HOST"),
+		InitialAdminPassword: getenv("BUCKY_INITIAL_ADMIN_PASSWORD"),
 	}
 
 	if cfg.Env != EnvDevelopment && cfg.Env != EnvProduction {
@@ -87,6 +96,17 @@ func Load(getenv func(string) string) (Config, error) {
 	cfg.ShutdownTimeout, err = time.ParseDuration(get("SHUTDOWN_TIMEOUT", "10s"))
 	if err != nil || cfg.ShutdownTimeout <= 0 {
 		errs = append(errs, fmt.Errorf("SHUTDOWN_TIMEOUT: must be a positive duration such as 10s, got %q", getenv("SHUTDOWN_TIMEOUT")))
+	}
+
+	cfg.SessionIdleTimeout, err = time.ParseDuration(get("SESSION_IDLE_TIMEOUT", "168h"))
+	if err != nil || cfg.SessionIdleTimeout <= 0 {
+		errs = append(errs, fmt.Errorf("SESSION_IDLE_TIMEOUT: must be a positive duration such as 168h, got %q", getenv("SESSION_IDLE_TIMEOUT")))
+	}
+	cfg.SessionMaxAge, err = time.ParseDuration(get("SESSION_MAX_AGE", "720h"))
+	if err != nil || cfg.SessionMaxAge <= 0 {
+		errs = append(errs, fmt.Errorf("SESSION_MAX_AGE: must be a positive duration such as 720h, got %q", getenv("SESSION_MAX_AGE")))
+	} else if cfg.SessionMaxAge < cfg.SessionIdleTimeout {
+		errs = append(errs, errors.New("SESSION_MAX_AGE: must not be shorter than SESSION_IDLE_TIMEOUT"))
 	}
 
 	if len(errs) > 0 {
