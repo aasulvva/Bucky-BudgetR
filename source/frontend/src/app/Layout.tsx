@@ -23,6 +23,9 @@ import { IconLogout, IconMoon, IconShield, IconSettings, IconSun } from "@tabler
 import { useState } from "react";
 import { Link, Outlet, useLocation } from "react-router";
 
+import { CycleBanners } from "@/components/cycles/CycleBanners";
+import { CycleStatus } from "@/components/cycles/CycleStatus";
+
 import classes from "./Layout.module.css";
 import { findNav, navTabs, profileItems, type NavItem, type NavTab } from "./nav";
 import { useSession, useSignOut } from "./session";
@@ -51,7 +54,10 @@ export function Layout() {
             <Title order={1} size="h4" lineClamp={1}>
               {current?.item.label ?? "Bucky BudgetR"}
             </Title>
-            <ProfileMenu placement="header" />
+            <Group gap={4} wrap="nowrap">
+              <CycleStatus placement="header" />
+              <ProfileMenu placement="header" />
+            </Group>
           </Group>
         </AppShell.Header>
       )}
@@ -66,6 +72,7 @@ export function Layout() {
       {isDesktop && <ReactQueryDevtools buttonPosition="bottom-right" />}
 
       <AppShell.Main>
+        <CycleBanners />
         <Outlet />
       </AppShell.Main>
 
@@ -92,6 +99,9 @@ function SideNav({ current }: { current: Current }) {
         <Title order={1} size="h4" px="sm" pt={4} pb="sm">
           Bucky BudgetR
         </Title>
+        <Stack mb="sm">
+          <CycleStatus placement="sidebar" />
+        </Stack>
       </AppShell.Section>
       <AppShell.Section grow component={ScrollArea}>
         <Stack gap={4}>

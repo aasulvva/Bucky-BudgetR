@@ -5,6 +5,8 @@
 
 import type { components } from "@/api/schema";
 
+import { cycle } from "./fixtures";
+
 type User = components["schemas"]["User"];
 
 export interface MockResponse {
@@ -39,6 +41,8 @@ function defaults(): Map<string, Handler> {
     ["GET /readyz", { body: { status: "ok" } }],
     ["POST /api/v1/auth/logout", { status: 204 }],
     ["GET /api/v1/accounts", { body: [] }],
+    ["GET /api/v1/cycles", { body: [cycle()] }],
+    ["GET /api/v1/cycles/active", { body: { active: cycle(), next: null } }],
     ["GET /api/v1/buckets", { body: [] }],
   ]);
 }
