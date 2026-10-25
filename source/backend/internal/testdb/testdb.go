@@ -189,6 +189,7 @@ func connectPool(ctx context.Context, url, name string) (*pgxpool.Pool, error) {
 		return nil, err
 	}
 	cfg.ConnConfig.Database = name
+	db.Configure(cfg)
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("connect to %s: %w", name, err)

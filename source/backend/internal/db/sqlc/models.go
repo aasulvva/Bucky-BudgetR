@@ -5,10 +5,202 @@
 package sqlc
 
 import (
+	"database/sql/driver"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/shopspring/decimal"
 )
+
+type CorrectionType string
+
+const (
+	CorrectionTypeNone       CorrectionType = "none"
+	CorrectionTypeAdjustment CorrectionType = "adjustment"
+	CorrectionTypeReversal   CorrectionType = "reversal"
+)
+
+func (e *CorrectionType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = CorrectionType(s)
+	case string:
+		*e = CorrectionType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for CorrectionType: %T", src)
+	}
+	return nil
+}
+
+type NullCorrectionType struct {
+	CorrectionType CorrectionType
+	Valid          bool // Valid is true if CorrectionType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullCorrectionType) Scan(value interface{}) error {
+	if value == nil {
+		ns.CorrectionType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.CorrectionType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullCorrectionType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.CorrectionType), nil
+}
+
+type CycleState string
+
+const (
+	CycleStateFuture   CycleState = "future"
+	CycleStateActive   CycleState = "active"
+	CycleStateFinished CycleState = "finished"
+)
+
+func (e *CycleState) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = CycleState(s)
+	case string:
+		*e = CycleState(s)
+	default:
+		return fmt.Errorf("unsupported scan type for CycleState: %T", src)
+	}
+	return nil
+}
+
+type NullCycleState struct {
+	CycleState CycleState
+	Valid      bool // Valid is true if CycleState is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullCycleState) Scan(value interface{}) error {
+	if value == nil {
+		ns.CycleState, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.CycleState.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullCycleState) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.CycleState), nil
+}
+
+type TransactionType string
+
+const (
+	TransactionTypeOPB TransactionType = "OPB"
+	TransactionTypeBLA TransactionType = "BLA"
+	TransactionTypeINC TransactionType = "INC"
+	TransactionTypeEXP TransactionType = "EXP"
+	TransactionTypeTRF TransactionType = "TRF"
+	TransactionTypeINP TransactionType = "INP"
+	TransactionTypeOPF TransactionType = "OPF"
+	TransactionTypeREF TransactionType = "REF"
+	TransactionTypeBUA TransactionType = "BUA"
+	TransactionTypeBAT TransactionType = "BAT"
+	TransactionTypeOVF TransactionType = "OVF"
+)
+
+func (e *TransactionType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = TransactionType(s)
+	case string:
+		*e = TransactionType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for TransactionType: %T", src)
+	}
+	return nil
+}
+
+type NullTransactionType struct {
+	TransactionType TransactionType
+	Valid           bool // Valid is true if TransactionType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullTransactionType) Scan(value interface{}) error {
+	if value == nil {
+		ns.TransactionType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.TransactionType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullTransactionType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.TransactionType), nil
+}
+
+type BankAccount struct {
+	ID         string
+	UserID     string
+	Name       string
+	Currency   string
+	Deleted    bool
+	CreatedAt  time.Time
+	ModifiedAt time.Time
+}
+
+type BankTransaction struct {
+	ID               string
+	TransactionID    string
+	AccountID        string
+	Amount           decimal.Decimal
+	OriginalAmount   decimal.NullDecimal
+	OriginalCurrency pgtype.Text
+	ExchangeRate     decimal.NullDecimal
+	CreatedAt        time.Time
+	CreatedBy        pgtype.Text
+}
+
+type Bucket struct {
+	ID              string
+	UserID          string
+	Name            string
+	SourceAccountID string
+	Deleted         bool
+	CreatedAt       time.Time
+	ModifiedAt      time.Time
+}
+
+type BucketTransaction struct {
+	ID            string
+	TransactionID string
+	BucketID      string
+	CycleID       string
+	Amount        decimal.Decimal
+	CreatedAt     time.Time
+	CreatedBy     pgtype.Text
+}
+
+type Cycle struct {
+	ID         string
+	UserID     string
+	StartDate  time.Time
+	EndDate    time.Time
+	State      CycleState
+	CreatedAt  time.Time
+	ModifiedAt time.Time
+}
 
 type Session struct {
 	TokenHash  []byte
@@ -18,6 +210,31 @@ type Session struct {
 	ExpiresAt  time.Time
 	UserAgent  string
 	Ip         string
+}
+
+type Tag struct {
+	ID        int64
+	UserID    string
+	Name      string
+	CreatedAt time.Time
+}
+
+type TransactionHeader struct {
+	ID              string
+	UserID          string
+	ParentID        pgtype.Text
+	CorrectionType  CorrectionType
+	TransactionType TransactionType
+	TransactionDate time.Time
+	Counterparty    string
+	CreatedAt       time.Time
+	CreatedBy       pgtype.Text
+}
+
+type TransactionTag struct {
+	TransactionID string
+	TagID         int64
+	UserID        string
 }
 
 type User struct {
