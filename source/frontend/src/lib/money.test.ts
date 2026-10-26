@@ -8,6 +8,7 @@ import {
   multiplyAmount,
   parseAmount,
   percentOf,
+  splitAmount,
   subtractAmounts,
 } from "./money";
 
@@ -131,5 +132,14 @@ describe("currencyOptions", () => {
     expect(currencyOptions("en").find((o) => o.value === "NOK")?.label).toBe(
       "NOK · Norwegian Krone",
     );
+  });
+});
+
+describe("splitAmount", () => {
+  it("splits exactly, giving the leftover cents to the largest remainders", () => {
+    expect(splitAmount("100.00", ["150.00"])).toEqual(["100.00"]);
+    expect(splitAmount("100.00", ["1.00", "1.00", "1.00"])).toEqual(["33.34", "33.33", "33.33"]);
+    expect(splitAmount("10.00", ["200.40", "50.00"])).toEqual(["8.00", "2.00"]);
+    expect(splitAmount("5.00", ["0.00"])).toEqual(["0.00"]);
   });
 });

@@ -17,7 +17,13 @@ import {
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
-import { IconAlertTriangle, IconLayoutGrid, IconList, IconSettings } from "@tabler/icons-react";
+import {
+  IconAlertTriangle,
+  IconArrowsShuffle,
+  IconLayoutGrid,
+  IconList,
+  IconSettings,
+} from "@tabler/icons-react";
 import { useMutation } from "@tanstack/react-query";
 import { useState, type CSSProperties } from "react";
 import { Trans, useTranslation } from "react-i18next";
@@ -206,6 +212,12 @@ function AccountSection({
   const { t } = useTranslation();
   const summary = accountSummary(account, buckets);
   const isShort = compareAmounts(summary.short, "0") > 0;
+  // Reallocating only matters while some bucket isn't fully covered.
+  const uncovered =
+    isShort ||
+    buckets.some(
+      (b) => b.source_account_id === account.id && compareAmounts(coverage(b).gap, "0") > 0,
+    );
   const money = (amount: string) => formatMoney(amount, account.currency);
 
   return (
@@ -222,6 +234,7 @@ function AccountSection({
           ) : (
             <Figure label={t("buckets.unallocated")} value={money(summary.unallocated)} />
           )}
+          {uncovered && <ReallocateButton account={account} />}
         </Group>
       </Group>
       {isShort && (
@@ -230,19 +243,16 @@ function AccountSection({
           icon={<IconAlertTriangle size={20} />}
           p="sm"
         >
-          <Group justify="space-between" align="center" gap="sm" wrap="wrap">
-            <Stack gap={4} style={{ flex: "1 1 240px" }}>
-              <Text size="sm">
-                {t(summary.tone === "alert" ? "buckets.shortAlert" : "buckets.shortWarn", {
-                  amount: money(summary.short),
-                })}
-              </Text>
-              <Text size="xs" c="dimmed">
-                {t("buckets.reallocateHint")}
-              </Text>
-            </Stack>
-            <ReallocateButton account={account} />
-          </Group>
+          <Stack gap={4}>
+            <Text size="sm">
+              {t(summary.tone === "alert" ? "buckets.shortAlert" : "buckets.shortWarn", {
+                amount: money(summary.short),
+              })}
+            </Text>
+            <Text size="xs" c="dimmed">
+              {t("buckets.reallocateHint")}
+            </Text>
+          </Stack>
         </Alert>
       )}
       {view === "list" ? (
@@ -567,8 +577,9 @@ function ReallocateButton({ account }: { account: Account }) {
   });
   return (
     <Button
-      variant="default"
+      variant="light"
       size="xs"
+      leftSection={<IconArrowsShuffle size={14} />}
       loading={reallocate.isPending}
       aria-label={t("buckets.reallocateName", { name: account.name })}
       onClick={() => {

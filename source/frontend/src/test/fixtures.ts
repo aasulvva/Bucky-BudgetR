@@ -2,6 +2,7 @@
 
 import type { Account, Bucket, BucketFigures } from "@/api/accounts";
 import type { Cycle } from "@/api/cycles";
+import type { Transaction } from "@/api/transactions";
 import { addDays, endAtFor, startAtFor, today } from "@/lib/cycles";
 
 export function account(overrides: Partial<Account> & Pick<Account, "id" | "name">): Account {
@@ -68,6 +69,29 @@ export function cycle(overrides: Partial<Cycle> = {}): Cycle {
     end_at: endAtFor(addDays(today(), 19)),
     state: "active",
     created_at: "2026-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+/** An expense of 100 on account 1234, now, with no buckets; change what a test needs. */
+export function transaction(
+  overrides: Partial<Transaction> & Pick<Transaction, "id">,
+): Transaction {
+  return {
+    type: "EXP",
+    at: new Date().toISOString(),
+    counterparty: "",
+    tags: [],
+    triggers_refill: false,
+    created_at: new Date().toISOString(),
+    created_by: "00000000-0000-0000-0000-000000000001",
+    corrected: false,
+    reversed: false,
+    replaces: null,
+    replaced_by: null,
+    bank_lines: [{ account_id: "1234", amount: "-100.00" }],
+    bucket_lines: [],
+    before_reversal: null,
     ...overrides,
   };
 }

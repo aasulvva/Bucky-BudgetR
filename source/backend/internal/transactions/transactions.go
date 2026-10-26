@@ -100,9 +100,18 @@ type Transaction struct {
 	// that sum to zero are left out.
 	BankLines   []BankLine
 	BucketLines []BucketLine
+	// BeforeReversal is set on a reversed transaction: its effective lines
+	// just before the reversal, which are what it amounted to.
+	BeforeReversal *Lines
 	// History is the original and its corrections, oldest first. Only Get
 	// fills it.
 	History []Version
+}
+
+// Lines are a transaction's amounts per account and bucket.
+type Lines struct {
+	Bank    []BankLine
+	Buckets []BucketLine
 }
 
 // BankLine is an amount on an account.
@@ -567,6 +576,37 @@ func (s *Service) load(ctx context.Context, q *sqlc.Queries, userID string, orig
 	return out, nil
 }
 
+// sumLines sums the lines of these headers per account and bucket, in the
+// order they first appear, leaving out sums of 0.
+func sumLines(fam []sqlc.TransactionHeader, bank []sqlc.BankTransaction, buckets []sqlc.BucketTransaction) ([]BankLine, []BucketLine) {
+	bankOut, bucketOut := []BankLine{}, []BucketLine{}
+	for _, h := range fam {
+		for _, l := range bank {
+			if l.TransactionID != h.ID {
+				continue
+			}
+			if i := slices.IndexFunc(bankOut, func(b BankLine) bool { return b.AccountID == l.AccountID }); i >= 0 {
+				bankOut[i].Amount = bankOut[i].Amount.Add(l.Amount)
+			} else {
+				bankOut = append(bankOut, BankLine{AccountID: l.AccountID, Amount: l.Amount})
+			}
+		}
+		for _, l := range buckets {
+			if l.TransactionID != h.ID {
+				continue
+			}
+			if i := slices.IndexFunc(bucketOut, func(b BucketLine) bool { return b.BucketID == l.BucketID }); i >= 0 {
+				bucketOut[i].Amount = bucketOut[i].Amount.Add(l.Amount)
+			} else {
+				bucketOut = append(bucketOut, BucketLine{BucketID: l.BucketID, CycleID: l.CycleID, Amount: l.Amount})
+			}
+		}
+	}
+	bankOut = slices.DeleteFunc(bankOut, func(l BankLine) bool { return l.Amount.IsZero() })
+	bucketOut = slices.DeleteFunc(bucketOut, func(l BucketLine) bool { return l.Amount.IsZero() })
+	return bankOut, bucketOut
+}
+
 // merge builds a Transaction from a family: the original header first, then
 // its corrections, with all their lines. tags are the newest header's, which
 // like its counterparty are the effective ones: every correction carries them.
@@ -589,36 +629,13 @@ func merge(fam []sqlc.TransactionHeader, bank []sqlc.BankTransaction, buckets []
 		}
 	}
 
-	// Sum per account and bucket, in the order they first appear.
-	for _, h := range fam {
-		for _, l := range bank {
-			if l.TransactionID != h.ID {
-				continue
-			}
-			if i := slices.IndexFunc(t.BankLines, func(b BankLine) bool { return b.AccountID == l.AccountID }); i >= 0 {
-				t.BankLines[i].Amount = t.BankLines[i].Amount.Add(l.Amount)
-			} else {
-				t.BankLines = append(t.BankLines, BankLine{AccountID: l.AccountID, Amount: l.Amount})
-			}
-		}
-		for _, l := range buckets {
-			if l.TransactionID != h.ID {
-				continue
-			}
-			if i := slices.IndexFunc(t.BucketLines, func(b BucketLine) bool { return b.BucketID == l.BucketID }); i >= 0 {
-				t.BucketLines[i].Amount = t.BucketLines[i].Amount.Add(l.Amount)
-			} else {
-				t.BucketLines = append(t.BucketLines, BucketLine{BucketID: l.BucketID, CycleID: l.CycleID, Amount: l.Amount})
-			}
-		}
-	}
-	t.BankLines = slices.DeleteFunc(t.BankLines, func(l BankLine) bool { return l.Amount.IsZero() })
-	t.BucketLines = slices.DeleteFunc(t.BucketLines, func(l BucketLine) bool { return l.Amount.IsZero() })
-	if t.BankLines == nil {
-		t.BankLines = []BankLine{}
-	}
-	if t.BucketLines == nil {
-		t.BucketLines = []BucketLine{}
+	t.BankLines, t.BucketLines = sumLines(fam, bank, buckets)
+	if i := slices.IndexFunc(fam, func(h sqlc.TransactionHeader) bool {
+		return h.CorrectionType == sqlc.CorrectionTypeReversal
+	}); i > 0 {
+		var before Lines
+		before.Bank, before.Buckets = sumLines(fam[:i], bank, buckets)
+		t.BeforeReversal = &before
 	}
 
 	if history {

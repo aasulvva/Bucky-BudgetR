@@ -1100,6 +1100,11 @@ export interface components {
             bank_lines: components["schemas"]["TransactionBankLine"][];
             /** @description Effective amounts per bucket, the original plus its corrections. Lines that sum to 0 are left out. */
             bucket_lines: components["schemas"]["TransactionBucketLine"][];
+            /**
+             * @description Set on a reversed transaction: its effective lines just before the
+             *     reversal, so what it amounted to can still be shown. Null otherwise.
+             */
+            before_reversal: components["schemas"]["TransactionLines"] | null;
             /** @description Only from `GET /transactions/{id}`. The original and its corrections, oldest first. */
             history?: components["schemas"]["TransactionVersion"][];
         };
@@ -1109,6 +1114,10 @@ export interface components {
             /** Format: date-time */
             created_at: string;
             created_by: string | null;
+            bank_lines: components["schemas"]["TransactionBankLine"][];
+            bucket_lines: components["schemas"]["TransactionBucketLine"][];
+        };
+        TransactionLines: {
             bank_lines: components["schemas"]["TransactionBankLine"][];
             bucket_lines: components["schemas"]["TransactionBucketLine"][];
         };

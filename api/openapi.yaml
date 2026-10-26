@@ -1834,7 +1834,7 @@ components:
     Transaction:
       type: object
       additionalProperties: false
-      required: [id, type, at, counterparty, tags, triggers_refill, created_at, created_by, corrected, reversed, replaces, replaced_by, bank_lines, bucket_lines]
+      required: [id, type, at, counterparty, tags, triggers_refill, created_at, created_by, corrected, reversed, replaces, replaced_by, bank_lines, bucket_lines, before_reversal]
       properties:
         id:
           $ref: "#/components/schemas/TransactionId"
@@ -1886,6 +1886,14 @@ components:
           description: Effective amounts per bucket, the original plus its corrections. Lines that sum to 0 are left out.
           items:
             $ref: "#/components/schemas/TransactionBucketLine"
+        before_reversal:
+          description: |
+            Set on a reversed transaction: its effective lines just before the
+            reversal, so what it amounted to can still be shown. Null otherwise.
+          type: object
+          allOf:
+            - $ref: "#/components/schemas/TransactionLines"
+          nullable: true
         history:
           type: array
           description: Only from `GET /transactions/{id}`. The original and its corrections, oldest first.
@@ -1907,6 +1915,20 @@ components:
         created_by:
           type: string
           nullable: true
+        bank_lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransactionBankLine"
+        bucket_lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransactionBucketLine"
+
+    TransactionLines:
+      type: object
+      additionalProperties: false
+      required: [bank_lines, bucket_lines]
+      properties:
         bank_lines:
           type: array
           items:

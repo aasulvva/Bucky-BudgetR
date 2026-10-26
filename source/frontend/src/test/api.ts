@@ -17,6 +17,8 @@ export interface MockResponse {
 export interface MockRequest {
   method: string;
   path: string;
+  /** The query string; routes match on method and path only. */
+  query: URLSearchParams;
   body: unknown;
 }
 
@@ -47,6 +49,7 @@ function defaults(): Map<string, Handler> {
     ["GET /api/v1/cycles/100001000001/bucket-figures", { body: [] }],
     ["GET /api/v1/tags", { body: [] }],
     ["GET /api/v1/counterparties", { body: [] }],
+    ["GET /api/v1/transactions", { body: { items: [], next_cursor: null } }],
   ]);
 }
 
@@ -74,9 +77,11 @@ export const apiMock = {
 
 export async function fakeFetch(input: Request): Promise<Response> {
   const text = await input.text();
+  const url = new URL(input.url);
   const req: MockRequest = {
     method: input.method,
-    path: new URL(input.url).pathname,
+    path: url.pathname,
+    query: url.searchParams,
     body: text ? (JSON.parse(text) as unknown) : undefined,
   };
   apiMock.requests.push(req);

@@ -1,8 +1,11 @@
 import type { CounterpartySuggestion } from "@/api/transactions";
-import { account, bucket, cycle } from "@/test/fixtures";
+import { account, bucket, cycle, transaction } from "@/test/fixtures";
 
 import {
   bucketTotals,
+  correctionBody,
+  editState,
+  followAmount,
   fromLastTime,
   initialAccount,
   insideCycle,
@@ -125,5 +128,113 @@ describe("initialAccount", () => {
     expect(initialAccount([main, buffer], buffer.id)).toBe(buffer.id);
     expect(initialAccount([main, buffer], "9999")).toBeNull();
     expect(initialAccount([main], null)).toBe(main.id);
+  });
+});
+
+describe("editing", () => {
+  const exp = transaction({
+    id: "t1",
+    counterparty: "Rema 1000",
+    tags: ["food"],
+    bank_lines: [{ account_id: main.id, amount: "-250.40" }],
+    bucket_lines: [{ bucket_id: groceries.id, cycle_id: cycle().id, amount: "-200.40" }],
+  });
+
+  it("starts from the effective values, with positive amounts", () => {
+    const start = editState(exp);
+    expect(start).toMatchObject({
+      amount: "250.40",
+      accountId: main.id,
+      toAccountId: null,
+      counterparty: "Rema 1000",
+      tags: ["food"],
+      triggersRefill: false,
+    });
+    expect(start.lines.map((l) => [l.bucketId, l.amount])).toEqual([[groceries.id, "200.40"]]);
+
+    const trf = transaction({
+      id: "t2",
+      type: "TRF",
+      bank_lines: [
+        { account_id: buffer.id, amount: "300.00" },
+        { account_id: main.id, amount: "-300.00" },
+      ],
+    });
+    expect(editState(trf)).toMatchObject({
+      amount: "300.00",
+      accountId: main.id,
+      toAccountId: buffer.id,
+    });
+    const bla = transaction({
+      id: "t3",
+      type: "BLA",
+      bank_lines: [{ account_id: main.id, amount: "-12.00" }],
+    });
+    expect(editState(bla).amount).toBe("-12.00");
+  });
+
+  it("sends only what changed, or nothing", () => {
+    const start = editState(exp);
+    expect(correctionBody(exp, start, false)).toBeNull();
+    expect(
+      correctionBody(exp, { ...start, tags: ["food"], counterparty: " Rema 1000 " }, false),
+    ).toBeNull();
+    expect(correctionBody(exp, { ...start, amount: "260.00", tags: [] }, false)).toEqual({
+      amount: "260.00",
+      tags: [],
+    });
+    const lines = [newLine(groceries.id, "150.00"), newLine(household.id, "50.40")];
+    expect(correctionBody(exp, { ...start, lines }, false)).toEqual({
+      bucket_lines: [
+        { bucket_id: groceries.id, amount: "150.00" },
+        { bucket_id: household.id, amount: "50.40" },
+      ],
+    });
+    // Locked: the lines are left out.
+    expect(correctionBody(exp, { ...start, lines }, true)).toBeNull();
+    // A move drops the buckets of the old account.
+    expect(correctionBody(exp, { ...start, accountId: buffer.id, lines: [] }, false)).toEqual({
+      account_id: buffer.id,
+      bucket_lines: [],
+    });
+    const inc = transaction({
+      id: "t4",
+      type: "INC",
+      bank_lines: [{ account_id: main.id, amount: "100.00" }],
+    });
+    expect(correctionBody(inc, { ...editState(inc), triggersRefill: true }, false)).toEqual({
+      triggers_refill: true,
+    });
+  });
+});
+
+describe("followAmount", () => {
+  const amounts = (lines: ReturnType<typeof followAmount>) => lines.map((l) => l.amount);
+
+  it("keeps a split that took the whole amount whole", () => {
+    const one = { amount: "150.00", lines: [newLine(groceries.id, "150.00")] };
+    expect(amounts(followAmount(one, "100.00"))).toEqual(["100.00"]);
+    expect(amounts(followAmount(one, "175.50"))).toEqual(["175.50"]);
+    const two = {
+      amount: "300.00",
+      lines: [newLine(groceries.id, "200.00"), newLine(household.id, "100.00")],
+    };
+    expect(amounts(followAmount(two, "150.00"))).toEqual(["100.00", "50.00"]);
+  });
+
+  it("keeps a partial split, unless it no longer fits", () => {
+    const part = { amount: "250.40", lines: [newLine(groceries.id, "200.40")] };
+    expect(amounts(followAmount(part, "260.00"))).toEqual(["200.40"]);
+    expect(amounts(followAmount(part, "220.00"))).toEqual(["200.40"]);
+    expect(amounts(followAmount(part, "150.00"))).toEqual(["150.00"]);
+  });
+
+  it("leaves rows alone without amounts to go by", () => {
+    const empty = { amount: "100.00", lines: [newLine(groceries.id, null)] };
+    expect(amounts(followAmount(empty, "50.00"))).toEqual([null]);
+    const none = { amount: null, lines: [newLine(groceries.id, "20.00")] };
+    expect(amounts(followAmount(none, "50.00"))).toEqual(["20.00"]);
+    const base = { amount: "150.00", lines: [newLine(groceries.id, "150.00")] };
+    expect(amounts(followAmount(base, null))).toEqual(["150.00"]);
   });
 });

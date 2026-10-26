@@ -115,6 +115,29 @@ export function subtractAmounts(a: string, b: string): string {
   return fromCents(toCents(canonicalAmount(a)) - toCents(canonicalAmount(b)));
 }
 
+/**
+ * Splits total in proportion to weights (positive amounts), exactly: shares are
+ * rounded down to cents, and the cents left over go one each to the largest
+ * remainders, so they add up to total.
+ */
+export function splitAmount(total: string, weights: string[]): string[] {
+  const t = toCents(canonicalAmount(total));
+  const w = weights.map((x) => toCents(canonicalAmount(x)));
+  const sum = w.reduce((a, b) => a + b, 0n);
+  if (sum <= 0n) return weights.map(() => "0.00");
+  const shares = w.map((x) => (t * x) / sum);
+  const order = w
+    .map((x, i) => ({ i, rem: (t * x) % sum }))
+    .sort((a, b) => (b.rem > a.rem ? 1 : b.rem < a.rem ? -1 : a.i - b.i));
+  let left = t - shares.reduce((a, b) => a + b, 0n);
+  for (const { i } of order) {
+    if (left <= 0n) break;
+    shares[i] = (shares[i] ?? 0n) + 1n;
+    left -= 1n;
+  }
+  return shares.map(fromCents);
+}
+
 /** Compares two amounts: negative, 0 or positive, as a is less, equal or more. */
 export function compareAmounts(a: string, b: string): number {
   const d = toCents(canonicalAmount(a)) - toCents(canonicalAmount(b));

@@ -177,12 +177,25 @@ func TestReverse(t *testing.T) {
 		Type: sqlc.TransactionTypeINC, Amount: dec("300"), Tags: []string{"gift"},
 		Buckets: []transactions.BucketAmount{{BucketID: bucket, Amount: dec("100")}},
 	})
+	if orig.BeforeReversal != nil {
+		t.Errorf("not reversed, but BeforeReversal %+v", orig.BeforeReversal)
+	}
+	// Corrected first: BeforeReversal holds the corrected amounts.
+	e.correct(t, orig.ID, transactions.Changes{Amount: ptr(dec("350"))})
 	got, err := e.svc.Reverse(t.Context(), e.user, orig.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !got.Reversed || len(got.BankLines)+len(got.BucketLines) != 0 || !equal(got.Tags, []string{"gift"}) {
 		t.Errorf("reversed %+v", got)
+	}
+	if b := got.BeforeReversal; b == nil || len(b.Bank) != 1 || !b.Bank[0].Amount.Equal(dec("350")) ||
+		len(b.Buckets) != 1 || !b.Buckets[0].Amount.Equal(dec("100")) {
+		t.Errorf("BeforeReversal %+v, want 350 on the account and 100 on the bucket", got.BeforeReversal)
+	}
+	list, err := e.svc.List(t.Context(), e.user, transactions.Filter{})
+	if err != nil || len(list.Items) == 0 || list.Items[0].BeforeReversal == nil {
+		t.Errorf("listed without BeforeReversal: %v %+v", err, list)
 	}
 	acc, tf := e.balances(t)
 	if !acc[e.account].IsZero() || !tf[bucket].IsZero() {
