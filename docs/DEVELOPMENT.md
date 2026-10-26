@@ -50,7 +50,7 @@ docker run --rm hello-world   # must work without sudo
 
 ## Backend
 
-The Go service lives in `source/backend`. `make dev-backend` runs it with live reload (air). The server applies pending migrations on startup.
+The Go service lives in `source/backend`. `make dev-backend` runs it with live reload (air). The server applies pending migrations on startup. It first stops a dev server left over from an earlier run: air can lose track of its server, which then keeps the port, so the new one can't start and the old code keeps answering.
 
 ```bash
 go run ./cmd/server           # start the server

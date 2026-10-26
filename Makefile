@@ -36,8 +36,17 @@ help: ## Show this help
 dev: db-up ## Start the database, then the backend (air) and frontend (Vite) with live reload
 	$(MAKE) -j2 dev-backend dev-frontend
 
+# The dev server air runs. One left over from an earlier run (air can lose
+# track of it) would keep the port, so the new one couldn't start. Anchored,
+# so it doesn't match the shell running the recipe.
+DEV_SERVER := ^$(CURDIR)/$(BACKEND)/tmp/server$$
+
 dev-backend:
 ifneq ($(HAS_BACKEND),)
+	@if pkill -f '$(DEV_SERVER)'; then \
+		echo "Stopped a dev server left over from an earlier run."; \
+		while pgrep -f '$(DEV_SERVER)' >/dev/null; do sleep 0.2; done; \
+	fi
 	cd $(BACKEND) && go tool air
 else
 	$(call skip,backend)
