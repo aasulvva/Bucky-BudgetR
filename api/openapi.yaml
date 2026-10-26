@@ -28,7 +28,8 @@ info:
 
     A user whose `must_change_password` is set may only call operations
     marked `x-allowed-before-password-change`; everything else gets 403
-    `password_change_required`.
+    `password_change_required`. Operations marked `x-admin-only` need an
+    admin; others get 403 `admin_only`.
 
 servers:
   - url: /
@@ -50,6 +51,8 @@ tags:
     description: Buckets, their settings and their funds.
   - name: transactions
     description: Income, expenses and transfers, and the transaction list.
+  - name: admin
+    description: User management, for admins only.
 
 paths:
   /healthz:
@@ -217,6 +220,131 @@ paths:
         "400":
           $ref: "#/components/responses/Error"
         "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/admin/users:
+    get:
+      operationId: listUsers
+      x-admin-only: true
+      tags: [admin]
+      summary: List users
+      description: Every user, sorted by username, with when they last used the app.
+      responses:
+        "200":
+          description: The users.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminUser"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+    post:
+      operationId: createUser
+      x-admin-only: true
+      tags: [admin]
+      summary: Create a user
+      description: |
+        Creates an active user with a generated temporary password, which is
+        returned only here. The user must change it at first login. A taken
+        username (ignoring case) is 409 `username_taken`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserCreate"
+      responses:
+        "201":
+          description: The user and their temporary password.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatedUser"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/admin/users/{userId}:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    patch:
+      operationId: updateUser
+      x-admin-only: true
+      tags: [admin]
+      summary: Activate, deactivate, grant or revoke admin
+      description: |
+        Deactivating ends the user's sessions and blocks login; their data is
+        kept. The last active admin can't be deactivated or demoted (409
+        `last_admin`), and admins can't change themselves here (409
+        `own_account`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdate"
+      responses:
+        "200":
+          description: The updated user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/admin/users/{userId}/reset-password:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    post:
+      operationId: resetUserPassword
+      x-admin-only: true
+      tags: [admin]
+      summary: Reset a user's password
+      description: |
+        Sets a generated temporary password, returned only here, and ends the
+        user's sessions. The user must change it at their next login. Admins
+        change their own password with `POST /me/password` (409
+        `own_account`).
+      responses:
+        "200":
+          description: The temporary password.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemporaryPassword"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
           $ref: "#/components/responses/Error"
         default:
           $ref: "#/components/responses/Error"
@@ -1307,6 +1435,13 @@ components:
         type: string
 
   parameters:
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/UserId"
+
     AccountId:
       name: accountId
       in: path
@@ -1357,6 +1492,84 @@ components:
       description: 6-digit user ID.
       pattern: "^[1-9][0-9]{5}$"
       example: "482913"
+
+    Username:
+      type: string
+      description: 3–32 letters, digits, `.`, `_` or `-`. Unique, ignoring case.
+      pattern: "^[A-Za-z0-9._-]{3,32}$"
+      example: kari
+
+    AdminUser:
+      type: object
+      additionalProperties: false
+      required: [id, username, active, admin, must_change_password, created_at, created_by, last_seen_at]
+      properties:
+        id:
+          $ref: "#/components/schemas/UserId"
+        username:
+          $ref: "#/components/schemas/Username"
+        active:
+          type: boolean
+          description: An inactive user can't log in.
+        admin:
+          type: boolean
+        must_change_password:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        created_by:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/UserId"
+          nullable: true
+          description: The admin who created the user; null for the initial admin.
+        last_seen_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When one of the user's sessions was last used; null without a session.
+
+    UserCreate:
+      type: object
+      additionalProperties: false
+      required: [username]
+      properties:
+        username:
+          $ref: "#/components/schemas/Username"
+        admin:
+          type: boolean
+          default: false
+
+    UserUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        active:
+          type: boolean
+        admin:
+          type: boolean
+
+    CreatedUser:
+      type: object
+      additionalProperties: false
+      required: [user, temporary_password]
+      properties:
+        user:
+          $ref: "#/components/schemas/AdminUser"
+        temporary_password:
+          type: string
+          description: Shown once. The user must change it at first login.
+
+    TemporaryPassword:
+      type: object
+      additionalProperties: false
+      required: [temporary_password]
+      properties:
+        temporary_password:
+          type: string
+          description: Shown once. The user must change it at their next login.
 
     User:
       type: object

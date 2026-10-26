@@ -42,6 +42,10 @@ Self-hosted, envelope-style ("bucket") budgeting application.
 
 **Initial setup:** on first start a default admin account is created with password `BuckyBudgetR_ADMIN_Pa$$w0rd`. The user must change it at first login. The default can be overridden with an environment variable.
 
+**User management (admins):** admins create users, activate and deactivate them, grant and revoke admin, and reset passwords. New and reset passwords are generated temporary ones, shown to the admin once; the user must change it at their next login. Users are never deleted: deactivating blocks login and ends their sessions, and keeps their data. Admins manage accounts only, never other users' money. An admin can't change their own account there (they use Settings), and the last active admin can't be demoted or deactivated.
+
+**Recovery:** when no admin can log in, `server reset-password --user <name>` on the server gives that user a temporary password (printed), makes them an active admin and ends their sessions.
+
 ## 2. Bank accounts
 
 | Field | Notes |
@@ -300,7 +304,7 @@ Desktop and mobile use the same groups (decided in #8; wireframes in the design 
 | Savings setup | Savings targets and priority rules |
 | Stats & reports | Spending and balance graphs over time; yearly PDF report; filter by bucket, tag, counterparty |
 | Settings | Profile menu. Password, preferences (locale, language, default refill mode, income rules), data export/import *(later)* |
-| Admin | Profile menu, admins only. User management, including password reset |
+| Admin | Profile menu, admins only. Users: create, activate/deactivate, make/remove admin, reset password (a temporary password shown once) |
 
 ## 10. Roadmap
 
@@ -314,7 +318,6 @@ Desktop and mobile use the same groups (decided in #8; wireframes in the design 
 - Basic spending analysis (e.g. warnings to slow down in a category).
 - Better investment tracking.
 - Shared budgeting for couples (shared "Groceries" bucket, separate "Hobby" buckets). Note: the owner-embedded IDs assume a single owner.
-- Recovering the admin password if it is forgotten.
 - Which stats and reports to offer.
 
 ## 12. Dev rules

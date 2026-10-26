@@ -655,6 +655,56 @@
     "endedStarted": "Cycle ended. {{range}} has started.",
     "ended": "Cycle ended. There's no active cycle until you start one."
   },
+  "admin": {
+    "intro": "Everyone who can log in. Users are never deleted: deactivate them instead, which keeps their data. Admins manage users, but don't see other users' money.",
+    "adminsOnly": "Admins only",
+    "adminsOnlyDetail": "Only admins can manage users.",
+    "newUser": "New user",
+    "username": "Username",
+    "usernameRule": "3–32 letters, digits, dots, dashes or underscores.",
+    "makeAdminToo": "Admin",
+    "makeAdminHint": "Admins can manage users.",
+    "createHint": "They get a temporary password, shown next, and must change it when they first log in.",
+    "create": "Create user",
+    "created": "Created",
+    "lastSeen": "Last seen",
+    "lastSeenAt": "Last seen: {{when}}",
+    "never": "Never",
+    "actions": "Actions",
+    "actionsFor": "Actions for {{name}}",
+    "ownAccount": "This is you. Change your own password in Settings.",
+    "makeAdmin": "Make admin",
+    "removeAdmin": "Remove admin",
+    "resetPassword": "Reset password",
+    "deactivateUser": "Deactivate",
+    "activate": "Activate",
+    "madeAdmin": "{{name}} is now an admin.",
+    "removedAdmin": "{{name}} is no longer an admin.",
+    "activated": "{{name}} can log in again.",
+    "badges": {
+      "you": "You",
+      "admin": "Admin",
+      "inactive": "Inactive",
+      "mustChange": "Must change password"
+    },
+    "deactivate": {
+      "title": "Deactivate {{name}}?",
+      "question": "<b>{{name}}</b> can no longer log in, and is logged out everywhere. Their data is kept, and you can activate them again later.",
+      "done": "{{name}} is deactivated."
+    },
+    "reset": {
+      "title": "Reset the password for {{name}}?",
+      "question": "<b>{{name}}</b> gets a new temporary password and is logged out everywhere. They must change it when they log in."
+    },
+    "password": {
+      "title": "Temporary password",
+      "intro": "The temporary password for <b>{{name}}</b>:",
+      "copy": "Copy the password",
+      "copied": "Copied",
+      "onceOnly": "This is the only time it's shown. Give it to them; they must change it when they log in.",
+      "done": "Done"
+    }
+  },
   "errors": {
     "generic": "Something went wrong",
     "network": "Network error",
@@ -675,6 +725,7 @@
     "codes": {
       "account_has_buckets": "Buckets use this account as their source. Choose a new source account for each, or delete them in Bucket setup.",
       "active_cycle_exists": "Another cycle is active. End it first.",
+      "admin_only": "Only admins can do this.",
       "already_refilled": "The bucket has already been refilled in this cycle.",
       "already_reversed": "The transaction has been reversed.",
       "balance_not_zero": "The account still has money in it. Transfer it to another account or adjust the balance to 0.",
@@ -690,15 +741,18 @@
       "database_unavailable": "The database is not reachable.",
       "internal_error": "The server ran into a problem.",
       "invalid_credentials": "Wrong username or password.",
+      "last_admin": "This is the last active admin. Make someone else an admin first.",
       "name_taken": "That name is already in use.",
       "no_active_cycle": "Bucket transactions need an active cycle. Start a cycle first.",
       "no_change": "The balance is already this amount.",
       "not_correctable": "System transactions of this type can't be corrected or reversed.",
       "not_found": "It doesn't exist, or it has been deleted.",
       "not_next_cycle": "An earlier cycle is planned. Start that one first.",
+      "own_account": "You can't change your own account here. Use Settings.",
       "password_change_required": "Change your password first.",
       "refill_unavailable": "Only income in the active cycle can trigger a refill.",
       "unauthenticated": "Log in first.",
+      "username_taken": "That username is already in use.",
       "wrong_password": "The current password is wrong.",
       "wrong_refill_mode": "Only buckets with the manual refill mode can be refilled by hand."
     },

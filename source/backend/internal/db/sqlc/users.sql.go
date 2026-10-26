@@ -7,9 +7,21 @@ package sqlc
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const countOtherActiveAdmins = `-- name: CountOtherActiveAdmins :one
+SELECT count(*) FROM users WHERE active AND admin AND id <> $1::text
+`
+
+func (q *Queries) CountOtherActiveAdmins(ctx context.Context, id string) (int64, error) {
+	row := q.db.QueryRow(ctx, countOtherActiveAdmins, id)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
 
 const countUsers = `-- name: CountUsers :one
 SELECT count(*) FROM users
@@ -97,6 +109,131 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 	return i, err
 }
 
+const getUserForUpdate = `-- name: GetUserForUpdate :one
+SELECT id, active, admin FROM users WHERE id = $1 FOR UPDATE
+`
+
+type GetUserForUpdateRow struct {
+	ID     string
+	Active bool
+	Admin  bool
+}
+
+func (q *Queries) GetUserForUpdate(ctx context.Context, id string) (GetUserForUpdateRow, error) {
+	row := q.db.QueryRow(ctx, getUserForUpdate, id)
+	var i GetUserForUpdateRow
+	err := row.Scan(&i.ID, &i.Active, &i.Admin)
+	return i, err
+}
+
+const lastSeenByUser = `-- name: LastSeenByUser :many
+SELECT user_id, max(last_seen_at)::timestamptz AS last_seen_at
+FROM sessions
+GROUP BY user_id
+`
+
+type LastSeenByUserRow struct {
+	UserID     string
+	LastSeenAt time.Time
+}
+
+// When each user's sessions were last used; users without one are left out.
+func (q *Queries) LastSeenByUser(ctx context.Context) ([]LastSeenByUserRow, error) {
+	rows, err := q.db.Query(ctx, lastSeenByUser)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LastSeenByUserRow{}
+	for rows.Next() {
+		var i LastSeenByUserRow
+		if err := rows.Scan(&i.UserID, &i.LastSeenAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUsers = `-- name: ListUsers :many
+SELECT id, username, password_hash, active, admin, must_change_password, preferences, created_at, modified_at, created_by FROM users ORDER BY lower(username)
+`
+
+func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
+	rows, err := q.db.Query(ctx, listUsers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []User{}
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.Username,
+			&i.PasswordHash,
+			&i.Active,
+			&i.Admin,
+			&i.MustChangePassword,
+			&i.Preferences,
+			&i.CreatedAt,
+			&i.ModifiedAt,
+			&i.CreatedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const recoverUser = `-- name: RecoverUser :one
+UPDATE users
+SET password_hash = $1, must_change_password = true, active = true, admin = true,
+    modified_at = now()
+WHERE lower(username) = lower($2)
+RETURNING id
+`
+
+type RecoverUserParams struct {
+	PasswordHash string
+	Username     string
+}
+
+// The CLI's rescue: a temporary password, and the user active and admin.
+func (q *Queries) RecoverUser(ctx context.Context, arg RecoverUserParams) (string, error) {
+	row := q.db.QueryRow(ctx, recoverUser, arg.PasswordHash, arg.Username)
+	var id string
+	err := row.Scan(&id)
+	return id, err
+}
+
+const setTemporaryPassword = `-- name: SetTemporaryPassword :execrows
+UPDATE users
+SET password_hash = $2, must_change_password = true, modified_at = now()
+WHERE id = $1
+`
+
+type SetTemporaryPasswordParams struct {
+	ID           string
+	PasswordHash string
+}
+
+// A password the user must change at their next login.
+func (q *Queries) SetTemporaryPassword(ctx context.Context, arg SetTemporaryPasswordParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setTemporaryPassword, arg.ID, arg.PasswordHash)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updatePassword = `-- name: UpdatePassword :exec
 UPDATE users
 SET password_hash = $2, must_change_password = false, modified_at = now()
@@ -131,4 +268,19 @@ func (q *Queries) UpdatePreferences(ctx context.Context, arg UpdatePreferencesPa
 	var preferences []byte
 	err := row.Scan(&preferences)
 	return preferences, err
+}
+
+const updateUserFlags = `-- name: UpdateUserFlags :exec
+UPDATE users SET active = $2, admin = $3, modified_at = now() WHERE id = $1
+`
+
+type UpdateUserFlagsParams struct {
+	ID     string
+	Active bool
+	Admin  bool
+}
+
+func (q *Queries) UpdateUserFlags(ctx context.Context, arg UpdateUserFlagsParams) error {
+	_, err := q.db.Exec(ctx, updateUserFlags, arg.ID, arg.Active, arg.Admin)
+	return err
 }

@@ -144,6 +144,82 @@ export interface paths {
         patch: operations["updatePreferences"];
         trace?: never;
     };
+    "/api/v1/admin/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List users
+         * @description Every user, sorted by username, with when they last used the app.
+         */
+        get: operations["listUsers"];
+        put?: never;
+        /**
+         * Create a user
+         * @description Creates an active user with a generated temporary password, which is
+         *     returned only here. The user must change it at first login. A taken
+         *     username (ignoring case) is 409 `username_taken`.
+         */
+        post: operations["createUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Activate, deactivate, grant or revoke admin
+         * @description Deactivating ends the user's sessions and blocks login; their data is
+         *     kept. The last active admin can't be deactivated or demoted (409
+         *     `last_admin`), and admins can't change themselves here (409
+         *     `own_account`).
+         */
+        patch: operations["updateUser"];
+        trace?: never;
+    };
+    "/api/v1/admin/users/{userId}/reset-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset a user's password
+         * @description Sets a generated temporary password, returned only here, and ends the
+         *     user's sessions. The user must change it at their next login. Admins
+         *     change their own password with `POST /me/password` (409
+         *     `own_account`).
+         */
+        post: operations["resetUserPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/accounts": {
         parameters: {
             query?: never;
@@ -831,6 +907,46 @@ export interface components {
          * @example 482913
          */
         UserId: string;
+        /**
+         * @description 3–32 letters, digits, `.`, `_` or `-`. Unique, ignoring case.
+         * @example kari
+         */
+        Username: string;
+        AdminUser: {
+            id: components["schemas"]["UserId"];
+            username: components["schemas"]["Username"];
+            /** @description An inactive user can't log in. */
+            active: boolean;
+            admin: boolean;
+            must_change_password: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** @description The admin who created the user; null for the initial admin. */
+            created_by: (string & components["schemas"]["UserId"]) | null;
+            /**
+             * Format: date-time
+             * @description When one of the user's sessions was last used; null without a session.
+             */
+            last_seen_at: string | null;
+        };
+        UserCreate: {
+            username: components["schemas"]["Username"];
+            /** @default false */
+            admin: boolean;
+        };
+        UserUpdate: {
+            active?: boolean;
+            admin?: boolean;
+        };
+        CreatedUser: {
+            user: components["schemas"]["AdminUser"];
+            /** @description Shown once. The user must change it at first login. */
+            temporary_password: string;
+        };
+        TemporaryPassword: {
+            /** @description Shown once. The user must change it at their next login. */
+            temporary_password: string;
+        };
         User: {
             id: components["schemas"]["UserId"];
             /** @example admin */
@@ -1404,6 +1520,7 @@ export interface components {
         };
     };
     parameters: {
+        UserId: components["schemas"]["UserId"];
         AccountId: components["schemas"]["AccountId"];
         CycleId: components["schemas"]["CycleId"];
         BucketId: components["schemas"]["BucketId"];
@@ -1599,6 +1716,117 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listUsers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The users. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUser"][];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserCreate"];
+            };
+        };
+        responses: {
+            /** @description The user and their temporary password. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedUser"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    updateUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserUpdate"];
+            };
+        };
+        responses: {
+            /** @description The updated user. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUser"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    resetUserPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The temporary password. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemporaryPassword"];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };

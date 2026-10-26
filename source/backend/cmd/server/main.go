@@ -5,6 +5,9 @@
 //	server          start the HTTP server (default)
 //	server serve    same as above
 //	server migrate  apply database migrations and exit
+//	server reset-password --user NAME
+//	                give NAME a temporary password and make them an active
+//	                admin, for when no admin can log in; prints the password
 //
 // Configuration comes from environment variables; see internal/config.
 package main
@@ -12,6 +15,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"log/slog"
@@ -21,6 +25,8 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/accounts"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/allocation"
@@ -38,7 +44,7 @@ import (
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	err := run(ctx, os.Args[1:], os.Getenv, os.Stderr)
+	err := run(ctx, os.Args[1:], os.Getenv, os.Stdout, os.Stderr)
 	stop()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
@@ -46,13 +52,26 @@ func main() {
 	}
 }
 
-func run(ctx context.Context, args []string, getenv func(string) string, logOut io.Writer) error {
+func run(ctx context.Context, args []string, getenv func(string) string, out, logOut io.Writer) error {
 	cmd := "serve"
 	if len(args) > 0 {
 		cmd = args[0]
 	}
-	if cmd != "serve" && cmd != "migrate" {
-		return fmt.Errorf("unknown command %q (want serve or migrate)", cmd)
+	var username string
+	switch cmd {
+	case "serve", "migrate":
+	case "reset-password":
+		fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
+		fs.SetOutput(logOut)
+		fs.StringVar(&username, "user", "", "the user to recover")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		if username == "" {
+			return errors.New("reset-password needs --user")
+		}
+	default:
+		return fmt.Errorf("unknown command %q (want serve, migrate or reset-password)", cmd)
 	}
 
 	cfg, err := config.Load(getenv)
@@ -72,8 +91,11 @@ func run(ctx context.Context, args []string, getenv func(string) string, logOut 
 			return err
 		}
 	}
-	if cmd == "migrate" {
+	switch cmd {
+	case "migrate":
 		return nil
+	case "reset-password":
+		return resetPassword(ctx, pool, username, out)
 	}
 
 	if err := auth.EnsureInitialAdmin(ctx, pool, cfg.InitialAdminPassword, logger); err != nil {
@@ -109,6 +131,19 @@ func run(ctx context.Context, args []string, getenv func(string) string, logOut 
 		IdleTimeout:       2 * time.Minute,
 	}
 	return serve(ctx, srv, cfg.ShutdownTimeout, logger)
+}
+
+// resetPassword is the way back in when no admin can log in.
+func resetPassword(ctx context.Context, pool *pgxpool.Pool, username string, out io.Writer) error {
+	password, err := auth.RecoverAdmin(ctx, pool, username)
+	if errors.Is(err, auth.ErrUserNotFound) {
+		return fmt.Errorf("no user named %q", username)
+	}
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(out, "%s is now an active admin. Temporary password: %s\nThey must change it when they log in.\n", username, password)
+	return err
 }
 
 // serve runs srv until ctx is cancelled, then shuts it down gracefully,
