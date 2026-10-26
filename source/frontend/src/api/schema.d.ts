@@ -388,6 +388,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cycles/{cycleId}/bucket-figures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycleId: components["parameters"]["CycleId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The buckets' figures for a cycle
+         * @description What happened to each bucket in the cycle (spec §4), for the Buckets
+         *     screen's "used X of Y": its TF when the cycle began, what was put in
+         *     or taken out by type, what was spent and what overflowed. Calculated
+         *     from the bucket lines; lines from later cycles don't count, so a
+         *     finished cycle's figures stay as they were.
+         *
+         *     Every bucket that isn't deleted is listed, sorted by ID, with zeros
+         *     when nothing happened to it. A cycle that isn't the user's gets 404.
+         */
+        get: operations["listBucketFigures"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/buckets": {
         parameters: {
             query?: never;
@@ -883,6 +912,36 @@ export interface components {
             refilled: boolean;
             /** Format: date-time */
             created_at: string;
+        };
+        /**
+         * @description A bucket's figures for one cycle. The parts are signed: a reduction
+         *     or a transfer out is negative. `budget` = `start` + `refills` +
+         *     `income` + `opening_funds` + `adjustments` + `transfers`, and `left` =
+         *     `budget` − `used` − `overflow`, which is the current TF while the cycle
+         *     is active.
+         */
+        BucketFigures: {
+            bucket_id: components["schemas"]["BucketId"];
+            /** @description TF when the cycle began, from the lines of earlier cycles. */
+            start: components["schemas"]["Amount"];
+            /** @description Refills (REF). */
+            refills: components["schemas"]["Amount"];
+            /** @description Income put into the bucket (INC). */
+            income: components["schemas"]["Amount"];
+            /** @description Opening funds (OPF). */
+            opening_funds: components["schemas"]["Amount"];
+            /** @description Bucket adjustments (BUA). */
+            adjustments: components["schemas"]["Amount"];
+            /** @description Transfers to (positive) or from (negative) other buckets (BAT). */
+            transfers: components["schemas"]["Amount"];
+            /** @description What the bucket had to spend in the cycle. */
+            budget: components["schemas"]["Amount"];
+            /** @description What was spent (EXP, net of corrections), as a positive amount. */
+            used: components["schemas"]["Amount"];
+            /** @description What overflowed (OVF), as a positive amount. */
+            overflow: components["schemas"]["Amount"];
+            /** @description What's left at the end of the cycle. */
+            left: components["schemas"]["Amount"];
         };
         BucketCreate: {
             name: components["schemas"]["BucketName"];
@@ -1655,6 +1714,31 @@ export interface operations {
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listBucketFigures: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycleId: components["parameters"]["CycleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The figures, one per bucket. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BucketFigures"][];
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };

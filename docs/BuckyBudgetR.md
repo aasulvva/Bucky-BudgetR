@@ -125,6 +125,8 @@ A budget period. Usually a month, but its start and end dates can be set freely,
 
 A finished cycle keeps its figures: lines from later cycles don't change them.
 
+`GET /cycles/{id}/bucket-figures` returns these per bucket, with the budget split into its parts (start, refills, income, opening funds, adjustments, transfers). The Buckets screen shows the parts that aren't 0 as a breakdown: "Start 500.00 + refill 1 500.00".
+
 ## 5. Transactions
 
 Every transaction has a **header**. Each affected bank account or bucket gets its own **line** (bank transaction / bucket transaction) linked to that header.
@@ -276,7 +278,7 @@ Desktop and mobile use the same groups (decided in #8; wireframes in the design 
 | Dashboard | Customisable widgets: budget health, bucket status, account balances, recent transactions, graphs… |
 | Create transaction | INC, EXP, TRF (INP later). An income has a "Triggers refill" checkbox (§6). |
 | Buckets | Per source account: used this cycle out of the budget, left (TF) and covered (CAF) per bucket, list or grid view, drill into transactions, manual refill button (once per cycle); a cog opens the bucket in Bucket setup |
-| Bucket setup | Create/edit (name, importance, priority, options)/delete buckets. **Adjust:** *Temporary* (set TF, may exceed BC → BUA) · *Future* (set RA, BC follows its rules, TF unchanged) · *Both* (set RA and change TF by the same relative amount → BUA). The same options are available for reallocating between buckets (→ BAT). |
+| Bucket setup | Create/edit (name, importance, priority, options)/delete buckets. Delete is one confirmation that says where what's left goes (unallocated in the source account, §4). **Adjust:** *Temporary* (set TF, may exceed BC → BUA) · *Future* (set RA, BC follows its rules, TF unchanged) · *Both* (set RA and change TF by the same relative amount → BUA). The same options are available for reallocating between buckets (→ BAT). |
 | Budget setup | All buckets at once: enter the expected monthly income per source account, set RAs, see the % allocated and the remainder |
 | Accounts | Balances, drill into transactions, balance adjustment (BLA), register interest (INC); a cog opens the account in Account setup |
 | Cycles | The active cycle (extend, end) and planned cycles. Ending asks for confirmation, listing the buckets that will be emptied (OVF) and the Auto buckets the next cycle refills, with the amounts (REF, and any overflow). Without an active cycle, a prompt offers to start the planned one or a new one. |

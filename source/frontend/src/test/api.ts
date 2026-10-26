@@ -44,6 +44,7 @@ function defaults(): Map<string, Handler> {
     ["GET /api/v1/cycles", { body: [cycle()] }],
     ["GET /api/v1/cycles/active", { body: { active: cycle(), next: null } }],
     ["GET /api/v1/buckets", { body: [] }],
+    ["GET /api/v1/cycles/100001000001/bucket-figures", { body: [] }],
   ]);
 }
 

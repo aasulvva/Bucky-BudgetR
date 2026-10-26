@@ -603,6 +603,38 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/v1/cycles/{cycleId}/bucket-figures:
+    parameters:
+      - $ref: "#/components/parameters/CycleId"
+    get:
+      operationId: listBucketFigures
+      tags: [buckets]
+      summary: The buckets' figures for a cycle
+      description: |
+        What happened to each bucket in the cycle (spec §4), for the Buckets
+        screen's "used X of Y": its TF when the cycle began, what was put in
+        or taken out by type, what was spent and what overflowed. Calculated
+        from the bucket lines; lines from later cycles don't count, so a
+        finished cycle's figures stay as they were.
+
+        Every bucket that isn't deleted is listed, sorted by ID, with zeros
+        when nothing happened to it. A cycle that isn't the user's gets 404.
+      responses:
+        "200":
+          description: The figures, one per bucket.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BucketFigures"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
   /api/v1/buckets:
     get:
       operationId: listBuckets
@@ -1513,6 +1545,60 @@ components:
         created_at:
           type: string
           format: date-time
+
+    BucketFigures:
+      type: object
+      additionalProperties: false
+      description: |
+        A bucket's figures for one cycle. The parts are signed: a reduction
+        or a transfer out is negative. `budget` = `start` + `refills` +
+        `income` + `opening_funds` + `adjustments` + `transfers`, and `left` =
+        `budget` − `used` − `overflow`, which is the current TF while the cycle
+        is active.
+      required: [bucket_id, start, refills, income, opening_funds, adjustments, transfers, budget, used, overflow, left]
+      properties:
+        bucket_id:
+          $ref: "#/components/schemas/BucketId"
+        start:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: TF when the cycle began, from the lines of earlier cycles.
+        refills:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Refills (REF).
+        income:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Income put into the bucket (INC).
+        opening_funds:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Opening funds (OPF).
+        adjustments:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Bucket adjustments (BUA).
+        transfers:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Transfers to (positive) or from (negative) other buckets (BAT).
+        budget:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: What the bucket had to spend in the cycle.
+        used:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: What was spent (EXP, net of corrections), as a positive amount.
+        overflow:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: What overflowed (OVF), as a positive amount.
+        left:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: What's left at the end of the cycle.
 
     BucketCreate:
       type: object

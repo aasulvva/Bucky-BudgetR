@@ -4,7 +4,8 @@
 
 import type { Bucket } from "@/api/accounts";
 
-import { addAmounts, compareAmounts, subtractAmounts } from "./money";
+import { refillOf } from "./buckets";
+import { addAmounts, compareAmounts } from "./money";
 
 export interface Emptied {
   bucket: Bucket;
@@ -54,12 +55,11 @@ export function endPreview(buckets: Bucket[], refills: boolean): EndPreview {
   const refilled: Refilled[] = [];
   if (refills) {
     for (const b of buckets.filter((x) => x.refill_mode === "auto")) {
-      const tf = b.keep_funds || !positive(b.target_funds) ? b.target_funds : "0";
-      const amount = b.keep_funds ? b.refill_amount : subtractAmounts(b.refill_amount, tf);
-      const excess = subtractAmounts(addAmounts(tf, amount), b.capacity);
-      const overflow = b.keep_funds && positive(excess) ? excess : "0.00";
+      // TF after the end routine emptied it.
+      const tf = b.keep_funds || !positive(b.target_funds) ? b.target_funds : "0.00";
+      const { amount, overflow } = refillOf(b, tf);
       if (compareAmounts(amount, "0") !== 0 || positive(overflow)) {
-        refilled.push({ bucket: b, amount: addAmounts(amount), overflow });
+        refilled.push({ bucket: b, amount, overflow });
       }
     }
   }

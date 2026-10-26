@@ -5,7 +5,9 @@ import {
   formatAmountInput,
   formatMoney,
   isValidAmount,
+  multiplyAmount,
   parseAmount,
+  percentOf,
   subtractAmounts,
 } from "./money";
 
@@ -97,6 +99,20 @@ describe("amount arithmetic", () => {
     expect(compareAmounts("1.00", "1")).toBe(0);
     expect(compareAmounts("-1.00", "0.00")).toBe(-1);
     expect(compareAmounts("0.01", "0.00")).toBe(1);
+  });
+
+  it("multiplies by a factor, rounding half away from zero", () => {
+    expect(multiplyAmount("1500", "1.5")).toBe("2250.00");
+    expect(multiplyAmount("0.05", "1.5")).toBe("0.08");
+    expect(multiplyAmount("-0.05", "1.5")).toBe("-0.08");
+    expect(multiplyAmount("333.33", "1")).toBe("333.33");
+  });
+
+  it("gives a percentage, rounded down", () => {
+    expect(percentOf("800", "4000")).toBe(20);
+    expect(percentOf("2", "3")).toBe(66);
+    expect(percentOf("5000", "4000")).toBe(125);
+    expect(percentOf("100", "0")).toBe(0);
   });
 });
 

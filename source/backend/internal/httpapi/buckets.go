@@ -9,6 +9,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/api"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/balance"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/buckets"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
@@ -28,6 +29,38 @@ func (s *server) ListBuckets(ctx context.Context, _ api.ListBucketsRequestObject
 	out := make(api.ListBuckets200JSONResponse, len(list))
 	for i, b := range list {
 		out[i] = toAPIBucket(b)
+	}
+	return out, nil
+}
+
+func (s *server) ListBucketFigures(ctx context.Context, req api.ListBucketFiguresRequestObject) (api.ListBucketFiguresResponseObject, error) {
+	svc, err := s.bucketService()
+	if err != nil {
+		return nil, err
+	}
+	list, err := svc.CycleFigures(ctx, sessionFrom(ctx).User.ID, req.CycleId)
+	if errors.Is(err, balance.ErrNotFound) {
+		return nil, &Error{Status: http.StatusNotFound, Code: "not_found", Detail: "Cycle not found.", Err: err}
+	}
+	if err != nil {
+		return nil, err
+	}
+	amount := func(d decimal.Decimal) string { return d.StringFixed(money.Places) }
+	out := make(api.ListBucketFigures200JSONResponse, len(list))
+	for i, f := range list {
+		out[i] = api.BucketFigures{
+			BucketId:     f.BucketID,
+			Start:        amount(f.Start),
+			Refills:      amount(f.Refills),
+			Income:       amount(f.Income),
+			OpeningFunds: amount(f.Opening),
+			Adjustments:  amount(f.Adjustments),
+			Transfers:    amount(f.Transfers),
+			Budget:       amount(f.Budget),
+			Used:         amount(f.Used),
+			Overflow:     amount(f.Overflow),
+			Left:         amount(f.Left),
+		}
 	}
 	return out, nil
 }

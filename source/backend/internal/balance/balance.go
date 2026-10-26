@@ -68,9 +68,12 @@ func Buckets(ctx context.Context, db sqlc.DBTX, userID string) (map[string]decim
 type Figures struct {
 	// Start is TF when the cycle began: the bucket's lines in earlier cycles.
 	Start decimal.Decimal
-	// Budget is Start plus everything put into or taken out of the bucket in
-	// the cycle except expenses and overflow: refills, income, opening funds,
-	// budget adjustments and transfers between buckets.
+	// What was put into or taken out of the bucket in the cycle, by type,
+	// signed: refills (REF), income (INC), opening funds (OPF), bucket
+	// adjustments (BUA) and transfers between buckets (BAT).
+	Refills, Income, Opening, Adjustments, Transfers decimal.Decimal
+	// Budget is Start plus Refills, Income, Opening, Adjustments and
+	// Transfers: everything except expenses and overflow.
 	Budget decimal.Decimal
 	// Used is what was spent: the cycle's EXP lines, net of corrections,
 	// as a positive amount.
@@ -102,11 +105,16 @@ func Cycle(ctx context.Context, db sqlc.DBTX, userID, cycleID string) (map[strin
 	out := make(map[string]Figures, len(rows))
 	for _, r := range rows {
 		f := Figures{
-			Start:    r.Start,
-			Budget:   r.Start.Add(r.Added),
-			Used:     r.Expenses.Neg(),
-			Overflow: r.Overflow.Neg(),
+			Start:       r.Start,
+			Refills:     r.Refills,
+			Income:      r.Income,
+			Opening:     r.Opening,
+			Adjustments: r.Adjustments,
+			Transfers:   r.Transfers,
+			Used:        r.Expenses.Neg(),
+			Overflow:    r.Overflow.Neg(),
 		}
+		f.Budget = f.Start.Add(f.Refills).Add(f.Income).Add(f.Opening).Add(f.Adjustments).Add(f.Transfers)
 		f.Left = f.Budget.Sub(f.Used).Sub(f.Overflow)
 		out[r.ID] = f
 	}

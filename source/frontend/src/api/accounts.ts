@@ -12,6 +12,8 @@ import type { components } from "./schema";
 export type Account = components["schemas"]["Account"];
 export type AccountType = components["schemas"]["AccountType"];
 export type Bucket = components["schemas"]["Bucket"];
+export type BucketFigures = components["schemas"]["BucketFigures"];
+export type RefillMode = components["schemas"]["RefillMode"];
 
 export const ACCOUNTS_KEY = ["accounts"] as const;
 export const BUCKETS_KEY = ["buckets"] as const;
@@ -41,6 +43,27 @@ export function useBuckets() {
     queryKey: BUCKETS_KEY,
     queryFn: () => unwrap(api.GET("/api/v1/buckets")),
   });
+}
+
+/**
+ * The buckets' figures for a cycle ("used X of Y"); off without a cycle.
+ * Under BUCKETS_KEY, so money changes refresh them with the buckets.
+ */
+export function useBucketFigures(cycleId: string | undefined) {
+  return useQuery({
+    queryKey: [...BUCKETS_KEY, "figures", cycleId],
+    queryFn: () =>
+      unwrap(
+        api.GET("/api/v1/cycles/{cycleId}/bucket-figures", {
+          params: { path: { cycleId: cycleId ?? "" } },
+        }),
+      ),
+    enabled: cycleId !== undefined,
+  });
+}
+
+export function refillModeLabel(mode: RefillMode): string {
+  return i18n.t(`buckets.modes.${mode}`);
 }
 
 /**

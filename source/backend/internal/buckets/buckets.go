@@ -143,6 +143,32 @@ func (s *Service) List(ctx context.Context, userID string) ([]Bucket, error) {
 	return out, nil
 }
 
+// Figures is a bucket's figures for a cycle.
+type Figures struct {
+	BucketID string
+	balance.Figures
+}
+
+// CycleFigures returns the figures of each of the user's buckets that isn't
+// deleted for a cycle, sorted by bucket ID. It returns balance.ErrNotFound
+// if the cycle isn't the user's.
+func (s *Service) CycleFigures(ctx context.Context, userID, cycleID string) ([]Figures, error) {
+	figs, err := balance.Cycle(ctx, s.pool, userID, cycleID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := sqlc.New(s.pool).ListBuckets(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Figures, len(rows))
+	for i, r := range rows {
+		out[i] = Figures{BucketID: r.Bucket.ID, Figures: figs[r.Bucket.ID]}
+	}
+	slices.SortFunc(out, func(a, b Figures) int { return strings.Compare(a.BucketID, b.BucketID) })
+	return out, nil
+}
+
 // Get returns one of the user's buckets.
 func (s *Service) Get(ctx context.Context, userID, id string) (Bucket, error) {
 	return s.get(ctx, s.pool, userID, id)

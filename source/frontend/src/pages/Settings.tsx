@@ -152,7 +152,7 @@ function ruleErrors(row: RuleRow): { counterparty?: string; minAmount?: string }
     errors.counterparty = i18n.t("common.maxChars", { count: 200 });
   }
   if (row.minAmount === null) errors.minAmount = i18n.t("settings.rules.enterAmount");
-  else if (row.minAmount.startsWith("-")) errors.minAmount = i18n.t("settings.rules.notNegative");
+  else if (row.minAmount.startsWith("-")) errors.minAmount = i18n.t("common.notNegative");
   else if (!/^\d{1,12}(\.|$)/.test(row.minAmount)) {
     errors.minAmount = i18n.t("settings.rules.tooLarge");
   }
