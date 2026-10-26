@@ -40,7 +40,6 @@ import { ApiError, unwrap } from "@/api/errors";
 import type { components } from "@/api/schema";
 import { useSession } from "@/app/session";
 import { AmountInput } from "@/components/AmountInput";
-import { AdjustFunds } from "@/components/buckets/AdjustFunds";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { QueryState } from "@/components/QueryState";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
@@ -120,16 +119,9 @@ export default function BucketSetup() {
               const open = selection === "new" || editing !== undefined;
               const form = open && (
                 <BucketForm
-                  // Remounted when an adjustment changes RA or the capacity,
-                  // so the form starts from the new values.
-                  key={
-                    editing
-                      ? `${editing.id}:${editing.refill_amount}:${editing.cap_amount ?? ""}`
-                      : "new"
-                  }
+                  key={editing?.id ?? "new"}
                   bucket={editing}
                   accounts={accountList}
-                  buckets={bucketList}
                   onDone={(saved) => {
                     select(isDesktop ? saved : null);
                   }}
@@ -310,13 +302,10 @@ const STARTS: Start[] = ["refill", "amount", "zero"];
 function BucketForm({
   bucket,
   accounts,
-  buckets,
   onDone,
 }: {
   bucket: Bucket | undefined;
   accounts: Account[];
-  /** All buckets, to move funds to. */
-  buckets: Bucket[];
   /** After saving (with the bucket's ID), deleting or cancelling (null). */
   onDone: (saved: string | null) => void;
 }) {
@@ -468,260 +457,255 @@ function BucketForm({
   }
 
   return (
-    <Stack gap="lg">
-      <form
-        noValidate
-        aria-label={bucket ? bucket.name : t("bucketSetup.newBucket")}
-        onSubmit={(e) => {
-          e.preventDefault();
-          const found = validate();
-          setErrors(found);
-          if (Object.values(found).every((v) => v === undefined)) save.mutate();
-        }}
-      >
-        <Stack gap="lg">
-          <Stack gap="md">
-            <Title order={3} size="h5">
-              {t("bucketSetup.details")}
-            </Title>
-            <TextInput
-              label={t("bucketSetup.name")}
-              placeholder={t("bucketSetup.namePlaceholder")}
-              value={name}
-              maxLength={100}
-              onChange={(e) => {
-                setName(e.currentTarget.value);
-              }}
-              error={errors.name}
-              required
-              data-autofocus
+    <form
+      noValidate
+      aria-label={bucket ? bucket.name : t("bucketSetup.newBucket")}
+      onSubmit={(e) => {
+        e.preventDefault();
+        const found = validate();
+        setErrors(found);
+        if (Object.values(found).every((v) => v === undefined)) save.mutate();
+      }}
+    >
+      <Stack gap="lg">
+        <Stack gap="md">
+          <Title order={3} size="h5">
+            {t("bucketSetup.details")}
+          </Title>
+          <TextInput
+            label={t("bucketSetup.name")}
+            placeholder={t("bucketSetup.namePlaceholder")}
+            value={name}
+            maxLength={100}
+            onChange={(e) => {
+              setName(e.currentTarget.value);
+            }}
+            error={errors.name}
+            required
+            data-autofocus
+          />
+          <Select
+            label={t("bucketSetup.source")}
+            description={
+              bucket && source !== bucket.source_account_id
+                ? t("bucketSetup.sourceChanged")
+                : t("bucketSetup.sourceHint")
+            }
+            data={sources}
+            value={source}
+            allowDeselect={false}
+            onChange={(v) => {
+              if (v) setSource(v);
+            }}
+            error={errors.source}
+            required
+          />
+          <Checkbox
+            label={t("bucketSetup.priority")}
+            description={t("bucketSetup.priorityHint")}
+            checked={priority}
+            onChange={(e) => {
+              setPriority(e.currentTarget.checked);
+            }}
+          />
+          <div>
+            <Text size="sm" fw={500} id="importance-label">
+              {t("bucketSetup.importance", { value: importance })}
+            </Text>
+            <Text size="xs" c="dimmed" mb="xs">
+              {t("bucketSetup.importanceHint")}
+            </Text>
+            <Slider
+              min={1}
+              max={10}
+              step={1}
+              value={importance}
+              onChange={setImportance}
+              thumbProps={{ "aria-labelledby": "importance-label" }}
+              marks={[{ value: 1 }, { value: 5 }, { value: 10 }]}
             />
-            <Select
-              label={t("bucketSetup.source")}
-              description={
-                bucket && source !== bucket.source_account_id
-                  ? t("bucketSetup.sourceChanged")
-                  : t("bucketSetup.sourceHint")
-              }
-              data={sources}
-              value={source}
-              allowDeselect={false}
-              onChange={(v) => {
-                if (v) setSource(v);
-              }}
-              error={errors.source}
-              required
-            />
-            <Checkbox
-              label={t("bucketSetup.priority")}
-              description={t("bucketSetup.priorityHint")}
-              checked={priority}
-              onChange={(e) => {
-                setPriority(e.currentTarget.checked);
-              }}
-            />
-            <div>
-              <Text size="sm" fw={500} id="importance-label">
-                {t("bucketSetup.importance", { value: importance })}
-              </Text>
-              <Text size="xs" c="dimmed" mb="xs">
-                {t("bucketSetup.importanceHint")}
-              </Text>
-              <Slider
-                min={1}
-                max={10}
-                step={1}
-                value={importance}
-                onChange={setImportance}
-                thumbProps={{ "aria-labelledby": "importance-label" }}
-                marks={[{ value: 1 }, { value: 5 }, { value: 10 }]}
-              />
-            </div>
-          </Stack>
-
-          <Stack gap="md">
-            <Title order={3} size="h5">
-              {t("bucketSetup.refill")}
-            </Title>
-            <AmountInput
-              label={t("bucketSetup.refillAmount")}
-              currency={currency}
-              value={refillAmount}
-              onChange={setRefillAmount}
-              error={errors.refillAmount}
-              required
-            />
-            <Stack gap={6}>
-              <Text size="sm" fw={500}>
-                {t("bucketSetup.capacity")}
-              </Text>
-              <SegmentedControl
-                aria-label={t("bucketSetup.capacity")}
-                value={capMode}
-                onChange={(v) => {
-                  setCapMode(v === "fixed" ? "fixed" : "multiplier");
-                }}
-                data={[
-                  { value: "multiplier", label: t("bucketSetup.multiplier") },
-                  { value: "fixed", label: t("bucketSetup.fixed") },
-                ]}
-              />
-              {capMode === "multiplier" ? (
-                <TextInput
-                  label={t("bucketSetup.multiplier")}
-                  inputMode="decimal"
-                  autoComplete="off"
-                  value={multiplier}
-                  onChange={(e) => {
-                    setMultiplier(e.currentTarget.value);
-                  }}
-                  error={errors.multiplier}
-                  rightSection={
-                    <Text size="sm" c="dimmed">
-                      ×
-                    </Text>
-                  }
-                />
-              ) : (
-                <AmountInput
-                  label={t("bucketSetup.capacityAmount")}
-                  currency={currency}
-                  value={capAmount}
-                  onChange={setCapAmount}
-                  error={errors.capAmount}
-                />
-              )}
-              <Text size="xs" c="dimmed">
-                {capacity && (
-                  <>
-                    <Text span fw={600} inherit>
-                      {t("bucketSetup.capacityIs", { amount: formatMoney(capacity, currency) })}
-                    </Text>
-                    {" · "}
-                  </>
-                )}
-                {raised ? t("bucketSetup.capacityRaised") : t("bucketSetup.capacityHint")}
-              </Text>
-            </Stack>
-            <Stack gap={6}>
-              <Text size="sm" fw={500}>
-                {t("bucketSetup.refillMode")}
-              </Text>
-              <SegmentedControl
-                aria-label={t("bucketSetup.refillMode")}
-                value={refillMode}
-                onChange={(v) => {
-                  const mode = REFILL_MODES.find((m) => m === v);
-                  if (mode) setRefillMode(mode);
-                }}
-                data={REFILL_MODES.map((m) => ({ value: m, label: refillModeLabel(m) }))}
-              />
-            </Stack>
-            <Checkbox
-              label={t("bucketSetup.keepFunds")}
-              description={t("bucketSetup.keepFundsHint")}
-              checked={keepFunds}
-              onChange={(e) => {
-                setKeepFunds(e.currentTarget.checked);
-              }}
-            />
-            <Select
-              label={t("bucketSetup.overflow")}
-              data={[
-                { value: "unallocated", label: t("bucketSetup.overflowUnallocated") },
-                {
-                  value: "savings_distribution",
-                  label: t("bucketSetup.overflowDistribution"),
-                  disabled: true,
-                },
-                { value: "savings_target", label: t("bucketSetup.overflowTarget"), disabled: true },
-              ]}
-              value={overflow}
-              allowDeselect={false}
-              onChange={(v) => {
-                if (v === "unallocated") setOverflow(v);
-              }}
-            />
-            {!bucket &&
-              (usable ? (
-                <Radio.Group
-                  label={t("bucketSetup.start")}
-                  value={start}
-                  onChange={(v) => {
-                    const next = STARTS.find((s) => s === v);
-                    if (next) setStart(next);
-                  }}
-                >
-                  <Stack gap="sm" mt="xs">
-                    <Radio
-                      value="refill"
-                      label={t("bucketSetup.startRefill", { amount: formatMoney(ra, currency) })}
-                      description={t("bucketSetup.startRefillHint")}
-                    />
-                    <Radio value="amount" label={t("bucketSetup.startAmount")} />
-                    {start === "amount" && (
-                      <AmountInput
-                        label={t("bucketSetup.openingFunds")}
-                        description={t("bucketSetup.openingHint")}
-                        currency={currency}
-                        value={opening}
-                        onChange={setOpening}
-                        error={errors.opening}
-                        ml="xl"
-                      />
-                    )}
-                    <Radio
-                      value="zero"
-                      label={t("bucketSetup.startZero")}
-                      description={t("bucketSetup.startZeroHint")}
-                    />
-                  </Stack>
-                </Radio.Group>
-              ) : (
-                <div>
-                  <Text size="sm" fw={500}>
-                    {t("bucketSetup.start")}
-                  </Text>
-                  <Text size="xs" c="dimmed">
-                    {t("bucketSetup.openingNeedsCycle")}
-                  </Text>
-                </div>
-              ))}
-          </Stack>
-
-          {save.error && !nameProblem(save.error) && <ErrorAlert error={save.error} />}
-          <Group justify={bucket ? "space-between" : "flex-end"} gap="xs">
-            {bucket && (
-              <Button
-                variant="subtle"
-                color="red"
-                onClick={() => {
-                  setDeleting(true);
-                }}
-              >
-                {t("common.delete")}
-              </Button>
-            )}
-            <Group gap="xs">
-              <Button
-                variant="default"
-                onClick={() => {
-                  onDone(null);
-                }}
-              >
-                {t("common.cancel")}
-              </Button>
-              <Button type="submit" loading={save.isPending} disabled={!changed}>
-                {bucket ? t("common.save") : t("bucketSetup.create")}
-              </Button>
-            </Group>
-          </Group>
+          </div>
         </Stack>
-      </form>
-      {bucket && (
-        <AdjustFunds bucket={bucket} buckets={buckets} accounts={accounts} usable={usable} />
-      )}
-    </Stack>
+
+        <Stack gap="md">
+          <Title order={3} size="h5">
+            {t("bucketSetup.refill")}
+          </Title>
+          <AmountInput
+            label={t("bucketSetup.refillAmount")}
+            currency={currency}
+            value={refillAmount}
+            onChange={setRefillAmount}
+            error={errors.refillAmount}
+            required
+          />
+          <Stack gap={6}>
+            <Text size="sm" fw={500}>
+              {t("bucketSetup.capacity")}
+            </Text>
+            <SegmentedControl
+              aria-label={t("bucketSetup.capacity")}
+              value={capMode}
+              onChange={(v) => {
+                setCapMode(v === "fixed" ? "fixed" : "multiplier");
+              }}
+              data={[
+                { value: "multiplier", label: t("bucketSetup.multiplier") },
+                { value: "fixed", label: t("bucketSetup.fixed") },
+              ]}
+            />
+            {capMode === "multiplier" ? (
+              <TextInput
+                label={t("bucketSetup.multiplier")}
+                inputMode="decimal"
+                autoComplete="off"
+                value={multiplier}
+                onChange={(e) => {
+                  setMultiplier(e.currentTarget.value);
+                }}
+                error={errors.multiplier}
+                rightSection={
+                  <Text size="sm" c="dimmed">
+                    ×
+                  </Text>
+                }
+              />
+            ) : (
+              <AmountInput
+                label={t("bucketSetup.capacityAmount")}
+                currency={currency}
+                value={capAmount}
+                onChange={setCapAmount}
+                error={errors.capAmount}
+              />
+            )}
+            <Text size="xs" c="dimmed">
+              {capacity && (
+                <>
+                  <Text span fw={600} inherit>
+                    {t("bucketSetup.capacityIs", { amount: formatMoney(capacity, currency) })}
+                  </Text>
+                  {" · "}
+                </>
+              )}
+              {raised ? t("bucketSetup.capacityRaised") : t("bucketSetup.capacityHint")}
+            </Text>
+          </Stack>
+          <Stack gap={6}>
+            <Text size="sm" fw={500}>
+              {t("bucketSetup.refillMode")}
+            </Text>
+            <SegmentedControl
+              aria-label={t("bucketSetup.refillMode")}
+              value={refillMode}
+              onChange={(v) => {
+                const mode = REFILL_MODES.find((m) => m === v);
+                if (mode) setRefillMode(mode);
+              }}
+              data={REFILL_MODES.map((m) => ({ value: m, label: refillModeLabel(m) }))}
+            />
+          </Stack>
+          <Checkbox
+            label={t("bucketSetup.keepFunds")}
+            description={t("bucketSetup.keepFundsHint")}
+            checked={keepFunds}
+            onChange={(e) => {
+              setKeepFunds(e.currentTarget.checked);
+            }}
+          />
+          <Select
+            label={t("bucketSetup.overflow")}
+            data={[
+              { value: "unallocated", label: t("bucketSetup.overflowUnallocated") },
+              {
+                value: "savings_distribution",
+                label: t("bucketSetup.overflowDistribution"),
+                disabled: true,
+              },
+              { value: "savings_target", label: t("bucketSetup.overflowTarget"), disabled: true },
+            ]}
+            value={overflow}
+            allowDeselect={false}
+            onChange={(v) => {
+              if (v === "unallocated") setOverflow(v);
+            }}
+          />
+          {!bucket &&
+            (usable ? (
+              <Radio.Group
+                label={t("bucketSetup.start")}
+                value={start}
+                onChange={(v) => {
+                  const next = STARTS.find((s) => s === v);
+                  if (next) setStart(next);
+                }}
+              >
+                <Stack gap="sm" mt="xs">
+                  <Radio
+                    value="refill"
+                    label={t("bucketSetup.startRefill", { amount: formatMoney(ra, currency) })}
+                    description={t("bucketSetup.startRefillHint")}
+                  />
+                  <Radio value="amount" label={t("bucketSetup.startAmount")} />
+                  {start === "amount" && (
+                    <AmountInput
+                      label={t("bucketSetup.openingFunds")}
+                      description={t("bucketSetup.openingHint")}
+                      currency={currency}
+                      value={opening}
+                      onChange={setOpening}
+                      error={errors.opening}
+                      ml="xl"
+                    />
+                  )}
+                  <Radio
+                    value="zero"
+                    label={t("bucketSetup.startZero")}
+                    description={t("bucketSetup.startZeroHint")}
+                  />
+                </Stack>
+              </Radio.Group>
+            ) : (
+              <div>
+                <Text size="sm" fw={500}>
+                  {t("bucketSetup.start")}
+                </Text>
+                <Text size="xs" c="dimmed">
+                  {t("bucketSetup.openingNeedsCycle")}
+                </Text>
+              </div>
+            ))}
+        </Stack>
+
+        {save.error && !nameProblem(save.error) && <ErrorAlert error={save.error} />}
+        <Group justify={bucket ? "space-between" : "flex-end"} gap="xs">
+          {bucket && (
+            <Button
+              variant="subtle"
+              color="red"
+              onClick={() => {
+                setDeleting(true);
+              }}
+            >
+              {t("common.delete")}
+            </Button>
+          )}
+          <Group gap="xs">
+            <Button
+              variant="default"
+              onClick={() => {
+                onDone(null);
+              }}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button type="submit" loading={save.isPending} disabled={!changed}>
+              {bucket ? t("common.save") : t("bucketSetup.create")}
+            </Button>
+          </Group>
+        </Group>
+      </Stack>
+    </form>
   );
 }
 

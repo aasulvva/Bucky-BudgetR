@@ -209,7 +209,7 @@ The Transactions screen keeps its rules in `lib/transactionList.ts`: the filters
 
 Budget setup keeps its rules in `lib/budget.ts`: the edited values (`BudgetDraft`, only what changed, so the saved values show through), an account's totals against its expected income (`accountBudget`), a bucket's capacity after an RA change (`capacityAfter`, mirroring `settings.check` in `internal/buckets`), and what Save sends (`budgetChanges`).
 
-Bucket setup's *Adjust funds* previews with `lib/bucketAdjust.ts` (`adjustPreview`, `movePreview`), which mirror `Adjust` and `Transfer` in `internal/buckets`; change both together. A move between buckets on one account takes CAF along in `allocation.Follow` (`moveAlong`).
+The Buckets screen's *Adjust funds* dialog (`components/buckets/AdjustFunds.tsx`) previews with `lib/bucketAdjust.ts` (`adjustPreview`, `movePreview`), which mirror `Adjust` and `Transfer` in `internal/buckets`; change both together. A move between buckets on one account takes CAF along in `allocation.Follow` (`moveAlong`).
 
 On the backend, `buckets` can't import `refill` (it's the other way round), so `refill.Service.OnCreate` reaches bucket creation through the `buckets.Options.OnCreate` hook, wired in `cmd/server/main.go`.
 

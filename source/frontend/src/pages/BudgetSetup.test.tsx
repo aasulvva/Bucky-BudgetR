@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { formatMoney } from "@/lib/money";
@@ -163,7 +163,10 @@ describe("Budget setup", () => {
       within(screen.getByRole("navigation")).getByRole("link", { name: "Buckets" }),
     );
     await userEvent.click(await screen.findByRole("button", { name: "Leave without saving" }));
-    expect(router.state.location.pathname).toBe("/buckets");
+    // The page loads lazily, so navigating can take a moment.
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe("/buckets");
+    });
   });
 
   it("shows a card per bucket on mobile", async () => {

@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { formatMoney } from "@/lib/money";
@@ -45,14 +45,22 @@ beforeEach(() => {
   apiMock.on("GET /api/v1/buckets", { body: [fuel, fun, travel, paris] });
 });
 
-const adjustSection = async () =>
-  within(await screen.findByRole("region", { name: "Adjust funds" }));
+/** Opens Fuel's Adjust funds dialog on the Buckets screen. */
+const openAdjust = async () => {
+  renderRoute("/buckets");
+  await userEvent.click(await screen.findByRole("button", { name: "Adjust funds for Fuel" }));
+  return within(await screen.findByRole("dialog", { name: "Adjust funds: Fuel" }));
+};
+
+const closed = () =>
+  waitFor(() => {
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
 
 describe("Adjust funds", () => {
   it("sets this cycle only, with a preview", async () => {
     apiMock.on("POST /api/v1/buckets/1000000001/adjustment", { body: fuel });
-    renderRoute("/buckets/setup?edit=1000000001");
-    const adjust = await adjustSection();
+    const adjust = await openAdjust();
     expect(
       adjust.getByText(`This cycle ${m("100.00")} · refill amount ${m("1000.00")}`),
     ).toBeInTheDocument();
@@ -68,6 +76,7 @@ describe("Adjust funds", () => {
     ).toBeInTheDocument();
     await userEvent.click(apply);
     expect(await screen.findByText("Fuel adjusted.")).toBeInTheDocument();
+    await closed();
     expect(apiMock.calls("POST /api/v1/buckets/1000000001/adjustment").map((c) => c.body)).toEqual([
       { mode: "temporary", target_funds: "400.00" },
     ]);
@@ -75,8 +84,7 @@ describe("Adjust funds", () => {
 
   it("changes the refill amount, and this cycle too with Both", async () => {
     apiMock.on("POST /api/v1/buckets/1000000001/adjustment", { body: fuel });
-    renderRoute("/buckets/setup?edit=1000000001");
-    const adjust = await adjustSection();
+    const adjust = await openAdjust();
 
     await userEvent.click(adjust.getByRole("radio", { name: /^From next refill/ }));
     await userEvent.type(adjust.getByRole("textbox", { name: "New refill amount" }), "1500");
@@ -100,8 +108,7 @@ describe("Adjust funds", () => {
   });
 
   it("asks for a different amount", async () => {
-    renderRoute("/buckets/setup?edit=1000000001");
-    const adjust = await adjustSection();
+    const adjust = await openAdjust();
     await userEvent.type(adjust.getByRole("textbox", { name: "New amount this cycle" }), "100");
     expect(adjust.getByText("Enter a different amount.")).toBeInTheDocument();
     expect(adjust.getByRole("button", { name: "Apply adjustment" })).toBeDisabled();
@@ -109,8 +116,7 @@ describe("Adjust funds", () => {
 
   it("changes only the refill amount without a running cycle", async () => {
     apiMock.on("GET /api/v1/cycles/active", { body: { active: null, next: null } });
-    renderRoute("/buckets/setup?edit=1000000001");
-    const adjust = await adjustSection();
+    const adjust = await openAdjust();
     await userEvent.type(adjust.getByRole("textbox", { name: "New amount this cycle" }), "400");
     expect(
       adjust.getByText("This cycle can only change while a cycle is active."),
@@ -126,8 +132,7 @@ describe("Adjust funds", () => {
       "POST /api/v1/buckets/1000000001/adjustment",
       problem(409, "cycle_overdue", "The active cycle's end date has passed."),
     );
-    renderRoute("/buckets/setup?edit=1000000001");
-    const adjust = await adjustSection();
+    const adjust = await openAdjust();
     await userEvent.type(adjust.getByRole("textbox", { name: "New amount this cycle" }), "400");
     await userEvent.click(adjust.getByRole("button", { name: "Apply adjustment" }));
     expect(await adjust.findByRole("alert")).toBeInTheDocument();
@@ -135,10 +140,8 @@ describe("Adjust funds", () => {
 
   it("moves funds to a bucket in the same currency", async () => {
     apiMock.on("POST /api/v1/buckets/1000000001/transfer", { body: { from: fuel, to: fun } });
-    renderRoute("/buckets/setup?edit=1000000001");
-    const adjust = await adjustSection();
-    await userEvent.click(adjust.getByRole("button", { name: "Move funds to another bucket…" }));
-    const dialog = within(await screen.findByRole("dialog", { name: "Move funds from Fuel" }));
+    const dialog = await openAdjust();
+    await userEvent.click(dialog.getByRole("radio", { name: "Move to another bucket" }));
 
     await userEvent.click(dialog.getByRole("combobox", { name: "To bucket" }));
     const options = (await screen.findAllByRole("option")).map((o) => o.textContent);
@@ -165,22 +168,23 @@ describe("Adjust funds", () => {
     await userEvent.type(dialog.getByRole("textbox", { name: "Amount" }), "300");
     await userEvent.click(dialog.getByRole("button", { name: "Move funds" }));
     expect(await screen.findByText(`Moved ${m("300.00")} from Fuel to Fun.`)).toBeInTheDocument();
+    await closed();
     expect(apiMock.calls("POST /api/v1/buckets/1000000001/transfer").map((c) => c.body)).toEqual([
       { to_bucket_id: fun.id, mode: "future", amount: "300.00" },
     ]);
   });
 
-  it("works full screen on mobile", async () => {
+  it("opens from a bucket card on mobile", async () => {
     viewport.width = 390;
-    renderRoute("/buckets/setup?edit=1000000001");
-    const dialog = within(await screen.findByRole("dialog", { name: "Fuel (#1000000001)" }));
-    expect(dialog.getByRole("region", { name: "Adjust funds" })).toBeInTheDocument();
+    const dialog = await openAdjust();
+    expect(dialog.getByRole("button", { name: "Apply adjustment" })).toBeInTheDocument();
   });
 
   it("speaks nynorsk", async () => {
     apiMock.on("GET /api/v1/me", { body: { ...testUser, preferences: { language: "nn" } } });
-    renderRoute("/buckets/setup?edit=1000000001");
-    const adjust = within(await screen.findByRole("region", { name: "Juster midlar" }));
+    renderRoute("/buckets");
+    await userEvent.click(await screen.findByRole("button", { name: "Juster midlar for Fuel" }));
+    const adjust = within(await screen.findByRole("dialog", { name: "Juster midlar: Fuel" }));
     expect(adjust.getByRole("radio", { name: /^Berre denne perioden/ })).toBeChecked();
     expect(adjust.getByRole("button", { name: "Utfør justeringa" })).toBeInTheDocument();
   });
