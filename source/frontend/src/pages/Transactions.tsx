@@ -18,7 +18,7 @@ import {
 import { DatePickerInput } from "@mantine/dates";
 import { useDebouncedCallback, useMediaQuery } from "@mantine/hooks";
 import { IconAdjustmentsHorizontal, IconPlus, IconSearch, IconX } from "@tabler/icons-react";
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router";
 
@@ -90,7 +90,12 @@ export default function Transactions() {
 
   const items = pages.data?.pages.flatMap((p) => p.items) ?? [];
   const list = (
-    <Card withBorder padding={0} style={{ flex: "999 1 460px", minWidth: 0 }}>
+    // The flex sizes are for the desktop row; in the mobile column they'd set heights.
+    <Card
+      withBorder
+      padding={0}
+      style={isDesktop ? { flex: "999 1 460px", minWidth: 0 } : undefined}
+    >
       {pages.isPending ? (
         <Center py="xl">
           <Loader size="sm" />
@@ -166,7 +171,7 @@ export default function Transactions() {
 
       {isDesktop ? (
         <Group gap="xs" align="flex-end" wrap="wrap">
-          <Search filter={filter} onChange={change} />
+          <Search filter={filter} onChange={change} style={{ flex: "1 1 200px" }} />
           <FilterFields filter={filter} active={active} onChange={change} inline />
         </Group>
       ) : (
@@ -302,7 +307,15 @@ function TransactionRow({
 }
 
 /** The counterparty search, debounced into the URL. */
-function Search({ filter, onChange }: { filter: TransactionFilter; onChange: FilterChange }) {
+function Search({
+  filter,
+  onChange,
+  style,
+}: {
+  filter: TransactionFilter;
+  onChange: FilterChange;
+  style?: CSSProperties;
+}) {
   const { t } = useTranslation();
   const [text, setText] = useState(filter.q);
   // Follow the URL when it changes from outside, e.g. Back.
@@ -325,7 +338,7 @@ function Search({ filter, onChange }: { filter: TransactionFilter; onChange: Fil
         setText(e.currentTarget.value);
         apply(e.currentTarget.value);
       }}
-      style={{ flex: "1 1 200px" }}
+      style={style}
     />
   );
 }
