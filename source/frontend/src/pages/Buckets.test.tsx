@@ -159,6 +159,18 @@ describe("Buckets", () => {
     expect(apiMock.calls("POST /api/v1/buckets/1000000003/refill")).toHaveLength(1);
   });
 
+  it("reallocates an underfunded account by hand", async () => {
+    apiMock.on("POST /api/v1/accounts/1234/reallocate", { body: main });
+    renderRoute("/buckets");
+    // Only underfunded accounts get the button.
+    expect(
+      screen.queryByRole("button", { name: "Reallocate Buffer account" }),
+    ).not.toBeInTheDocument();
+    await userEvent.click(await screen.findByRole("button", { name: "Reallocate Main account" }));
+    expect(await screen.findByText("Main account reallocated.")).toBeInTheDocument();
+    expect(apiMock.calls("POST /api/v1/accounts/1234/reallocate")).toHaveLength(1);
+  });
+
   it("switches to the grid and remembers it", async () => {
     renderRoute("/buckets");
     await userEvent.click(await screen.findByRole("radio", { name: "Grid view" }));

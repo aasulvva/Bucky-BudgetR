@@ -217,6 +217,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/accounts/{accountId}/reallocate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reallocate the account's money
+         * @description Runs the Money Allocation Routine for the buckets funded from the
+         *     account now (spec §7), splitting its money by TF, priority and
+         *     importance. CAF otherwise only moves on the routine's triggers, so this
+         *     reshares an underfunded account by hand, for example after a refill.
+         */
+        post: operations["reallocateAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/accounts/{accountId}/delete": {
         parameters: {
             query?: never;
@@ -1546,6 +1571,31 @@ export interface operations {
                 };
             };
             400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    reallocateAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The account, with what's unallocated now. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
             default: components["responses"]["Error"];

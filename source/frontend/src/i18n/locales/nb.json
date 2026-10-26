@@ -242,6 +242,10 @@
     "refillName": "Fyll på {{name}}",
     "refillWithAmount": "Fyll på ({{amount}})",
     "refilledDone": "{{name}} er fylt på ({{amount}}).",
+    "reallocate": "Fordel på nytt",
+    "reallocateName": "Fordel {{name}} på nytt",
+    "reallocateHint": "Penger flyttes bare mellom bøttene ved visse hendelser, så et påfyll kan la en bøtte stå udekket. «Fordel på nytt» fordeler saldoen igjen nå.",
+    "reallocatedDone": "Pengene på {{name}} er fordelt på nytt.",
     "noCycleFigures": "Ingen aktiv periode",
     "setupFor": "Bøtteoppsett for {{name}}"
   },

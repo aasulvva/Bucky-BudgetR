@@ -1,6 +1,8 @@
 package allocation_test
 
 import (
+	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -15,6 +17,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledgertest"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/refill"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/testdb"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/transactions"
 )
@@ -25,6 +28,7 @@ type env struct {
 	accounts *accounts.Service
 	buckets  *buckets.Service
 	tx       *transactions.Service
+	refills  *refill.Service
 	user     string
 	account  string
 }
@@ -36,11 +40,12 @@ func setup(t *testing.T) env {
 	user := authtest.NewUser(t, pool, "alice").ID
 	now := time.Now()
 	ledgertest.Cycle(t, pool, user, now.Add(-24*time.Hour), now.Add(30*24*time.Hour), "active")
+	refills := refill.NewService(pool, l, refill.Options{})
 	e := env{
-		pool: pool, ledger: l, user: user,
+		pool: pool, ledger: l, user: user, refills: refills,
 		accounts: accounts.NewService(pool, l, accounts.Options{}),
 		buckets:  buckets.NewService(pool, l, buckets.Options{}),
-		tx:       transactions.NewService(pool, l, transactions.Options{}),
+		tx:       transactions.NewService(pool, l, transactions.Options{Refills: refills}),
 	}
 	a, err := e.accounts.Create(t.Context(), user, accounts.New{Name: "Main", OpeningBalance: dec("1000")})
 	if err != nil {
@@ -52,9 +57,13 @@ func setup(t *testing.T) env {
 
 func (e env) bucket(t *testing.T, name, opening string, priority bool) string {
 	t.Helper()
-	b, err := e.buckets.Create(t.Context(), e.user, buckets.New{
-		Name: name, SourceAccountID: e.account, OpeningFunds: dec(opening), Priority: priority,
-	})
+	return e.create(t, buckets.New{Name: name, OpeningFunds: dec(opening), Priority: priority})
+}
+
+func (e env) create(t *testing.T, n buckets.New) string {
+	t.Helper()
+	n.SourceAccountID = e.account
+	b, err := e.buckets.Create(t.Context(), e.user, n)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,18 +116,20 @@ func TestTriggers(t *testing.T) {
 		unallocated string
 	}{
 		{"enough funds: CAF = TF", func() {}, []string{"300.00", "200.00"}, "500.00"},
-		// TF A 200, balance 900: A's CAF follows its TF, B keeps its CAF.
+		// TF A 200, balance 900: the expense takes A's CAF, B keeps its CAF.
 		{"expense from A", func() { exp("100", a, "100") }, []string{"200.00", "200.00"}, "500.00"},
-		// Balance 200 < Σ CAF 400: recalculated by weight. TF A is 199 now,
-		// so 200 splits into 99.75 and 100.25.
+		// 699 not on a bucket, and the balance (200) drops below Σ TF:
+		// recalculated by weight. TF A is 199 now, so 200 splits into 99.75
+		// and 100.25.
 		{"balance drops", func() { exp("700", a, "1") }, []string{"99.75", "100.25"}, "0.00"},
-		// 0.50 unallocated isn't enough to move money.
-		{"small income", func() { inc("0.50") }, []string{"99.75", "100.25"}, "0.50"},
-		// 1.00 unallocated while underfunded: 201 splits into 100.248… and
-		// 100.751…, and the leftover cent goes to the larger remainder.
-		{"1.00 unallocated", func() { inc("0.50") }, []string{"100.25", "100.75"}, "0.00"},
+		// Underfunded, but an expense from B takes only B's CAF: A keeps its.
+		{"expense from B", func() { exp("50", b, "50") }, []string{"99.75", "50.25"}, "0.00"},
+		// Money no bucket owns, however little: 150.50 split by TF 199 and 150.
+		{"outside income", func() { inc("0.50") }, []string{"85.82", "64.68"}, "0.00"},
+		// B's CAF is spent: 85.82 split by TF 199 and 85.32.
+		{"B's CAF spent", func() { exp("64.68", b, "64.68") }, []string{"60.07", "25.75"}, "0.00"},
 		// Enough again: CAF = TF.
-		{"funds cover TF", func() { inc("1000") }, []string{"199.00", "200.00"}, "802.00"},
+		{"funds cover TF", func() { inc("1000") }, []string{"199.00", "85.32"}, "801.50"},
 	}
 	for _, s := range steps {
 		s.do()
@@ -127,6 +138,59 @@ func TestTriggers(t *testing.T) {
 			t.Errorf("%s: CAF %v unallocated %s, want %v and %s", s.name, got, unallocated, s.want, s.unallocated)
 		}
 	}
+}
+
+// TestRefills refills buckets by hand: CAF only moves when the account
+// crosses Σ TF, until the account is reallocated. An income that triggers a
+// refill recalculates with the refilled TFs.
+func TestRefills(t *testing.T) {
+	e := setup(t)
+	manual := func(name, ra, opening string) string {
+		return e.create(t, buckets.New{Name: name, RefillMode: sqlc.RefillModeManual,
+			RefillAmount: dec(ra), OpeningFunds: dec(opening)})
+	}
+	a := manual("A", "900", "600")
+	b := e.bucket(t, "B", "300", false)
+	c := manual("C", "200", "0")
+	check := func(step string, want []string, unallocated string, ids ...string) {
+		t.Helper()
+		got, u := e.caf(t, ids...)
+		if fmt.Sprint(got) != fmt.Sprint(want) || u != unallocated {
+			t.Errorf("%s: CAF %v unallocated %s, want %v and %s", step, got, u, want, unallocated)
+		}
+	}
+	check("start", []string{"600.00", "300.00", "0.00"}, "100.00", a, b, c)
+
+	// TF A 900: Σ TF 1200 is above the balance now, so 1000 is split.
+	if err := e.refills.Manual(t.Context(), e.user, a); err != nil {
+		t.Fatal(err)
+	}
+	check("refill crosses Σ TF", []string{"750.00", "250.00", "0.00"}, "0.00", a, b, c)
+
+	// Underfunded already: C's new TF stays unfunded.
+	if err := e.refills.Manual(t.Context(), e.user, c); err != nil {
+		t.Fatal(err)
+	}
+	check("refill while underfunded", []string{"750.00", "250.00", "0.00"}, "0.00", a, b, c)
+
+	// By hand: 1000 split by TF 900, 300 and 200.
+	acc, err := e.accounts.Reallocate(t.Context(), e.user, e.account)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !acc.Unallocated.IsZero() {
+		t.Errorf("reallocated: unallocated %s", acc.Unallocated)
+	}
+	check("reallocated", []string{"642.86", "214.28", "142.86"}, "0.00", a, b, c)
+	if _, err := e.accounts.Reallocate(t.Context(), authtest.NewUser(t, e.pool, "bob").ID, e.account); !errors.Is(err, accounts.ErrNotFound) {
+		t.Errorf("another user's account: %v", err)
+	}
+
+	// An On income bucket refilled by an income of 100: 1100 split by TF
+	// 900, 300, 200 and 100.
+	d := e.create(t, buckets.New{Name: "D", RefillMode: sqlc.RefillModeOnIncome, RefillAmount: dec("100")})
+	e.record(t, transactions.New{Type: sqlc.TransactionTypeINC, Amount: dec("100"), TriggersRefill: ptr(true)})
+	check("income refill", []string{"660.00", "220.00", "146.67", "73.33"}, "0.00", a, b, c, d)
 }
 
 func TestSettingsRecalculate(t *testing.T) {

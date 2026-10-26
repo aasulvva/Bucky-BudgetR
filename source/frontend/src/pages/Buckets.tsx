@@ -230,9 +230,19 @@ function AccountSection({
           icon={<IconAlertTriangle size={20} />}
           p="sm"
         >
-          {t(summary.tone === "alert" ? "buckets.shortAlert" : "buckets.shortWarn", {
-            amount: money(summary.short),
-          })}
+          <Group justify="space-between" align="center" gap="sm" wrap="wrap">
+            <Stack gap={4} style={{ flex: "1 1 240px" }}>
+              <Text size="sm">
+                {t(summary.tone === "alert" ? "buckets.shortAlert" : "buckets.shortWarn", {
+                  amount: money(summary.short),
+                })}
+              </Text>
+              <Text size="xs" c="dimmed">
+                {t("buckets.reallocateHint")}
+              </Text>
+            </Stack>
+            <ReallocateButton account={account} />
+          </Group>
         </Alert>
       )}
       {view === "list" ? (
@@ -529,6 +539,44 @@ function SetupLink({ bucket, size }: { bucket: Bucket; size: number }) {
     >
       <IconSettings size={18} />
     </ActionIcon>
+  );
+}
+
+/**
+ * Shares an underfunded account's money out again now. The allocation routine
+ * only does it on its own triggers (spec §7), so after a refill, for example,
+ * a bucket can stay uncovered.
+ */
+function ReallocateButton({ account }: { account: Account }) {
+  const { t } = useTranslation();
+  const refresh = useRefreshMoney();
+  const reallocate = useMutation({
+    mutationFn: () =>
+      unwrap(
+        api.POST("/api/v1/accounts/{accountId}/reallocate", {
+          params: { path: { accountId: account.id } },
+        }),
+      ),
+    onSuccess: async () => {
+      notifications.show({
+        color: "green",
+        message: t("buckets.reallocatedDone", { name: account.name }),
+      });
+      await refresh();
+    },
+  });
+  return (
+    <Button
+      variant="default"
+      size="xs"
+      loading={reallocate.isPending}
+      aria-label={t("buckets.reallocateName", { name: account.name })}
+      onClick={() => {
+        reallocate.mutate();
+      }}
+    >
+      {t("buckets.reallocate")}
+    </Button>
   );
 }
 

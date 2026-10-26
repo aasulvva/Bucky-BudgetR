@@ -3,8 +3,8 @@
 // Current Available Funds (CAF).
 //
 // Allocate is the pure calculation. Run applies it to the database, and only
-// when one of the §7 triggers says the stored CAF no longer fits, so money
-// isn't reshuffled on every transaction.
+// when one of the §7 triggers says so (Follow, Needed), so money isn't
+// reshuffled on every transaction.
 package allocation
 
 import (
@@ -23,7 +23,7 @@ type Bucket struct {
 	TF         decimal.Decimal
 	Priority   bool
 	Importance int
-	// CAF is the stored CAF. Allocate ignores it; Needed and Clamp use it.
+	// CAF is the stored CAF. Allocate ignores it; the others use it.
 	CAF decimal.Decimal
 }
 
@@ -152,17 +152,14 @@ func sumTF(buckets []Bucket) decimal.Decimal {
 	return total
 }
 
-// Clamp returns the stored CAF limited to 0 ≤ CAF ≤ max(TF, 0). An expense
-// from a bucket lowers its TF and the account balance by the same amount, so
-// lowering its CAF to match keeps the other buckets' CAF where it was.
+// Clamp returns the stored CAF limited to 0 ≤ CAF ≤ max(TF, 0).
 func Clamp(b Bucket) decimal.Decimal {
 	return decimal.Min(decimal.Max(b.CAF, decimal.Zero), decimal.Max(b.TF, decimal.Zero))
 }
 
-// Needed reports whether the stored (clamped) CAF should be recalculated
-// (spec §7): when it exceeds the available funds, when the funds now cover
-// every TF but CAF doesn't, or when at least 1.00 is unallocated while some
-// bucket is underfunded.
+// Needed reports whether the stored (clamped) CAF no longer fits the account,
+// whatever changed it (spec §7): when it's more than the available funds, or
+// when the funds cover every TF but CAF doesn't match it.
 func Needed(available decimal.Decimal, buckets []Bucket) bool {
 	available = decimal.Max(available, decimal.Zero)
 	caf, tf := decimal.Zero, decimal.Zero
@@ -176,6 +173,55 @@ func Needed(available decimal.Decimal, buckets []Bucket) bool {
 	case available.GreaterThanOrEqual(tf):
 		return !caf.Equal(tf)
 	default:
-		return caf.LessThan(tf) && available.Sub(caf).GreaterThanOrEqual(decimal.NewFromInt(1))
+		return false
 	}
+}
+
+// Lines is what one transaction did to a source account: the sum of its bank
+// lines there, and its lines on the account's buckets.
+type Lines struct {
+	// Banked is set when the transaction has a bank line on the account (an
+	// income, expense or transfer, not a bucket-only REF, OVF and so on).
+	Banked  bool
+	Bank    decimal.Decimal
+	Buckets map[string]decimal.Decimal
+}
+
+// Follow applies a transaction to the CAF of an account's buckets, which hold
+// the TF after it and the CAF before it, and reports whether it calls for a
+// recalculation (spec §7). available is the balance after it.
+//
+// With a bank line, each bucket line moves its own bucket's CAF: an expense
+// of 50 from a bucket takes 50 of its CAF, so the other buckets keep theirs.
+// A recalculation is due when:
+//
+//   - part of the bank line isn't on a bucket: money no bucket owns came in
+//     or went out;
+//   - a bucket's CAF is spent (0 or below), or an income into an overspent
+//     bucket left it above TF;
+//   - the balance crossed Σ TF, up or down.
+func Follow(available decimal.Decimal, buckets []Bucket, l Lines) bool {
+	untied := l.Bank
+	due := false
+	tfBefore, tfAfter := decimal.Zero, decimal.Zero
+	for i, b := range buckets {
+		d := l.Buckets[b.ID]
+		tfBefore = tfBefore.Add(decimal.Max(b.TF.Sub(d), decimal.Zero))
+		tfAfter = tfAfter.Add(decimal.Max(b.TF, decimal.Zero))
+		if !l.Banked || d.IsZero() {
+			continue
+		}
+		untied = untied.Sub(d)
+		caf := b.CAF.Add(d)
+		if d.IsNegative() && !caf.IsPositive() || caf.GreaterThan(decimal.Max(b.TF, decimal.Zero)) {
+			due = true
+		}
+		buckets[i].CAF = caf
+	}
+	if l.Banked && !untied.IsZero() {
+		due = true
+	}
+	before := decimal.Max(available.Sub(l.Bank), decimal.Zero).GreaterThanOrEqual(tfBefore)
+	after := decimal.Max(available, decimal.Zero).GreaterThanOrEqual(tfAfter)
+	return due || before != after
 }

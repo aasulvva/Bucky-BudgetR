@@ -208,7 +208,7 @@ Only **INC, EXP, TRF and INP** can be created from the *Create transaction* scre
 The routines run in the same database transaction as ending or starting the cycle, so they happen exactly once.
 
 ### Cycle end
-1. Run the Money Allocation Routine (forced) so CAF is up to date.
+1. Check that CAF fits the accounts (§7), so the funded part is known. This doesn't reallocate otherwise.
 2. For each bucket with **Keep funds off**, an **OVF** transaction brings a positive TF to 0. Only the funded part (CAF) is real money for the overflow destination; the unfunded rest simply disappears. A negative TF stays until the next refill.
 3. The OVF is dated now, or just before the cycle's end if it is ended late, so it belongs to the ending cycle.
 
@@ -230,6 +230,8 @@ A bucket is refilled **at most once per cycle** (tracked per bucket and cycle). 
 
 A REF or OVF of 0 isn't recorded, but the refill still counts.
 
+A refill raises TF without adding money, so on its own it only moves CAF when the account crosses Σ TF (§7). An income that triggers a refill is money no bucket owns, so its account is recalculated with the refilled TFs (and again when its refills are undone).
+
 ## 7. Money Allocation Routine
 
 Funds the buckets: works out how much of each source account's money backs each bucket (CAF), based on TF.
@@ -241,10 +243,15 @@ Funds the buckets: works out how much of each source account's money backs each 
   2. The remaining funds are split by weight: `CAF_i = available × (TF_i × importance_i) / Σ(TF_j × importance_j)`. No bucket gets more than its TF, and any excess is split again among the rest. If even the priority buckets can't be fully funded, the same split is used among them.
 - Buckets with TF ≤ 0 get CAF = 0. A negative account balance counts as 0 available.
 - **Rounding:** shares are calculated at full precision, rounded down to cents, and the leftover cents go one each to the buckets with the largest remainders, so the CAFs add up to exactly what was split.
-- CAF is **stored**, so funds aren't redistributed on every change. The check runs after every transaction, for the accounts it touched (directly or as a bucket's source). First each CAF is limited to 0 ≤ CAF ≤ TF: an expense from a bucket lowers its TF and the balance by the same amount, so its CAF follows and the other buckets keep theirs. Then a recalculation happens when:
-  - CAF exceeds the available funds;
-  - the available funds now cover TF;
-  - the available funds are ≥ 1.00 above CAF (while CAF < TF).
+- CAF is **stored**, so funds aren't redistributed on every change. After every transaction, for the accounts it touched (directly or as a bucket's source):
+  - **A bucket line moves its own bucket's CAF** by its amount: an expense of 50 from Groceries takes 50 of Groceries' CAF, and the other buckets keep theirs.
+  - Each CAF is then kept to 0 ≤ CAF ≤ TF.
+  - The account is **recalculated** only when:
+    - part of the transaction's bank line isn't on a bucket: an income, expense or transfer without bucket lines, or the part of a split that isn't tied to a bucket. That is money no bucket owns, however little;
+    - a bucket's CAF is spent (0 or below), or an income into an overspent bucket leaves its CAF above TF;
+    - the balance crosses Σ TF of the account's buckets, up or down (a refill can do that);
+    - CAF no longer fits (Σ CAF above the balance), or the balance covers Σ TF but CAF doesn't match it.
+  - Otherwise nothing moves, so an underfunded account can leave a refilled bucket uncovered. **Reallocate** on the Buckets screen (`POST /accounts/{id}/reallocate`) recalculates it by hand.
 - **Bucket changes recalculate at once:** creating or deleting a bucket, moving it to another account, or changing its priority or importance recalculates the accounts involved right away.
 - **Unallocated** is the account balance minus the CAF of its buckets. It is derived from the stored CAF rather than stored separately.
 
@@ -280,7 +287,7 @@ Desktop and mobile use the same groups (decided in #8; wireframes in the design 
 | ------ | ------- |
 | Dashboard | Customisable widgets: budget health, bucket status, account balances, recent transactions, graphs… |
 | Create transaction | INC, EXP, TRF (INP later). The user enters a positive amount; the type gives the sign. Defaults: now, and the last account used in this browser. An income or expense can be split between the buckets funded from its account (needs an active cycle, and the time inside it); a new row starts with what isn't tied to a bucket yet, and the rest stays in the account. Counterparty and tags autocomplete from earlier values, and picking an earlier counterparty fills in its last account (unless chosen), tags (if none) and buckets (if none). An income has a "Triggers refill" checkbox (§6), shown while the time is inside the active cycle and pre-checked when the account has *On income* buckets waiting or an income rule matches. Save goes back; *Save and add another* keeps the type, account and date. On mobile, Save stays visible. |
-| Buckets | Per source account: used this cycle out of the budget (the bar turns yellow above 90 %, red when overspent), and left per bucket. Left is what the account backs (CAF); while that's less than TF, TF is struck through beside it with a bar of how much is covered. An overspent bucket (negative TF) shows its TF in red with a red warning. List or grid view, drill into transactions, manual refill button (once per cycle); a cog opens the bucket in Bucket setup |
+| Buckets | Per source account: used this cycle out of the budget (the bar turns yellow above 90 %, red when overspent), and left per bucket. Left is what the account backs (CAF); while that's less than TF, TF is struck through beside it with a bar of how much is covered. An overspent bucket (negative TF) shows its TF in red with a red warning. List or grid view, drill into transactions, manual refill button (once per cycle), a Reallocate button on an underfunded account; a cog opens the bucket in Bucket setup |
 | Bucket setup | Create/edit (name, importance, priority, options)/delete buckets, listed with their IDs. A new bucket in a running cycle starts with *Refill now* (default), *Set starting funds* or *Start at 0* (§6). Delete is one confirmation that says where what's left goes (unallocated in the source account, §4). **Adjust:** *Temporary* (set TF, may exceed BC → BUA) · *Future* (set RA, BC follows its rules, TF unchanged) · *Both* (set RA and change TF by the same relative amount → BUA). The same options are available for reallocating between buckets (→ BAT). |
 | Budget setup | All buckets at once: enter the expected monthly income per source account, set RAs, see the % allocated and the remainder |
 | Accounts | Balances, drill into transactions, balance adjustment (BLA), register interest (INC); a cog opens the account in Account setup |

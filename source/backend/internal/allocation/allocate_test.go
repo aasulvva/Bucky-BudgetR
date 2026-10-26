@@ -118,16 +118,77 @@ func TestNeeded(t *testing.T) {
 		"covers TF, CAF behind": {"1000", []allocation.Bucket{stored("a", "300", "100")}, true},
 		"CAF above available":   {"200", []allocation.Bucket{stored("a", "300", "250")}, true},
 		"underfunded, stable":   {"200.50", []allocation.Bucket{stored("a", "300", "200")}, false},
-		"1.00 unallocated":      {"201", []allocation.Bucket{stored("a", "300", "200")}, true},
-		// An expense of 50 from a: TF and balance both drop by 50, and the
-		// clamped CAF follows, so nothing else needs to move.
-		"expense from a bucket": {"250", []allocation.Bucket{stored("a", "250", "300"), stored("b", "200", "0")}, false},
-		"overdrawn":             {"-10", []allocation.Bucket{stored("a", "300", "0")}, false},
-		"no buckets":            {"100", nil, false},
+		// Unallocated money alone doesn't move CAF: only a trigger (Follow) or
+		// a reallocation by hand does.
+		"unallocated":  {"250", []allocation.Bucket{stored("a", "300", "200")}, false},
+		"CAF above TF": {"250", []allocation.Bucket{stored("a", "250", "300"), stored("b", "200", "0")}, false},
+		"overdrawn":    {"-10", []allocation.Bucket{stored("a", "300", "0")}, false},
+		"no buckets":   {"100", nil, false},
 	} {
 		if got := allocation.Needed(dec(tc.available), tc.buckets); got != tc.want {
 			t.Errorf("%s: %v, want %v", name, got, tc.want)
 		}
+	}
+}
+
+func TestFollow(t *testing.T) {
+	stored := func(id, tf, caf string) allocation.Bucket {
+		return allocation.Bucket{ID: id, TF: dec(tf), CAF: dec(caf), Importance: 5}
+	}
+	lines := func(bank string, buckets ...string) allocation.Lines {
+		l := allocation.Lines{Banked: bank != "", Buckets: map[string]decimal.Decimal{}}
+		if bank != "" {
+			l.Bank = dec(bank)
+		}
+		for i := 0; i < len(buckets); i += 2 {
+			l.Buckets[buckets[i]] = dec(buckets[i+1])
+		}
+		return l
+	}
+	// Balance 400 for Σ TF 600 before each case, all of it allocated:
+	// a 300 of TF 400, b 100 of TF 200.
+	for name, tc := range map[string]struct {
+		available string
+		tf        [2]string
+		lines     allocation.Lines
+		want      bool
+		caf       [2]string
+	}{
+		"expense from a bucket": {"350", [2]string{"350", "200"}, lines("-50", "a", "-50"), false, [2]string{"250", "100"}},
+		"income into a bucket":  {"450", [2]string{"450", "200"}, lines("50", "a", "50"), false, [2]string{"350", "100"}},
+		"split over two":        {"300", [2]string{"340", "160"}, lines("-100", "a", "-60", "b", "-40"), false, [2]string{"240", "60"}},
+		"part not on a bucket":  {"300", [2]string{"360", "200"}, lines("-100", "a", "-40"), true, [2]string{"260", "100"}},
+		"outside expense":       {"390", [2]string{"400", "200"}, lines("-10"), true, [2]string{"300", "100"}},
+		"outside income":        {"410", [2]string{"400", "200"}, lines("10"), true, [2]string{"300", "100"}},
+		"CAF spent":             {"300", [2]string{"400", "100"}, lines("-100", "b", "-100"), true, [2]string{"300", "0"}},
+		"CAF overspent":         {"250", [2]string{"400", "50"}, lines("-150", "b", "-150"), true, [2]string{"300", "-50"}},
+		// A refill raises TF without money: CAF stays while underfunded.
+		"refill, underfunded": {"400", [2]string{"400", "300"}, lines("", "b", "100"), false, [2]string{"300", "100"}},
+	} {
+		buckets := []allocation.Bucket{stored("a", tc.tf[0], "300"), stored("b", tc.tf[1], "100")}
+		if got := allocation.Follow(dec(tc.available), buckets, tc.lines); got != tc.want {
+			t.Errorf("%s: %v, want %v", name, got, tc.want)
+		}
+		if got := [2]string{buckets[0].CAF.String(), buckets[1].CAF.String()}; got != tc.caf {
+			t.Errorf("%s: CAF %v, want %v", name, got, tc.caf)
+		}
+	}
+
+	// Covered (balance 700 for Σ TF 600) until a refill of 200 on b: it
+	// crosses Σ TF.
+	covered := []allocation.Bucket{stored("a", "400", "400"), stored("b", "400", "200")}
+	if !allocation.Follow(dec("700"), covered, lines("", "b", "200")) {
+		t.Error("a refill that leaves the account underfunded should recalculate")
+	}
+	// A bucket line moves the balance and TF together, so it never crosses.
+	still := []allocation.Bucket{stored("a", "600", "600")}
+	if allocation.Follow(dec("700"), still, lines("-100", "a", "-100")) {
+		t.Error("an expense from a bucket of a covered account shouldn't recalculate")
+	}
+	// An income into an overspent bucket pays its debt first.
+	debt := []allocation.Bucket{stored("a", "30", "0")}
+	if !allocation.Follow(dec("30"), debt, lines("50", "a", "50")) {
+		t.Error("an income into an overspent bucket should recalculate")
 	}
 }
 
