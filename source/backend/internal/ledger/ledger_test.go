@@ -261,7 +261,7 @@ func TestOwnership(t *testing.T) {
 	for name, e := range map[string]ledger.Entry{
 		"other user's account": {BankLines: bank(w.otherAc, "1")},
 		"deleted account":      {BankLines: bank(deletedAcc, "1")},
-		"unknown account":      {BankLines: bank("9999", "1")},
+		"unknown account":      {BankLines: bank(ledgertest.UnusedAccountID(t, w.pool), "1")},
 		"other user's bucket":  {BankLines: bank(w.acc1, "1"), BucketLines: buckets(w.otherBucket, "1")},
 		"deleted bucket":       {BankLines: bank(w.acc1, "1"), BucketLines: buckets(deletedBucket, "1")},
 	} {

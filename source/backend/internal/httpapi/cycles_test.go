@@ -56,7 +56,7 @@ func TestCyclesAPI(t *testing.T) {
 	expect(t, "bob starts alice's", do(http.MethodPost, "/api/v1/cycles/"+c1.Id+"/start", nil, bob), http.StatusNotFound, "not_found")
 	w = do(http.MethodPost, "/api/v1/cycles/"+c1.Id+"/start", nil, alice)
 	expect(t, "start", w, http.StatusOK, "")
-	if c := decode[api.Cycle](t, w); c.State != api.Active || !c.StartAt.Before(now.Add(day)) {
+	if c := decode[api.Cycle](t, w); c.State != api.CycleStateActive || !c.StartAt.Before(now.Add(day)) {
 		t.Errorf("started %+v, want active from now", c)
 	}
 
@@ -83,7 +83,7 @@ func TestCyclesAPI(t *testing.T) {
 	expect(t, "end", w, http.StatusOK, "")
 	res := decode[api.CycleEndResult](t, w)
 	started, err := res.Started.Get()
-	if res.Ended.State != api.Finished || err != nil || started.Id != c2.Id || !started.StartAt.Equal(res.Ended.EndAt) {
+	if res.Ended.State != api.CycleStateFinished || err != nil || started.Id != c2.Id || !started.StartAt.Equal(res.Ended.EndAt) {
 		t.Errorf("end result %+v", res)
 	}
 	expect(t, "end again", do(http.MethodPost, "/api/v1/cycles/"+c1.Id+"/end", nil, alice), http.StatusConflict, "cycle_not_active")
@@ -92,7 +92,7 @@ func TestCyclesAPI(t *testing.T) {
 
 	w = do(http.MethodGet, "/api/v1/cycles", nil, alice)
 	expect(t, "list", w, http.StatusOK, "")
-	if list := decode[[]api.Cycle](t, w); len(list) != 2 || list[0].Id != c1.Id || list[1].State != api.Active {
+	if list := decode[[]api.Cycle](t, w); len(list) != 2 || list[0].Id != c1.Id || list[1].State != api.CycleStateActive {
 		t.Errorf("list %+v", list)
 	}
 }

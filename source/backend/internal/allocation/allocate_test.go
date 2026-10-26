@@ -164,6 +164,13 @@ func TestFollow(t *testing.T) {
 		"CAF overspent":         {"250", [2]string{"400", "50"}, lines("-150", "b", "-150"), true, [2]string{"300", "-50"}},
 		// A refill raises TF without money: CAF stays while underfunded.
 		"refill, underfunded": {"400", [2]string{"400", "300"}, lines("", "b", "100"), false, [2]string{"300", "100"}},
+		// A move between the account's buckets takes covered money along; a's
+		// gap of 100 stays with a.
+		"move": {"400", [2]string{"250", "350"}, lines("", "a", "-150", "b", "150"), false, [2]string{"150", "250"}},
+		// b can only take up to its TF; the rest goes back to a.
+		"move into a small bucket": {"400", [2]string{"100", "200"}, lines("", "a", "-300", "b", "300"), false, [2]string{"100", "200"}},
+		// Moving more than a has: a goes negative, b gets what a had covered.
+		"move into overspending": {"400", [2]string{"-100", "700"}, lines("", "a", "-500", "b", "500"), false, [2]string{"0", "400"}},
 	} {
 		buckets := []allocation.Bucket{stored("a", tc.tf[0], "300"), stored("b", tc.tf[1], "100")}
 		if got := allocation.Follow(dec(tc.available), buckets, tc.lines); got != tc.want {

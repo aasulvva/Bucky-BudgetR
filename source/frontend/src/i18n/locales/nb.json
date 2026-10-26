@@ -247,7 +247,54 @@
     "reallocateHint": "Penger flyttes bare mellom bøttene ved visse hendelser, så et påfyll kan la en bøtte stå udekket. «Fordel på nytt» fordeler saldoen igjen nå.",
     "reallocatedDone": "Pengene på {{name}} er fordelt på nytt.",
     "noCycleFigures": "Ingen aktiv periode",
-    "setupFor": "Bøtteoppsett for {{name}}"
+    "setupFor": "Bøtteoppsett for {{name}}",
+    "actions": "Handlinger",
+    "adjust": {
+      "title": "Juster midler",
+      "adjustName": "Juster midler for {{name}}",
+      "dialogTitle": "Juster midler: {{name}}",
+      "tabs": {
+        "adjust": "Juster",
+        "move": "Flytt til en annen bøtte"
+      },
+      "current": "Denne perioden {{tf}} · påfyllingsbeløp {{ra}}",
+      "mode": "Justering",
+      "modes": {
+        "temporary": "Bare denne perioden",
+        "future": "Fra neste påfyll",
+        "both": "Begge"
+      },
+      "hints": {
+        "temporary": "Sett det som er igjen denne perioden. Påfyllingsbeløpet blir som det er.",
+        "future": "Endre påfyllingsbeløpet. Denne perioden blir som den er.",
+        "both": "Endre påfyllingsbeløpet, og denne perioden med det samme beløpet."
+      },
+      "newTarget": "Nytt beløp denne perioden",
+      "newRefill": "Nytt påfyllingsbeløp",
+      "previewRefill": "Påfyllingsbeløp {{from}} → {{to}}",
+      "previewCycle": "Denne perioden {{from}} → {{to}}, en bøttejustering på {{amount}}",
+      "previewCycleSame": "Denne perioden blir {{amount}}",
+      "capacityRaised": "Kapasiteten heves til {{amount}}.",
+      "overspent": "{{name}} går under 0: overforbruk på {{amount}}.",
+      "same": "Skriv inn et annet beløp.",
+      "needsCycle": "Denne perioden kan bare endres mens en periode er aktiv.",
+      "apply": "Utfør justeringen",
+      "applied": "{{name}} er justert.",
+      "moveTo": "Til bøtte",
+      "amount": "Beløp",
+      "moveHints": {
+        "temporary": "Flytt av det som er igjen denne perioden.",
+        "future": "Flytt av påfyllingsbeløpet, fra neste påfyll.",
+        "both": "Flytt både påfyllingsbeløp og det som er igjen denne perioden."
+      },
+      "movePreview": "{{name}}: denne perioden {{tfFrom}} → {{tfTo}} · påfyllingsbeløp {{raFrom}} → {{raTo}}",
+      "moveButton": "Flytt midler",
+      "moved": "Flyttet {{amount}} fra {{from}} til {{to}}.",
+      "overRefill": "Påfyllingsbeløpet til {{name}} er bare {{amount}}.",
+      "enterAmount": "Skriv inn et beløp over 0.",
+      "noTargets": "Det finnes ingen annen bøtte i {{currency}} å flytte midler til.",
+      "pickBucket": "Velg en bøtte."
+    }
   },
   "bucketSetup": {
     "newBucket": "Ny bøtte",

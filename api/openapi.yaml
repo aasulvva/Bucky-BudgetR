@@ -869,6 +869,101 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/v1/buckets/{bucketId}/adjustment:
+    parameters:
+      - $ref: "#/components/parameters/BucketId"
+    post:
+      operationId: adjustBucket
+      tags: [buckets]
+      summary: Adjust a bucket's funds
+      description: |
+        The adjustment modes of Bucket setup (spec §9):
+
+        - `temporary`: sets this cycle's TF to `target_funds` (0 or more)
+          with a Budget Adjustment (BUA) for the difference. RA is unchanged.
+        - `future`: sets RA to `refill_amount`; TF is unchanged and nothing
+          is recorded. A fixed capacity below the new RA is raised to it.
+        - `both`: sets RA to `refill_amount` and changes TF by the same
+          amount (BUA). TF may go below 0.
+
+        A BUA needs an active cycle (409 `no_active_cycle` or
+        `cycle_overdue`). An adjustment that changes nothing is 400
+        `no_change`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BucketAdjustment"
+      responses:
+        "200":
+          description: The adjusted bucket.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bucket"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/buckets/{bucketId}/transfer:
+    parameters:
+      - $ref: "#/components/parameters/BucketId"
+    post:
+      operationId: transferBucketFunds
+      tags: [buckets]
+      summary: Move funds to another bucket
+      description: |
+        Moves `amount` from this bucket to `to_bucket_id`, in the same
+        currency (400 `currency_mismatch`), with the modes of
+        `POST /buckets/{bucketId}/adjustment`:
+
+        - `temporary`: moves TF with a Budget Adjustment Transfer (BAT). The
+          sending bucket may go below 0.
+        - `future`: moves RA; nothing is recorded. The sending bucket's RA
+          must be at least `amount`.
+        - `both`: moves RA and TF (BAT).
+
+        Between buckets on the same account, the covered part (CAF) moves
+        along with TF (spec §7).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BucketTransfer"
+      responses:
+        "200":
+          description: Both buckets after the move.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [from, to]
+                properties:
+                  from:
+                    $ref: "#/components/schemas/Bucket"
+                  to:
+                    $ref: "#/components/schemas/Bucket"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
   /api/v1/transactions:
     get:
       operationId: listTransactions
@@ -1813,6 +1908,41 @@ components:
             its refill mode. It counts as the bucket's refill in that
             cycle. Needs an active cycle; can't be combined with
             `opening_funds`.
+
+    AdjustmentMode:
+      type: string
+      enum: [temporary, future, both]
+      description: "temporary: this cycle only (TF). future: from the next refill (RA). both: RA, and TF by the same amount."
+
+    BucketAdjustment:
+      type: object
+      additionalProperties: false
+      required: [mode]
+      properties:
+        mode:
+          $ref: "#/components/schemas/AdjustmentMode"
+        target_funds:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: The new TF, 0 or more. Only and always with `temporary`.
+        refill_amount:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: The new RA, 0 or more. Only and always with `future` and `both`.
+
+    BucketTransfer:
+      type: object
+      additionalProperties: false
+      required: [to_bucket_id, mode, amount]
+      properties:
+        to_bucket_id:
+          $ref: "#/components/schemas/BucketId"
+        mode:
+          $ref: "#/components/schemas/AdjustmentMode"
+        amount:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: What to move, above 0.
 
     RefillAmounts:
       type: object

@@ -200,6 +200,9 @@ type Lines struct {
 //   - a bucket's CAF is spent (0 or below), or an income into an overspent
 //     bucket left it above TF;
 //   - the balance crossed Σ TF, up or down.
+//
+// Without a bank line, a move of TF between the account's buckets (a BAT
+// within one account) takes CAF along: see moveAlong.
 func Follow(available decimal.Decimal, buckets []Bucket, l Lines) bool {
 	untied := l.Bank
 	due := false
@@ -221,7 +224,50 @@ func Follow(available decimal.Decimal, buckets []Bucket, l Lines) bool {
 	if l.Banked && !untied.IsZero() {
 		due = true
 	}
+	if !l.Banked {
+		moveAlong(buckets, l.Buckets)
+	}
 	before := decimal.Max(available.Sub(l.Bank), decimal.Zero).GreaterThanOrEqual(tfBefore)
 	after := decimal.Max(available, decimal.Zero).GreaterThanOrEqual(tfAfter)
 	return due || before != after
+}
+
+// moveAlong moves CAF with TF when a bucket-only transaction moves TF between
+// the account's buckets, its lines on them adding up to 0 (spec §7). Covered
+// money moves first: a bucket that gives d hands over up to d of its CAF, so
+// a gap it had stays with it. The buckets that receive take it up to their
+// TF; what they can't take goes back to the givers, up to theirs. The buckets
+// hold the TF after the transaction and the CAF before it.
+func moveAlong(buckets []Bucket, lines map[string]decimal.Decimal) {
+	sum, n := decimal.Zero, 0
+	for _, b := range buckets {
+		if d := lines[b.ID]; !d.IsZero() {
+			sum = sum.Add(d)
+			n++
+		}
+	}
+	if n < 2 || !sum.IsZero() {
+		return
+	}
+	room := func(b Bucket) decimal.Decimal {
+		return decimal.Max(decimal.Max(b.TF, decimal.Zero).Sub(b.CAF), decimal.Zero)
+	}
+	moving := decimal.Zero
+	for i, b := range buckets {
+		if d := lines[b.ID]; d.IsNegative() {
+			give := decimal.Min(d.Neg(), decimal.Max(b.CAF, decimal.Zero))
+			moving = moving.Add(give)
+			buckets[i].CAF = b.CAF.Sub(give)
+		}
+	}
+	for _, receiving := range []bool{true, false} {
+		for i, b := range buckets {
+			if lines[b.ID].IsPositive() != receiving || lines[b.ID].IsZero() || !moving.IsPositive() {
+				continue
+			}
+			add := decimal.Min(moving, room(b))
+			buckets[i].CAF = b.CAF.Add(add)
+			moving = moving.Sub(add)
+		}
+	}
 }

@@ -39,6 +39,8 @@ var (
 	// ErrCurrencyMismatch means the new source account has another currency
 	// than the old one.
 	ErrCurrencyMismatch = errors.New("the accounts have different currencies")
+	// ErrNoChange means an adjustment wouldn't change anything.
+	ErrNoChange = errors.New("nothing would change")
 )
 
 const (
@@ -400,6 +402,172 @@ func update(ctx context.Context, tx pgx.Tx, userID, id string, c Changes) error 
 		}
 	}
 	return nil
+}
+
+// Mode is how an adjustment applies (spec §9): to this cycle's TF, to RA
+// from the next refill, or both.
+type Mode string
+
+const (
+	// ModeTemporary changes TF for this cycle with a BUA or BAT; RA stays.
+	ModeTemporary Mode = "temporary"
+	// ModeFuture changes RA, from the next refill; TF stays and nothing is
+	// recorded.
+	ModeFuture Mode = "future"
+	// ModeBoth changes RA, and TF by the same amount.
+	ModeBoth Mode = "both"
+)
+
+// Adjustment changes one bucket's funds. ModeTemporary takes TargetFunds,
+// the other modes RefillAmount.
+type Adjustment struct {
+	Mode         Mode
+	TargetFunds  *decimal.Decimal
+	RefillAmount *decimal.Decimal
+}
+
+// Adjust applies a to the bucket. ModeTemporary sets TF (0 or more) with a
+// Budget Adjustment (BUA) for the difference. ModeFuture sets RA as Update
+// does. ModeBoth sets RA and records a BUA of the same change, so TF moves
+// by that amount and may go below 0. A BUA needs an active cycle.
+func (s *Service) Adjust(ctx context.Context, userID, id string, a Adjustment) (Bucket, error) {
+	var out Bucket
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := ledger.LockUser(ctx, tx, userID); err != nil {
+			return err
+		}
+		row, err := sqlc.New(tx).GetBucketForUpdate(ctx, sqlc.GetBucketForUpdateParams{ID: id, UserID: userID})
+		if err != nil {
+			return notFound(err, id)
+		}
+		var change decimal.Decimal
+		switch a.Mode {
+		case ModeTemporary:
+			if a.TargetFunds == nil || a.RefillAmount != nil {
+				return fmt.Errorf("%w: a temporary adjustment takes target_funds only", ErrInvalid)
+			}
+			if err := money.Valid(*a.TargetFunds); err != nil {
+				return fmt.Errorf("%w: target funds: %w", ErrInvalid, err)
+			}
+			if a.TargetFunds.IsNegative() {
+				return fmt.Errorf("%w: the target funds can't be negative", ErrInvalid)
+			}
+			tf, err := balance.Buckets(ctx, tx, userID)
+			if err != nil {
+				return err
+			}
+			change = a.TargetFunds.Sub(tf[id])
+			if change.IsZero() {
+				return fmt.Errorf("%w: the target funds are already %s", ErrNoChange, tf[id].StringFixed(money.Places))
+			}
+		case ModeFuture, ModeBoth:
+			if a.RefillAmount == nil || a.TargetFunds != nil {
+				return fmt.Errorf("%w: a %s adjustment takes refill_amount only", ErrInvalid, a.Mode)
+			}
+			if a.RefillAmount.Equal(row.RefillAmount) {
+				return fmt.Errorf("%w: the refill amount is already %s", ErrNoChange, row.RefillAmount.StringFixed(money.Places))
+			}
+			if err := update(ctx, tx, userID, id, Changes{RefillAmount: a.RefillAmount}); err != nil {
+				return err
+			}
+			if a.Mode == ModeBoth {
+				change = a.RefillAmount.Sub(row.RefillAmount)
+			}
+		default:
+			return fmt.Errorf("%w: adjustment mode %q", ErrInvalid, a.Mode)
+		}
+		if !change.IsZero() {
+			if _, err := s.ledger.Record(ctx, tx, ledger.Entry{
+				UserID: userID, CreatedBy: userID, Type: sqlc.TransactionTypeBUA, At: s.now(),
+				BucketLines: []ledger.BucketLine{{BucketID: id, Amount: change}},
+			}); err != nil {
+				return err
+			}
+		}
+		out, err = s.get(ctx, tx, userID, id)
+		return err
+	})
+	if err != nil {
+		return Bucket{}, err
+	}
+	return out, nil
+}
+
+// Transfer moves funds from one bucket to another.
+type Transfer struct {
+	To     string
+	Mode   Mode
+	Amount decimal.Decimal
+}
+
+// Transfer moves t.Amount from the bucket to t.To, in the same currency.
+// ModeTemporary moves TF with a Budget Adjustment Transfer (BAT); the sender
+// may go below 0. ModeFuture moves RA (the sender needs at least the
+// amount), and ModeBoth both. Between buckets on one account, the allocation
+// routine moves CAF along with TF. It returns both buckets.
+func (s *Service) Transfer(ctx context.Context, userID, from string, t Transfer) (Bucket, Bucket, error) {
+	if from == t.To {
+		return Bucket{}, Bucket{}, fmt.Errorf("%w: a bucket can't move funds to itself", ErrInvalid)
+	}
+	if err := money.Valid(t.Amount); err != nil {
+		return Bucket{}, Bucket{}, fmt.Errorf("%w: amount: %w", ErrInvalid, err)
+	}
+	if !t.Amount.IsPositive() {
+		return Bucket{}, Bucket{}, fmt.Errorf("%w: the amount must be above 0", ErrInvalid)
+	}
+	var out [2]Bucket
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := ledger.LockUser(ctx, tx, userID); err != nil {
+			return err
+		}
+		q := sqlc.New(tx)
+		src, err := q.GetBucketForUpdate(ctx, sqlc.GetBucketForUpdateParams{ID: from, UserID: userID})
+		if err != nil {
+			return notFound(err, from)
+		}
+		dst, err := q.GetBucketForUpdate(ctx, sqlc.GetBucketForUpdateParams{ID: t.To, UserID: userID})
+		if err != nil {
+			return notFound(err, t.To)
+		}
+		if err := checkNewSource(ctx, q, userID, src.SourceAccountID, dst.SourceAccountID); err != nil {
+			return err
+		}
+		switch t.Mode {
+		case ModeTemporary:
+		case ModeFuture, ModeBoth:
+			if src.RefillAmount.LessThan(t.Amount) {
+				return fmt.Errorf("%w: the refill amount is only %s", ErrInvalid, src.RefillAmount.StringFixed(money.Places))
+			}
+			for _, c := range []struct {
+				id string
+				ra decimal.Decimal
+			}{{from, src.RefillAmount.Sub(t.Amount)}, {t.To, dst.RefillAmount.Add(t.Amount)}} {
+				if err := update(ctx, tx, userID, c.id, Changes{RefillAmount: &c.ra}); err != nil {
+					return err
+				}
+			}
+		default:
+			return fmt.Errorf("%w: adjustment mode %q", ErrInvalid, t.Mode)
+		}
+		if t.Mode != ModeFuture {
+			if _, err := s.ledger.Record(ctx, tx, ledger.Entry{
+				UserID: userID, CreatedBy: userID, Type: sqlc.TransactionTypeBAT, At: s.now(),
+				BucketLines: []ledger.BucketLine{{BucketID: from, Amount: t.Amount.Neg()}, {BucketID: t.To, Amount: t.Amount}},
+			}); err != nil {
+				return err
+			}
+		}
+		for i, id := range []string{from, t.To} {
+			if out[i], err = s.get(ctx, tx, userID, id); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return Bucket{}, Bucket{}, err
+	}
+	return out[0], out[1], nil
 }
 
 // Delete soft-deletes a bucket. Its remaining TF is released first with a

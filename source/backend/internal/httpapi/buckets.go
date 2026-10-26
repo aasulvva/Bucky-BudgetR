@@ -172,6 +172,52 @@ func (s *server) UpdateBucket(ctx context.Context, req api.UpdateBucketRequestOb
 	return api.UpdateBucket200JSONResponse(toAPIBucket(out)), nil
 }
 
+func (s *server) AdjustBucket(ctx context.Context, req api.AdjustBucketRequestObject) (api.AdjustBucketResponseObject, error) {
+	svc, err := s.bucketService()
+	if err != nil {
+		return nil, err
+	}
+	a := buckets.Adjustment{Mode: buckets.Mode(req.Body.Mode)}
+	for _, f := range []struct {
+		in  *string
+		out **decimal.Decimal
+	}{
+		{req.Body.TargetFunds, &a.TargetFunds},
+		{req.Body.RefillAmount, &a.RefillAmount},
+	} {
+		if f.in != nil {
+			d, err := parseAmount(*f.in)
+			if err != nil {
+				return nil, err
+			}
+			*f.out = &d
+		}
+	}
+	out, err := svc.Adjust(ctx, sessionFrom(ctx).User.ID, req.BucketId, a)
+	if err != nil {
+		return nil, bucketError(err)
+	}
+	return api.AdjustBucket200JSONResponse(toAPIBucket(out)), nil
+}
+
+func (s *server) TransferBucketFunds(ctx context.Context, req api.TransferBucketFundsRequestObject) (api.TransferBucketFundsResponseObject, error) {
+	svc, err := s.bucketService()
+	if err != nil {
+		return nil, err
+	}
+	amount, err := parseAmount(req.Body.Amount)
+	if err != nil {
+		return nil, err
+	}
+	from, to, err := svc.Transfer(ctx, sessionFrom(ctx).User.ID, req.BucketId, buckets.Transfer{
+		To: req.Body.ToBucketId, Mode: buckets.Mode(req.Body.Mode), Amount: amount,
+	})
+	if err != nil {
+		return nil, bucketError(err)
+	}
+	return api.TransferBucketFunds200JSONResponse{From: toAPIBucket(from), To: toAPIBucket(to)}, nil
+}
+
 func (s *server) SetRefillAmounts(ctx context.Context, req api.SetRefillAmountsRequestObject) (api.SetRefillAmountsResponseObject, error) {
 	svc, err := s.bucketService()
 	if err != nil {
@@ -260,6 +306,8 @@ func bucketError(err error) error {
 			Detail: "A bucket can only move to an account in the same currency."}
 	case errors.Is(err, buckets.ErrInvalid):
 		return &Error{Status: http.StatusBadRequest, Code: "invalid_request", Detail: invalidDetail(err, buckets.ErrInvalid), Err: err}
+	case errors.Is(err, buckets.ErrNoChange):
+		return &Error{Status: http.StatusBadRequest, Code: "no_change", Detail: "Nothing would change.", Err: err}
 	}
 	return ledgerError(err)
 }

@@ -119,6 +119,7 @@ func TestCreate(t *testing.T) {
 		t.Errorf("duplicate name: %v", err)
 	}
 
+	unknown := ledgertest.UnusedAccountID(t, e.pool)
 	for name, n := range map[string]buckets.New{
 		"empty name":         {Name: "  "},
 		"long name":          {Name: strings.Repeat("x", 101)},
@@ -131,7 +132,7 @@ func TestCreate(t *testing.T) {
 		"savings overflow":   {OverflowDestination: sqlc.OverflowDestinationSavingsDistribution},
 		"importance 11":      {Importance: 11},
 		"negative opening":   {OpeningFunds: dec("-5")},
-		"unknown account":    {SourceAccountID: "9999"},
+		"unknown account":    {SourceAccountID: unknown},
 	} {
 		if n.Name == "" {
 			n.Name = "Bucket " + name
@@ -331,6 +332,138 @@ func TestSetRefillAmounts(t *testing.T) {
 	}
 }
 
+// tf returns a bucket's TF.
+func (e env) tf(t *testing.T, id string) string {
+	t.Helper()
+	tf, err := balance.Buckets(t.Context(), e.pool, e.user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tf[id].StringFixed(2)
+}
+
+func TestAdjust(t *testing.T) {
+	e := setup(t)
+	b := e.create(t, buckets.New{Name: "Fuel", RefillAmount: dec("1000"), CapMode: sqlc.BucketCapModeFixed, CapAmount: dec("1200")})
+	adjust := func(a buckets.Adjustment) (buckets.Bucket, error) {
+		t.Helper()
+		return e.svc.Adjust(t.Context(), e.user, b.ID, a)
+	}
+	// Recording a BUA needs an active cycle; Future doesn't.
+	if _, err := adjust(buckets.Adjustment{Mode: buckets.ModeTemporary, TargetFunds: ptr(dec("500"))}); !errors.Is(err, ledger.ErrNoActiveCycle) {
+		t.Errorf("temporary without a cycle: %v", err)
+	}
+	got, err := adjust(buckets.Adjustment{Mode: buckets.ModeFuture, RefillAmount: ptr(dec("1500"))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.RefillAmount.Equal(dec("1500")) || !got.Capacity.Equal(dec("1500")) || e.tf(t, b.ID) != "0.00" || e.count(t, sqlc.TransactionTypeBUA) != 0 {
+		t.Errorf("future: RA %s BC %s TF %s, want 1500, the fixed BC raised, TF 0 and no BUA", got.RefillAmount, got.Capacity, e.tf(t, b.ID))
+	}
+
+	e.startCycle(t)
+	if _, err := adjust(buckets.Adjustment{Mode: buckets.ModeTemporary, TargetFunds: ptr(dec("600"))}); err != nil {
+		t.Fatal(err)
+	}
+	if tf := e.tf(t, b.ID); tf != "600.00" || e.count(t, sqlc.TransactionTypeBUA) != 1 {
+		t.Errorf("temporary: TF %s, want 600 with one BUA", tf)
+	}
+	// Both: TF changes by the RA's change, and may go below 0.
+	if got, err = adjust(buckets.Adjustment{Mode: buckets.ModeBoth, RefillAmount: ptr(dec("1700"))}); err != nil {
+		t.Fatal(err)
+	}
+	if tf := e.tf(t, b.ID); tf != "800.00" || !got.RefillAmount.Equal(dec("1700")) {
+		t.Errorf("both, up: TF %s RA %s, want 800 and 1700", tf, got.RefillAmount)
+	}
+	if _, err = adjust(buckets.Adjustment{Mode: buckets.ModeBoth, RefillAmount: ptr(dec("500"))}); err != nil {
+		t.Fatal(err)
+	}
+	if tf := e.tf(t, b.ID); tf != "-400.00" || e.count(t, sqlc.TransactionTypeBUA) != 3 {
+		t.Errorf("both, down: TF %s, want -400 after three BUAs", tf)
+	}
+
+	for name, tc := range map[string]struct {
+		a    buckets.Adjustment
+		want error
+	}{
+		"negative TF":     {buckets.Adjustment{Mode: buckets.ModeTemporary, TargetFunds: ptr(dec("-1"))}, buckets.ErrInvalid},
+		"same RA":         {buckets.Adjustment{Mode: buckets.ModeFuture, RefillAmount: ptr(dec("500.00"))}, buckets.ErrNoChange},
+		"RA in temporary": {buckets.Adjustment{Mode: buckets.ModeTemporary, RefillAmount: ptr(dec("1"))}, buckets.ErrInvalid},
+		"TF in both":      {buckets.Adjustment{Mode: buckets.ModeBoth, RefillAmount: ptr(dec("1")), TargetFunds: ptr(dec("1"))}, buckets.ErrInvalid},
+		"negative RA":     {buckets.Adjustment{Mode: buckets.ModeFuture, RefillAmount: ptr(dec("-1"))}, buckets.ErrInvalid},
+		"unknown mode":    {buckets.Adjustment{Mode: "weekly", RefillAmount: ptr(dec("1"))}, buckets.ErrInvalid},
+	} {
+		if _, err := adjust(tc.a); !errors.Is(err, tc.want) {
+			t.Errorf("%s: %v, want %v", name, err, tc.want)
+		}
+	}
+	if _, err := e.svc.Adjust(t.Context(), e.user, b.ID, buckets.Adjustment{Mode: buckets.ModeTemporary, TargetFunds: ptr(dec("0"))}); err != nil {
+		t.Errorf("settle an overspent bucket: %v", err)
+	}
+	if _, err := adjust(buckets.Adjustment{Mode: buckets.ModeTemporary, TargetFunds: ptr(dec("0"))}); !errors.Is(err, buckets.ErrNoChange) {
+		t.Errorf("same TF: %v", err)
+	}
+	bob := authtest.NewUser(t, e.pool, "bob").ID
+	if _, err := e.svc.Adjust(t.Context(), bob, b.ID, buckets.Adjustment{Mode: buckets.ModeFuture, RefillAmount: ptr(dec("1"))}); !errors.Is(err, buckets.ErrNotFound) {
+		t.Errorf("bob adjusts alice's bucket: %v", err)
+	}
+}
+
+func TestTransfer(t *testing.T) {
+	e := setup(t)
+	e.startCycle(t)
+	food := e.create(t, buckets.New{Name: "Food", RefillAmount: dec("1000"), OpeningFunds: dec("500")})
+	fun := e.create(t, buckets.New{Name: "Fun", RefillAmount: dec("200"), CapMode: sqlc.BucketCapModeFixed, CapAmount: dec("300")})
+	move := func(from, to string, mode buckets.Mode, amount string) (buckets.Bucket, buckets.Bucket, error) {
+		t.Helper()
+		return e.svc.Transfer(t.Context(), e.user, from, buckets.Transfer{To: to, Mode: mode, Amount: dec(amount)})
+	}
+
+	if _, _, err := move(food.ID, fun.ID, buckets.ModeTemporary, "150"); err != nil {
+		t.Fatal(err)
+	}
+	if e.tf(t, food.ID) != "350.00" || e.tf(t, fun.ID) != "150.00" || e.count(t, sqlc.TransactionTypeBAT) != 1 {
+		t.Errorf("temporary: TF %s and %s, want 350 and 150 with one BAT", e.tf(t, food.ID), e.tf(t, fun.ID))
+	}
+	from, to, err := move(food.ID, fun.ID, buckets.ModeFuture, "200")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !from.RefillAmount.Equal(dec("800")) || !to.RefillAmount.Equal(dec("400")) || !to.Capacity.Equal(dec("400")) ||
+		e.tf(t, fun.ID) != "150.00" || e.count(t, sqlc.TransactionTypeBAT) != 1 {
+		t.Errorf("future: RA %s and %s (BC %s), want 800 and 400 with the fixed BC raised, TF unchanged", from.RefillAmount, to.RefillAmount, to.Capacity)
+	}
+	if from, to, err = move(fun.ID, food.ID, buckets.ModeBoth, "100"); err != nil {
+		t.Fatal(err)
+	}
+	if !from.RefillAmount.Equal(dec("300")) || !to.RefillAmount.Equal(dec("900")) || e.tf(t, fun.ID) != "50.00" || e.tf(t, food.ID) != "450.00" {
+		t.Errorf("both: RA %s and %s, TF %s and %s", from.RefillAmount, to.RefillAmount, e.tf(t, fun.ID), e.tf(t, food.ID))
+	}
+	// This cycle may go below 0.
+	if _, _, err := move(fun.ID, food.ID, buckets.ModeTemporary, "80"); err != nil || e.tf(t, fun.ID) != "-30.00" {
+		t.Errorf("temporary below 0: %v, TF %s", err, e.tf(t, fun.ID))
+	}
+
+	eur := e.create(t, buckets.New{Name: "Euro", SourceAccountID: ledgertest.Account(t, e.pool, e.user, "EUR")})
+	for name, tc := range map[string]struct {
+		from, to string
+		mode     buckets.Mode
+		amount   string
+		want     error
+	}{
+		"to itself":        {food.ID, food.ID, buckets.ModeTemporary, "1", buckets.ErrInvalid},
+		"zero":             {food.ID, fun.ID, buckets.ModeTemporary, "0", buckets.ErrInvalid},
+		"other currency":   {food.ID, eur.ID, buckets.ModeTemporary, "1", buckets.ErrCurrencyMismatch},
+		"more than the RA": {fun.ID, food.ID, buckets.ModeFuture, "300.01", buckets.ErrInvalid},
+		"unknown mode":     {food.ID, fun.ID, "weekly", "1", buckets.ErrInvalid},
+		"unknown bucket":   {food.ID, "1234567890", buckets.ModeTemporary, "1", buckets.ErrNotFound},
+	} {
+		if _, _, err := move(tc.from, tc.to, tc.mode, tc.amount); !errors.Is(err, tc.want) {
+			t.Errorf("%s: %v, want %v", name, err, tc.want)
+		}
+	}
+}
+
 func TestUpdateSource(t *testing.T) {
 	e := setup(t)
 	b := e.create(t, buckets.New{Name: "Fuel"})
@@ -341,7 +474,7 @@ func TestUpdateSource(t *testing.T) {
 	if _, err := e.svc.Update(t.Context(), e.user, b.ID, buckets.Changes{SourceAccountID: &eur}); !errors.Is(err, buckets.ErrCurrencyMismatch) {
 		t.Errorf("to EUR: %v", err)
 	}
-	if _, err := e.svc.Update(t.Context(), e.user, b.ID, buckets.Changes{SourceAccountID: ptr("9999")}); !errors.Is(err, buckets.ErrInvalid) {
+	if _, err := e.svc.Update(t.Context(), e.user, b.ID, buckets.Changes{SourceAccountID: ptr(ledgertest.UnusedAccountID(t, e.pool))}); !errors.Is(err, buckets.ErrInvalid) {
 		t.Errorf("to an unknown account: %v", err)
 	}
 

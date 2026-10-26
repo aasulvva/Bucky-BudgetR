@@ -42,6 +42,7 @@ import {
 import { api } from "@/api/client";
 import { useCurrentCycles, type Cycle } from "@/api/cycles";
 import { unwrap } from "@/api/errors";
+import { AdjustButton } from "@/components/buckets/AdjustFunds";
 import { QueryState } from "@/components/QueryState";
 import i18n from "@/i18n";
 import {
@@ -101,7 +102,8 @@ function toneStyle(tone: Tone): CSSProperties | undefined {
 /**
  * Buckets (spec §9, canvas "Buckets"): per source account, each bucket's
  * spending this cycle out of its budget, what's left (TF) and what the
- * account covers (CAF), with a refill button for manual buckets.
+ * account covers (CAF), with a refill button for manual buckets and each
+ * bucket's Adjust funds.
  */
 export default function Buckets() {
   const { t } = useTranslation();
@@ -311,8 +313,8 @@ function BucketTable({
               <Table.Th w="30%">{t("buckets.usedThisCycle")}</Table.Th>
               <Table.Th w="22%">{t("buckets.left")}</Table.Th>
               <Table.Th>{t("buckets.refill")}</Table.Th>
-              <Table.Th w={48}>
-                <span className="mantine-visually-hidden">{t("nav.items.bucketSetup")}</span>
+              <Table.Th w={88}>
+                <span className="mantine-visually-hidden">{t("buckets.actions")}</span>
               </Table.Th>
             </Table.Tr>
           </Table.Thead>
@@ -339,7 +341,10 @@ function BucketTable({
                     </Group>
                   </Table.Td>
                   <Table.Td>
-                    <SetupLink bucket={b} size={32} />
+                    <Group gap={4} wrap="nowrap">
+                      <AdjustButton bucket={b} size={32} />
+                      <SetupLink bucket={b} size={32} />
+                    </Group>
                   </Table.Td>
                 </Table.Tr>
               );
@@ -359,7 +364,10 @@ function BucketCard({ bucket, figures, active, mobile }: BucketProps & { mobile:
       <Stack gap="xs">
         <Group gap="xs" wrap="nowrap" justify="space-between">
           <BucketName bucket={bucket} />
-          <SetupLink bucket={bucket} size={mobile ? 44 : 32} />
+          <Group gap={4} wrap="nowrap">
+            <AdjustButton bucket={bucket} size={mobile ? 44 : 32} />
+            <SetupLink bucket={bucket} size={mobile ? 44 : 32} />
+          </Group>
         </Group>
         <div>
           <Text size="xs" c="dimmed">
