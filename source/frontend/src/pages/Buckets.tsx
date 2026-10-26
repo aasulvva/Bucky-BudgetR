@@ -2,12 +2,10 @@ import {
   ActionIcon,
   Alert,
   Anchor,
-  Badge,
   Box,
   Button,
   Card,
   Group,
-  Progress,
   SegmentedControl,
   Stack,
   Table,
@@ -25,7 +23,7 @@ import {
   IconSettings,
 } from "@tabler/icons-react";
 import { useMutation } from "@tanstack/react-query";
-import { useState, type CSSProperties } from "react";
+import { useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
@@ -43,18 +41,17 @@ import { api } from "@/api/client";
 import { useCurrentCycles, type Cycle } from "@/api/cycles";
 import { unwrap } from "@/api/errors";
 import { AdjustButton } from "@/components/buckets/AdjustFunds";
+import {
+  BucketName,
+  LeftFunds,
+  UsedThisCycle,
+  type BucketProps,
+} from "@/components/buckets/BucketParts";
 import { QueryState } from "@/components/QueryState";
 import i18n from "@/i18n";
-import {
-  accountSummary,
-  breakdownText,
-  coverage,
-  refillOf,
-  usageColor,
-  type Tone,
-} from "@/lib/buckets";
+import { accountSummary, coverage, refillOf, toneStyle } from "@/lib/buckets";
 import { cycleRange, daysLeftLabel, isOverdue } from "@/lib/cycles";
-import { compareAmounts, formatMoney, percentOf } from "@/lib/money";
+import { compareAmounts, formatMoney } from "@/lib/money";
 
 type View = "list" | "grid";
 
@@ -80,23 +77,6 @@ function useView(): [View, (view: View) => void] {
       }
     },
   ];
-}
-
-/** Mantine colors for a bucket's or account's tone; they follow the color scheme. */
-const TONE_COLOR: Record<Tone, string | undefined> = {
-  ok: undefined,
-  warn: "yellow",
-  alert: "red",
-};
-
-function toneStyle(tone: Tone): CSSProperties | undefined {
-  const color = TONE_COLOR[tone];
-  return color
-    ? {
-        backgroundColor: `var(--mantine-color-${color}-light)`,
-        borderColor: `var(--mantine-color-${color}-outline)`,
-      }
-    : undefined;
 }
 
 /**
@@ -190,12 +170,6 @@ export default function Buckets() {
       </QueryState>
     </Stack>
   );
-}
-
-interface BucketProps {
-  bucket: Bucket;
-  figures: BucketFigures | undefined;
-  active: Cycle | null;
 }
 
 function AccountSection({
@@ -391,143 +365,6 @@ function BucketCard({ bucket, figures, active, mobile }: BucketProps & { mobile:
         {mobile && <RefillButton bucket={bucket} active={active} full />}
       </Stack>
     </Card>
-  );
-}
-
-/** The text color for a tone, readable in both color schemes. */
-function toneText(tone: Tone): string | undefined {
-  const color = TONE_COLOR[tone];
-  return color && `var(--mantine-color-${color}-text)`;
-}
-
-function BucketName({ bucket }: { bucket: Bucket }) {
-  const { t } = useTranslation();
-  const { overspent, tone } = coverage(bucket);
-  const label = overspent
-    ? t("buckets.overspentLabel")
-    : t(tone === "alert" ? "buckets.alertLabel" : "buckets.warnLabel");
-  return (
-    <Group gap={6} wrap="wrap" style={{ minWidth: 0 }}>
-      {tone !== "ok" && (
-        <IconAlertTriangle size={18} role="img" aria-label={label} color={toneText(tone)} />
-      )}
-      <Anchor
-        component={Link}
-        to={`/transactions?bucket_id=${bucket.id}`}
-        fw={600}
-        c="var(--mantine-color-text)"
-      >
-        {bucket.name}
-      </Anchor>
-      {bucket.priority && (
-        <Badge size="sm" variant="light" radius="sm">
-          {t("buckets.priority")}
-        </Badge>
-      )}
-    </Group>
-  );
-}
-
-/**
- * What's left: what the account backs (CAF). While that's less than TF, TF
- * is struck through beside it, with a bar of how much is covered. An
- * overspent bucket shows its negative TF.
- */
-function LeftFunds({ bucket, large }: { bucket: Bucket; large?: boolean }) {
-  const { t } = useTranslation();
-  const { gap, coveredPct, overspent, tone } = coverage(bucket);
-  const money = (amount: string) => formatMoney(amount, bucket.currency);
-  const fz = large ? 22 : "sm";
-  if (overspent) {
-    return (
-      <div>
-        <Text fz={fz} fw={600} c={toneText(tone)} style={{ whiteSpace: "nowrap" }}>
-          {money(bucket.target_funds)}
-        </Text>
-        <Text size="xs" c={toneText(tone)}>
-          {t("buckets.overspentLabel")}
-        </Text>
-      </div>
-    );
-  }
-  const short = compareAmounts(gap, "0") > 0;
-  return (
-    <Stack gap={4}>
-      <Group gap="xs" wrap="wrap" align="baseline">
-        <Text fz={fz} fw={600} style={{ whiteSpace: "nowrap" }}>
-          {money(bucket.current_available_funds)}
-        </Text>
-        {short && (
-          <Text
-            component="del"
-            size="sm"
-            c="dimmed"
-            title={t("buckets.target", { amount: money(bucket.target_funds) })}
-            style={{ whiteSpace: "nowrap" }}
-          >
-            {money(bucket.target_funds)}
-          </Text>
-        )}
-      </Group>
-      {short && (
-        <Progress
-          value={coveredPct}
-          color={TONE_COLOR[tone]}
-          size="sm"
-          aria-label={t("buckets.coveredOf", {
-            covered: money(bucket.current_available_funds),
-            target: money(bucket.target_funds),
-          })}
-        />
-      )}
-      {short ? (
-        <Text size="xs" c={toneText(tone)}>
-          {t("buckets.notCovered", { amount: money(gap) })}
-        </Text>
-      ) : (
-        compareAmounts(bucket.target_funds, "0") > 0 && (
-          <Text size="xs" c="dimmed">
-            {t("buckets.fullyCovered")}
-          </Text>
-        )
-      )}
-    </Stack>
-  );
-}
-
-/** The cycle's spending out of the budget, with the bar and the breakdown. */
-function UsedThisCycle({ bucket, figures, active, long }: BucketProps & { long?: boolean }) {
-  const { t } = useTranslation();
-  if (!active || !figures) {
-    return (
-      <Text size="sm" c="dimmed">
-        {active ? "…" : t("buckets.noCycleFigures")}
-      </Text>
-    );
-  }
-  const money = (amount: string) => formatMoney(amount, bucket.currency);
-  const pct = percentOf(figures.used, figures.budget);
-  const values = { used: money(figures.used), budget: money(figures.budget) };
-  return (
-    <Stack gap={4}>
-      {!long && (
-        <Group justify="space-between" gap="xs" wrap="nowrap">
-          <Text size="sm">{t("buckets.usedOf", values)}</Text>
-          <Text size="xs" c="dimmed">
-            {pct}%
-          </Text>
-        </Group>
-      )}
-      <Progress
-        value={Math.min(pct, 100)}
-        color={usageColor(pct)}
-        aria-label={t("buckets.usedOfLong", values)}
-      />
-      {long && <Text size="sm">{t("buckets.usedOfLong", values)}</Text>}
-      <Text size="xs" c="dimmed">
-        {breakdownText(figures, bucket.currency)}
-      </Text>
-    </Stack>
   );
 }
 

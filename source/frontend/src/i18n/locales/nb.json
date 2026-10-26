@@ -197,6 +197,52 @@
     "deleteAccount": "Slett kontoen",
     "deleted": "{{name}} er slettet."
   },
+  "dashboard": {
+    "settings": "Innstillinger",
+    "settingsFor": "Innstillinger for {{widget}}",
+    "settingsTitle": "Innstillinger for {{widget}}",
+    "cycle": {
+      "title": "Periode",
+      "manage": "Perioder",
+      "next": "Neste: {{range}} (planlagt)"
+    },
+    "health": {
+      "title": "Budsjettstatus",
+      "covered": "{{pct}} % dekket: {{covered}} av {{needed}}",
+      "uncovered_one": "{{count}} bøtte ikke helt dekket",
+      "uncovered_other": "{{count}} bøtter ikke helt dekket",
+      "overspent_one": "{{count}} overforbrukt",
+      "overspent_other": "{{count}} overforbrukt",
+      "short": "Mangler {{amount}}",
+      "unallocated": "{{amount}} ufordelt"
+    },
+    "bucketStatus": {
+      "title": "Bøttestatus",
+      "show": "Vis",
+      "modes": {
+        "attention": "Trenger oppmerksomhet",
+        "all": "Alle bøtter",
+        "most_used": "Mest brukt",
+        "bucket": "Én bøtte"
+      },
+      "bucket": "Bøtte",
+      "pickBucket": "Velg en bøtte.",
+      "allFine": "Alle bøttene er i orden: helt dekket, og ingen over 90 % brukt.",
+      "overspentBy": "Overforbrukt med {{amount}}",
+      "used": "{{pct}} % brukt",
+      "usedOf": "{{name}}: {{pct}} % brukt",
+      "noneUsed": "Ingen bøtte har budsjett i denne perioden ennå."
+    },
+    "accounts": {
+      "title": "Kontosaldoer"
+    },
+    "recent": {
+      "title": "Siste transaksjoner",
+      "all": "Alle transaksjoner",
+      "empty": "Ingen transaksjoner ennå.",
+      "count": "Antall transaksjoner"
+    }
+  },
   "buckets": {
     "modes": {
       "auto": "Automatisk",

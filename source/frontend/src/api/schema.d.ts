@@ -858,6 +858,26 @@ export interface components {
              *     `triggers_refill` (spec §6). Null means no rules.
              */
             income_refill_rules?: components["schemas"]["IncomeRefillRule"][] | null;
+            /** @description The Dashboard widgets' settings. Replaced as a whole on update. Null means the defaults. */
+            dashboard?: components["schemas"]["DashboardSettings"] | null;
+        };
+        /** @description Settings per Dashboard widget. A missing widget uses its defaults. */
+        DashboardSettings: {
+            bucket_status?: {
+                /**
+                 * @description Which buckets the widget shows: the ones that need attention
+                 *     (the default), all of them, the most used ones, or the one in
+                 *     `bucket_id`.
+                 * @enum {string}
+                 */
+                mode: "attention" | "all" | "most_used" | "bucket";
+                /** @description The bucket shown in `bucket` mode. */
+                bucket_id?: (string & components["schemas"]["BucketId"]) | null;
+            };
+            recent_transactions?: {
+                /** @description How many transactions it shows. 5 by default. */
+                count: number;
+            };
         };
         /**
          * @description A web app language: English, Norwegian bokmål or Norwegian nynorsk.

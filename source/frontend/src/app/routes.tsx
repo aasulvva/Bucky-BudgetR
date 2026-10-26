@@ -13,6 +13,7 @@ type PageModule = Promise<{ default: ComponentType }>;
 
 /** Screens that exist. Every other nav item gets a placeholder. */
 const pages: Partial<Record<string, () => PageModule>> = {
+  "/": () => import("@/pages/Dashboard"),
   "/accounts": () => import("@/pages/Accounts"),
   "/accounts/setup": () => import("@/pages/AccountSetup"),
   "/buckets": () => import("@/pages/Buckets"),
