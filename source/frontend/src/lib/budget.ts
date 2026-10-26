@@ -24,7 +24,9 @@ export interface BudgetDraft {
 
 export const EMPTY_DRAFT: BudgetDraft = { incomes: {}, ras: {} };
 
-const saved = (amount: string | null) => (amount === null ? null : canonicalAmount(amount));
+// Undefined too: a list fetched from an older server lacks expected_income.
+const saved = (amount: string | null | undefined) =>
+  amount === null || amount === undefined ? null : canonicalAmount(amount);
 
 /** The expected income shown for an account. */
 export function draftIncome(draft: BudgetDraft, account: Account): string | null {

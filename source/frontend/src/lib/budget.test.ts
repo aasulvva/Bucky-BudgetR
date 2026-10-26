@@ -48,6 +48,13 @@ describe("draft values", () => {
     expect(draftIncome(draft, main)).toBeNull();
     expect(draftRefill(draft, rent)).toBe("100.00");
   });
+
+  it("takes a missing expected income as not entered", () => {
+    const old = { ...main };
+    delete (old as Partial<typeof main>).expected_income;
+    expect(draftIncome(EMPTY_DRAFT, old)).toBeNull();
+    expect(budgetChanges(EMPTY_DRAFT, [old], all).count).toBe(0);
+  });
 });
 
 describe("accountBudget", () => {
