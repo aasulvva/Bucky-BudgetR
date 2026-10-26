@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/oapi-codegen/nullable"
 
@@ -175,6 +176,48 @@ func transactionError(err error) error {
 		return &Error{Status: http.StatusBadRequest, Code: "invalid_request", Detail: invalidDetail(err, ledger.ErrInvalid), Err: err}
 	}
 	return refillError(err)
+}
+
+func (s *server) ListTags(ctx context.Context, req api.ListTagsRequestObject) (api.ListTagsResponseObject, error) {
+	svc, err := s.transactionService()
+	if err != nil {
+		return nil, err
+	}
+	tags, err := svc.Tags(ctx, sessionFrom(ctx).User.ID, deref(req.Params.Q), deref(req.Params.Limit))
+	if err != nil {
+		return nil, transactionError(err)
+	}
+	out := make(api.ListTags200JSONResponse, len(tags))
+	for i, t := range tags {
+		out[i] = api.Tag{Name: t.Name, LastUsedAt: nullable.NewNullNullable[time.Time]()}
+		if !t.LastUsed.IsZero() {
+			out[i].LastUsedAt.Set(t.LastUsed)
+		}
+	}
+	return out, nil
+}
+
+func (s *server) ListCounterparties(ctx context.Context, req api.ListCounterpartiesRequestObject) (api.ListCounterpartiesResponseObject, error) {
+	svc, err := s.transactionService()
+	if err != nil {
+		return nil, err
+	}
+	var typ sqlc.TransactionType
+	if req.Params.Type != nil {
+		typ = sqlc.TransactionType(*req.Params.Type)
+	}
+	list, err := svc.Counterparties(ctx, sessionFrom(ctx).User.ID, deref(req.Params.Q), typ, deref(req.Params.Limit))
+	if err != nil {
+		return nil, transactionError(err)
+	}
+	out := make(api.ListCounterparties200JSONResponse, len(list))
+	for i, c := range list {
+		out[i] = api.CounterpartySuggestion{
+			Counterparty: c.Counterparty, Type: api.CounterpartySuggestionType(c.Type), At: c.At,
+			AccountId: c.AccountID, Tags: c.Tags, BucketIds: c.BucketIDs,
+		}
+	}
+	return out, nil
 }
 
 func toAPITransaction(t transactions.Transaction) api.Transaction {
