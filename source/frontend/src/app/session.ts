@@ -1,7 +1,7 @@
 // The session: who is logged in. GET /me answers 401 without a session, which
 // here means "nobody" rather than an error.
 
-import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 
 import { api } from "@/api/client";
@@ -9,6 +9,7 @@ import { ApiError, unwrap } from "@/api/errors";
 import type { components } from "@/api/schema";
 
 export type User = components["schemas"]["User"];
+export type Preferences = components["schemas"]["Preferences"];
 
 export const SESSION_KEY = ["me"] as const;
 
@@ -24,6 +25,17 @@ async function fetchSession(): Promise<User | null> {
 /** The logged-in user, or null without a session. */
 export function useSession() {
   return useQuery({ queryKey: SESSION_KEY, queryFn: fetchSession, staleTime: 5 * 60_000 });
+}
+
+/** PATCHes preferences and puts the result into the session user. */
+export function useUpdatePreferences() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Preferences) => unwrap(api.PATCH("/api/v1/me/preferences", { body })),
+    onSuccess: (preferences) => {
+      client.setQueryData<User | null>(SESSION_KEY, (user) => user && { ...user, preferences });
+    },
+  });
 }
 
 let ended = false;

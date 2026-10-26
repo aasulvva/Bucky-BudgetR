@@ -197,6 +197,60 @@
     "deleteAccount": "Delete account",
     "deleted": "{{name}} deleted."
   },
+  "dashboard": {
+    "settings": "Settings",
+    "settingsFor": "Settings for {{widget}}",
+    "settingsTitle": "{{widget}} settings",
+    "cycle": {
+      "title": "Cycle",
+      "manage": "Cycles",
+      "next": "Next: {{range}} (planned)",
+      "showNext": "Show the next planned cycle"
+    },
+    "health": {
+      "title": "Budget health",
+      "covered": "{{pct}}% covered: {{covered}} of {{needed}}",
+      "uncovered_one": "{{count}} bucket not fully covered",
+      "uncovered_other": "{{count}} buckets not fully covered",
+      "overspent_one": "{{count}} overspent",
+      "overspent_other": "{{count}} overspent",
+      "short": "{{amount}} short",
+      "unallocated": "{{amount}} unallocated"
+    },
+    "bucketStatus": {
+      "title": "Bucket status",
+      "show": "Show",
+      "modes": {
+        "attention": "Needs attention",
+        "all": "All buckets",
+        "most_used": "Most used",
+        "bucket": "One bucket"
+      },
+      "bucket": "Bucket",
+      "pickBucket": "Choose a bucket.",
+      "allFine": "All buckets are fine: fully covered, and none more than 90% used.",
+      "overspentBy": "Overspent by {{amount}}",
+      "used": "{{pct}}% used",
+      "usedOf": "{{name}}: {{pct}}% used",
+      "noneUsed": "No bucket has a budget this cycle yet."
+    },
+    "accounts": {
+      "title": "Account balances",
+      "show": "Show",
+      "modes": {
+        "all": "All accounts",
+        "account": "One account"
+      },
+      "account": "Account",
+      "pickAccount": "Choose an account."
+    },
+    "recent": {
+      "title": "Recent transactions",
+      "all": "All transactions",
+      "empty": "No transactions yet.",
+      "count": "Number of transactions"
+    }
+  },
   "buckets": {
     "modes": {
       "auto": "Auto",

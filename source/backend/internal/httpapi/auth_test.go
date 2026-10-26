@@ -376,7 +376,29 @@ func TestPreferences(t *testing.T) {
 		t.Errorf("language reset: %d %s", w.Code, w.Body)
 	}
 
-	for _, body := range []string{`{"theme":"dark"}`, `{"locale":"not a locale!"}`, `{"locale":42}`, `{"language":"de"}`, `[]`} {
+	// The Dashboard's settings are replaced as a whole.
+	dashboard := `{"dashboard":{"accounts":{"account_id":"1234","mode":"account"},"bucket_status":{"bucket_id":"1000000001","mode":"bucket"},"cycle":{"show_next":false},"recent_transactions":{"count":10}}}`
+	if w := patch(dashboard); w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != dashboard {
+		t.Errorf("dashboard: %d %s", w.Code, w.Body)
+	}
+	want := `{"dashboard":{"bucket_status":{"mode":"all"}}}`
+	if w := patch(`{"dashboard":{"bucket_status":{"mode":"all","bucket_id":null}}}`); strings.TrimSpace(w.Body.String()) != want {
+		t.Errorf("dashboard replaced: %d %s", w.Code, w.Body)
+	}
+	if w := patch(`{"dashboard":null}`); strings.TrimSpace(w.Body.String()) != `{}` {
+		t.Errorf("dashboard reset: %d %s", w.Code, w.Body)
+	}
+
+	for _, body := range []string{
+		`{"theme":"dark"}`, `{"locale":"not a locale!"}`, `{"locale":42}`, `{"language":"de"}`, `[]`,
+		`{"dashboard":{"bucket_status":{"mode":"some"}}}`,
+		`{"dashboard":{"bucket_status":{"mode":"bucket","bucket_id":"42"}}}`,
+		`{"dashboard":{"recent_transactions":{"count":0}}}`,
+		`{"dashboard":{"recent_transactions":{"count":21}}}`,
+		`{"dashboard":{"graphs":{}}}`,
+		`{"dashboard":{"cycle":{}}}`,
+		`{"dashboard":{"accounts":{"mode":"account","account_id":"12"}}}`,
+	} {
 		w := patch(body)
 		if w.Code != http.StatusBadRequest || deref(decodeProblem(t, w).Code) != "invalid_request" {
 			t.Errorf("%s: got %d %s", body, w.Code, w.Body)

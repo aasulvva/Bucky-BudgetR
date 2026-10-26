@@ -1411,6 +1411,69 @@ components:
             `triggers_refill` (spec §6). Null means no rules.
           items:
             $ref: "#/components/schemas/IncomeRefillRule"
+        dashboard:
+          type: object
+          allOf:
+            - $ref: "#/components/schemas/DashboardSettings"
+          nullable: true
+          description: The Dashboard widgets' settings. Replaced as a whole on update. Null means the defaults.
+
+    DashboardSettings:
+      type: object
+      additionalProperties: false
+      description: Settings per Dashboard widget. A missing widget uses its defaults.
+      properties:
+        cycle:
+          type: object
+          additionalProperties: false
+          required: [show_next]
+          properties:
+            show_next:
+              type: boolean
+              description: Also show the next planned cycle. True by default.
+        accounts:
+          type: object
+          additionalProperties: false
+          required: [mode]
+          properties:
+            mode:
+              type: string
+              enum: [all, account]
+              description: All accounts (the default), or only the one in `account_id`.
+            account_id:
+              type: string
+              allOf:
+                - $ref: "#/components/schemas/AccountId"
+              nullable: true
+              description: The account shown in `account` mode.
+        bucket_status:
+          type: object
+          additionalProperties: false
+          required: [mode]
+          properties:
+            mode:
+              type: string
+              enum: [attention, all, most_used, bucket]
+              description: |
+                Which buckets the widget shows: the ones that need attention
+                (the default), all of them, the most used ones, or the one in
+                `bucket_id`.
+            bucket_id:
+              type: string
+              allOf:
+                - $ref: "#/components/schemas/BucketId"
+              nullable: true
+              description: The bucket shown in `bucket` mode.
+        recent_transactions:
+          type: object
+          additionalProperties: false
+          required: [count]
+          properties:
+            count:
+              type: integer
+              minimum: 1
+              maximum: 20
+              description: How many transactions it shows. 5 by default.
 
     Language:
       type: string

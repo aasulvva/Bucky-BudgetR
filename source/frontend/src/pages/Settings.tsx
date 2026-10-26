@@ -12,14 +12,14 @@ import {
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { IconPlus, IconTrash } from "@tabler/icons-react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { api } from "@/api/client";
 import { unwrap } from "@/api/errors";
 import type { components } from "@/api/schema";
-import { SESSION_KEY, useSession, type User } from "@/app/session";
+import { useSession, useUpdatePreferences, type Preferences } from "@/app/session";
 import { AmountInput } from "@/components/AmountInput";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { PasswordForm } from "@/components/PasswordForm";
@@ -29,7 +29,6 @@ import { LANGUAGES } from "@/lib/language";
 import { LOCALE_OPTIONS } from "@/lib/locale";
 import { parseAmount } from "@/lib/money";
 
-type Preferences = components["schemas"]["Preferences"];
 type RefillMode = components["schemas"]["RefillMode"];
 
 /** The API's limit on income rules. */
@@ -53,17 +52,6 @@ export default function Settings() {
       <ApiStatus />
     </Stack>
   );
-}
-
-/** PATCHes preferences and puts the result into the session user. */
-function useUpdatePreferences() {
-  const client = useQueryClient();
-  return useMutation({
-    mutationFn: (body: Preferences) => unwrap(api.PATCH("/api/v1/me/preferences", { body })),
-    onSuccess: (preferences) => {
-      client.setQueryData<User | null>(SESSION_KEY, (user) => user && { ...user, preferences });
-    },
-  });
 }
 
 /** The value the locale select uses for "the browser's locale". */

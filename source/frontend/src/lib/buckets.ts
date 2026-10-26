@@ -1,6 +1,8 @@
 // What the Buckets screen shows about a bucket and its account: whether the
 // account covers it, the cycle's breakdown, and what a refill adds.
 
+import type { CSSProperties } from "react";
+
 import type { Account, Bucket, BucketFigures } from "@/api/accounts";
 import i18n from "@/i18n";
 
@@ -119,4 +121,27 @@ export function refillOf(
     : subtractAmounts(bucket.refill_amount, tf);
   const excess = subtractAmounts(addAmounts(tf, amount), bucket.capacity);
   return { amount, overflow: bucket.keep_funds && positive(excess) ? excess : "0.00" };
+}
+
+/** Mantine colors for a bucket's or account's tone; they follow the color scheme. */
+export const TONE_COLOR: Record<Tone, string | undefined> = {
+  ok: undefined,
+  warn: "yellow",
+  alert: "red",
+};
+
+export function toneStyle(tone: Tone): CSSProperties | undefined {
+  const color = TONE_COLOR[tone];
+  return color
+    ? {
+        backgroundColor: `var(--mantine-color-${color}-light)`,
+        borderColor: `var(--mantine-color-${color}-outline)`,
+      }
+    : undefined;
+}
+
+/** The text color for a tone, readable in both color schemes. */
+export function toneText(tone: Tone): string | undefined {
+  const color = TONE_COLOR[tone];
+  return color && `var(--mantine-color-${color}-text)`;
 }

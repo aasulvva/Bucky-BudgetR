@@ -1,5 +1,4 @@
 import {
-  Badge,
   Box,
   Button,
   Card,
@@ -12,7 +11,6 @@ import {
   Text,
   TextInput,
   Title,
-  UnstyledButton,
   useMantineTheme,
 } from "@mantine/core";
 import { DatePickerInput } from "@mantine/dates";
@@ -24,17 +22,12 @@ import { Link, useSearchParams } from "react-router";
 
 import { useAccounts, useBuckets } from "@/api/accounts";
 import { useCurrentCycles, useCycles, type Cycle } from "@/api/cycles";
-import { useTags, useTransactionPages, type Transaction } from "@/api/transactions";
+import { useTags, useTransactionPages } from "@/api/transactions";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
 import { TransactionDetail } from "@/components/transactions/TransactionDetail";
-import {
-  signedMoney,
-  transactionSubLine,
-  transactionTitle,
-  useLookups,
-  type Lookups,
-} from "@/components/transactions/lookups";
+import { TransactionRow } from "@/components/transactions/TransactionRow";
+import { useLookups, type Lookups } from "@/components/transactions/lookups";
 import { cycleRange, formatDateRange } from "@/lib/cycles";
 import { formatDay } from "@/lib/dates";
 import {
@@ -45,7 +38,6 @@ import {
   isFiltered,
   listQuery,
   readFilter,
-  rowAmount,
   shownCycle,
   withFilter,
   type TransactionFilter,
@@ -230,79 +222,6 @@ export default function Transactions() {
         </>
       )}
     </Stack>
-  );
-}
-
-function TransactionRow({
-  tx,
-  names,
-  filter,
-  to,
-  selected,
-  badge,
-}: {
-  tx: Transaction;
-  names: Lookups;
-  filter: TransactionFilter;
-  to: string;
-  selected: boolean;
-  badge: boolean;
-}) {
-  const { t } = useTranslation();
-  const amount = rowAmount(tx, filter);
-  const positive = amount.signed && !amount.amount.startsWith("-") && amount.amount !== "0.00";
-  const note = tx.replaced_by
-    ? t("transactions.moved")
-    : tx.reversed
-      ? t("transactions.reversedMark")
-      : tx.corrected
-        ? t("transactions.edited")
-        : "";
-  return (
-    <UnstyledButton
-      component={Link}
-      to={to}
-      aria-current={selected ? "true" : undefined}
-      px="md"
-      py={10}
-      bg={selected ? "var(--mantine-color-blue-light)" : undefined}
-      style={{
-        display: "grid",
-        gridTemplateColumns: badge ? "48px minmax(0, 1fr) auto" : "minmax(0, 1fr) auto",
-        gap: 12,
-        alignItems: "center",
-        borderBottom: "1px solid var(--mantine-color-default-border)",
-      }}
-    >
-      {badge && (
-        <Badge variant="light" color="gray" radius="sm" size="sm" style={{ justifySelf: "start" }}>
-          {tx.type}
-        </Badge>
-      )}
-      <Box style={{ minWidth: 0 }}>
-        <Text fw={600} truncate>
-          {transactionTitle(tx, names)}
-        </Text>
-        <Text size="sm" c="dimmed" truncate>
-          {transactionSubLine(tx, names)}
-        </Text>
-      </Box>
-      <Box ta="right">
-        <Text
-          fw={600}
-          style={{ whiteSpace: "nowrap" }}
-          c={tx.reversed ? "dimmed" : positive ? "var(--mantine-color-blue-text)" : undefined}
-          td={tx.reversed ? "line-through" : undefined}
-        >
-          {signedMoney(amount, names.currencyOf(tx))}
-        </Text>
-        {note && (
-          <Text size="xs" c="dimmed">
-            {note}
-          </Text>
-        )}
-      </Box>
-    </UnstyledButton>
   );
 }
 
