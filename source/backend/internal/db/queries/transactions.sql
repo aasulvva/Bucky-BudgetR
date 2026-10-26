@@ -54,3 +54,50 @@ ORDER BY lower(t.name) COLLATE "C";
 -- The transactions that replace any of these (after a move to another account).
 SELECT id, replaces_id::text AS replaces_id FROM transaction_headers
 WHERE replaces_id = ANY(sqlc.arg(ids)::text[]);
+
+-- name: ListTagSuggestions :many
+-- The user's tags for autocompletion, most recently used first (by
+-- transaction time, on any header), then unused ones by name. q is a LIKE
+-- pattern, escaped by the caller.
+-- last_used_at is only meaningful when used is set (timestamptz maps to a
+-- plain time.Time).
+SELECT t.name, (used.transaction_at IS NOT NULL)::bool AS used,
+       coalesce(used.transaction_at, t.created_at)::timestamptz AS last_used_at
+FROM tags t
+LEFT JOIN LATERAL (
+    SELECT h.transaction_at FROM transaction_tags tt
+    JOIN transaction_headers h ON h.id = tt.transaction_id
+    WHERE tt.tag_id = t.id
+    ORDER BY h.transaction_at DESC
+    LIMIT 1
+) used ON true
+WHERE t.user_id = sqlc.arg(user_id)
+  AND (sqlc.narg(q)::text IS NULL OR t.name ILIKE sqlc.narg(q)::text)
+ORDER BY used.transaction_at DESC NULLS LAST, lower(t.name) COLLATE "C"
+LIMIT sqlc.arg(row_limit);
+
+-- name: ListCounterpartyOriginals :many
+-- For autocompletion: per counterparty (ignoring case), the newest original
+-- income or expense that isn't reversed, newest first. The counterparty is
+-- the family's effective one, from its newest header. q is a LIKE pattern,
+-- escaped by the caller.
+SELECT id FROM (
+    SELECT DISTINCT ON (lower(latest.counterparty)) h.id, h.transaction_at
+    FROM transaction_headers h
+    JOIN LATERAL (
+        SELECT c.counterparty FROM transaction_headers c
+        WHERE c.id = h.id OR c.parent_id = h.id
+        ORDER BY c.created_at DESC, c.id DESC
+        LIMIT 1
+    ) latest ON true
+    WHERE h.user_id = sqlc.arg(user_id) AND h.correction_type = 'none'
+      AND h.transaction_type::text = ANY(sqlc.arg(types)::text[])
+      AND latest.counterparty <> ''
+      AND (sqlc.narg(q)::text IS NULL OR latest.counterparty ILIKE sqlc.narg(q)::text)
+      AND NOT EXISTS (
+          SELECT 1 FROM transaction_headers r
+          WHERE r.parent_id = h.id AND r.correction_type = 'reversal')
+    ORDER BY lower(latest.counterparty), h.transaction_at DESC, h.id DESC
+) newest
+ORDER BY transaction_at DESC, id DESC
+LIMIT sqlc.arg(row_limit);

@@ -329,3 +329,120 @@ func TestList(t *testing.T) {
 		t.Errorf("bob's list %v %v", page.Items, err)
 	}
 }
+
+// TestSuggestions: counterparties and tags for autocompletion.
+func TestSuggestions(t *testing.T) {
+	e := setup(t)
+	groceries := ledgertest.Bucket(t, e.pool, e.user, e.account)
+	exp := func(counterparty string, at time.Time, tags []string, bucket string) transactions.Transaction {
+		t.Helper()
+		n := transactions.New{Type: sqlc.TransactionTypeEXP, Amount: dec("100"), At: at, Counterparty: counterparty, Tags: tags}
+		if bucket != "" {
+			n.Buckets = []transactions.BucketAmount{{BucketID: bucket, Amount: dec("100")}}
+		}
+		return e.create(t, n)
+	}
+	exp("Rema 1000", now.Add(-3*day), []string{"food"}, groceries)
+	exp("rema 1000", now.Add(-1*day), []string{"food", "weekly"}, "")
+	e.create(t, transactions.New{Type: sqlc.TransactionTypeINC, Amount: dec("500"), At: now.Add(-2 * day), Counterparty: "Employer AS", Tags: []string{"salary"}})
+	coop := exp("Coop", now.Add(-4*day), []string{"coop"}, groceries)
+	// A correction changes the counterparty and tags; the newest header wins.
+	if _, err := e.ledger.Create(t.Context(), e.pool, ledger.Entry{
+		UserID: e.user, CreatedBy: e.user, Type: sqlc.TransactionTypeEXP, Correction: sqlc.CorrectionTypeAdjustment,
+		ParentID: coop.ID, At: coop.At, Counterparty: "Coop Mega", Tags: []string{"groceries"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Reversed: not suggested.
+	kiwi := exp("Kiwi", now.Add(-day/2), nil, "")
+	if _, err := e.ledger.Create(t.Context(), e.pool, ledger.Entry{
+		UserID: e.user, CreatedBy: e.user, Type: sqlc.TransactionTypeEXP, Correction: sqlc.CorrectionTypeReversal,
+		ParentID: kiwi.ID, At: kiwi.At, BankLines: []ledger.BankLine{{AccountID: e.account, Amount: dec("100")}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// A transfer has no counterparty to suggest.
+	other := ledgertest.Account(t, e.pool, e.user, "NOK")
+	e.create(t, transactions.New{Type: sqlc.TransactionTypeTRF, Amount: dec("10"), ToAccountID: other, Counterparty: "Me"})
+	if _, err := e.pool.Exec(t.Context(), "INSERT INTO tags (user_id, name) VALUES ($1, 'archive')", e.user); err != nil {
+		t.Fatal(err)
+	}
+
+	names := func(list []transactions.Counterparty) []string {
+		out := []string{}
+		for _, c := range list {
+			out = append(out, c.Counterparty)
+		}
+		return out
+	}
+	cps := func(q string, typ sqlc.TransactionType) []transactions.Counterparty {
+		t.Helper()
+		list, err := e.svc.Counterparties(t.Context(), e.user, q, typ, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return list
+	}
+	all := cps("", "")
+	if got, want := names(all), []string{"rema 1000", "Employer AS", "Coop Mega"}; !slices.Equal(got, want) {
+		t.Fatalf("counterparties %v, want %v", got, want)
+	}
+	if r := all[0]; r.Type != sqlc.TransactionTypeEXP || r.AccountID != e.account || !r.At.Equal(now.Add(-1*day)) ||
+		!slices.Equal(r.Tags, []string{"food", "weekly"}) || len(r.BucketIDs) != 0 {
+		t.Errorf("newest Rema 1000 %+v", r)
+	}
+	if c := all[2]; !slices.Equal(c.Tags, []string{"groceries"}) || !slices.Equal(c.BucketIDs, []string{groceries}) {
+		t.Errorf("corrected Coop %+v", c)
+	}
+	if got := names(cps("", sqlc.TransactionTypeINC)); !slices.Equal(got, []string{"Employer AS"}) {
+		t.Errorf("incomes %v", got)
+	}
+	if got := names(cps("MEGA", "")); !slices.Equal(got, []string{"Coop Mega"}) {
+		t.Errorf("q=MEGA %v", got)
+	}
+	if got := names(cps("%", "")); len(got) != 0 {
+		t.Errorf("q=%% is literal: %v", got)
+	}
+	bob := authtest.NewUser(t, e.pool, "bob").ID
+	if list, err := e.svc.Counterparties(t.Context(), bob, "", "", 0); err != nil || len(list) != 0 {
+		t.Errorf("bob: %v, %v", list, err)
+	}
+	if _, err := e.svc.Counterparties(t.Context(), e.user, "", sqlc.TransactionTypeTRF, 0); !errors.Is(err, transactions.ErrInvalid) {
+		t.Errorf("transfers: %v", err)
+	}
+	if _, err := e.svc.Counterparties(t.Context(), e.user, "", "", transactions.MaxCounterpartyLimit+1); !errors.Is(err, transactions.ErrInvalid) {
+		t.Errorf("limit: %v", err)
+	}
+	if list, err := e.svc.Counterparties(t.Context(), e.user, "", "", 1); err != nil || len(list) != 1 {
+		t.Errorf("limit 1: %v, %v", list, err)
+	}
+
+	tags := func(q string) []string {
+		t.Helper()
+		list, err := e.svc.Tags(t.Context(), e.user, q, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := []string{}
+		for _, tag := range list {
+			out = append(out, tag.Name)
+		}
+		return out
+	}
+	if got, want := tags(""), []string{"food", "weekly", "salary", "coop", "groceries", "archive"}; !slices.Equal(got, want) {
+		t.Errorf("tags %v, want %v", got, want)
+	}
+	if got, want := tags("O"), []string{"food", "coop", "groceries"}; !slices.Equal(got, want) {
+		t.Errorf("tags with o %v, want %v", got, want)
+	}
+	list, err := e.svc.Tags(t.Context(), e.user, "archive", 0)
+	if err != nil || len(list) != 1 || !list[0].LastUsed.IsZero() {
+		t.Errorf("unused tag %+v, %v", list, err)
+	}
+	if list, err := e.svc.Tags(t.Context(), e.user, "food", 0); err != nil || !list[0].LastUsed.Equal(now.Add(-1*day)) {
+		t.Errorf("food last used %+v, %v", list, err)
+	}
+	if _, err := e.svc.Tags(t.Context(), e.user, "", transactions.MaxTagLimit+1); !errors.Is(err, transactions.ErrInvalid) {
+		t.Errorf("tag limit: %v", err)
+	}
+}

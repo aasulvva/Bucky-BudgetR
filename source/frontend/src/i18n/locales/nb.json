@@ -304,6 +304,63 @@
     "deleteBucket": "Slett bøtta",
     "deleted": "{{name}} er slettet."
   },
+  "newTransaction": {
+    "type": "Type",
+    "types": {
+      "EXP": "Utgift",
+      "INC": "Inntekt",
+      "TRF": "Overføring",
+      "INP": "Intern betaling (senere)"
+    },
+    "hints": {
+      "EXP": "Penger ut",
+      "INC": "Penger inn",
+      "TRF": "Mellom dine egne kontoer"
+    },
+    "amount": "Beløp",
+    "enterAmount": "Skriv inn et beløp over 0.",
+    "date": "Dato og tid",
+    "account": "Konto",
+    "from": "Fra konto",
+    "to": "Til konto",
+    "chooseOther": "Velg en annen konto enn den pengene kommer fra.",
+    "noOther": "Du har ingen annen konto i {{currency}} å overføre til.",
+    "accountOption": "{{name}} · {{balance}}",
+    "counterparty": {
+      "EXP": "Betalt til",
+      "INC": "Fra"
+    },
+    "counterpartyPlaceholder": "Firma eller person",
+    "triggersRefill": "Utløser påfyll",
+    "refillsWaiting": "Fyller på {{names}}, «Ved inntekt»-bøttene på denne kontoen som ikke er fylt på i denne perioden.",
+    "refillsNone": "Ingen «Ved inntekt»-bøtter på denne kontoen venter på påfyll i denne perioden.",
+    "tags": "Tagger",
+    "tagsPlaceholder": "Legg til tagg",
+    "buckets": "Bøtter",
+    "fundedFrom": "Fra {{name}}",
+    "bucket": "Bøtte",
+    "bucketOption": "{{name}} · {{amount}} igjen",
+    "amountFor": "Beløp for {{name}}",
+    "amountForBucket": "Beløp for bøtta",
+    "removeBucket": "Fjern {{name}}",
+    "removeRow": "Fjern raden",
+    "addBucket": "Legg til bøtte",
+    "noAccountBuckets": "Ingen bøtter finansieres fra denne kontoen, så alt blir værende på kontoen.",
+    "chooseAccountFirst": "Velg kontoen for å fordele beløpet på bøttene dens.",
+    "needsCycle": "Bøttelinjer krever en aktiv periode. <cycles>Start en under Perioder</cycles>; til da blir beløpet bare værende på kontoen.",
+    "inBuckets": "I bøtter",
+    "notTied": "Ikke knyttet til en bøtte",
+    "overBy": "Bøttene får {{amount}} mer enn transaksjonen.",
+    "chooseBucket": "Velg en bøtte.",
+    "outsideCycle": "Med bøtter må tidspunktet være innenfor den aktive perioden ({{range}}).",
+    "save": "Lagre",
+    "saveAnother": "Lagre og legg til en ny",
+    "saved": {
+      "EXP": "Utgiften er lagret.",
+      "INC": "Inntekten er lagret.",
+      "TRF": "Overføringen er lagret."
+    }
+  },
   "cycles": {
     "plan": "Planlegg en periode",
     "noActive": "Ingen aktiv periode",

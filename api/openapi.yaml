@@ -1068,6 +1068,93 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/v1/tags:
+    get:
+      operationId: listTags
+      tags: [transactions]
+      summary: List tags
+      description: |
+        The user's tags, for autocompletion: most recently used first (by
+        the time of the newest transaction with the tag), then unused ones
+        by name.
+      parameters:
+        - name: q
+          in: query
+          description: Only tags whose name contains this text, ignoring case.
+          schema:
+            type: string
+            maxLength: 50
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        "200":
+          description: The tags.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Tag"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/counterparties:
+    get:
+      operationId: listCounterparties
+      tags: [transactions]
+      summary: List counterparties
+      description: |
+        Counterparties of the user's incomes and expenses, for
+        autocompletion. Each is listed once (ignoring case, with its latest
+        spelling), newest first, with what its newest transaction that
+        isn't reversed used, so the Create transaction screen can fill it in
+        again: the account, the tags and the buckets. The values are the
+        effective ones, after corrections.
+      parameters:
+        - name: q
+          in: query
+          description: Only counterparties that contain this text, ignoring case.
+          schema:
+            type: string
+            maxLength: 200
+        - name: type
+          in: query
+          description: Only incomes or only expenses.
+          schema:
+            type: string
+            enum: [INC, EXP]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+      responses:
+        "200":
+          description: The counterparties.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CounterpartySuggestion"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
 components:
   securitySchemes:
     cookieAuth:
@@ -1900,6 +1987,45 @@ components:
                 allOf:
                   - $ref: "#/components/schemas/Amount"
                 description: Positive.
+
+    Tag:
+      type: object
+      additionalProperties: false
+      required: [name, last_used_at]
+      properties:
+        name:
+          type: string
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: The time of the newest transaction with the tag; null if none has it.
+
+    CounterpartySuggestion:
+      type: object
+      additionalProperties: false
+      required: [counterparty, type, at, account_id, tags, bucket_ids]
+      properties:
+        counterparty:
+          type: string
+        type:
+          type: string
+          enum: [INC, EXP]
+        at:
+          type: string
+          format: date-time
+          description: The time of the newest transaction with it.
+        account_id:
+          $ref: "#/components/schemas/AccountId"
+        tags:
+          type: array
+          items:
+            type: string
+        bucket_ids:
+          type: array
+          description: The buckets it had lines on, in order. They may since have been deleted.
+          items:
+            $ref: "#/components/schemas/BucketId"
 
     TransactionCorrection:
       type: object

@@ -304,6 +304,63 @@
     "deleteBucket": "Delete bucket",
     "deleted": "{{name}} deleted."
   },
+  "newTransaction": {
+    "type": "Type",
+    "types": {
+      "EXP": "Expense",
+      "INC": "Income",
+      "TRF": "Transfer",
+      "INP": "Internal payment (later)"
+    },
+    "hints": {
+      "EXP": "Money out",
+      "INC": "Money in",
+      "TRF": "Between your own accounts"
+    },
+    "amount": "Amount",
+    "enterAmount": "Enter an amount above 0.",
+    "date": "Date and time",
+    "account": "Account",
+    "from": "From account",
+    "to": "To account",
+    "chooseOther": "Choose another account than the one it comes from.",
+    "noOther": "You have no other account in {{currency}} to transfer to.",
+    "accountOption": "{{name}} · {{balance}}",
+    "counterparty": {
+      "EXP": "Paid to",
+      "INC": "From"
+    },
+    "counterpartyPlaceholder": "Company or person",
+    "triggersRefill": "Triggers refill",
+    "refillsWaiting": "Refills {{names}}, the “On income” buckets on this account that haven't been refilled this cycle.",
+    "refillsNone": "No “On income” buckets on this account are waiting for a refill this cycle.",
+    "tags": "Tags",
+    "tagsPlaceholder": "Add tag",
+    "buckets": "Buckets",
+    "fundedFrom": "From {{name}}",
+    "bucket": "Bucket",
+    "bucketOption": "{{name}} · {{amount}} left",
+    "amountFor": "Amount for {{name}}",
+    "amountForBucket": "Amount for the bucket",
+    "removeBucket": "Remove {{name}}",
+    "removeRow": "Remove the row",
+    "addBucket": "Add bucket",
+    "noAccountBuckets": "No buckets are funded from this account, so it all stays in the account.",
+    "chooseAccountFirst": "Choose the account to split it between its buckets.",
+    "needsCycle": "Bucket lines need an active cycle. <cycles>Start one in Cycles</cycles>; until then the amount just stays in the account.",
+    "inBuckets": "In buckets",
+    "notTied": "Not tied to a bucket",
+    "overBy": "The buckets get {{amount}} more than the transaction.",
+    "chooseBucket": "Choose a bucket.",
+    "outsideCycle": "With buckets, the time must be inside the active cycle ({{range}}).",
+    "save": "Save",
+    "saveAnother": "Save and add another",
+    "saved": {
+      "EXP": "Expense saved.",
+      "INC": "Income saved.",
+      "TRF": "Transfer saved."
+    }
+  },
   "cycles": {
     "plan": "Plan a cycle",
     "noActive": "No active cycle",

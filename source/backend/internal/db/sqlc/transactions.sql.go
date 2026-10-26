@@ -7,6 +7,7 @@ package sqlc
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -77,6 +78,65 @@ func (q *Queries) ListBucketLinesFor(ctx context.Context, ids []string) ([]Bucke
 	return items, nil
 }
 
+const listCounterpartyOriginals = `-- name: ListCounterpartyOriginals :many
+SELECT id FROM (
+    SELECT DISTINCT ON (lower(latest.counterparty)) h.id, h.transaction_at
+    FROM transaction_headers h
+    JOIN LATERAL (
+        SELECT c.counterparty FROM transaction_headers c
+        WHERE c.id = h.id OR c.parent_id = h.id
+        ORDER BY c.created_at DESC, c.id DESC
+        LIMIT 1
+    ) latest ON true
+    WHERE h.user_id = $1 AND h.correction_type = 'none'
+      AND h.transaction_type::text = ANY($2::text[])
+      AND latest.counterparty <> ''
+      AND ($3::text IS NULL OR latest.counterparty ILIKE $3::text)
+      AND NOT EXISTS (
+          SELECT 1 FROM transaction_headers r
+          WHERE r.parent_id = h.id AND r.correction_type = 'reversal')
+    ORDER BY lower(latest.counterparty), h.transaction_at DESC, h.id DESC
+) newest
+ORDER BY transaction_at DESC, id DESC
+LIMIT $4
+`
+
+type ListCounterpartyOriginalsParams struct {
+	UserID   string
+	Types    []string
+	Q        pgtype.Text
+	RowLimit int32
+}
+
+// For autocompletion: per counterparty (ignoring case), the newest original
+// income or expense that isn't reversed, newest first. The counterparty is
+// the family's effective one, from its newest header. q is a LIKE pattern,
+// escaped by the caller.
+func (q *Queries) ListCounterpartyOriginals(ctx context.Context, arg ListCounterpartyOriginalsParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, listCounterpartyOriginals,
+		arg.UserID,
+		arg.Types,
+		arg.Q,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listReplacedBy = `-- name: ListReplacedBy :many
 SELECT id, replaces_id::text AS replaces_id FROM transaction_headers
 WHERE replaces_id = ANY($1::text[])
@@ -98,6 +158,60 @@ func (q *Queries) ListReplacedBy(ctx context.Context, ids []string) ([]ListRepla
 	for rows.Next() {
 		var i ListReplacedByRow
 		if err := rows.Scan(&i.ID, &i.ReplacesID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTagSuggestions = `-- name: ListTagSuggestions :many
+SELECT t.name, (used.transaction_at IS NOT NULL)::bool AS used,
+       coalesce(used.transaction_at, t.created_at)::timestamptz AS last_used_at
+FROM tags t
+LEFT JOIN LATERAL (
+    SELECT h.transaction_at FROM transaction_tags tt
+    JOIN transaction_headers h ON h.id = tt.transaction_id
+    WHERE tt.tag_id = t.id
+    ORDER BY h.transaction_at DESC
+    LIMIT 1
+) used ON true
+WHERE t.user_id = $1
+  AND ($2::text IS NULL OR t.name ILIKE $2::text)
+ORDER BY used.transaction_at DESC NULLS LAST, lower(t.name) COLLATE "C"
+LIMIT $3
+`
+
+type ListTagSuggestionsParams struct {
+	UserID   string
+	Q        pgtype.Text
+	RowLimit int32
+}
+
+type ListTagSuggestionsRow struct {
+	Name       string
+	Used       bool
+	LastUsedAt time.Time
+}
+
+// The user's tags for autocompletion, most recently used first (by
+// transaction time, on any header), then unused ones by name. q is a LIKE
+// pattern, escaped by the caller.
+// last_used_at is only meaningful when used is set (timestamptz maps to a
+// plain time.Time).
+func (q *Queries) ListTagSuggestions(ctx context.Context, arg ListTagSuggestionsParams) ([]ListTagSuggestionsRow, error) {
+	rows, err := q.db.Query(ctx, listTagSuggestions, arg.UserID, arg.Q, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTagSuggestionsRow{}
+	for rows.Next() {
+		var i ListTagSuggestionsRow
+		if err := rows.Scan(&i.Name, &i.Used, &i.LastUsedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

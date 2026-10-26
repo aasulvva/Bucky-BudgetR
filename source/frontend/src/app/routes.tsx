@@ -19,6 +19,7 @@ const pages: Partial<Record<string, () => PageModule>> = {
   "/buckets/setup": () => import("@/pages/BucketSetup"),
   "/cycles": () => import("@/pages/Cycles"),
   "/settings": () => import("@/pages/Settings"),
+  "/transactions/new": () => import("@/pages/NewTransaction"),
 };
 
 /** The paths whose screen is built, rather than a placeholder. */

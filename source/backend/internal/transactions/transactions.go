@@ -355,9 +355,7 @@ func (s *Service) List(ctx context.Context, userID string, f Filter) (Page, erro
 	p.AccountID = text(f.AccountID)
 	p.BucketID = text(f.BucketID)
 	p.Tag = text(strings.TrimSpace(f.Tag))
-	if c := strings.TrimSpace(f.Counterparty); c != "" {
-		p.Counterparty = text("%" + likeEscaper.Replace(c) + "%")
-	}
+	p.Counterparty = likeContains(f.Counterparty)
 	if f.Cursor != "" {
 		at, id, err := decodeCursor(f.Cursor)
 		if err != nil {
@@ -384,6 +382,121 @@ func (s *Service) List(ctx context.Context, userID string, f Filter) (Page, erro
 		return Page{}, err
 	}
 	return page, nil
+}
+
+// The page sizes of Tags and Counterparties: the default if 0, at most the
+// maximum.
+const (
+	DefaultTagLimit          = 50
+	MaxTagLimit              = 100
+	DefaultCounterpartyLimit = 10
+	MaxCounterpartyLimit     = 50
+)
+
+// Tag is one of the user's tags, for autocompletion.
+type Tag struct {
+	Name string
+	// LastUsed is the time of the newest transaction with the tag, or zero
+	// if no transaction has it.
+	LastUsed time.Time
+}
+
+// Counterparty is a counterparty the user has entered before, with what its
+// newest income or expense used: the values to suggest the next time.
+type Counterparty struct {
+	Counterparty string
+	Type         sqlc.TransactionType
+	At           time.Time
+	AccountID    string
+	Tags         []string
+	BucketIDs    []string
+}
+
+// Tags returns the user's tags whose name contains q (ignoring case), most
+// recently used first, then unused ones by name.
+func (s *Service) Tags(ctx context.Context, userID, q string, limit int) ([]Tag, error) {
+	limit, err := checkLimit(limit, DefaultTagLimit, MaxTagLimit)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := sqlc.New(s.pool).ListTagSuggestions(ctx, sqlc.ListTagSuggestionsParams{
+		UserID: userID, Q: likeContains(q), RowLimit: int32(limit), //nolint:gosec // at most MaxTagLimit
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Tag, len(rows))
+	for i, r := range rows {
+		out[i] = Tag{Name: r.Name}
+		if r.Used {
+			out[i].LastUsed = r.LastUsedAt
+		}
+	}
+	return out, nil
+}
+
+// Counterparties returns the counterparties of the user's incomes and
+// expenses (only typ's, if given) that contain q, ignoring case. Each is
+// listed once, newest first, with the effective values of its newest
+// transaction that isn't reversed.
+func (s *Service) Counterparties(ctx context.Context, userID, q string, typ sqlc.TransactionType, limit int) ([]Counterparty, error) {
+	limit, err := checkLimit(limit, DefaultCounterpartyLimit, MaxCounterpartyLimit)
+	if err != nil {
+		return nil, err
+	}
+	types := []string{string(sqlc.TransactionTypeINC), string(sqlc.TransactionTypeEXP)}
+	switch typ {
+	case "":
+	case sqlc.TransactionTypeINC, sqlc.TransactionTypeEXP:
+		types = []string{string(typ)}
+	default:
+		return nil, fmt.Errorf("%w: only incomes and expenses have counterparties to suggest", ErrInvalid)
+	}
+	db := sqlc.New(s.pool)
+	ids, err := db.ListCounterpartyOriginals(ctx, sqlc.ListCounterpartyOriginalsParams{
+		UserID: userID, Types: types, Q: likeContains(q), RowLimit: int32(limit), //nolint:gosec // at most MaxCounterpartyLimit
+	})
+	if err != nil {
+		return nil, err
+	}
+	list, err := s.load(ctx, db, userID, ids, false)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Counterparty, len(list))
+	for i, t := range list {
+		c := Counterparty{Counterparty: t.Counterparty, Type: t.Type, At: t.At, Tags: t.Tags, BucketIDs: []string{}}
+		if len(t.BankLines) > 0 {
+			c.AccountID = t.BankLines[0].AccountID
+		}
+		for _, l := range t.BucketLines {
+			if !slices.Contains(c.BucketIDs, l.BucketID) {
+				c.BucketIDs = append(c.BucketIDs, l.BucketID)
+			}
+		}
+		out[i] = c
+	}
+	return out, nil
+}
+
+// checkLimit returns the page size: def if 0, an error outside 1..maximum.
+func checkLimit(limit, def, maximum int) (int, error) {
+	switch {
+	case limit == 0:
+		return def, nil
+	case limit < 0 || limit > maximum:
+		return 0, fmt.Errorf("%w: the limit must be 1 to %d", ErrInvalid, maximum)
+	}
+	return limit, nil
+}
+
+// likeContains is a LIKE pattern matching text that contains s, or null for
+// an empty s.
+func likeContains(s string) pgtype.Text {
+	if s = strings.TrimSpace(s); s == "" {
+		return pgtype.Text{}
+	}
+	return text("%" + likeEscaper.Replace(s) + "%")
 }
 
 // load returns the original transactions with these IDs, in this order,

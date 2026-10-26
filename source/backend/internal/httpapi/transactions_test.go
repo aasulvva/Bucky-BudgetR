@@ -120,4 +120,28 @@ func TestTransactionsAPI(t *testing.T) {
 	if page := decode[api.TransactionPage](t, w); len(page.Items) != 0 {
 		t.Errorf("bob sees %d transactions", len(page.Items))
 	}
+
+	// Suggestions for the Create transaction screen; the service tests cover
+	// the rules.
+	expect(t, "counterparties without a session", do(http.MethodGet, "/api/v1/counterparties", nil, nil), http.StatusUnauthorized, "unauthenticated")
+	expect(t, "tags without a session", do(http.MethodGet, "/api/v1/tags", nil, nil), http.StatusUnauthorized, "unauthenticated")
+	w = do(http.MethodGet, "/api/v1/counterparties?type=EXP&q=rema", nil, alice)
+	expect(t, "counterparties", w, http.StatusOK, "")
+	if cps := decode[[]api.CounterpartySuggestion](t, w); len(cps) != 1 || cps[0].Counterparty != "Rema 1000" ||
+		cps[0].Type != api.CounterpartySuggestionTypeEXP || cps[0].AccountId != main ||
+		len(cps[0].Tags) != 1 || cps[0].Tags[0] != "food" || len(cps[0].BucketIds) != 1 || cps[0].BucketIds[0] != groceries {
+		t.Errorf("counterparties %+v", cps)
+	}
+	expect(t, "counterparties of transfers", do(http.MethodGet, "/api/v1/counterparties?type=TRF", nil, alice), http.StatusBadRequest, "invalid_request")
+	expect(t, "counterparties limit", do(http.MethodGet, "/api/v1/counterparties?limit=51", nil, alice), http.StatusBadRequest, "invalid_request")
+	w = do(http.MethodGet, "/api/v1/tags", nil, alice)
+	expect(t, "tags", w, http.StatusOK, "")
+	if tags := decode[[]api.Tag](t, w); len(tags) != 1 || tags[0].Name != "food" || !tags[0].LastUsedAt.IsSpecified() || tags[0].LastUsedAt.IsNull() {
+		t.Errorf("tags %+v", tags)
+	}
+	expect(t, "tags limit", do(http.MethodGet, "/api/v1/tags?limit=0", nil, alice), http.StatusBadRequest, "invalid_request")
+	w = do(http.MethodGet, "/api/v1/tags", nil, bob)
+	if tags := decode[[]api.Tag](t, w); len(tags) != 0 {
+		t.Errorf("bob sees tags %+v", tags)
+	}
 }
