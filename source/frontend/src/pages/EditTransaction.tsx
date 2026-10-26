@@ -25,7 +25,10 @@ export default function EditTransaction() {
           <Title order={2}>
             {isCorrectableType(tx.type)
               ? t(`newTransaction.editTitle.${tx.type}`)
-              : t("transactions.detail")}
+              : t("transactions.detail")}{" "}
+            <Text span inherit c="dimmed" fw={400}>
+              (#{tx.id})
+            </Text>
           </Title>
           {isCorrectable(tx) ? (
             <QueryState query={accounts}>

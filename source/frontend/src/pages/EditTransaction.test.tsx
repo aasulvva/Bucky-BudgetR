@@ -38,7 +38,9 @@ const amount = () => screen.getByRole("textbox", { name: "Amount" });
 describe("Edit transaction", () => {
   it("starts from the transaction and sends only what changed", async () => {
     const { router } = renderRoute(`/transactions/${rema.id}/edit`);
-    expect(await screen.findByRole("heading", { name: "Edit expense" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: `Edit expense (#${rema.id})` }),
+    ).toBeInTheDocument();
     expect(amount()).toHaveValue("250.40");
     expect(screen.getByRole("combobox", { name: "Paid to" })).toHaveValue("Rema 1000");
     expect(screen.queryByRole("radio", { name: "Income" })).not.toBeInTheDocument();
@@ -60,6 +62,30 @@ describe("Edit transaction", () => {
     // Opened directly, so it goes to the transaction in the list.
     await waitFor(() => {
       expect(router.state.location.search).toBe(`?open=${rema.id}`);
+    });
+  });
+
+  it("lets a bucket line that took the whole amount follow it", async () => {
+    apiMock.on(`GET ${path}`, {
+      body: {
+        ...rema,
+        bank_lines: [{ account_id: main.id, amount: "-150.00" }],
+        bucket_lines: [{ bucket_id: groceries.id, cycle_id: cycle().id, amount: "-150.00" }],
+        history: [],
+      },
+    });
+    renderRoute(`/transactions/${rema.id}/edit`);
+    expect(
+      await screen.findByRole("heading", { name: `Edit expense (#${rema.id})` }),
+    ).toBeInTheDocument();
+    await userEvent.clear(amount());
+    await userEvent.type(amount(), "100");
+    expect(screen.getByRole("textbox", { name: "Amount for Groceries" })).toHaveValue("100.00");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByText("Correction saved.");
+    expect(sent()).toEqual({
+      amount: "100.00",
+      bucket_lines: [{ bucket_id: groceries.id, amount: "100.00" }],
     });
   });
 
@@ -106,7 +132,7 @@ describe("Edit transaction", () => {
     apiMock.on(`POST /api/v1/transactions/${bla.id}/correction`, { body: bla });
     renderRoute(`/transactions/${bla.id}/edit`);
     expect(
-      await screen.findByRole("heading", { name: "Edit balance adjustment" }),
+      await screen.findByRole("heading", { name: `Edit balance adjustment (#${bla.id})` }),
     ).toBeInTheDocument();
     expect(amount()).toHaveValue("-12.00");
     expect(screen.getByRole("combobox", { name: "Account" })).toBeDisabled();

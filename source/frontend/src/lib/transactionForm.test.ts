@@ -5,6 +5,7 @@ import {
   bucketTotals,
   correctionBody,
   editState,
+  followAmount,
   fromLastTime,
   initialAccount,
   insideCycle,
@@ -204,5 +205,36 @@ describe("editing", () => {
     expect(correctionBody(inc, { ...editState(inc), triggersRefill: true }, false)).toEqual({
       triggers_refill: true,
     });
+  });
+});
+
+describe("followAmount", () => {
+  const amounts = (lines: ReturnType<typeof followAmount>) => lines.map((l) => l.amount);
+
+  it("keeps a split that took the whole amount whole", () => {
+    const one = { amount: "150.00", lines: [newLine(groceries.id, "150.00")] };
+    expect(amounts(followAmount(one, "100.00"))).toEqual(["100.00"]);
+    expect(amounts(followAmount(one, "175.50"))).toEqual(["175.50"]);
+    const two = {
+      amount: "300.00",
+      lines: [newLine(groceries.id, "200.00"), newLine(household.id, "100.00")],
+    };
+    expect(amounts(followAmount(two, "150.00"))).toEqual(["100.00", "50.00"]);
+  });
+
+  it("keeps a partial split, unless it no longer fits", () => {
+    const part = { amount: "250.40", lines: [newLine(groceries.id, "200.40")] };
+    expect(amounts(followAmount(part, "260.00"))).toEqual(["200.40"]);
+    expect(amounts(followAmount(part, "220.00"))).toEqual(["200.40"]);
+    expect(amounts(followAmount(part, "150.00"))).toEqual(["150.00"]);
+  });
+
+  it("leaves rows alone without amounts to go by", () => {
+    const empty = { amount: "100.00", lines: [newLine(groceries.id, null)] };
+    expect(amounts(followAmount(empty, "50.00"))).toEqual([null]);
+    const none = { amount: null, lines: [newLine(groceries.id, "20.00")] };
+    expect(amounts(followAmount(none, "50.00"))).toEqual(["20.00"]);
+    const base = { amount: "150.00", lines: [newLine(groceries.id, "150.00")] };
+    expect(amounts(followAmount(base, null))).toEqual(["150.00"]);
   });
 });

@@ -11,7 +11,7 @@ import type {
   TransactionCorrection,
 } from "@/api/transactions";
 
-import { addAmounts, compareAmounts, subtractAmounts } from "./money";
+import { addAmounts, compareAmounts, splitAmount, subtractAmounts } from "./money";
 
 type IncomeRefillRule = components["schemas"]["IncomeRefillRule"];
 
@@ -45,6 +45,35 @@ export function bucketTotals(
 export function prefillFor(amount: string | null, lines: SplitLine[]): string | null {
   const { notTied } = bucketTotals(amount, lines);
   return compareAmounts(notTied, "0") > 0 ? notTied : null;
+}
+
+/**
+ * The rows after the amount changes from base.amount, the amount they were
+ * last set for. A split that took all of it follows the new amount, shared in
+ * the same proportions; one that only took part keeps its amounts unless they
+ * no longer fit, and then shrinks to the new amount. Rows without an amount
+ * stay as they are.
+ */
+export function followAmount(
+  base: { amount: string | null; lines: SplitLine[] },
+  amount: string | null,
+): SplitLine[] {
+  const amounts = base.lines.map((l) => l.amount);
+  if (
+    amount === null ||
+    base.amount === null ||
+    compareAmounts(amount, "0") <= 0 ||
+    amounts.length === 0 ||
+    amounts.some((a) => a === null || compareAmounts(a, "0") <= 0)
+  ) {
+    return base.lines;
+  }
+  const weights = amounts.filter((a) => a !== null);
+  const inBuckets = addAmounts(...weights);
+  const full = compareAmounts(inBuckets, base.amount) === 0;
+  if (!full && compareAmounts(amount, inBuckets) >= 0) return base.lines;
+  const shares = splitAmount(amount, weights);
+  return base.lines.map((l, i) => ({ ...l, amount: shares[i] ?? l.amount }));
 }
 
 /** The account's "On income" buckets that haven't been refilled in this cycle. */

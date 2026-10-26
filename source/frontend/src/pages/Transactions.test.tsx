@@ -152,7 +152,14 @@ describe("Transactions", () => {
     await userEvent.click(await screen.findByRole("link", { name: /Rema 1000/ }));
     const panel = within(await screen.findByRole("article", { name: "Rema 1000" }));
     expect(router.state.location.search).toContain(`open=${rema.id}`);
-    expect(panel.getByText("Bucket: Groceries")).toBeInTheDocument();
+    expect(panel.getByRole("heading", { name: `Rema 1000 (#${rema.id})` })).toBeInTheDocument();
+    // Accounts and buckets each get their own section.
+    expect(
+      within(panel.getByRole("region", { name: "Account" })).getByText("Main account"),
+    ).toBeInTheDocument();
+    expect(
+      within(panel.getByRole("region", { name: "Bucket" })).getByText("Groceries"),
+    ).toBeInTheDocument();
     expect(panel.getByText(/^Recorded .* by you$/)).toBeInTheDocument();
     expect(panel.getByText(/^Corrected .* by the system$/)).toBeInTheDocument();
     expect(panel.getByText(/Bucket amounts can be changed until the cycle/)).toBeInTheDocument();

@@ -1,6 +1,6 @@
 import { ActionIcon, Alert, Anchor, Button, Group, Stack, Text, Title } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { IconX } from "@tabler/icons-react";
+import { IconBucket, IconBuildingBank, IconX, type Icon } from "@tabler/icons-react";
 import { useMutation } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { Trans, useTranslation } from "react-i18next";
@@ -71,7 +71,10 @@ function Detail({
       <Group justify="space-between" align="flex-start" wrap="nowrap" gap="xs">
         <div style={{ minWidth: 0 }}>
           <Title order={3} size="h4">
-            {transactionTitle(tx, names)}
+            {transactionTitle(tx, names)}{" "}
+            <Text span inherit c="dimmed" fw={400}>
+              (#{tx.id})
+            </Text>
           </Title>
           <Text size="sm" c="dimmed">
             {[t(`transactionTypes.${tx.type}`), formatDateTime(tx.at), ...tx.tags].join(" · ")}
@@ -98,26 +101,35 @@ function Detail({
         {signedMoney(linesAmount(lines), currency)}
       </Text>
 
-      <Section title={t("transactions.lines")}>
-        {tx.reversed && (
-          <Text size="sm" c="dimmed">
-            {t("transactions.reversedLines")}
-          </Text>
-        )}
-        {lines.bank_lines.map((l) => (
-          <Row key={`a${l.account_id}`} label={names.accountName(l.account_id)}>
-            {signedMoney({ amount: l.amount, signed: true }, currency)}
-          </Row>
-        ))}
-        {lines.bucket_lines.map((l) => (
-          <Row
-            key={`b${l.bucket_id}`}
-            label={t("transactions.bucketLine", { name: names.bucketName(l.bucket_id) })}
-          >
-            {signedMoney({ amount: l.amount, signed: true }, currency)}
-          </Row>
-        ))}
-      </Section>
+      {tx.reversed && (
+        <Text size="sm" c="dimmed">
+          {t("transactions.reversedLines")}
+        </Text>
+      )}
+      {lines.bank_lines.length > 0 && (
+        <Section
+          title={t("transactions.accountLines", { count: lines.bank_lines.length })}
+          icon={IconBuildingBank}
+        >
+          {lines.bank_lines.map((l) => (
+            <Row key={l.account_id} label={names.accountName(l.account_id)}>
+              {signedMoney({ amount: l.amount, signed: true }, currency)}
+            </Row>
+          ))}
+        </Section>
+      )}
+      {lines.bucket_lines.length > 0 && (
+        <Section
+          title={t("transactions.bucketLines", { count: lines.bucket_lines.length })}
+          icon={IconBucket}
+        >
+          {lines.bucket_lines.map((l) => (
+            <Row key={l.bucket_id} label={names.bucketName(l.bucket_id)}>
+              {signedMoney({ amount: l.amount, signed: true }, currency)}
+            </Row>
+          ))}
+        </Section>
+      )}
 
       {tx.history && tx.history.length > 0 && (
         <Section title={t("transactions.history")}>
@@ -258,12 +270,23 @@ function Actions({ tx, locked, names }: { tx: Transaction; locked: boolean; name
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({
+  title,
+  icon: SectionIcon,
+  children,
+}: {
+  title: string;
+  icon?: Icon;
+  children: ReactNode;
+}) {
   return (
-    <Stack gap={6}>
-      <Text size="xs" fw={600} tt="uppercase" c="dimmed" style={{ letterSpacing: "0.04em" }}>
-        {title}
-      </Text>
+    <Stack gap={6} component="section" aria-label={title}>
+      <Group gap={6} c="dimmed">
+        {SectionIcon && <SectionIcon size={16} aria-hidden />}
+        <Text size="xs" fw={600} tt="uppercase" c="dimmed" style={{ letterSpacing: "0.04em" }}>
+          {title}
+        </Text>
+      </Group>
       {children}
     </Stack>
   );

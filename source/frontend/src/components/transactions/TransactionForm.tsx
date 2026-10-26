@@ -47,6 +47,7 @@ import {
   bucketTotals,
   correctionBody,
   editState,
+  followAmount,
   fromLastTime,
   initialAccount,
   insideCycle,
@@ -128,6 +129,9 @@ export function TransactionForm({
   const [counterparty, setCounterparty] = useState(start?.counterparty ?? "");
   const [tags, setTags] = useState<string[]>(start?.tags ?? []);
   const [lines, setLines] = useState<SplitLine[]>(start?.lines ?? []);
+  // The rows as the user last set them, and the amount they were set for: a
+  // new amount reshapes them from here (followAmount).
+  const [base, setBase] = useState({ amount: start?.amount ?? null, lines: start?.lines ?? [] });
   const [refill, setRefill] = useState<boolean | null>(start?.triggersRefill ?? null);
   const [errors, setErrors] = useState<Errors>({});
 
@@ -161,6 +165,17 @@ export function TransactionForm({
       )
     : null;
 
+  const changeLines = (next: SplitLine[]) => {
+    setLines(next);
+    setBase({ amount, lines: next });
+  };
+
+  const changeAmount = (next: string | null) => {
+    setAmount(next);
+    // Locked lines can't change, so they don't follow.
+    if (withBuckets && !locked) setLines(followAmount(base, next));
+  };
+
   const accountOptions = (list: Account[]) =>
     list.map((a) => ({
       value: a.id,
@@ -173,8 +188,8 @@ export function TransactionForm({
   const changeAccount = (id: string) => {
     setAccountId(id);
     setAccountTouched(true);
-    setLines((ls) =>
-      ls.filter(
+    changeLines(
+      lines.filter(
         (l) =>
           l.bucketId === null ||
           buckets.some((b) => b.id === l.bucketId && b.source_account_id === id),
@@ -188,6 +203,7 @@ export function TransactionForm({
     setCounterparty("");
     setTags([]);
     setLines([]);
+    setBase({ amount: null, lines: [] });
     setRefill(null);
     setErrors({});
     document.getElementById(amountId)?.focus();
@@ -313,7 +329,7 @@ export function TransactionForm({
           label={t("newTransaction.amount")}
           currency={currency}
           value={amount}
-          onChange={setAmount}
+          onChange={changeAmount}
           error={errors.amount}
           size={isDesktop ? "lg" : "xl"}
           styles={{ input: { fontWeight: 600 } }}
@@ -396,7 +412,7 @@ export function TransactionForm({
             );
             if (filled.accountId) setAccountId(filled.accountId);
             if (filled.tags) setTags(filled.tags);
-            if (filled.lines) setLines(filled.lines);
+            if (filled.lines) changeLines(filled.lines);
           }}
         />
       )}
@@ -486,7 +502,7 @@ export function TransactionForm({
                 active={active}
                 amount={amount}
                 lines={lines}
-                onChange={setLines}
+                onChange={changeLines}
                 errors={errors}
                 locked={locked}
               />
