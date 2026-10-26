@@ -140,6 +140,49 @@ func TestTriggers(t *testing.T) {
 	}
 }
 
+// TestAdjustments adjusts and moves funds in Bucket setup: a BUA follows the
+// usual rules, and a BAT within the account takes covered money along.
+func TestAdjustments(t *testing.T) {
+	e := setup(t)
+	a := e.bucket(t, "A", "800", false)
+	b := e.bucket(t, "B", "200", false)
+	if got, un := e.caf(t, a, b); got[0] != "800.00" || got[1] != "200.00" || un != "0.00" {
+		t.Fatalf("start: CAF %v unallocated %s", got, un)
+	}
+	// TF 1000 + 200 is more than the balance (1000): it crossed Σ TF, so the
+	// account is recalculated by weight.
+	if _, err := e.buckets.Adjust(t.Context(), e.user, a, buckets.Adjustment{Mode: buckets.ModeTemporary, TargetFunds: ptr(dec("1000"))}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := e.caf(t, a, b); got[0] != "833.33" || got[1] != "166.67" {
+		t.Errorf("after the BUA: CAF %v, want 833.33 and 166.67", got)
+	}
+	// Moving 300 of TF to B takes 300 of A's CAF along; B can take 333.33.
+	if _, _, err := e.buckets.Transfer(t.Context(), e.user, a, buckets.Transfer{To: b, Mode: buckets.ModeTemporary, Amount: dec("300")}); err != nil {
+		t.Fatal(err)
+	}
+	if got, un := e.caf(t, a, b); got[0] != "533.33" || got[1] != "466.67" || un != "0.00" {
+		t.Errorf("after the BAT: CAF %v unallocated %s, want 533.33, 466.67 and 0", got, un)
+	}
+
+	// To another account: B's CAF is limited to its new TF (400), and the
+	// other account's bucket follows its own account (no money there).
+	other, err := e.accounts.Create(t.Context(), e.user, accounts.New{Name: "Other"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := e.buckets.Create(t.Context(), e.user, buckets.New{Name: "C", SourceAccountID: other.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := e.buckets.Transfer(t.Context(), e.user, b, buckets.Transfer{To: c.ID, Mode: buckets.ModeTemporary, Amount: dec("100")}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := e.caf(t, a, b, c.ID); got[0] != "533.33" || got[1] != "400.00" || got[2] != "0.00" {
+		t.Errorf("after the BAT to another account: CAF %v, want 533.33, 400.00 and 0.00", got)
+	}
+}
+
 // TestRefills refills buckets by hand: CAF only moves when the account
 // crosses Σ TF, until the account is reallocated. An income that triggers a
 // refill recalculates with the refilled TFs.

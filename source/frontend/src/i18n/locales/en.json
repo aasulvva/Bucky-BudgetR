@@ -302,7 +302,49 @@
     "deleteSettles": "It's {{amount}} overspent, which is taken from the unallocated money in {{account}}.",
     "deleteNeedsCycle": "Releasing what's left needs an active cycle. Start or extend one first.",
     "deleteBucket": "Delete bucket",
-    "deleted": "{{name}} deleted."
+    "deleted": "{{name}} deleted.",
+    "adjust": {
+      "title": "Adjust funds",
+      "current": "This cycle {{tf}} · refill amount {{ra}}",
+      "mode": "Adjustment",
+      "modes": {
+        "temporary": "This cycle only",
+        "future": "From next refill",
+        "both": "Both"
+      },
+      "hints": {
+        "temporary": "Set what's left this cycle. The refill amount stays.",
+        "future": "Change the refill amount. This cycle stays as it is.",
+        "both": "Change the refill amount, and this cycle by the same amount."
+      },
+      "newTarget": "New amount this cycle",
+      "newRefill": "New refill amount",
+      "previewRefill": "Refill amount {{from}} → {{to}}",
+      "previewCycle": "This cycle {{from}} → {{to}}, a bucket adjustment of {{amount}}",
+      "previewCycleSame": "This cycle stays at {{amount}}",
+      "capacityRaised": "The capacity is raised to {{amount}}.",
+      "overspent": "{{name}} goes below 0: overspent by {{amount}}.",
+      "same": "Enter a different amount.",
+      "needsCycle": "This cycle can only change while a cycle is active.",
+      "apply": "Apply adjustment",
+      "applied": "{{name}} adjusted.",
+      "move": "Move funds to another bucket…",
+      "moveTitle": "Move funds from {{name}}",
+      "moveTo": "To bucket",
+      "amount": "Amount",
+      "moveHints": {
+        "temporary": "Move from what's left this cycle.",
+        "future": "Move refill amount, from the next refill.",
+        "both": "Move refill amount and what's left this cycle."
+      },
+      "movePreview": "{{name}}: this cycle {{tfFrom}} → {{tfTo}} · refill amount {{raFrom}} → {{raTo}}",
+      "moveButton": "Move funds",
+      "moved": "Moved {{amount}} from {{from}} to {{to}}.",
+      "overRefill": "{{name}}'s refill amount is only {{amount}}.",
+      "enterAmount": "Enter an amount above 0.",
+      "noTargets": "There's no other bucket in {{currency}} to move funds to.",
+      "pickBucket": "Choose a bucket."
+    }
   },
   "budgetSetup": {
     "intro": "Plan each cycle's refills against the income you expect on each account.",

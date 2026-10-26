@@ -568,6 +568,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/buckets/{bucketId}/adjustment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bucketId: components["parameters"]["BucketId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Adjust a bucket's funds
+         * @description The adjustment modes of Bucket setup (spec §9):
+         *
+         *     - `temporary`: sets this cycle's TF to `target_funds` (0 or more)
+         *       with a Budget Adjustment (BUA) for the difference. RA is unchanged.
+         *     - `future`: sets RA to `refill_amount`; TF is unchanged and nothing
+         *       is recorded. A fixed capacity below the new RA is raised to it.
+         *     - `both`: sets RA to `refill_amount` and changes TF by the same
+         *       amount (BUA). TF may go below 0.
+         *
+         *     A BUA needs an active cycle (409 `no_active_cycle` or
+         *     `cycle_overdue`). An adjustment that changes nothing is 400
+         *     `no_change`.
+         */
+        post: operations["adjustBucket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/buckets/{bucketId}/transfer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bucketId: components["parameters"]["BucketId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move funds to another bucket
+         * @description Moves `amount` from this bucket to `to_bucket_id`, in the same
+         *     currency (400 `currency_mismatch`), with the modes of
+         *     `POST /buckets/{bucketId}/adjustment`:
+         *
+         *     - `temporary`: moves TF with a Budget Adjustment Transfer (BAT). The
+         *       sending bucket may go below 0.
+         *     - `future`: moves RA; nothing is recorded. The sending bucket's RA
+         *       must be at least `amount`.
+         *     - `both`: moves RA and TF (BAT).
+         *
+         *     Between buckets on the same account, the covered part (CAF) moves
+         *     along with TF (spec §7).
+         */
+        post: operations["transferBucketFunds"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/transactions": {
         parameters: {
             query?: never;
@@ -1063,6 +1129,24 @@ export interface components {
             opening_funds?: components["schemas"]["Amount"];
             /** @description Refill the bucket now in the active cycle (spec §6), whatever its refill mode. It counts as the bucket's refill in that cycle. Needs an active cycle; can't be combined with `opening_funds`. */
             refill?: boolean;
+        };
+        /**
+         * @description temporary: this cycle only (TF). future: from the next refill (RA). both: RA, and TF by the same amount.
+         * @enum {string}
+         */
+        AdjustmentMode: "temporary" | "future" | "both";
+        BucketAdjustment: {
+            mode: components["schemas"]["AdjustmentMode"];
+            /** @description The new TF, 0 or more. Only and always with `temporary`. */
+            target_funds?: components["schemas"]["Amount"];
+            /** @description The new RA, 0 or more. Only and always with `future` and `both`. */
+            refill_amount?: components["schemas"]["Amount"];
+        };
+        BucketTransfer: {
+            to_bucket_id: components["schemas"]["BucketId"];
+            mode: components["schemas"]["AdjustmentMode"];
+            /** @description What to move, above 0. */
+            amount: components["schemas"]["Amount"];
         };
         RefillAmounts: {
             items: {
@@ -2088,6 +2172,71 @@ export interface operations {
                     "application/json": components["schemas"]["Bucket"];
                 };
             };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    adjustBucket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bucketId: components["parameters"]["BucketId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BucketAdjustment"];
+            };
+        };
+        responses: {
+            /** @description The adjusted bucket. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Bucket"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    transferBucketFunds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bucketId: components["parameters"]["BucketId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BucketTransfer"];
+            };
+        };
+        responses: {
+            /** @description Both buckets after the move. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        from: components["schemas"]["Bucket"];
+                        to: components["schemas"]["Bucket"];
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];

@@ -160,6 +160,30 @@ func TestBucketsAPI(t *testing.T) {
 	expect(t, "bob's figures of alice's cycle", do(http.MethodGet, "/api/v1/cycles/"+cycle+"/bucket-figures", nil, bob),
 		http.StatusNotFound, "not_found")
 
+	// Adjusting and moving funds.
+	w = do(http.MethodPost, "/api/v1/buckets/"+fun.Id+"/adjustment", map[string]any{"mode": "temporary", "target_funds": "250"}, alice)
+	expect(t, "adjust this cycle", w, http.StatusOK, "")
+	if u := decode[api.Bucket](t, w); u.TargetFunds != "250.00" {
+		t.Errorf("adjusted TF %s, want 250.00", u.TargetFunds)
+	}
+	expect(t, "adjust, no change", do(http.MethodPost, "/api/v1/buckets/"+fun.Id+"/adjustment",
+		map[string]any{"mode": "temporary", "target_funds": "250.00"}, alice), http.StatusBadRequest, "no_change")
+	expect(t, "adjust, wrong field", do(http.MethodPost, "/api/v1/buckets/"+fun.Id+"/adjustment",
+		map[string]any{"mode": "both", "target_funds": "1"}, alice), http.StatusBadRequest, "invalid_request")
+	expect(t, "adjust, unknown mode", do(http.MethodPost, "/api/v1/buckets/"+fun.Id+"/adjustment",
+		map[string]any{"mode": "weekly", "refill_amount": "1"}, alice), http.StatusBadRequest, "invalid_request")
+	expect(t, "bob adjusts", do(http.MethodPost, "/api/v1/buckets/"+fun.Id+"/adjustment",
+		map[string]any{"mode": "future", "refill_amount": "1"}, bob), http.StatusNotFound, "not_found")
+	w = do(http.MethodPost, "/api/v1/buckets/"+fun.Id+"/transfer", map[string]any{"to_bucket_id": b.Id, "mode": "both", "amount": "50"}, alice)
+	expect(t, "move funds, more than the RA", w, http.StatusBadRequest, "invalid_request")
+	w = do(http.MethodPost, "/api/v1/buckets/"+fun.Id+"/transfer", map[string]any{"to_bucket_id": b.Id, "mode": "temporary", "amount": "50"}, alice)
+	expect(t, "move funds", w, http.StatusOK, "")
+	if m := decode[struct{ From, To api.Bucket }](t, w); m.From.TargetFunds != "200.00" || m.To.TargetFunds != "50.00" {
+		t.Errorf("moved: TF %s and %s, want 200.00 and 50.00", m.From.TargetFunds, m.To.TargetFunds)
+	}
+	expect(t, "move funds to itself", do(http.MethodPost, "/api/v1/buckets/"+fun.Id+"/transfer",
+		map[string]any{"to_bucket_id": fun.Id, "mode": "temporary", "amount": "1"}, alice), http.StatusBadRequest, "invalid_request")
+
 	expect(t, "bob deletes alice's", do(http.MethodDelete, "/api/v1/buckets/"+fun.Id, nil, bob), http.StatusNotFound, "not_found")
 	expect(t, "delete", do(http.MethodDelete, "/api/v1/buckets/"+fun.Id, nil, alice), http.StatusNoContent, "")
 	expect(t, "get deleted", do(http.MethodGet, "/api/v1/buckets/"+fun.Id, nil, alice), http.StatusNotFound, "not_found")

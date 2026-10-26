@@ -302,7 +302,49 @@
     "deleteSettles": "Ho er overforbrukt med {{amount}}, som vert teke frå dei ufordelte pengane på {{account}}.",
     "deleteNeedsCycle": "Å frigjere det som er att, krev ein aktiv periode. Start eller forleng ein først.",
     "deleteBucket": "Slett bøtta",
-    "deleted": "{{name}} er sletta."
+    "deleted": "{{name}} er sletta.",
+    "adjust": {
+      "title": "Juster midlar",
+      "current": "Denne perioden {{tf}} · påfyllingsbeløp {{ra}}",
+      "mode": "Justering",
+      "modes": {
+        "temporary": "Berre denne perioden",
+        "future": "Frå neste påfyll",
+        "both": "Begge"
+      },
+      "hints": {
+        "temporary": "Set det som er att denne perioden. Påfyllingsbeløpet vert som det er.",
+        "future": "Endra påfyllingsbeløpet. Denne perioden vert som han er.",
+        "both": "Endra påfyllingsbeløpet, og denne perioden med same beløpet."
+      },
+      "newTarget": "Nytt beløp denne perioden",
+      "newRefill": "Nytt påfyllingsbeløp",
+      "previewRefill": "Påfyllingsbeløp {{from}} → {{to}}",
+      "previewCycle": "Denne perioden {{from}} → {{to}}, ei bøttejustering på {{amount}}",
+      "previewCycleSame": "Denne perioden vert {{amount}}",
+      "capacityRaised": "Kapasiteten vert heva til {{amount}}.",
+      "overspent": "{{name}} går under 0: overforbruk på {{amount}}.",
+      "same": "Skriv inn eit anna beløp.",
+      "needsCycle": "Denne perioden kan berre endrast medan ein periode er aktiv.",
+      "apply": "Utfør justeringa",
+      "applied": "{{name}} er justert.",
+      "move": "Flytt midlar til ei anna bøtte …",
+      "moveTitle": "Flytt midlar frå {{name}}",
+      "moveTo": "Til bøtte",
+      "amount": "Beløp",
+      "moveHints": {
+        "temporary": "Flytt av det som er att denne perioden.",
+        "future": "Flytt av påfyllingsbeløpet, frå neste påfyll.",
+        "both": "Flytt både påfyllingsbeløp og det som er att denne perioden."
+      },
+      "movePreview": "{{name}}: denne perioden {{tfFrom}} → {{tfTo}} · påfyllingsbeløp {{raFrom}} → {{raTo}}",
+      "moveButton": "Flytt midlar",
+      "moved": "Flytta {{amount}} frå {{from}} til {{to}}.",
+      "overRefill": "Påfyllingsbeløpet til {{name}} er berre {{amount}}.",
+      "enterAmount": "Skriv inn eit beløp over 0.",
+      "noTargets": "Det finst inga anna bøtte i {{currency}} å flytte midlar til.",
+      "pickBucket": "Vel ei bøtte."
+    }
   },
   "budgetSetup": {
     "intro": "Planlegg påfylla i kvar periode mot inntekta du ventar på kvar konto.",
