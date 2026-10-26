@@ -97,11 +97,17 @@ func TestAccountsAPI(t *testing.T) {
 		t.Errorf("adjusted balance %q, want 1400.00", a.Balance)
 	}
 	expect(t, "adjust, no change", do(http.MethodPost, path+"/balance-adjustment", map[string]any{"target_balance": "1400.00"}, alice), http.StatusBadRequest, "no_change")
+	w = do(http.MethodPost, path+"/reallocate", nil, alice)
+	expect(t, "reallocate", w, http.StatusOK, "")
+	if a := decode[api.Account](t, w); a.Unallocated != "1400.00" {
+		t.Errorf("reallocated: unallocated %q, want 1400.00 (no buckets)", a.Unallocated)
+	}
 
 	// Bob can't see or touch alice's account.
 	expect(t, "bob gets", do(http.MethodGet, path, nil, bob), http.StatusNotFound, "not_found")
 	expect(t, "bob renames", do(http.MethodPatch, path, map[string]any{"name": "Mine"}, bob), http.StatusNotFound, "not_found")
 	expect(t, "bob adjusts", do(http.MethodPost, path+"/balance-adjustment", map[string]any{"target_balance": "0"}, bob), http.StatusNotFound, "not_found")
+	expect(t, "bob reallocates", do(http.MethodPost, path+"/reallocate", nil, bob), http.StatusNotFound, "not_found")
 	expect(t, "bob deletes", do(http.MethodPost, path+"/delete", nil, bob), http.StatusNotFound, "not_found")
 	w = do(http.MethodGet, "/api/v1/accounts", nil, bob)
 	expect(t, "bob lists", w, http.StatusOK, "")

@@ -16,6 +16,7 @@ The words for the app's concepts, so the same thing is called the same everywher
 | Auto / Manual / On income   | Automatisk / Manuelt / Ved inntekt                | Automatisk / Manuelt / Ved inntekt    |
 | overflow                    | overløp                                           | overløp                               |
 | unallocated                 | ufordelt                                          | ufordelt                              |
+| reallocate                  | fordele på nytt                                   | fordele på nytt                       |
 | Keep funds                  | Behold midler                                     | Behald midlar                         |
 | income / expense / transfer | inntekt / utgift / overføring                     | inntekt / utgift / overføring         |
 | balance                     | saldo                                             | saldo                                 |

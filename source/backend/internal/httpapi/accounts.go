@@ -108,6 +108,18 @@ func (s *server) AdjustAccountBalance(ctx context.Context, req api.AdjustAccount
 	return api.AdjustAccountBalance200JSONResponse(toAPIAccount(a)), nil
 }
 
+func (s *server) ReallocateAccount(ctx context.Context, req api.ReallocateAccountRequestObject) (api.ReallocateAccountResponseObject, error) {
+	svc, err := s.accountService()
+	if err != nil {
+		return nil, err
+	}
+	a, err := svc.Reallocate(ctx, sessionFrom(ctx).User.ID, req.AccountId)
+	if err != nil {
+		return nil, accountError(err)
+	}
+	return api.ReallocateAccount200JSONResponse(toAPIAccount(a)), nil
+}
+
 func (s *server) DeleteAccount(ctx context.Context, req api.DeleteAccountRequestObject) (api.DeleteAccountResponseObject, error) {
 	svc, err := s.accountService()
 	if err != nil {

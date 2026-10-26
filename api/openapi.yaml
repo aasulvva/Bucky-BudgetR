@@ -352,6 +352,32 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/v1/accounts/{accountId}/reallocate:
+    parameters:
+      - $ref: "#/components/parameters/AccountId"
+    post:
+      operationId: reallocateAccount
+      tags: [accounts]
+      summary: Reallocate the account's money
+      description: |
+        Runs the Money Allocation Routine for the buckets funded from the
+        account now (spec §7), splitting its money by TF, priority and
+        importance. CAF otherwise only moves on the routine's triggers, so this
+        reshares an underfunded account by hand, for example after a refill.
+      responses:
+        "200":
+          description: The account, with what's unallocated now.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
   /api/v1/accounts/{accountId}/delete:
     parameters:
       - $ref: "#/components/parameters/AccountId"

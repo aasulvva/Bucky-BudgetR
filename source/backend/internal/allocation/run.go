@@ -3,6 +3,7 @@ package allocation
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 
 	"github.com/jackc/pgx/v5"
@@ -14,11 +15,52 @@ import (
 )
 
 // Run brings the stored CAF of the buckets funded from these accounts up to
-// date, inside tx. For each account it first clamps every CAF to
-// 0 ≤ CAF ≤ max(TF, 0), then recalculates the account with Allocate when
-// force is set or Needed says so. Callers hold the user's lock
-// (ledger.LockUser).
+// date, inside tx. For each account it limits every CAF to
+// 0 ≤ CAF ≤ max(TF, 0), or recalculates the account with Allocate when force
+// is set or Needed says so. Callers hold the user's lock (ledger.LockUser).
 func Run(ctx context.Context, tx pgx.Tx, userID string, accountIDs []string, force bool) error {
+	return run(ctx, tx, userID, accountIDs, force, nil)
+}
+
+// AfterRecord is the ledger hook (ledger.Options.AfterRecord): it runs the
+// routine for the accounts a transaction touched, directly or as the source
+// of a bucket it touched, and recalculates only those Follow says to.
+func AfterRecord(ctx context.Context, tx pgx.Tx, t *ledger.Transaction) error {
+	lines := map[string]*Lines{}
+	at := func(account string) *Lines {
+		if lines[account] == nil {
+			lines[account] = &Lines{Buckets: map[string]decimal.Decimal{}}
+		}
+		return lines[account]
+	}
+	for _, l := range t.BankLines {
+		a := at(l.AccountID)
+		a.Banked = true
+		a.Bank = a.Bank.Add(l.Amount)
+	}
+	if len(t.BucketLines) > 0 {
+		ids := make([]string, len(t.BucketLines))
+		for i, l := range t.BucketLines {
+			ids[i] = l.BucketID
+		}
+		sources, err := sqlc.New(tx).BucketSourceAccounts(ctx, ids)
+		if err != nil {
+			return err
+		}
+		for _, a := range sources {
+			at(a)
+		}
+		for _, l := range t.BucketLines {
+			for _, a := range lines {
+				// Every account gets the line; Follow only looks at its own buckets.
+				a.Buckets[l.BucketID] = a.Buckets[l.BucketID].Add(l.Amount)
+			}
+		}
+	}
+	return run(ctx, tx, t.Header.UserID, slices.Sorted(maps.Keys(lines)), false, lines)
+}
+
+func run(ctx context.Context, tx pgx.Tx, userID string, accountIDs []string, force bool, lines map[string]*Lines) error {
 	if len(accountIDs) == 0 {
 		return nil
 	}
@@ -43,15 +85,21 @@ func Run(ctx context.Context, tx pgx.Tx, userID string, accountIDs []string, for
 	}
 
 	byAccount := map[string][]Bucket{}
+	stored := map[string]decimal.Decimal{}
 	for _, r := range rows {
 		byAccount[r.SourceAccountID] = append(byAccount[r.SourceAccountID], Bucket{
 			ID: r.ID, TF: tf[r.ID], CAF: r.Caf, Priority: r.Priority, Importance: int(r.Importance),
 		})
+		stored[r.ID] = r.Caf
 	}
 	for account, buckets := range byAccount {
 		available := balances[account]
+		recalc := force
+		if l := lines[account]; l != nil && Follow(available, buckets, *l) {
+			recalc = true
+		}
 		var want map[string]decimal.Decimal
-		if force || Needed(available, buckets) {
+		if recalc || Needed(available, buckets) {
 			want = Allocate(available, buckets)
 		}
 		for _, b := range buckets {
@@ -59,7 +107,7 @@ func Run(ctx context.Context, tx pgx.Tx, userID string, accountIDs []string, for
 			if want != nil {
 				caf = want[b.ID]
 			}
-			if caf.Equal(b.CAF) {
+			if caf.Equal(stored[b.ID]) {
 				continue
 			}
 			if err := q.SetBucketCAF(ctx, sqlc.SetBucketCAFParams{ID: b.ID, Caf: caf}); err != nil {
@@ -68,27 +116,4 @@ func Run(ctx context.Context, tx pgx.Tx, userID string, accountIDs []string, for
 		}
 	}
 	return nil
-}
-
-// AfterRecord is the ledger hook (ledger.Options.AfterRecord): it runs the
-// routine for the accounts a transaction touched, directly or as the source
-// of a bucket it touched.
-func AfterRecord(ctx context.Context, tx pgx.Tx, t *ledger.Transaction) error {
-	var accounts []string
-	for _, l := range t.BankLines {
-		accounts = append(accounts, l.AccountID)
-	}
-	if len(t.BucketLines) > 0 {
-		ids := make([]string, len(t.BucketLines))
-		for i, l := range t.BucketLines {
-			ids[i] = l.BucketID
-		}
-		sources, err := sqlc.New(tx).BucketSourceAccounts(ctx, ids)
-		if err != nil {
-			return err
-		}
-		accounts = append(accounts, sources...)
-	}
-	slices.Sort(accounts)
-	return Run(ctx, tx, t.Header.UserID, slices.Compact(accounts), false)
 }
