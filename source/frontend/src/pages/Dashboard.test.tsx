@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import type { components } from "@/api/schema";
-import { cycleRange, daysLeftLabel } from "@/lib/cycles";
+import { addDays, cycleRange, daysLeftLabel, endAtFor, startAtFor, today } from "@/lib/cycles";
 import { formatMoney } from "@/lib/money";
 import { apiMock, testUser } from "@/test/api";
 import { account, bucket, bucketFigures, cycle, transaction } from "@/test/fixtures";
@@ -214,6 +214,8 @@ describe("Dashboard", () => {
     expect(apiMock.calls("PATCH /api/v1/me/preferences").map((c) => c.body)).toEqual([
       {
         dashboard: {
+          cycle: { show_next: true },
+          accounts: { mode: "all" },
           bucket_status: { mode: "bucket", bucket_id: fun.id },
           recent_transactions: { count: 5 },
         },
@@ -239,7 +241,82 @@ describe("Dashboard", () => {
     });
     expect(apiMock.calls("PATCH /api/v1/me/preferences").map((c) => c.body)).toEqual([
       {
-        dashboard: { bucket_status: { mode: "all" }, recent_transactions: { count: 10 } },
+        dashboard: {
+          cycle: { show_next: true },
+          accounts: { mode: "all" },
+          bucket_status: { mode: "all" },
+          recent_transactions: { count: 10 },
+        },
+      },
+    ]);
+  });
+
+  it("shows the next planned cycle, unless switched off", async () => {
+    const planned = cycle({
+      id: "100001000002",
+      state: "future",
+      start_at: startAtFor(addDays(today(), 20)),
+      end_at: endAtFor(addDays(today(), 49)),
+    });
+    apiMock.on("GET /api/v1/cycles/active", { body: { active: cycle(), next: planned } });
+    renderRoute("/");
+    const cycleWidget = await widget("Cycle");
+    const next = plain(`Next: ${cycleRange(planned)} (planned)`);
+    expect(await cycleWidget.findByText(next)).toBeInTheDocument();
+
+    await userEvent.click(cycleWidget.getByRole("button", { name: "Settings for Cycle" }));
+    const dialog = within(await screen.findByRole("dialog", { name: "Cycle settings" }));
+    await userEvent.click(dialog.getByRole("checkbox", { name: "Show the next planned cycle" }));
+    await userEvent.click(dialog.getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(cycleWidget.queryByText(next)).not.toBeInTheDocument();
+    });
+    expect(apiMock.calls("PATCH /api/v1/me/preferences").map((c) => c.body)).toEqual([
+      {
+        dashboard: {
+          cycle: { show_next: false },
+          accounts: { mode: "all" },
+          bucket_status: { mode: "attention" },
+          recent_transactions: { count: 5 },
+        },
+      },
+    ]);
+  });
+
+  it("shows one account", async () => {
+    withPreferences({ dashboard: { accounts: { mode: "account", account_id: main.id } } });
+    renderRoute("/");
+    const accounts = await widget("Account balances");
+    expect(await accounts.findByRole("link", { name: "Main account" })).toBeInTheDocument();
+    expect(accounts.queryByRole("link", { name: "Buffer account" })).not.toBeInTheDocument();
+    expect(accounts.getByText(m("1500.00"))).toBeInTheDocument();
+    expect(accounts.getByText(m("1850.00"))).toBeInTheDocument();
+    expect(accounts.getByText(m("400.00"))).toBeInTheDocument();
+  });
+
+  it("saves the account to show", async () => {
+    renderRoute("/");
+    const accounts = await widget("Account balances");
+    await userEvent.click(
+      await accounts.findByRole("button", { name: "Settings for Account balances" }),
+    );
+    const box = await screen.findByRole("dialog", { name: "Account balances settings" });
+    await choose(box, "Show", "One account");
+    expect(within(box).getByRole("button", { name: "Save" })).toBeDisabled();
+    await choose(box, "Account", "Buffer account");
+    await userEvent.click(within(box).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(accounts.queryByRole("link", { name: "Main account" })).not.toBeInTheDocument();
+    });
+    expect(apiMock.calls("PATCH /api/v1/me/preferences").map((c) => c.body)).toEqual([
+      {
+        dashboard: {
+          cycle: { show_next: true },
+          accounts: { mode: "account", account_id: buffer.id },
+          bucket_status: { mode: "attention" },
+          recent_transactions: { count: 5 },
+        },
       },
     ]);
   });

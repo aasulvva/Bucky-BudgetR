@@ -204,7 +204,8 @@
     "cycle": {
       "title": "Periode",
       "manage": "Periodar",
-      "next": "Neste: {{range}} (planlagd)"
+      "next": "Neste: {{range}} (planlagd)",
+      "showNext": "Vis neste planlagde periode"
     },
     "health": {
       "title": "Budsjettstatus",
@@ -234,7 +235,14 @@
       "noneUsed": "Inga bøtte har budsjett i denne perioden enno."
     },
     "accounts": {
-      "title": "Kontosaldoar"
+      "title": "Kontosaldoar",
+      "show": "Vis",
+      "modes": {
+        "all": "Alle kontoar",
+        "account": "Éin konto"
+      },
+      "account": "Konto",
+      "pickAccount": "Vel ein konto."
     },
     "recent": {
       "title": "Siste transaksjonar",

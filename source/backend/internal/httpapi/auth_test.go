@@ -377,7 +377,7 @@ func TestPreferences(t *testing.T) {
 	}
 
 	// The Dashboard's settings are replaced as a whole.
-	dashboard := `{"dashboard":{"bucket_status":{"bucket_id":"1000000001","mode":"bucket"},"recent_transactions":{"count":10}}}`
+	dashboard := `{"dashboard":{"accounts":{"account_id":"1234","mode":"account"},"bucket_status":{"bucket_id":"1000000001","mode":"bucket"},"cycle":{"show_next":false},"recent_transactions":{"count":10}}}`
 	if w := patch(dashboard); w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != dashboard {
 		t.Errorf("dashboard: %d %s", w.Code, w.Body)
 	}
@@ -396,6 +396,8 @@ func TestPreferences(t *testing.T) {
 		`{"dashboard":{"recent_transactions":{"count":0}}}`,
 		`{"dashboard":{"recent_transactions":{"count":21}}}`,
 		`{"dashboard":{"graphs":{}}}`,
+		`{"dashboard":{"cycle":{}}}`,
+		`{"dashboard":{"accounts":{"mode":"account","account_id":"12"}}}`,
 	} {
 		w := patch(body)
 		if w.Code != http.StatusBadRequest || deref(decodeProblem(t, w).Code) != "invalid_request" {

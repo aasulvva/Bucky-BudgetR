@@ -863,6 +863,19 @@ export interface components {
         };
         /** @description Settings per Dashboard widget. A missing widget uses its defaults. */
         DashboardSettings: {
+            cycle?: {
+                /** @description Also show the next planned cycle. True by default. */
+                show_next: boolean;
+            };
+            accounts?: {
+                /**
+                 * @description All accounts (the default), or only the one in `account_id`.
+                 * @enum {string}
+                 */
+                mode: "all" | "account";
+                /** @description The account shown in `account` mode. */
+                account_id?: (string & components["schemas"]["AccountId"]) | null;
+            };
             bucket_status?: {
                 /**
                  * @description Which buckets the widget shows: the ones that need attention

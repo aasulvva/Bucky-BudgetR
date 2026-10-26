@@ -1423,6 +1423,29 @@ components:
       additionalProperties: false
       description: Settings per Dashboard widget. A missing widget uses its defaults.
       properties:
+        cycle:
+          type: object
+          additionalProperties: false
+          required: [show_next]
+          properties:
+            show_next:
+              type: boolean
+              description: Also show the next planned cycle. True by default.
+        accounts:
+          type: object
+          additionalProperties: false
+          required: [mode]
+          properties:
+            mode:
+              type: string
+              enum: [all, account]
+              description: All accounts (the default), or only the one in `account_id`.
+            account_id:
+              type: string
+              allOf:
+                - $ref: "#/components/schemas/AccountId"
+              nullable: true
+              description: The account shown in `account` mode.
         bucket_status:
           type: object
           additionalProperties: false

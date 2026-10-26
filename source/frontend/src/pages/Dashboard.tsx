@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Card,
+  Checkbox,
   Group,
   Progress,
   Select,
@@ -18,6 +19,7 @@ import { Trans, useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
 import {
+  accountTypeLabel,
   useAccounts,
   useBucketFigures,
   useBuckets,
@@ -35,18 +37,21 @@ import { QueryState } from "@/components/QueryState";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
 import { useLookups } from "@/components/transactions/lookups";
 import { TransactionRow } from "@/components/transactions/TransactionRow";
-import { TONE_COLOR, coverage, toneText, usageColor } from "@/lib/buckets";
+import { TONE_COLOR, accountSummary, coverage, toneText, usageColor } from "@/lib/buckets";
 import { cycleRange, daysLeftLabel, isOverdue, lastDay } from "@/lib/cycles";
 import {
+  ACCOUNTS_MODES,
   BUCKET_STATUS_MODES,
   TRANSACTION_COUNTS,
   accountHealth,
   dashboardSettings,
   mostUsed,
   needsAttention,
+  shownAccounts,
   shownBucketStatus,
   toPreferences,
   usedPct,
+  type AccountsMode,
   type BucketStatusMode,
   type DashboardSettings,
 } from "@/lib/dashboard";
@@ -60,8 +65,8 @@ const NO_FOCUS = { accountId: null, bucketId: null };
 /**
  * Dashboard (spec §9): the active cycle, the budget's health per account,
  * the buckets, the account balances and the latest transactions. The
- * widgets are fixed for now (#37 makes them customisable); Bucket status and
- * Recent transactions have settings, kept in the user's preferences.
+ * widgets are fixed for now (#37 makes them customisable); their settings
+ * are kept in the user's preferences.
  */
 export default function Dashboard() {
   const { t } = useTranslation();
@@ -78,10 +83,10 @@ export default function Dashboard() {
         </Button>
       </Group>
       <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
-        <CycleWidget />
+        <CycleWidget settings={settings} />
         <HealthWidget />
         <BucketStatusWidget settings={settings} active={active} />
-        <AccountsWidget />
+        <AccountsWidget settings={settings} />
       </SimpleGrid>
       <RecentWidget settings={settings} />
     </Stack>
@@ -186,18 +191,40 @@ function SettingsButton({ widget, onClick }: { widget: string; onClick: () => vo
   );
 }
 
-function CycleWidget() {
+function CycleWidget({ settings }: { settings: DashboardSettings }) {
   const { t } = useTranslation();
   const current = useCurrentCycles();
   const cycles = useCycles();
   const [starting, setStarting] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [showNext, setShowNext] = useState(settings.cycle.showNext);
   const title = t("dashboard.cycle.title");
   return (
-    <Widget title={title} link={{ to: "/cycles", label: t("dashboard.cycle.manage") }}>
+    <Widget
+      title={title}
+      link={{ to: "/cycles", label: t("dashboard.cycle.manage") }}
+      action={
+        <SettingsButton
+          widget={title}
+          onClick={() => {
+            setShowNext(settings.cycle.showNext);
+            setEditing(true);
+          }}
+        />
+      }
+    >
       <QueryState query={current}>
-        {({ active, next }) =>
-          active ? (
-            <ActiveCycle active={active} next={next} />
+        {({ active, next }) => {
+          const planned = settings.cycle.showNext && next && (
+            <Text size="sm" c="dimmed">
+              {t("dashboard.cycle.next", { range: cycleRange(next) })}
+            </Text>
+          );
+          return active ? (
+            <Stack gap={4}>
+              <ActiveCycle active={active} />
+              {planned}
+            </Stack>
           ) : (
             <>
               <Stack gap={4}>
@@ -205,6 +232,7 @@ function CycleWidget() {
                 <Text size="sm" c="dimmed">
                   {t("cycles.needed")}
                 </Text>
+                {planned}
               </Stack>
               <Button
                 variant="light"
@@ -224,18 +252,35 @@ function CycleWidget() {
                 cycles={cycles.data ?? []}
               />
             </>
-          )
-        }
+          );
+        }}
       </QueryState>
+      <SettingsDialog
+        title={title}
+        opened={editing}
+        onClose={() => {
+          setEditing(false);
+        }}
+        canSave
+        next={{ ...settings, cycle: { showNext } }}
+      >
+        <Checkbox
+          label={t("dashboard.cycle.showNext")}
+          checked={showNext}
+          onChange={(e) => {
+            setShowNext(e.currentTarget.checked);
+          }}
+        />
+      </SettingsDialog>
     </Widget>
   );
 }
 
-function ActiveCycle({ active, next }: { active: Cycle; next: Cycle | null }) {
+function ActiveCycle({ active }: { active: Cycle }) {
   const { t } = useTranslation();
   const overdue = isOverdue(active);
   return (
-    <Stack gap={4}>
+    <>
       <Text fz={20} fw={700}>
         {cycleRange(active)}
       </Text>
@@ -244,12 +289,7 @@ function ActiveCycle({ active, next }: { active: Cycle; next: Cycle | null }) {
           ? t("cycles.overdueSince", { date: formatDate(lastDay(active)) })
           : daysLeftLabel(active)}
       </Text>
-      {next && (
-        <Text size="sm" c="dimmed">
-          {t("dashboard.cycle.next", { range: cycleRange(next) })}
-        </Text>
-      )}
-    </Stack>
+    </>
   );
 }
 
@@ -648,70 +688,206 @@ function OneBucket({
   );
 }
 
-function AccountsWidget() {
+function AccountsWidget({ settings }: { settings: DashboardSettings }) {
   const { t } = useTranslation();
+  const [editing, setEditing] = useState(false);
+  const title = t("dashboard.accounts.title");
   return (
     <Widget
-      title={t("dashboard.accounts.title")}
+      title={title}
       link={{ to: "/accounts", label: t("nav.items.accounts") }}
+      action={
+        <SettingsButton
+          widget={title}
+          onClick={() => {
+            setEditing(true);
+          }}
+        />
+      }
     >
       <MoneyState>
         {(accounts, buckets) => {
           if (accounts.length === 0) return <NoBuckets accounts={accounts} />;
-          const currencies = [...new Set(accounts.map((a) => a.currency))];
+          const shown = shownAccounts(settings, accounts);
           return (
-            <Stack gap="xs">
-              {accounts.map((a) => (
-                <Group key={a.id} justify="space-between" gap="xs" wrap="nowrap">
-                  <Box style={{ minWidth: 0 }}>
-                    <Anchor
-                      component={Link}
-                      to={`/transactions?account_id=${a.id}`}
-                      fw={600}
-                      c="var(--mantine-color-text)"
-                    >
-                      {a.name}
-                    </Anchor>
-                    {buckets.some((b) => b.source_account_id === a.id) && (
-                      <Text size="xs" c="dimmed">
-                        {t("dashboard.health.unallocated", {
-                          amount: formatMoney(a.unallocated, a.currency),
-                        })}
-                      </Text>
-                    )}
-                  </Box>
-                  <Text fw={600} style={{ whiteSpace: "nowrap" }}>
-                    {formatMoney(a.balance, a.currency)}
-                  </Text>
-                </Group>
-              ))}
-              <Group
-                justify="space-between"
-                gap="xs"
-                pt="xs"
-                style={{ borderTop: "1px solid var(--mantine-color-default-border)" }}
-              >
-                <Text size="sm" c="dimmed">
-                  {t("accounts.total")}
-                </Text>
-                <Stack gap={0} align="flex-end">
-                  {currencies.map((currency) => (
-                    <Text key={currency} fw={700}>
-                      {formatMoney(
-                        addAmounts(
-                          ...accounts.filter((a) => a.currency === currency).map((a) => a.balance),
-                        ),
-                        currency,
-                      )}
-                    </Text>
-                  ))}
-                </Stack>
-              </Group>
-            </Stack>
+            <>
+              {shown.mode === "account" ? (
+                <OneAccount account={shown.account} buckets={buckets} />
+              ) : (
+                <AllAccounts accounts={accounts} buckets={buckets} />
+              )}
+              <AccountsSettings
+                key={String(editing)}
+                opened={editing}
+                onClose={() => {
+                  setEditing(false);
+                }}
+                title={title}
+                settings={settings}
+                accounts={accounts}
+              />
+            </>
           );
         }}
       </MoneyState>
     </Widget>
+  );
+}
+
+function AccountsSettings({
+  opened,
+  onClose,
+  title,
+  settings,
+  accounts,
+}: {
+  opened: boolean;
+  onClose: () => void;
+  title: string;
+  settings: DashboardSettings;
+  accounts: Account[];
+}) {
+  const { t } = useTranslation();
+  const [mode, setMode] = useState<AccountsMode>(settings.accounts.mode);
+  const [accountId, setAccountId] = useState<string | null>(
+    accounts.some((a) => a.id === settings.accounts.accountId) ? settings.accounts.accountId : null,
+  );
+  return (
+    <SettingsDialog
+      title={title}
+      opened={opened}
+      onClose={onClose}
+      canSave={mode !== "account" || accountId !== null}
+      next={{
+        ...settings,
+        accounts: { mode, accountId: mode === "account" ? accountId : null },
+      }}
+    >
+      <Select
+        label={t("dashboard.accounts.show")}
+        data={ACCOUNTS_MODES.map((m) => ({ value: m, label: t(`dashboard.accounts.modes.${m}`) }))}
+        value={mode}
+        allowDeselect={false}
+        onChange={(v) => {
+          const next = ACCOUNTS_MODES.find((m) => m === v);
+          if (next) setMode(next);
+        }}
+      />
+      {mode === "account" && (
+        <Select
+          label={t("dashboard.accounts.account")}
+          placeholder={t("dashboard.accounts.pickAccount")}
+          data={accounts.map((a) => ({ value: a.id, label: a.name }))}
+          value={accountId}
+          onChange={setAccountId}
+          searchable
+        />
+      )}
+    </SettingsDialog>
+  );
+}
+
+function AccountLink({ account }: { account: Account }) {
+  return (
+    <Anchor
+      component={Link}
+      to={`/transactions?account_id=${account.id}`}
+      fw={600}
+      c="var(--mantine-color-text)"
+    >
+      {account.name}
+    </Anchor>
+  );
+}
+
+function AllAccounts({ accounts, buckets }: { accounts: Account[]; buckets: Bucket[] }) {
+  const { t } = useTranslation();
+  const currencies = [...new Set(accounts.map((a) => a.currency))];
+  return (
+    <Stack gap="xs">
+      {accounts.map((a) => (
+        <Group key={a.id} justify="space-between" gap="xs" wrap="nowrap">
+          <Box style={{ minWidth: 0 }}>
+            <AccountLink account={a} />
+            {buckets.some((b) => b.source_account_id === a.id) && (
+              <Text size="xs" c="dimmed">
+                {t("dashboard.health.unallocated", {
+                  amount: formatMoney(a.unallocated, a.currency),
+                })}
+              </Text>
+            )}
+          </Box>
+          <Text fw={600} style={{ whiteSpace: "nowrap" }}>
+            {formatMoney(a.balance, a.currency)}
+          </Text>
+        </Group>
+      ))}
+      <Group
+        justify="space-between"
+        gap="xs"
+        pt="xs"
+        style={{ borderTop: "1px solid var(--mantine-color-default-border)" }}
+      >
+        <Text size="sm" c="dimmed">
+          {t("accounts.total")}
+        </Text>
+        <Stack gap={0} align="flex-end">
+          {currencies.map((currency) => (
+            <Text key={currency} fw={700}>
+              {formatMoney(
+                addAmounts(
+                  ...accounts.filter((a) => a.currency === currency).map((a) => a.balance),
+                ),
+                currency,
+              )}
+            </Text>
+          ))}
+        </Stack>
+      </Group>
+    </Stack>
+  );
+}
+
+/** One account: its balance, and what its buckets hold of it. */
+function OneAccount({ account, buckets }: { account: Account; buckets: Bucket[] }) {
+  const { t } = useTranslation();
+  const money = (amount: string) => formatMoney(amount, account.currency);
+  const own = buckets.filter((b) => b.source_account_id === account.id);
+  const summary = accountSummary(account, buckets);
+  const isShort = compareAmounts(summary.short, "0") > 0;
+  return (
+    <Stack gap="xs">
+      <Group gap="xs" wrap="wrap">
+        <AccountLink account={account} />
+        <Text size="sm" c="dimmed">
+          {accountTypeLabel(account.type)}
+        </Text>
+      </Group>
+      <div>
+        <Text size="xs" c="dimmed">
+          {t("buckets.balance")}
+        </Text>
+        <Text fz={22} fw={700}>
+          {money(account.balance)}
+        </Text>
+      </div>
+      {own.length > 0 && (
+        <Group gap="lg" wrap="wrap">
+          <Text size="sm" c="dimmed">
+            {t("buckets.leftInBuckets")}{" "}
+            <Text span fw={700} c="var(--mantine-color-text)">
+              {money(summary.left)}
+            </Text>
+          </Text>
+          <Text size="sm" c={isShort ? toneText(summary.tone) : "dimmed"}>
+            {isShort ? t("buckets.short") : t("buckets.unallocated")}{" "}
+            <Text span fw={700} c={isShort ? undefined : "var(--mantine-color-text)"}>
+              {money(isShort ? summary.short : summary.unallocated)}
+            </Text>
+          </Text>
+        </Group>
+      )}
+    </Stack>
   );
 }
 

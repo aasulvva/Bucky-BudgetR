@@ -5,6 +5,7 @@ import {
   dashboardSettings,
   mostUsed,
   needsAttention,
+  shownAccounts,
   shownBucketStatus,
   toPreferences,
   usedPct,
@@ -50,6 +51,8 @@ const figures = new Map(
 describe("dashboardSettings", () => {
   it("uses the defaults", () => {
     expect(dashboardSettings({})).toEqual({
+      cycle: { showNext: true },
+      accounts: { mode: "all", accountId: null },
       bucketStatus: { mode: "attention", bucketId: null },
       recentCount: 5,
     });
@@ -57,18 +60,45 @@ describe("dashboardSettings", () => {
 
   it("reads what's saved, and saves it back", () => {
     const dashboard = {
+      cycle: { show_next: false },
+      accounts: { mode: "account" as const, account_id: "1234" },
       bucket_status: { mode: "bucket" as const, bucket_id: "1000000001" },
       recent_transactions: { count: 10 },
     };
     const settings = dashboardSettings({ dashboard });
     expect(settings).toEqual({
+      cycle: { showNext: false },
+      accounts: { mode: "account", accountId: "1234" },
       bucketStatus: { mode: "bucket", bucketId: "1000000001" },
       recentCount: 10,
     });
     expect(toPreferences(settings)).toEqual(dashboard);
     expect(
-      toPreferences({ ...settings, bucketStatus: { mode: "all", bucketId: "1000000001" } }),
-    ).toEqual({ bucket_status: { mode: "all" }, recent_transactions: { count: 10 } });
+      toPreferences({
+        ...settings,
+        accounts: { mode: "all", accountId: "1234" },
+        bucketStatus: { mode: "all", bucketId: "1000000001" },
+      }),
+    ).toEqual({
+      cycle: { show_next: false },
+      accounts: { mode: "all" },
+      bucket_status: { mode: "all" },
+      recent_transactions: { count: 10 },
+    });
+  });
+});
+
+describe("shownAccounts", () => {
+  const settings = dashboardSettings({
+    dashboard: { accounts: { mode: "account", account_id: main.id } },
+  });
+
+  it("shows the chosen account", () => {
+    expect(shownAccounts(settings, [main])).toEqual({ mode: "account", account: main });
+  });
+
+  it("shows them all when it's gone", () => {
+    expect(shownAccounts(settings, [])).toEqual({ mode: "all" });
   });
 });
 

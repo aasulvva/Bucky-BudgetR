@@ -10,7 +10,9 @@ import { addAmounts, compareAmounts, percentOf } from "./money";
 type Preferences = components["schemas"]["Preferences"];
 export type DashboardPreferences = components["schemas"]["DashboardSettings"];
 export type BucketStatusMode = NonNullable<DashboardPreferences["bucket_status"]>["mode"];
+export type AccountsMode = NonNullable<DashboardPreferences["accounts"]>["mode"];
 
+export const ACCOUNTS_MODES: AccountsMode[] = ["all", "account"];
 export const BUCKET_STATUS_MODES: BucketStatusMode[] = ["attention", "all", "most_used", "bucket"];
 export const TRANSACTION_COUNTS = [3, 5, 10, 15, 20];
 
@@ -18,6 +20,8 @@ export const TRANSACTION_COUNTS = [3, 5, 10, 15, 20];
 export const MOST_USED = 5;
 
 export interface DashboardSettings {
+  cycle: { showNext: boolean };
+  accounts: { mode: AccountsMode; accountId: string | null };
   bucketStatus: { mode: BucketStatusMode; bucketId: string | null };
   recentCount: number;
 }
@@ -26,6 +30,11 @@ export interface DashboardSettings {
 export function dashboardSettings(preferences: Preferences): DashboardSettings {
   const saved = preferences.dashboard;
   return {
+    cycle: { showNext: saved?.cycle?.show_next ?? true },
+    accounts: {
+      mode: saved?.accounts?.mode ?? "all",
+      accountId: saved?.accounts?.account_id ?? null,
+    },
     bucketStatus: {
       mode: saved?.bucket_status?.mode ?? "attention",
       bucketId: saved?.bucket_status?.bucket_id ?? null,
@@ -37,7 +46,13 @@ export function dashboardSettings(preferences: Preferences): DashboardSettings {
 /** What saving the settings sends; the API replaces `dashboard` as a whole. */
 export function toPreferences(settings: DashboardSettings): DashboardPreferences {
   const { mode, bucketId } = settings.bucketStatus;
+  const accounts = settings.accounts;
   return {
+    cycle: { show_next: settings.cycle.showNext },
+    accounts:
+      accounts.mode === "account"
+        ? { mode: accounts.mode, account_id: accounts.accountId }
+        : { mode: accounts.mode },
     bucket_status: mode === "bucket" ? { mode, bucket_id: bucketId } : { mode },
     recent_transactions: { count: settings.recentCount },
   };
@@ -55,6 +70,19 @@ export function shownBucketStatus(
   if (mode !== "bucket") return { mode };
   const bucket = buckets.find((b) => b.id === bucketId);
   return bucket ? { mode, bucket } : { mode: "attention" };
+}
+
+/**
+ * The accounts Account balances shows: all of them, or the chosen one.
+ * Without it (none chosen, or it was deleted) the widget shows them all.
+ */
+export function shownAccounts(
+  settings: DashboardSettings,
+  accounts: Account[],
+): { mode: "all" } | { mode: "account"; account: Account } {
+  const { mode, accountId } = settings.accounts;
+  const account = accounts.find((a) => a.id === accountId);
+  return mode === "account" && account ? { mode, account } : { mode: "all" };
 }
 
 export interface AccountHealth {

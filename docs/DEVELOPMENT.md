@@ -211,7 +211,7 @@ Budget setup keeps its rules in `lib/budget.ts`: the edited values (`BudgetDraft
 
 The Buckets screen's *Adjust funds* dialog (`components/buckets/AdjustFunds.tsx`) previews with `lib/bucketAdjust.ts` (`adjustPreview`, `movePreview`), which mirror `Adjust` and `Transfer` in `internal/buckets`; change both together. A move between buckets on one account takes CAF along in `allocation.Follow` (`moveAlong`).
 
-The Dashboard's rules are in `lib/dashboard.ts`: its widgets' settings with their defaults (`dashboardSettings`; saved as `preferences.dashboard`, which the API replaces as a whole, so send all of it with `toPreferences`), the health per account (`accountHealth`), and which buckets Bucket status shows (`needsAttention`, `mostUsed`). It shares `components/buckets/BucketParts.tsx` with Buckets and `components/transactions/TransactionRow.tsx` with Transactions.
+The Dashboard's rules are in `lib/dashboard.ts`: its widgets' settings with their defaults (`dashboardSettings`; saved as `preferences.dashboard`, which the API replaces as a whole, so send all of it with `toPreferences`), the health per account (`accountHealth`), which buckets Bucket status shows (`needsAttention`, `mostUsed`), and the account or bucket a widget shows, falling back when it's gone (`shownAccounts`, `shownBucketStatus`). It shares `components/buckets/BucketParts.tsx` with Buckets and `components/transactions/TransactionRow.tsx` with Transactions.
 
 On the backend, `buckets` can't import `refill` (it's the other way round), so `refill.Service.OnCreate` reaches bucket creation through the `buckets.Options.OnCreate` hook, wired in `cmd/server/main.go`.
 

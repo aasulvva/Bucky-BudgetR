@@ -204,7 +204,8 @@
     "cycle": {
       "title": "Cycle",
       "manage": "Cycles",
-      "next": "Next: {{range}} (planned)"
+      "next": "Next: {{range}} (planned)",
+      "showNext": "Show the next planned cycle"
     },
     "health": {
       "title": "Budget health",
@@ -234,7 +235,14 @@
       "noneUsed": "No bucket has a budget this cycle yet."
     },
     "accounts": {
-      "title": "Account balances"
+      "title": "Account balances",
+      "show": "Show",
+      "modes": {
+        "all": "All accounts",
+        "account": "One account"
+      },
+      "account": "Account",
+      "pickAccount": "Choose an account."
     },
     "recent": {
       "title": "Recent transactions",
