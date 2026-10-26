@@ -236,6 +236,12 @@ func toAPITransaction(t transactions.Transaction) api.Transaction {
 		ReplacedBy:     nullableString(t.ReplacedBy),
 		BankLines:      toAPIBankLines(t.BankLines),
 		BucketLines:    toAPIBucketLines(t.BucketLines),
+		BeforeReversal: nullable.NewNullNullable[api.TransactionLines](),
+	}
+	if b := t.BeforeReversal; b != nil {
+		out.BeforeReversal = nullable.NewNullableWithValue(api.TransactionLines{
+			BankLines: toAPIBankLines(b.Bank), BucketLines: toAPIBucketLines(b.Buckets),
+		})
 	}
 	if t.History != nil {
 		h := make([]api.TransactionVersion, len(t.History))

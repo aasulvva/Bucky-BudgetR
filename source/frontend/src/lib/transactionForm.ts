@@ -1,10 +1,15 @@
 // The Create transaction screen's logic, kept apart from the form: the bucket
-// split, the "Triggers refill" default and filling in from last time.
+// split, the "Triggers refill" default, filling in from last time, and what
+// editing a transaction starts with and sends.
 
 import type { Account, Bucket } from "@/api/accounts";
 import type { Cycle } from "@/api/cycles";
 import type { components } from "@/api/schema";
-import type { CounterpartySuggestion } from "@/api/transactions";
+import type {
+  CounterpartySuggestion,
+  Transaction,
+  TransactionCorrection,
+} from "@/api/transactions";
 
 import { addAmounts, compareAmounts, subtractAmounts } from "./money";
 
@@ -119,4 +124,88 @@ export function fromLastTime(
 export function initialAccount(accounts: Account[], last: string | null): string | null {
   if (last && accounts.some((a) => a.id === last)) return last;
   return accounts.length === 1 ? (accounts[0]?.id ?? null) : null;
+}
+
+/** The fields a correction can change, as the form holds them. */
+export interface EditValues {
+  /** Positive, except for OPB and BLA (signed, the account's line). */
+  amount: string | null;
+  accountId: string | null;
+  /** A transfer's receiving account. */
+  toAccountId: string | null;
+  counterparty: string;
+  tags: string[];
+  lines: SplitLine[];
+  triggersRefill: boolean;
+}
+
+const isBalance = (tx: Transaction) => tx.type === "OPB" || tx.type === "BLA";
+const positive = (a: string) => (compareAmounts(a, "0") < 0 ? subtractAmounts("0", a) : a);
+
+/** What the edit form starts with: the transaction's effective values. */
+export function editState(tx: Transaction): EditValues {
+  const from = tx.bank_lines.find((l) => compareAmounts(l.amount, "0") < 0);
+  const to = tx.bank_lines.find((l) => compareAmounts(l.amount, "0") > 0);
+  const first = tx.bank_lines[0];
+  let amount: string | null = first ? positive(first.amount) : null;
+  if (isBalance(tx)) amount = first?.amount ?? null;
+  return {
+    amount,
+    accountId: (tx.type === "TRF" ? from : first)?.account_id ?? null,
+    toAccountId: tx.type === "TRF" ? (to?.account_id ?? null) : null,
+    counterparty: tx.counterparty,
+    tags: tx.tags,
+    lines: tx.bucket_lines.map((l) => newLine(l.bucket_id, positive(l.amount))),
+    triggersRefill: tx.triggers_refill,
+  };
+}
+
+const sameList = (a: string[], b: string[]) =>
+  a.length === b.length && [...a].sort().join("\n") === [...b].sort().join("\n");
+
+const lineKey = (lines: SplitLine[]) => lines.map((l) => `${l.bucketId ?? ""}:${l.amount ?? ""}`);
+
+/**
+ * The correction that turns tx into values: only what changed, or null when
+ * nothing did. Bucket lines are left out while they're locked.
+ */
+export function correctionBody(
+  tx: Transaction,
+  values: EditValues,
+  locked: boolean,
+): TransactionCorrection | null {
+  const start = editState(tx);
+  const body: TransactionCorrection = {};
+  if (
+    values.amount !== null &&
+    (start.amount === null || compareAmounts(values.amount, start.amount) !== 0)
+  ) {
+    body.amount = values.amount;
+  }
+  if (!isBalance(tx)) {
+    if (values.accountId && values.accountId !== start.accountId) {
+      body.account_id = values.accountId;
+    }
+    if (tx.type === "TRF" && values.toAccountId && values.toAccountId !== start.toAccountId) {
+      body.to_account_id = values.toAccountId;
+    }
+  }
+  if (values.counterparty.trim() !== start.counterparty) {
+    body.counterparty = values.counterparty.trim();
+  }
+  if (!sameList(values.tags, start.tags)) body.tags = values.tags;
+  if (
+    !locked &&
+    (tx.type === "INC" || tx.type === "EXP") &&
+    !sameList(lineKey(values.lines), lineKey(start.lines))
+  ) {
+    body.bucket_lines = values.lines.map((l) => ({
+      bucket_id: l.bucketId ?? "",
+      amount: l.amount ?? "",
+    }));
+  }
+  if (tx.type === "INC" && values.triggersRefill !== start.triggersRefill) {
+    body.triggers_refill = values.triggersRefill;
+  }
+  return Object.keys(body).length > 0 ? body : null;
 }

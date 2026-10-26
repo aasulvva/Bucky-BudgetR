@@ -19,8 +19,14 @@ const pages: Partial<Record<string, () => PageModule>> = {
   "/buckets/setup": () => import("@/pages/BucketSetup"),
   "/cycles": () => import("@/pages/Cycles"),
   "/settings": () => import("@/pages/Settings"),
+  "/transactions": () => import("@/pages/Transactions"),
   "/transactions/new": () => import("@/pages/NewTransaction"),
 };
+
+/** Screens outside the navigation. */
+const extraPages: [string, () => PageModule][] = [
+  ["/transactions/:id/edit", () => import("@/pages/EditTransaction")],
+];
 
 /** The paths whose screen is built, rather than a placeholder. */
 export const builtPaths = Object.keys(pages);
@@ -49,6 +55,7 @@ export const routes: RouteObject[] = [
                       element: <Placeholder item={item} />,
                     };
               }),
+              ...extraPages.map(([path, load]): RouteObject => ({ path, lazy: lazyPage(load) })),
               { path: "*", element: <NotFound /> },
             ],
           },

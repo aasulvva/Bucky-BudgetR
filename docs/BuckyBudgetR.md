@@ -199,7 +199,7 @@ Only **INC, EXP, TRF and INP** can be created from the *Create transaction* scre
 - **Bucket lines on INC/EXP:** each bucket must be funded from the transaction's bank account (this may change with cash support, #60). Together they can't exceed the bank amount; the remainder simply isn't tied to a bucket.
 - **TRF** goes between two of the user's accounts in the same currency. Transfers between currencies come with multi-currency (#33).
 - **No future dates:** a transaction records what has happened, so its time can't be later than now. Planned payments are scheduled transactions (#31).
-- **Reading:** the transaction list shows each transaction merged with its corrections (effective amounts, flagged as corrected or reversed); a transaction's history shows the original and each correction.
+- **Reading:** the transaction list shows each transaction merged with its corrections (effective amounts, flagged as corrected or reversed); a reversed one also carries its amounts from just before the reversal (`before_reversal`), so the list can still show what it was. A transaction's history shows the original and each correction.
 - **Suggestions:** `GET /tags` lists the user's tags, most recently used first. `GET /counterparties` lists the counterparties of incomes and expenses, each once (ignoring case), newest first, with the effective account, tags and buckets of its newest transaction that isn't reversed.
 - **Math:** calculate with full precision. Stored amounts use 2 decimals, rounded half away from zero (0.005 → 0.01, −0.005 → −0.01). Exchange rates use 8 decimals.
 
@@ -293,7 +293,7 @@ Desktop and mobile use the same groups (decided in #8; wireframes in the design 
 | Accounts | Balances, drill into transactions, balance adjustment (BLA), register interest (INC); a cog opens the account in Account setup |
 | Cycles | The active cycle (extend, end) and planned cycles. Ending asks for confirmation, listing the buckets that will be emptied (OVF) and the Auto buckets the next cycle refills, with the amounts (REF, and any overflow). Without an active cycle, a prompt offers to start the planned one or a new one. |
 | Account setup | Create/manage bank accounts |
-| Transactions | Filter by account, bucket, cycle…; corrections and reversals |
+| Transactions | Newest first, grouped by day, a page at a time. Filters (kept in the URL, so Accounts and Buckets drill in with theirs): counterparty search, account, bucket, cycle (the active one by default, or all), type, tag and dates. Refills, overflow and bucket adjustments are hidden unless *Show refills & adjustments* is on. A row shows the effective amount, marked *Edited*, *Reversed* (with the amount it had) or *Moved*. The detail (beside the list, full screen on mobile) shows the lines and the history. **Edit** opens the Create transaction form filled in: the type and time stay, only what changed is sent as a correction, and another account moves it. **Reverse** asks first. While the bucket lines are in a finished cycle they can't change: Reverse is disabled with the reason, and Edit still changes the amount (not below what's in the buckets), counterparty and tags. System transactions can't be edited or reversed. |
 | Savings | Expected deposits per savings target. "Done" creates the transfers |
 | Savings setup | Savings targets and priority rules |
 | Stats & reports | Spending and balance graphs over time; yearly PDF report; filter by bucket, tag, counterparty |

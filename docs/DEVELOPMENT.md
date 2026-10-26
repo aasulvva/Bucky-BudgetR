@@ -203,7 +203,9 @@ The End cycle confirmation previews the OVF and REF with `lib/cycleEnd.ts`. It m
 
 `lib/buckets.ts` also has what the Buckets screen works out from a bucket and its account: how much of TF the account doesn't cover, whether the bucket is overspent and the warning tone (`coverage`), the usage bar's color (`usageColor`), the account's totals (`accountSummary`), and the breakdown of the cycle's budget (`breakdownText`).
 
-The Create transaction screen keeps its rules in `lib/transactionForm.ts`: the bucket split's totals and the pre-fill for a new row, whether the time is inside the active cycle, the "Triggers refill" default (`ruleMatches` mirrors `refill.Triggers` on the backend), and what picking an earlier counterparty fills in (`fromLastTime`).
+The Create transaction screen keeps its rules in `lib/transactionForm.ts`: the bucket split's totals and the pre-fill for a new row, whether the time is inside the active cycle, the "Triggers refill" default (`ruleMatches` mirrors `refill.Triggers` on the backend), and what picking an earlier counterparty fills in (`fromLastTime`). Editing reuses the same form (`components/transactions/TransactionForm.tsx` with `editing`): `editState` gives its start values and `correctionBody` the correction with only what changed.
+
+The Transactions screen keeps its rules in `lib/transactionList.ts`: the filters as URL parameters (`readFilter`, `withFilter`; no `cycle_id` means the active cycle, `cycle_id=all` every cycle), the API query they make (`listQuery`), the day groups, a row's amount, and whether a transaction's bucket lines are locked (`bucketLinesLocked`, as the ledger checks).
 
 On the backend, `buckets` can't import `refill` (it's the other way round), so `refill.Service.OnCreate` reaches bucket creation through the `buckets.Options.OnCreate` hook, wired in `cmd/server/main.go`.
 

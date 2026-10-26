@@ -2,15 +2,19 @@
 // screen autocompletes from.
 
 import { useDebouncedValue } from "@mantine/hooks";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 
 import { api } from "./client";
 import { unwrap } from "./errors";
-import type { components } from "./schema";
+import type { components, operations } from "./schema";
 
 export type TransactionCreate = components["schemas"]["TransactionCreate"];
 export type NewTransactionType = TransactionCreate["type"];
 export type CounterpartySuggestion = components["schemas"]["CounterpartySuggestion"];
+export type Transaction = components["schemas"]["Transaction"];
+export type TransactionType = components["schemas"]["TransactionType"];
+export type TransactionCorrection = components["schemas"]["TransactionCorrection"];
+export type TransactionQuery = NonNullable<operations["listTransactions"]["parameters"]["query"]>;
 
 /** Under ["transactions"], so useRefreshMoney() refreshes the suggestions after a save. */
 const SUGGESTIONS_KEY = ["transactions", "suggestions"] as const;
@@ -40,5 +44,35 @@ export function useCounterparties(type: "INC" | "EXP", q: string) {
       ),
     placeholderData: keepPreviousData,
     meta: { silentError: true },
+  });
+}
+
+/** The transactions matching query, newest first, a page at a time. */
+export function useTransactionPages(query: TransactionQuery, enabled = true) {
+  return useInfiniteQuery({
+    queryKey: ["transactions", "list", query],
+    queryFn: ({ pageParam }) =>
+      unwrap(
+        api.GET("/api/v1/transactions", {
+          params: { query: { ...query, ...(pageParam ? { cursor: pageParam } : {}) } },
+        }),
+      ),
+    initialPageParam: "",
+    getNextPageParam: (page) => page.next_cursor ?? undefined,
+    enabled,
+  });
+}
+
+/** One transaction, merged with its corrections, with its history. */
+export function useTransaction(id: string | null) {
+  return useQuery({
+    queryKey: ["transactions", "detail", id],
+    queryFn: () =>
+      unwrap(
+        api.GET("/api/v1/transactions/{transactionId}", {
+          params: { path: { transactionId: id ?? "" } },
+        }),
+      ),
+    enabled: id !== null,
   });
 }

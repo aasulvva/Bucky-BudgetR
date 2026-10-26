@@ -25,6 +25,11 @@ The words for the app's concepts, so the same thing is called the same everywher
 | counterparty                | motpart                                           | motpart                               |
 | source account              | kildekonto                                        | kjeldekonto                           |
 | bucket line                 | bøttelinje                                        | bøttelinje                            |
+| opening funds               | startmidler                                       | startmidlar                           |
+| bucket adjustment           | bøttejustering                                    | bøttejustering                        |
+| bucket transfer             | bøtteoverføring                                   | bøtteoverføring                       |
+| correction / reversal       | korrigering / reversering                         | korrigering / reversering             |
+| tag                         | tagg (taggen, tagger)                             | tagg (taggen, taggar)                 |
 | overdue                     | på overtid                                        | på overtid                            |
 | settings                    | innstillinger                                     | innstillingar                         |
 | sign out / log in           | logg ut / logg inn                                | logg ut / logg inn                    |

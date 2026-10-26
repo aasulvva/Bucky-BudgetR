@@ -1,8 +1,10 @@
 import type { CounterpartySuggestion } from "@/api/transactions";
-import { account, bucket, cycle } from "@/test/fixtures";
+import { account, bucket, cycle, transaction } from "@/test/fixtures";
 
 import {
   bucketTotals,
+  correctionBody,
+  editState,
   fromLastTime,
   initialAccount,
   insideCycle,
@@ -125,5 +127,82 @@ describe("initialAccount", () => {
     expect(initialAccount([main, buffer], buffer.id)).toBe(buffer.id);
     expect(initialAccount([main, buffer], "9999")).toBeNull();
     expect(initialAccount([main], null)).toBe(main.id);
+  });
+});
+
+describe("editing", () => {
+  const exp = transaction({
+    id: "t1",
+    counterparty: "Rema 1000",
+    tags: ["food"],
+    bank_lines: [{ account_id: main.id, amount: "-250.40" }],
+    bucket_lines: [{ bucket_id: groceries.id, cycle_id: cycle().id, amount: "-200.40" }],
+  });
+
+  it("starts from the effective values, with positive amounts", () => {
+    const start = editState(exp);
+    expect(start).toMatchObject({
+      amount: "250.40",
+      accountId: main.id,
+      toAccountId: null,
+      counterparty: "Rema 1000",
+      tags: ["food"],
+      triggersRefill: false,
+    });
+    expect(start.lines.map((l) => [l.bucketId, l.amount])).toEqual([[groceries.id, "200.40"]]);
+
+    const trf = transaction({
+      id: "t2",
+      type: "TRF",
+      bank_lines: [
+        { account_id: buffer.id, amount: "300.00" },
+        { account_id: main.id, amount: "-300.00" },
+      ],
+    });
+    expect(editState(trf)).toMatchObject({
+      amount: "300.00",
+      accountId: main.id,
+      toAccountId: buffer.id,
+    });
+    const bla = transaction({
+      id: "t3",
+      type: "BLA",
+      bank_lines: [{ account_id: main.id, amount: "-12.00" }],
+    });
+    expect(editState(bla).amount).toBe("-12.00");
+  });
+
+  it("sends only what changed, or nothing", () => {
+    const start = editState(exp);
+    expect(correctionBody(exp, start, false)).toBeNull();
+    expect(
+      correctionBody(exp, { ...start, tags: ["food"], counterparty: " Rema 1000 " }, false),
+    ).toBeNull();
+    expect(correctionBody(exp, { ...start, amount: "260.00", tags: [] }, false)).toEqual({
+      amount: "260.00",
+      tags: [],
+    });
+    const lines = [newLine(groceries.id, "150.00"), newLine(household.id, "50.40")];
+    expect(correctionBody(exp, { ...start, lines }, false)).toEqual({
+      bucket_lines: [
+        { bucket_id: groceries.id, amount: "150.00" },
+        { bucket_id: household.id, amount: "50.40" },
+      ],
+    });
+    // Locked: the lines are left out.
+    expect(correctionBody(exp, { ...start, lines }, true)).toBeNull();
+    // A move drops the buckets of the old account.
+    expect(correctionBody(exp, { ...start, accountId: buffer.id, lines: [] }, false)).toEqual({
+      account_id: buffer.id,
+      bucket_lines: [],
+    });
+    const inc = transaction({
+      id: "t4",
+      type: "INC",
+      bank_lines: [{ account_id: main.id, amount: "100.00" }],
+    });
+    expect(correctionBody(inc, { ...editState(inc), triggersRefill: true }, false)).toEqual({
+      triggers_refill: true,
+    });
   });
 });

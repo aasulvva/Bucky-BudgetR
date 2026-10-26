@@ -23,3 +23,11 @@ export function formatDateTime(value: string | Date, locale = getLocale()): stri
   const date = typeof value === "string" ? new Date(value) : value;
   return new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
+
+/** Formats a date as a day heading: "Friday 23 October". */
+export function formatDay(value: string | Date, locale = getLocale()): string {
+  const date = typeof value === "string" ? parseDate(value) : value;
+  return new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long" }).format(
+    date,
+  );
+}
