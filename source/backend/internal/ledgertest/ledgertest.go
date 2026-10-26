@@ -25,6 +25,19 @@ func Account(t testing.TB, pool *pgxpool.Pool, userID, currency string) string {
 	})
 }
 
+// UnusedAccountID returns a valid account ID that no account has. Account
+// IDs are random, so a fixed one like "9999" can belong to a test's account.
+func UnusedAccountID(t testing.TB, pool *pgxpool.Pool) string {
+	t.Helper()
+	var id string
+	err := pool.QueryRow(context.Background(), `SELECT n::text FROM generate_series(9999, 1000, -1) n
+		WHERE NOT EXISTS (SELECT 1 FROM bank_accounts WHERE id = n::text) LIMIT 1`).Scan(&id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
 // Cycle creates a cycle for userID from start up to (not including) end, in
 // the given state ("future", "active" or "finished") and returns its ID.
 func Cycle(t testing.TB, pool *pgxpool.Pool, userID string, start, end time.Time, state string) string {

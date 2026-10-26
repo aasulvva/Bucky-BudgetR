@@ -119,6 +119,7 @@ func TestCreate(t *testing.T) {
 		t.Errorf("duplicate name: %v", err)
 	}
 
+	unknown := ledgertest.UnusedAccountID(t, e.pool)
 	for name, n := range map[string]buckets.New{
 		"empty name":         {Name: "  "},
 		"long name":          {Name: strings.Repeat("x", 101)},
@@ -131,7 +132,7 @@ func TestCreate(t *testing.T) {
 		"savings overflow":   {OverflowDestination: sqlc.OverflowDestinationSavingsDistribution},
 		"importance 11":      {Importance: 11},
 		"negative opening":   {OpeningFunds: dec("-5")},
-		"unknown account":    {SourceAccountID: "9999"},
+		"unknown account":    {SourceAccountID: unknown},
 	} {
 		if n.Name == "" {
 			n.Name = "Bucket " + name
@@ -341,7 +342,7 @@ func TestUpdateSource(t *testing.T) {
 	if _, err := e.svc.Update(t.Context(), e.user, b.ID, buckets.Changes{SourceAccountID: &eur}); !errors.Is(err, buckets.ErrCurrencyMismatch) {
 		t.Errorf("to EUR: %v", err)
 	}
-	if _, err := e.svc.Update(t.Context(), e.user, b.ID, buckets.Changes{SourceAccountID: ptr("9999")}); !errors.Is(err, buckets.ErrInvalid) {
+	if _, err := e.svc.Update(t.Context(), e.user, b.ID, buckets.Changes{SourceAccountID: ptr(ledgertest.UnusedAccountID(t, e.pool))}); !errors.Is(err, buckets.ErrInvalid) {
 		t.Errorf("to an unknown account: %v", err)
 	}
 
