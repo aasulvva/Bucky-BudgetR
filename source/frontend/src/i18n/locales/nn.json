@@ -304,6 +304,30 @@
     "deleteBucket": "Slett bøtta",
     "deleted": "{{name}} er sletta."
   },
+  "budgetSetup": {
+    "intro": "Planlegg påfylla i kvar periode mot inntekta du ventar på kvar konto.",
+    "futureNote": "Lagra påfyllingsbeløp gjeld frå neste påfyll. Det som er att i bøttene denne perioden, vert ikkje endra.",
+    "expectedIncome": "Venta inntekt per periode",
+    "expectedIncomeFor": "Venta inntekt per periode for {{name}}",
+    "allocated": "Fordelt",
+    "allocatedShare": "{{amount}} ({{percent}} %)",
+    "left": "Att",
+    "over": "Over med",
+    "noIncome": "Skriv inn venta inntekt for å sjå kor mykje bøttene tek av ho.",
+    "refillAmount": "Påfyllingsbeløp",
+    "refillAmountFor": "Påfyllingsbeløp for {{name}}",
+    "share": "Del av inntekta",
+    "shareValue": "{{percent}} %",
+    "capacityRaised": "Heva frå {{amount}}",
+    "enterRefill": "Skriv inn eit påfyllingsbeløp.",
+    "changes_one": "{{count}} endring",
+    "changes_other": "{{count}} endringar",
+    "discard": "Forkast",
+    "saved": "Budsjettet er lagra.",
+    "leaveQuestion": "Du har endringar som ikkje er lagra. Vil du gå utan å lagre?",
+    "leave": "Gå utan å lagre",
+    "stay": "Bli her"
+  },
   "newTransaction": {
     "type": "Type",
     "types": {

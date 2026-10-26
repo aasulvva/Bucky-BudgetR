@@ -300,48 +300,10 @@ func (s *Service) Update(ctx context.Context, userID, id string, c Changes) (Buc
 		if err := ledger.LockUser(ctx, tx, userID); err != nil {
 			return err
 		}
-		q := sqlc.New(tx)
-		row, err := q.GetBucketForUpdate(ctx, sqlc.GetBucketForUpdateParams{ID: id, UserID: userID})
-		if err != nil {
-			return notFound(err, id)
-		}
-		p := sqlc.UpdateBucketParams{ID: id, UserID: userID, Name: row.Name, SourceAccountID: row.SourceAccountID, Caf: row.Caf}
-		if c.Name != nil {
-			if p.Name, err = checkName(*c.Name); err != nil {
-				return err
-			}
-		}
-		if c.SourceAccountID != nil && *c.SourceAccountID != row.SourceAccountID {
-			if err := checkNewSource(ctx, q, userID, row.SourceAccountID, *c.SourceAccountID); err != nil {
-				return err
-			}
-			p.SourceAccountID = *c.SourceAccountID
-			p.Caf = decimal.Zero
-		}
-
-		st := settings{
-			RefillAmount: row.RefillAmount, CapMode: row.CapMode, CapMultiplier: row.CapMultiplier, CapAmount: row.CapAmount,
-			KeepFunds: row.KeepFunds, RefillMode: row.RefillMode, OverflowDestination: row.OverflowDestination,
-			Priority: row.Priority, Importance: int(row.Importance),
-		}
-		if err := st.apply(c); err != nil {
+		if err := update(ctx, tx, userID, id, c); err != nil {
 			return err
 		}
-		if err := st.check(); err != nil {
-			return err
-		}
-		p.RefillAmount, p.CapMode, p.CapMultiplier, p.CapAmount = st.RefillAmount, st.CapMode, st.CapMultiplier, st.CapAmount
-		p.KeepFunds, p.RefillMode, p.OverflowDestination = st.KeepFunds, st.RefillMode, st.OverflowDestination
-		p.Priority, p.Importance = st.Priority, st.dbImportance
-		if err := q.UpdateBucket(ctx, p); err != nil {
-			return nameTaken(err)
-		}
-		// Settings that change how the money is split take effect at once.
-		if p.SourceAccountID != row.SourceAccountID || p.Priority != row.Priority || p.Importance != row.Importance {
-			if err := allocation.Run(ctx, tx, userID, compact(row.SourceAccountID, p.SourceAccountID), true); err != nil {
-				return err
-			}
-		}
+		var err error
 		out, err = s.get(ctx, tx, userID, id)
 		return err
 	})
@@ -349,6 +311,95 @@ func (s *Service) Update(ctx context.Context, userID, id string, c Changes) (Buc
 		return Bucket{}, err
 	}
 	return out, nil
+}
+
+// RefillAmount is one bucket's new refill amount, for SetRefillAmounts.
+type RefillAmount struct {
+	BucketID string
+	Amount   decimal.Decimal
+}
+
+// SetRefillAmounts sets several buckets' refill amounts, all or nothing
+// (Budget setup, spec §9). Like Update, a fixed capacity below the new
+// amount is raised to it; TF is unchanged. It returns the buckets in the
+// order given.
+func (s *Service) SetRefillAmounts(ctx context.Context, userID string, items []RefillAmount) ([]Bucket, error) {
+	seen := make(map[string]bool, len(items))
+	for _, it := range items {
+		if seen[it.BucketID] {
+			return nil, fmt.Errorf("%w: bucket %s is listed twice", ErrInvalid, it.BucketID)
+		}
+		seen[it.BucketID] = true
+	}
+	out := make([]Bucket, len(items))
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := ledger.LockUser(ctx, tx, userID); err != nil {
+			return err
+		}
+		for _, it := range items {
+			if err := update(ctx, tx, userID, it.BucketID, Changes{RefillAmount: &it.Amount}); err != nil {
+				return err
+			}
+		}
+		for i, it := range items {
+			var err error
+			if out[i], err = s.get(ctx, tx, userID, it.BucketID); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// update applies c to the bucket in tx, which holds the user's lock.
+func update(ctx context.Context, tx pgx.Tx, userID, id string, c Changes) error {
+	q := sqlc.New(tx)
+	row, err := q.GetBucketForUpdate(ctx, sqlc.GetBucketForUpdateParams{ID: id, UserID: userID})
+	if err != nil {
+		return notFound(err, id)
+	}
+	p := sqlc.UpdateBucketParams{ID: id, UserID: userID, Name: row.Name, SourceAccountID: row.SourceAccountID, Caf: row.Caf}
+	if c.Name != nil {
+		if p.Name, err = checkName(*c.Name); err != nil {
+			return err
+		}
+	}
+	if c.SourceAccountID != nil && *c.SourceAccountID != row.SourceAccountID {
+		if err := checkNewSource(ctx, q, userID, row.SourceAccountID, *c.SourceAccountID); err != nil {
+			return err
+		}
+		p.SourceAccountID = *c.SourceAccountID
+		p.Caf = decimal.Zero
+	}
+
+	st := settings{
+		RefillAmount: row.RefillAmount, CapMode: row.CapMode, CapMultiplier: row.CapMultiplier, CapAmount: row.CapAmount,
+		KeepFunds: row.KeepFunds, RefillMode: row.RefillMode, OverflowDestination: row.OverflowDestination,
+		Priority: row.Priority, Importance: int(row.Importance),
+	}
+	if err := st.apply(c); err != nil {
+		return err
+	}
+	if err := st.check(); err != nil {
+		return err
+	}
+	p.RefillAmount, p.CapMode, p.CapMultiplier, p.CapAmount = st.RefillAmount, st.CapMode, st.CapMultiplier, st.CapAmount
+	p.KeepFunds, p.RefillMode, p.OverflowDestination = st.KeepFunds, st.RefillMode, st.OverflowDestination
+	p.Priority, p.Importance = st.Priority, st.dbImportance
+	if err := q.UpdateBucket(ctx, p); err != nil {
+		return nameTaken(err)
+	}
+	// Settings that change how the money is split take effect at once.
+	if p.SourceAccountID != row.SourceAccountID || p.Priority != row.Priority || p.Importance != row.Importance {
+		if err := allocation.Run(ctx, tx, userID, compact(row.SourceAccountID, p.SourceAccountID), true); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Delete soft-deletes a bucket. Its remaining TF is released first with a

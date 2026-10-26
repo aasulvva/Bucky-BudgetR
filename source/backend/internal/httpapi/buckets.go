@@ -172,6 +172,29 @@ func (s *server) UpdateBucket(ctx context.Context, req api.UpdateBucketRequestOb
 	return api.UpdateBucket200JSONResponse(toAPIBucket(out)), nil
 }
 
+func (s *server) SetRefillAmounts(ctx context.Context, req api.SetRefillAmountsRequestObject) (api.SetRefillAmountsResponseObject, error) {
+	svc, err := s.bucketService()
+	if err != nil {
+		return nil, err
+	}
+	items := make([]buckets.RefillAmount, len(req.Body.Items))
+	for i, it := range req.Body.Items {
+		items[i].BucketID = it.BucketId
+		if items[i].Amount, err = parseAmount(it.RefillAmount); err != nil {
+			return nil, err
+		}
+	}
+	list, err := svc.SetRefillAmounts(ctx, sessionFrom(ctx).User.ID, items)
+	if err != nil {
+		return nil, bucketError(err)
+	}
+	out := api.SetRefillAmounts200JSONResponse{Items: make([]api.Bucket, len(list))}
+	for i, b := range list {
+		out.Items[i] = toAPIBucket(b)
+	}
+	return out, nil
+}
+
 func (s *server) DeleteBucket(ctx context.Context, req api.DeleteBucketRequestObject) (api.DeleteBucketResponseObject, error) {
 	svc, err := s.bucketService()
 	if err != nil {

@@ -207,6 +207,8 @@ The Create transaction screen keeps its rules in `lib/transactionForm.ts`: the b
 
 The Transactions screen keeps its rules in `lib/transactionList.ts`: the filters as URL parameters (`readFilter`, `withFilter`; no `cycle_id` means the active cycle, `cycle_id=all` every cycle), the API query they make (`listQuery`), the day groups, a row's amount, and whether a transaction's bucket lines are locked (`bucketLinesLocked`, as the ledger checks).
 
+Budget setup keeps its rules in `lib/budget.ts`: the edited values (`BudgetDraft`, only what changed, so the saved values show through), an account's totals against its expected income (`accountBudget`), a bucket's capacity after an RA change (`capacityAfter`, mirroring `settings.check` in `internal/buckets`), and what Save sends (`budgetChanges`).
+
 On the backend, `buckets` can't import `refill` (it's the other way round), so `refill.Service.OnCreate` reaches bucket creation through the `buckets.Options.OnCreate` hook, wired in `cmd/server/main.go`.
 
 Tests run in jsdom. `src/test/render.tsx` has helpers that render a component with the app's providers (the real query client, minus retries), or the whole app at a given path. `viewport.width` from `src/test/setup.ts` switches between the desktop and mobile layouts.

@@ -473,6 +473,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/buckets/refill-amounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set several buckets' refill amounts at once
+         * @description Budget setup's save (spec §9): sets each bucket's refill amount, all
+         *     or nothing. It is the *Future* adjustment: TF is unchanged and no
+         *     transaction is recorded. As with `PATCH /buckets/{bucketId}`, a fixed
+         *     capacity below the new refill amount is raised to it.
+         *
+         *     A bucket may appear once (400 `invalid_request`); an unknown or
+         *     deleted bucket is 404.
+         */
+        post: operations["setRefillAmounts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/buckets/{bucketId}": {
         parameters: {
             query?: never;
@@ -811,6 +837,8 @@ export interface components {
             balance: components["schemas"]["Amount"];
             /** @description The part of the balance that backs no bucket, balance − Σ CAF of its buckets (spec §7). Negative when the account is overdrawn. */
             unallocated: components["schemas"]["Amount"];
+            /** @description The income expected on the account per cycle, which Budget setup compares the buckets' refill amounts with (spec §9). Null until entered. */
+            expected_income: (string & components["schemas"]["Amount"]) | null;
             /** Format: date-time */
             created_at: string;
         };
@@ -828,6 +856,8 @@ export interface components {
         AccountUpdate: {
             name?: components["schemas"]["AccountName"];
             type?: components["schemas"]["AccountType"];
+            /** @description The income expected per cycle, at least 0. Null clears it. */
+            expected_income?: (string & components["schemas"]["Amount"]) | null;
         };
         BalanceAdjustment: {
             target_balance: components["schemas"]["Amount"];
@@ -1033,6 +1063,12 @@ export interface components {
             opening_funds?: components["schemas"]["Amount"];
             /** @description Refill the bucket now in the active cycle (spec §6), whatever its refill mode. It counts as the bucket's refill in that cycle. Needs an active cycle; can't be combined with `opening_funds`. */
             refill?: boolean;
+        };
+        RefillAmounts: {
+            items: {
+                bucket_id: components["schemas"]["BucketId"];
+                refill_amount: components["schemas"]["Amount"];
+            }[];
         };
         BucketUpdate: {
             name?: components["schemas"]["BucketName"];
@@ -1919,6 +1955,36 @@ export interface operations {
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    setRefillAmounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefillAmounts"];
+            };
+        };
+        responses: {
+            /** @description The updated buckets, in the order given. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Bucket"][];
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };

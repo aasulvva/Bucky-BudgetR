@@ -84,7 +84,10 @@ type Account struct {
 	Balance  decimal.Decimal
 	// Unallocated is the part of the balance no bucket's CAF uses (spec §7).
 	Unallocated decimal.Decimal
-	CreatedAt   time.Time
+	// ExpectedIncome is the income expected per cycle, for Budget setup
+	// (spec §9). Invalid until entered.
+	ExpectedIncome decimal.NullDecimal
+	CreatedAt      time.Time
 }
 
 // New describes an account to create.
@@ -104,6 +107,8 @@ type New struct {
 type Changes struct {
 	Name *string
 	Type *sqlc.AccountType
+	// ExpectedIncome sets the expected income, or clears it when invalid.
+	ExpectedIncome *decimal.NullDecimal
 }
 
 // Adjustment sets the balance to Target as of At (default now) with a
@@ -237,7 +242,7 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Account, er
 	return out, nil
 }
 
-// Update changes an account's name or type.
+// Update changes an account's name, type or expected income.
 func (s *Service) Update(ctx context.Context, userID, id string, c Changes) (Account, error) {
 	var out Account
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -249,7 +254,9 @@ func (s *Service) Update(ctx context.Context, userID, id string, c Changes) (Acc
 		if err != nil {
 			return notFound(err, id)
 		}
-		params := sqlc.UpdateAccountParams{ID: id, UserID: userID, Name: row.Name, AccountType: row.AccountType}
+		params := sqlc.UpdateAccountParams{
+			ID: id, UserID: userID, Name: row.Name, AccountType: row.AccountType, ExpectedIncome: row.ExpectedIncome,
+		}
 		if c.Name != nil {
 			if params.Name, err = checkName(*c.Name); err != nil {
 				return err
@@ -260,6 +267,17 @@ func (s *Service) Update(ctx context.Context, userID, id string, c Changes) (Acc
 				return fmt.Errorf("%w: account type %q", ErrInvalid, *c.Type)
 			}
 			params.AccountType = *c.Type
+		}
+		if c.ExpectedIncome != nil {
+			if e := *c.ExpectedIncome; e.Valid {
+				if err := money.Valid(e.Decimal); err != nil {
+					return fmt.Errorf("%w: expected income: %w", ErrInvalid, err)
+				}
+				if e.Decimal.IsNegative() {
+					return fmt.Errorf("%w: the expected income can't be negative", ErrInvalid)
+				}
+			}
+			params.ExpectedIncome = *c.ExpectedIncome
 		}
 		if _, err := q.UpdateAccount(ctx, params); err != nil {
 			return nameTaken(err)
@@ -474,7 +492,7 @@ func (s *Service) get(ctx context.Context, db sqlc.DBTX, userID, id string) (Acc
 func toAccount(r sqlc.BankAccount, bal, allocated decimal.Decimal) Account {
 	return Account{
 		ID: r.ID, Name: r.Name, Type: r.AccountType, Currency: r.Currency,
-		Balance: bal, Unallocated: bal.Sub(allocated), CreatedAt: r.CreatedAt,
+		Balance: bal, Unallocated: bal.Sub(allocated), ExpectedIncome: r.ExpectedIncome, CreatedAt: r.CreatedAt,
 	}
 }
 

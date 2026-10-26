@@ -11,6 +11,7 @@ export function account(overrides: Partial<Account> & Pick<Account, "id" | "name
     currency: "NOK",
     balance: "0.00",
     unallocated: "0.00",
+    expected_income: null,
     created_at: "2026-01-01T00:00:00Z",
     ...overrides,
   };

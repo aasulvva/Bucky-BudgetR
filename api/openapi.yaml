@@ -715,6 +715,48 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/v1/buckets/refill-amounts:
+    post:
+      operationId: setRefillAmounts
+      tags: [buckets]
+      summary: Set several buckets' refill amounts at once
+      description: |
+        Budget setup's save (spec §9): sets each bucket's refill amount, all
+        or nothing. It is the *Future* adjustment: TF is unchanged and no
+        transaction is recorded. As with `PATCH /buckets/{bucketId}`, a fixed
+        capacity below the new refill amount is raised to it.
+
+        A bucket may appear once (400 `invalid_request`); an unknown or
+        deleted bucket is 404.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefillAmounts"
+      responses:
+        "200":
+          description: The updated buckets, in the order given.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Bucket"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
   /api/v1/buckets/{bucketId}:
     parameters:
       - $ref: "#/components/parameters/BucketId"
@@ -1330,7 +1372,7 @@ components:
     Account:
       type: object
       additionalProperties: false
-      required: [id, name, type, currency, balance, unallocated, created_at]
+      required: [id, name, type, currency, balance, unallocated, expected_income, created_at]
       properties:
         id:
           $ref: "#/components/schemas/AccountId"
@@ -1346,6 +1388,12 @@ components:
           allOf:
             - $ref: "#/components/schemas/Amount"
           description: The part of the balance that backs no bucket, balance − Σ CAF of its buckets (spec §7). Negative when the account is overdrawn.
+        expected_income:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          nullable: true
+          description: The income expected on the account per cycle, which Budget setup compares the buckets' refill amounts with (spec §9). Null until entered.
         created_at:
           type: string
           format: date-time
@@ -1377,6 +1425,12 @@ components:
           $ref: "#/components/schemas/AccountName"
         type:
           $ref: "#/components/schemas/AccountType"
+        expected_income:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          nullable: true
+          description: The income expected per cycle, at least 0. Null clears it.
 
     BalanceAdjustment:
       type: object
@@ -1759,6 +1813,25 @@ components:
             its refill mode. It counts as the bucket's refill in that
             cycle. Needs an active cycle; can't be combined with
             `opening_funds`.
+
+    RefillAmounts:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            type: object
+            additionalProperties: false
+            required: [bucket_id, refill_amount]
+            properties:
+              bucket_id:
+                $ref: "#/components/schemas/BucketId"
+              refill_amount:
+                $ref: "#/components/schemas/Amount"
 
     BucketUpdate:
       type: object

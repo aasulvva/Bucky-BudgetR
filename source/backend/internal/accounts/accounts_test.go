@@ -147,6 +147,39 @@ func TestUpdate(t *testing.T) {
 	if got.Name != "Everyday" || got.Type != sqlc.AccountTypeSavings || !got.Balance.Equal(dec("100")) {
 		t.Errorf("unexpected account %+v", got)
 	}
+	if got.ExpectedIncome.Valid {
+		t.Errorf("expected income %v before it's entered", got.ExpectedIncome)
+	}
+
+	income := decimal.NewNullDecimal(dec("32000"))
+	if got, err = e.svc.Update(t.Context(), e.user, a.ID, accounts.Changes{ExpectedIncome: &income}); err != nil ||
+		!got.ExpectedIncome.Decimal.Equal(dec("32000")) {
+		t.Errorf("set expected income: %v, %v", err, got.ExpectedIncome)
+	}
+	list, err := e.svc.List(t.Context(), e.user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range list {
+		if l.ID == a.ID && !l.ExpectedIncome.Decimal.Equal(dec("32000")) {
+			t.Errorf("listed with expected income %v", l.ExpectedIncome)
+		}
+	}
+	// Other changes leave it.
+	if got, err = e.svc.Update(t.Context(), e.user, a.ID, accounts.Changes{Name: &name}); err != nil || !got.ExpectedIncome.Valid {
+		t.Errorf("rename cleared the expected income: %v, %v", err, got.ExpectedIncome)
+	}
+	for _, bad := range []string{"-1", "1.001"} {
+		v := decimal.NewNullDecimal(dec(bad))
+		if _, err := e.svc.Update(t.Context(), e.user, a.ID, accounts.Changes{ExpectedIncome: &v}); !errors.Is(err, accounts.ErrInvalid) {
+			t.Errorf("expected income %s: %v", bad, err)
+		}
+	}
+	cleared := decimal.NullDecimal{}
+	if got, err = e.svc.Update(t.Context(), e.user, a.ID, accounts.Changes{ExpectedIncome: &cleared}); err != nil || got.ExpectedIncome.Valid {
+		t.Errorf("clear expected income: %v, %v", err, got.ExpectedIncome)
+	}
+
 	taken := "buffer"
 	if _, err := e.svc.Update(t.Context(), e.user, a.ID, accounts.Changes{Name: &taken}); !errors.Is(err, accounts.ErrNameTaken) {
 		t.Errorf("rename to a taken name: %v", err)
