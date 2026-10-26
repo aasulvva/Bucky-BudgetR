@@ -9,6 +9,8 @@ import { viewport } from "@/test/setup";
 
 /** An amount as Testing Library reads it, with plain spaces. */
 const m = (amount: string) => formatMoney(amount, "NOK").replace(/\s/g, " ");
+/** An amount in an accessible name, which keeps the no-break spaces. */
+const name = (amount: string) => formatMoney(amount, "NOK");
 
 const main = account({
   id: "1234",
@@ -95,9 +97,19 @@ describe("Buckets", () => {
     expect(await row.findByText(`${m("3000.00")} of ${m("4000.00")}`)).toBeInTheDocument();
     expect(row.getByText("75%")).toBeInTheDocument();
     expect(row.getByText(`Start ${m("500.00")} + refill ${m("3500.00")}`)).toBeInTheDocument();
+    // Left is what the account backs; TF is struck through while it's short.
+    expect(row.getByText(m("650.00"))).toBeInTheDocument();
+    expect(row.getByText(m("1000.00"), { selector: "del" })).toBeInTheDocument();
+    expect(
+      row.getByRole("progressbar", { name: `Covered ${name("650.00")} of ${name("1000.00")}` }),
+    ).toBeInTheDocument();
     expect(row.getByText(`${m("350.00")} not covered`)).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "Covered" })).not.toBeInTheDocument();
     expect(row.getByText("Auto · not refilled")).toBeInTheDocument();
-    expect(section.getByText("Auto · refilled")).toBeInTheDocument();
+    const rentRow = within(section.getByText("Rent").closest("tr") as HTMLElement);
+    expect(rentRow.getByText("Auto · refilled")).toBeInTheDocument();
+    expect(rentRow.getByText("Fully covered")).toBeInTheDocument();
+    expect(rentRow.queryByRole("progressbar", { name: /Covered/ })).not.toBeInTheDocument();
     expect(row.getByRole("link", { name: "Groceries" })).toHaveAttribute(
       "href",
       "/transactions?bucket_id=1000000001",
@@ -124,6 +136,18 @@ describe("Buckets", () => {
     expect(screen.getByText(/even priority buckets aren't fully covered/)).toBeInTheDocument();
   });
 
+  it("shows an overspent bucket's negative TF, in red", async () => {
+    apiMock.on("GET /api/v1/buckets", {
+      body: [{ ...groceries, target_funds: "-150.00", current_available_funds: "0.00" }],
+    });
+    renderRoute("/buckets");
+    const row = within((await screen.findByText("Groceries")).closest("tr") as HTMLElement);
+    expect(row.getByRole("img", { name: "Overspent" })).toBeInTheDocument();
+    expect(row.getByText(m("-150.00"))).toBeInTheDocument();
+    expect(row.getByText("Overspent")).toBeInTheDocument();
+    expect(row.queryByText(/not covered/)).not.toBeInTheDocument();
+  });
+
   it("refills a manual bucket", async () => {
     apiMock.on("POST /api/v1/buckets/1000000003/refill", { body: { ...hobby, refilled: true } });
     renderRoute("/buckets");
@@ -140,7 +164,9 @@ describe("Buckets", () => {
     await userEvent.click(await screen.findByRole("radio", { name: "Grid view" }));
     const card = within(await screen.findByRole("article", { name: "Groceries" }));
     expect(await card.findByText(`Used ${m("3000.00")} of ${m("4000.00")}`)).toBeInTheDocument();
-    expect(card.getByText(`Covered ${m("650.00")}`)).toBeInTheDocument();
+    expect(
+      card.getByRole("progressbar", { name: `Covered ${name("650.00")} of ${name("1000.00")}` }),
+    ).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
     expect(localStorage.getItem("bucky.bucketsView")).toBe("grid");
   });

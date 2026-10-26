@@ -1,6 +1,13 @@
 import { account, bucket, bucketFigures } from "@/test/fixtures";
 
-import { accountSummary, breakdown, breakdownText, coverage, refillOf } from "./buckets";
+import {
+  accountSummary,
+  breakdown,
+  breakdownText,
+  coverage,
+  refillOf,
+  usageColor,
+} from "./buckets";
 import { formatMoney } from "./money";
 
 const main = account({ id: "1234", name: "Main account", balance: "1000.00" });
@@ -11,10 +18,16 @@ describe("coverage", () => {
     const b = bucket({ ...base, id: "1", name: "A", target_funds: "500.00" });
     expect(coverage({ ...b, current_available_funds: "500.00" })).toEqual({
       gap: "0.00",
+      coveredPct: 100,
+      overspent: false,
       tone: "ok",
     });
-    // Nothing to back when TF is 0 or below.
-    expect(coverage({ ...b, target_funds: "-50.00" }).tone).toBe("ok");
+    expect(coverage({ ...b, target_funds: "0.00" }).tone).toBe("ok");
+  });
+
+  it("is red when the bucket is overspent", () => {
+    const b = bucket({ ...base, id: "1", name: "A", target_funds: "-50.00" });
+    expect(coverage(b)).toEqual({ gap: "0.00", coveredPct: 100, overspent: true, tone: "alert" });
   });
 
   it("warns about the gap, in red for a priority bucket", () => {
@@ -25,8 +38,8 @@ describe("coverage", () => {
       target_funds: "500.00",
       current_available_funds: "200.00",
     });
-    expect(coverage(b)).toEqual({ gap: "300.00", tone: "warn" });
-    expect(coverage({ ...b, priority: true })).toEqual({ gap: "300.00", tone: "alert" });
+    expect(coverage(b)).toEqual({ gap: "300.00", coveredPct: 40, overspent: false, tone: "warn" });
+    expect(coverage({ ...b, priority: true }).tone).toBe("alert");
   });
 });
 
@@ -70,13 +83,28 @@ describe("accountSummary", () => {
 
   it("isn't short when the balance covers them; overspent buckets don't add", () => {
     const rich = { ...main, balance: "2000.00", unallocated: "1100.00" };
-    const overspent = { ...fun, target_funds: "-300.00", current_available_funds: "0.00" };
+    // An overspent bucket is red, but the account isn't short.
+    const overspent = {
+      ...fun,
+      priority: true,
+      target_funds: "-300.00",
+      current_available_funds: "0.00",
+    };
     expect(accountSummary(rich, [rent, overspent])).toEqual({
       left: "500.00",
       short: "0.00",
       unallocated: "1100.00",
       tone: "ok",
     });
+  });
+});
+
+describe("usageColor", () => {
+  it("is yellow above 90 % and red above 100 %", () => {
+    expect(usageColor(90)).toBeUndefined();
+    expect(usageColor(91)).toBe("yellow");
+    expect(usageColor(100)).toBe("yellow");
+    expect(usageColor(101)).toBe("red");
   });
 });
 

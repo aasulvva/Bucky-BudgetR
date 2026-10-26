@@ -9,6 +9,8 @@ import { viewport } from "@/test/setup";
 
 /** An amount as Testing Library reads it, with plain spaces. */
 const m = (amount: string) => formatMoney(amount, "NOK").replace(/\s/g, " ");
+/** An amount in an accessible name, which keeps the no-break spaces. */
+const name = (amount: string) => formatMoney(amount, "NOK");
 
 const main = account({ id: "1234", name: "Main account" });
 const buffer = account({ id: "2345", name: "Buffer account", type: "savings" });
@@ -53,8 +55,9 @@ describe("Bucket setup", () => {
     expect(list.getByText(m("1000.00"))).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "Euro account" })).not.toBeInTheDocument();
 
-    await userEvent.click(list.getByRole("button", { name: /Hobby/ }));
+    await userEvent.click(list.getByRole("button", { name: /^Hobby \(#1000000002\)/ }));
     expect(router.state.location.search).toBe("?edit=1000000002");
+    expect(screen.getByRole("heading", { name: "Hobby (#1000000002)" })).toBeInTheDocument();
     const form = within(screen.getByRole("form", { name: "Hobby" }));
     expect(form.getByRole("radio", { name: "Fixed amount" })).toBeChecked();
     expect(form.getByRole("textbox", { name: "Capacity amount" })).toHaveValue("3,000.00");
@@ -89,6 +92,10 @@ describe("Bucket setup", () => {
     await userEvent.type(form.getByRole("textbox", { name: "Multiplier" }), "2,5");
     expect(form.getByText(`Capacity ${m("2500.00")}`)).toBeInTheDocument();
     await userEvent.click(form.getByRole("checkbox", { name: /Keep funds/ }));
+    expect(form.getByRole("radio", { name: `Refill now (+${name("1000.00")})` })).toBeChecked();
+    await userEvent.click(form.getByRole("radio", { name: "Set starting funds" }));
+    await userEvent.click(form.getByRole("button", { name: "Create bucket" }));
+    expect(form.getByText("Enter an amount above 0.")).toBeInTheDocument();
     await userEvent.type(form.getByRole("textbox", { name: "Opening funds" }), "300");
     await userEvent.click(form.getByRole("button", { name: "Create bucket" }));
 
@@ -110,6 +117,38 @@ describe("Bucket setup", () => {
     expect(router.state.location.search).toBe("?edit=1000000003");
   });
 
+  it("refills a new bucket by default, or starts it at 0", async () => {
+    apiMock.on("POST /api/v1/buckets", (req) => ({
+      status: 201,
+      body: bucket({
+        id: "1000000003",
+        name: "Car",
+        source_account_id: main.id,
+        ...(req.body as object),
+      }),
+    }));
+    renderRoute("/buckets/setup?new");
+    const form = within(await screen.findByRole("form", { name: "New bucket" }));
+    await userEvent.type(form.getByRole("textbox", { name: /Name/ }), "Car");
+    await pick(/Source account/, "Main account");
+    await userEvent.click(form.getByRole("button", { name: "Create bucket" }));
+    expect(await screen.findByText("Car created.")).toBeInTheDocument();
+    expect(apiMock.calls("POST /api/v1/buckets")[0]?.body).toMatchObject({ refill: true });
+
+    await userEvent.click(screen.getByRole("button", { name: "New bucket" }));
+    const next = within(await screen.findByRole("form", { name: "New bucket" }));
+    await userEvent.type(next.getByRole("textbox", { name: /Name/ }), "Car");
+    await pick(/Source account/, "Main account");
+    await userEvent.click(next.getByRole("radio", { name: "Start at 0" }));
+    await userEvent.click(next.getByRole("button", { name: "Create bucket" }));
+    await vi.waitFor(() => {
+      expect(apiMock.calls("POST /api/v1/buckets")).toHaveLength(2);
+    });
+    const body = apiMock.calls("POST /api/v1/buckets")[1]?.body;
+    expect(body).not.toHaveProperty("refill");
+    expect(body).not.toHaveProperty("opening_funds");
+  });
+
   it("checks the capacity, and says when a fixed one is raised to RA", async () => {
     renderRoute("/buckets/setup?new");
     const form = within(await screen.findByRole("form", { name: "New bucket" }));
@@ -128,11 +167,12 @@ describe("Bucket setup", () => {
     expect(form.getByText(/Raised to the refill amount/)).toBeInTheDocument();
   });
 
-  it("needs a running cycle for opening funds", async () => {
+  it("offers the starting funds only in a running cycle", async () => {
     apiMock.on("GET /api/v1/cycles/active", { body: { active: null, next: null } });
     renderRoute("/buckets/setup?new");
     const form = within(await screen.findByRole("form", { name: "New bucket" }));
-    expect(form.getByRole("textbox", { name: "Opening funds" })).toBeDisabled();
+    expect(form.queryByRole("radio", { name: /Refill now/ })).not.toBeInTheDocument();
+    expect(form.queryByRole("textbox", { name: "Opening funds" })).not.toBeInTheDocument();
     expect(form.getByText(/Needs an active cycle/)).toBeInTheDocument();
   });
 
@@ -207,7 +247,7 @@ describe("Bucket setup", () => {
     viewport.width = 390;
     renderRoute("/buckets/setup");
     await userEvent.click(await screen.findByRole("button", { name: /Groceries/ }));
-    const dialog = within(await screen.findByRole("dialog", { name: "Groceries" }));
+    const dialog = within(await screen.findByRole("dialog", { name: "Groceries (#1000000001)" }));
     expect(dialog.getByRole("textbox", { name: /Name/ })).toHaveValue("Groceries");
   });
 

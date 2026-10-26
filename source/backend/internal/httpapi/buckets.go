@@ -105,6 +105,9 @@ func (s *server) CreateBucket(ctx context.Context, req api.CreateBucketRequestOb
 	if b.Importance != nil {
 		n.Importance = *b.Importance
 	}
+	if b.Refill != nil {
+		n.Refill = *b.Refill
+	}
 	out, err := svc.Create(ctx, sessionFrom(ctx).User.ID, n)
 	if err != nil {
 		return nil, bucketError(err)

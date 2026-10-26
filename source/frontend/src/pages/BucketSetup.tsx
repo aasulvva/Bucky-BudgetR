@@ -7,6 +7,7 @@ import {
   Checkbox,
   Group,
   NavLink,
+  Radio,
   SegmentedControl,
   Select,
   Slider,
@@ -141,7 +142,7 @@ export default function BucketSetup() {
                     {list}
                     <ResponsiveModal
                       opened={open}
-                      title={editing ? editing.name : t("bucketSetup.newBucket")}
+                      title={<FormTitle bucket={editing} />}
                       onClose={() => {
                         select(null);
                       }}
@@ -157,7 +158,16 @@ export default function BucketSetup() {
                     {list}
                   </Box>
                   <Card withBorder style={{ flex: 1, minWidth: 0 }}>
-                    {form || <Text c="dimmed">{t("bucketSetup.pick")}</Text>}
+                    {form ? (
+                      <Stack gap="md">
+                        <Title order={3} size="h4">
+                          <FormTitle bucket={editing} />
+                        </Title>
+                        {form}
+                      </Stack>
+                    ) : (
+                      <Text c="dimmed">{t("bucketSetup.pick")}</Text>
+                    )}
                   </Card>
                 </Group>
               );
@@ -166,6 +176,20 @@ export default function BucketSetup() {
         )}
       </QueryState>
     </Stack>
+  );
+}
+
+/** "Groceries (#1000000001)", or "New bucket". */
+function FormTitle({ bucket }: { bucket: Bucket | undefined }) {
+  const { t } = useTranslation();
+  if (!bucket) return t("bucketSetup.newBucket");
+  return (
+    <>
+      {bucket.name}{" "}
+      <Text span inherit c="dimmed" fw={400}>
+        (#{bucket.id})
+      </Text>
+    </>
   );
 }
 
@@ -205,7 +229,14 @@ function BucketList({
                     key={b.id}
                     component="button"
                     type="button"
-                    label={b.name}
+                    label={
+                      <>
+                        {b.name}{" "}
+                        <Text span size="sm" c="dimmed">
+                          (#{b.id})
+                        </Text>
+                      </>
+                    }
                     active={b.id === selected}
                     aria-current={b.id === selected ? "true" : undefined}
                     rightSection={
@@ -253,11 +284,20 @@ interface FormErrors {
   refillAmount?: string;
   multiplier?: string;
   capAmount?: string;
+  opening?: string;
 }
 
 /**
- * Creates a bucket, or edits one and sends only what changed. Opening funds
- * are for a new bucket only; later changes to its money are adjustments.
+ * How a bucket created in a running cycle starts: refilled now, with opening
+ * funds, or at 0. The first two count as its refill in the cycle (spec §6).
+ */
+type Start = "refill" | "amount" | "zero";
+const STARTS: Start[] = ["refill", "amount", "zero"];
+
+/**
+ * Creates a bucket, or edits one and sends only what changed. How it starts
+ * (a refill or opening funds) is for a new bucket only; later changes to
+ * its money are adjustments.
  */
 function BucketForm({
   bucket,
@@ -293,6 +333,7 @@ function BucketForm({
   const [overflow, setOverflow] = useState<OverflowDestination>(
     bucket?.overflow_destination ?? "unallocated",
   );
+  const [start, setStart] = useState<Start>("refill");
   const [opening, setOpening] = useState<string | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
 
@@ -353,9 +394,8 @@ function BucketForm({
         refill_mode: refillMode,
         keep_funds: keepFunds,
         overflow_destination: overflow,
-        ...(opening !== null && compareAmounts(opening, "0") !== 0
-          ? { opening_funds: opening }
-          : {}),
+        ...(usable && start === "refill" ? { refill: true } : {}),
+        ...(usable && start === "amount" && opening !== null ? { opening_funds: opening } : {}),
       };
       return unwrap(api.POST("/api/v1/buckets", { body }));
     },
@@ -391,6 +431,13 @@ function BucketForm({
           : compareAmounts(capAmount, "0") < 0
             ? t("common.notNegative")
             : undefined,
+    opening:
+      !bucket &&
+      usable &&
+      start === "amount" &&
+      (opening === null || compareAmounts(opening, "0") <= 0)
+        ? t("bucketSetup.enterStartingFunds")
+        : undefined,
   });
 
   if (bucket && deleting) {
@@ -583,18 +630,51 @@ function BucketForm({
               if (v === "unallocated") setOverflow(v);
             }}
           />
-          {!bucket && (
-            <AmountInput
-              label={t("bucketSetup.openingFunds")}
-              description={
-                usable ? t("bucketSetup.openingHint") : t("bucketSetup.openingNeedsCycle")
-              }
-              currency={currency}
-              value={opening}
-              onChange={setOpening}
-              disabled={!usable}
-            />
-          )}
+          {!bucket &&
+            (usable ? (
+              <Radio.Group
+                label={t("bucketSetup.start")}
+                value={start}
+                onChange={(v) => {
+                  const next = STARTS.find((s) => s === v);
+                  if (next) setStart(next);
+                }}
+              >
+                <Stack gap="sm" mt="xs">
+                  <Radio
+                    value="refill"
+                    label={t("bucketSetup.startRefill", { amount: formatMoney(ra, currency) })}
+                    description={t("bucketSetup.startRefillHint")}
+                  />
+                  <Radio value="amount" label={t("bucketSetup.startAmount")} />
+                  {start === "amount" && (
+                    <AmountInput
+                      label={t("bucketSetup.openingFunds")}
+                      description={t("bucketSetup.openingHint")}
+                      currency={currency}
+                      value={opening}
+                      onChange={setOpening}
+                      error={errors.opening}
+                      ml="xl"
+                    />
+                  )}
+                  <Radio
+                    value="zero"
+                    label={t("bucketSetup.startZero")}
+                    description={t("bucketSetup.startZeroHint")}
+                  />
+                </Stack>
+              </Radio.Group>
+            ) : (
+              <div>
+                <Text size="sm" fw={500}>
+                  {t("bucketSetup.start")}
+                </Text>
+                <Text size="xs" c="dimmed">
+                  {t("bucketSetup.openingNeedsCycle")}
+                </Text>
+              </div>
+            ))}
         </Stack>
 
         {save.error && !nameProblem(save.error) && <ErrorAlert error={save.error} />}

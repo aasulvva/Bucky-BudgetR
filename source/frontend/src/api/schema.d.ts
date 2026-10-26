@@ -957,8 +957,10 @@ export interface components {
             priority?: boolean;
             /** @default 5 */
             importance: number;
-            /** @description Recorded now as an Opening Funds (OPF) transaction when not 0. Needs an active cycle. */
+            /** @description Recorded now as an Opening Funds (OPF) transaction when not 0. Needs an active cycle, and counts as the bucket's refill in it (spec §6), so no refill later in the cycle changes the amount. */
             opening_funds?: components["schemas"]["Amount"];
+            /** @description Refill the bucket now in the active cycle (spec §6), whatever its refill mode. It counts as the bucket's refill in that cycle. Needs an active cycle; can't be combined with `opening_funds`. */
+            refill?: boolean;
         };
         BucketUpdate: {
             name?: components["schemas"]["BucketName"];

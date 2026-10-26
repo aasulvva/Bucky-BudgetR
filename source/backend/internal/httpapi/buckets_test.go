@@ -14,17 +14,19 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/cycles"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/httpapi"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/refill"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/testdb"
 )
 
 func TestBucketsAPI(t *testing.T) {
 	pool := testdb.New(t)
 	l := ledger.New(ledger.Options{})
+	refills := refill.NewService(pool, l, refill.Options{})
 	h := newHandler(t, discard(), pool, httpapi.Options{
 		Auth:     auth.NewService(pool, discard(), auth.Options{IdleTimeout: idle, MaxAge: maxAge}),
 		Accounts: accounts.NewService(pool, l, accounts.Options{}),
 		Cycles:   cycles.NewService(pool, cycles.Options{}),
-		Buckets:  buckets.NewService(pool, l, buckets.Options{}),
+		Buckets:  buckets.NewService(pool, l, buckets.Options{OnCreate: refills.OnCreate}),
 	})
 	authtest.NewUser(t, pool, "alice")
 	authtest.NewUser(t, pool, "bob")
@@ -68,6 +70,8 @@ func TestBucketsAPI(t *testing.T) {
 		map[string]any{"name": "Fun", "source_account_id": acc.Id, "overflow_destination": "savings_target"}, alice), http.StatusBadRequest, "invalid_request")
 	expect(t, "opening funds without a cycle", do(http.MethodPost, "/api/v1/buckets",
 		map[string]any{"name": "Fun", "source_account_id": acc.Id, "opening_funds": "100"}, alice), http.StatusConflict, "no_active_cycle")
+	expect(t, "refill without a cycle", do(http.MethodPost, "/api/v1/buckets",
+		map[string]any{"name": "Fun", "source_account_id": acc.Id, "refill": true}, alice), http.StatusConflict, "no_active_cycle")
 	expect(t, "bob's source account", do(http.MethodPost, "/api/v1/buckets",
 		map[string]any{"name": "Fun", "source_account_id": acc.Id}, bob), http.StatusBadRequest, "invalid_request")
 	expect(t, "bad ID", do(http.MethodGet, "/api/v1/buckets/123", nil, alice), http.StatusBadRequest, "invalid_request")
@@ -94,9 +98,21 @@ func TestBucketsAPI(t *testing.T) {
 	w = do(http.MethodPost, "/api/v1/buckets", map[string]any{"name": "Fun", "source_account_id": acc.Id, "opening_funds": "100"}, alice)
 	expect(t, "create with opening funds", w, http.StatusCreated, "")
 	fun := decode[api.Bucket](t, w)
-	if fun.TargetFunds != "100.00" {
-		t.Errorf("TF %s, want 100.00", fun.TargetFunds)
+	if fun.TargetFunds != "100.00" || !fun.Refilled {
+		t.Errorf("TF %s, refilled %v; want 100.00, the opening funds counting as the refill", fun.TargetFunds, fun.Refilled)
 	}
+	expect(t, "opening funds and refill", do(http.MethodPost, "/api/v1/buckets", map[string]any{
+		"name": "Car", "source_account_id": acc.Id, "opening_funds": "100", "refill": true,
+	}, alice), http.StatusBadRequest, "invalid_request")
+	w = do(http.MethodPost, "/api/v1/buckets", map[string]any{
+		"name": "Car", "source_account_id": acc.Id, "refill_amount": "500", "refill": true,
+	}, alice)
+	expect(t, "create refilled", w, http.StatusCreated, "")
+	car := decode[api.Bucket](t, w)
+	if car.TargetFunds != "500.00" || !car.Refilled {
+		t.Errorf("TF %s, refilled %v; want 500.00, refilled", car.TargetFunds, car.Refilled)
+	}
+	expect(t, "delete refilled", do(http.MethodDelete, "/api/v1/buckets/"+car.Id, nil, alice), http.StatusNoContent, "")
 
 	w = do(http.MethodGet, "/api/v1/buckets", nil, alice)
 	expect(t, "list", w, http.StatusOK, "")

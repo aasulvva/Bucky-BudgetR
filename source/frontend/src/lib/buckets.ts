@@ -4,31 +4,62 @@
 import type { Account, Bucket, BucketFigures } from "@/api/accounts";
 import i18n from "@/i18n";
 
-import { addAmounts, compareAmounts, formatMoney, subtractAmounts } from "./money";
+import { addAmounts, compareAmounts, formatMoney, percentOf, subtractAmounts } from "./money";
 
 const positive = (a: string) => compareAmounts(a, "0") > 0;
 
-/** ok: fully covered; warn: not (yellow); alert: a priority bucket that isn't (red). */
+/**
+ * ok: fully covered; warn: not (yellow); alert: a priority bucket that isn't,
+ * or an overspent one (red).
+ */
 export type Tone = "ok" | "warn" | "alert";
 
-/** How much of a bucket's TF its account doesn't back (TF − CAF), and its tone. */
-export function coverage(bucket: Bucket): { gap: string; tone: Tone } {
-  const gap = positive(bucket.target_funds)
-    ? subtractAmounts(bucket.target_funds, bucket.current_available_funds)
-    : "0.00";
-  if (!positive(gap)) return { gap: "0.00", tone: "ok" };
-  return { gap, tone: bucket.priority ? "alert" : "warn" };
+export interface Coverage {
+  /** How much of TF the account doesn't back (TF − CAF), or 0. */
+  gap: string;
+  /** CAF as a % of TF while there's a gap, else 100. */
+  coveredPct: number;
+  /** TF is below 0: more was spent than the bucket had. */
+  overspent: boolean;
+  tone: Tone;
 }
 
-/** An account's buckets together: what's left in them, and what the balance lacks or has to spare. */
+/** How well a bucket's account backs its TF, and how it should look. */
+export function coverage(bucket: Bucket): Coverage {
+  const tf = bucket.target_funds;
+  const gap = positive(tf) ? subtractAmounts(tf, bucket.current_available_funds) : "0.00";
+  const overspent = compareAmounts(tf, "0") < 0;
+  if (!positive(gap)) {
+    return { gap: "0.00", coveredPct: 100, overspent, tone: overspent ? "alert" : "ok" };
+  }
+  return {
+    gap,
+    coveredPct: percentOf(bucket.current_available_funds, tf),
+    overspent,
+    tone: bucket.priority ? "alert" : "warn",
+  };
+}
+
+/** The usage bar's color: yellow above 90 %, red when overspent. */
+export function usageColor(pct: number): "yellow" | "red" | undefined {
+  if (pct > 100) return "red";
+  if (pct > 90) return "yellow";
+  return undefined;
+}
+
+/**
+ * An account's buckets together: what's left in them, and what the balance
+ * lacks or has to spare. The tone is about the shortage only, so an
+ * overspent bucket doesn't change it.
+ */
 export function accountSummary(
   account: Account,
   buckets: Bucket[],
 ): { left: string; short: string; unallocated: string; tone: Tone } {
   const own = buckets.filter((b) => b.source_account_id === account.id);
   const left = addAmounts(...own.map((b) => b.target_funds));
-  const tones = own.map((b) => coverage(b).tone);
-  const tone = tones.includes("alert") ? "alert" : tones.includes("warn") ? "warn" : "ok";
+  const short = own.filter((b) => positive(coverage(b).gap));
+  const tone = short.some((b) => b.priority) ? "alert" : short.length > 0 ? "warn" : "ok";
   const missing = subtractAmounts(
     addAmounts(...own.map((b) => (positive(b.target_funds) ? b.target_funds : "0"))),
     account.balance,

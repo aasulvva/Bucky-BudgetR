@@ -201,7 +201,9 @@ Cycles are picked as local dates, but the API takes timestamps (spec §3). `lib/
 
 The End cycle confirmation previews the OVF and REF with `lib/cycleEnd.ts`. It mirrors the routines in `internal/refill/refill.go`, so a change to one needs the same change in the other. The per-bucket refill rule is `refillOf()` in `lib/buckets.ts`, which the Buckets screen also uses for the amount on its Refill button.
 
-`lib/buckets.ts` also has what the Buckets screen works out from a bucket and its account: how much of TF the account doesn't cover and the warning tone (`coverage`), the account's totals (`accountSummary`), and the breakdown of the cycle's budget (`breakdownText`).
+`lib/buckets.ts` also has what the Buckets screen works out from a bucket and its account: how much of TF the account doesn't cover, whether the bucket is overspent and the warning tone (`coverage`), the usage bar's color (`usageColor`), the account's totals (`accountSummary`), and the breakdown of the cycle's budget (`breakdownText`).
+
+On the backend, `buckets` can't import `refill` (it's the other way round), so `refill.Service.OnCreate` reaches bucket creation through the `buckets.Options.OnCreate` hook, wired in `cmd/server/main.go`.
 
 Tests run in jsdom. `src/test/render.tsx` has helpers that render a component with the app's providers (the real query client, minus retries), or the whole app at a given path. `viewport.width` from `src/test/setup.ts` switches between the desktop and mobile layouts.
 

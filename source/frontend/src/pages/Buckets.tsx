@@ -38,7 +38,14 @@ import { useCurrentCycles, type Cycle } from "@/api/cycles";
 import { unwrap } from "@/api/errors";
 import { QueryState } from "@/components/QueryState";
 import i18n from "@/i18n";
-import { accountSummary, breakdownText, coverage, refillOf, type Tone } from "@/lib/buckets";
+import {
+  accountSummary,
+  breakdownText,
+  coverage,
+  refillOf,
+  usageColor,
+  type Tone,
+} from "@/lib/buckets";
 import { cycleRange, daysLeftLabel, isOverdue } from "@/lib/cycles";
 import { compareAmounts, formatMoney, percentOf } from "@/lib/money";
 
@@ -282,8 +289,7 @@ function BucketTable({
             <Table.Tr>
               <Table.Th>{t("buckets.bucket")}</Table.Th>
               <Table.Th w="30%">{t("buckets.usedThisCycle")}</Table.Th>
-              <Table.Th>{t("buckets.left")}</Table.Th>
-              <Table.Th>{t("buckets.covered")}</Table.Th>
+              <Table.Th w="22%">{t("buckets.left")}</Table.Th>
               <Table.Th>{t("buckets.refill")}</Table.Th>
               <Table.Th w={48}>
                 <span className="mantine-visually-hidden">{t("nav.items.bucketSetup")}</span>
@@ -292,26 +298,17 @@ function BucketTable({
           </Table.Thead>
           <Table.Tbody>
             {buckets.map((b) => {
-              const { gap, tone } = coverage(b);
-              const money = (amount: string) => formatMoney(amount, b.currency);
+              const { tone } = coverage(b);
               return (
                 <Table.Tr key={b.id} style={toneStyle(tone)}>
                   <Table.Td>
-                    <BucketName bucket={b} tone={tone} />
+                    <BucketName bucket={b} />
                   </Table.Td>
                   <Table.Td>
                     <UsedThisCycle bucket={b} figures={figures.get(b.id)} active={active} />
                   </Table.Td>
-                  <Table.Td fw={600} style={{ whiteSpace: "nowrap" }}>
-                    {money(b.target_funds)}
-                  </Table.Td>
                   <Table.Td>
-                    <Text size="sm">{money(b.current_available_funds)}</Text>
-                    <Text size="xs" c={tone === "ok" ? "dimmed" : `${TONE_COLOR[tone] ?? ""}.9`}>
-                      {tone === "ok"
-                        ? t("buckets.fullyCovered")
-                        : t("buckets.notCovered", { amount: money(gap) })}
-                    </Text>
+                    <LeftFunds bucket={b} />
                   </Table.Td>
                   <Table.Td>
                     <Group gap="xs" wrap="wrap">
@@ -336,40 +333,28 @@ function BucketTable({
 
 function BucketCard({ bucket, figures, active, mobile }: BucketProps & { mobile: boolean }) {
   const { t } = useTranslation();
-  const { gap, tone } = coverage(bucket);
-  const money = (amount: string) => formatMoney(amount, bucket.currency);
+  const { tone } = coverage(bucket);
   return (
     <Card withBorder component="article" aria-label={bucket.name} style={toneStyle(tone)}>
       <Stack gap="xs">
         <Group gap="xs" wrap="nowrap" justify="space-between">
-          <BucketName bucket={bucket} tone={tone} />
+          <BucketName bucket={bucket} />
           <SetupLink bucket={bucket} size={mobile ? 44 : 32} />
         </Group>
         <div>
           <Text size="xs" c="dimmed">
             {t("buckets.leftThisCycle")}
           </Text>
-          <Text fz={22} fw={600}>
-            {money(bucket.target_funds)}
-          </Text>
+          <LeftFunds bucket={bucket} large />
         </div>
         <UsedThisCycle bucket={bucket} figures={figures} active={active} long />
         <Group
           justify="space-between"
           gap="xs"
+          mih={32}
           pt="xs"
           style={{ borderTop: "1px solid var(--mantine-color-default-border)" }}
         >
-          <Text size="sm">
-            {t("buckets.coveredAmount", { amount: money(bucket.current_available_funds) })}
-          </Text>
-          {tone !== "ok" && (
-            <Text size="sm" c={`${TONE_COLOR[tone] ?? ""}.9`}>
-              {t("buckets.notCovered", { amount: money(gap) })}
-            </Text>
-          )}
-        </Group>
-        <Group justify="space-between" gap="xs" mih={32}>
           <Text size="sm" c="dimmed">
             {modeText(bucket, active)}
           </Text>
@@ -381,17 +366,22 @@ function BucketCard({ bucket, figures, active, mobile }: BucketProps & { mobile:
   );
 }
 
-function BucketName({ bucket, tone }: { bucket: Bucket; tone: Tone }) {
+/** The text color for a tone, readable in both color schemes. */
+function toneText(tone: Tone): string | undefined {
+  const color = TONE_COLOR[tone];
+  return color && `var(--mantine-color-${color}-text)`;
+}
+
+function BucketName({ bucket }: { bucket: Bucket }) {
   const { t } = useTranslation();
+  const { overspent, tone } = coverage(bucket);
+  const label = overspent
+    ? t("buckets.overspentLabel")
+    : t(tone === "alert" ? "buckets.alertLabel" : "buckets.warnLabel");
   return (
     <Group gap={6} wrap="wrap" style={{ minWidth: 0 }}>
       {tone !== "ok" && (
-        <IconAlertTriangle
-          size={18}
-          role="img"
-          aria-label={t(tone === "alert" ? "buckets.alertLabel" : "buckets.warnLabel")}
-          color={`var(--mantine-color-${TONE_COLOR[tone] ?? ""}-light-color)`}
-        />
+        <IconAlertTriangle size={18} role="img" aria-label={label} color={toneText(tone)} />
       )}
       <Anchor
         component={Link}
@@ -407,6 +397,73 @@ function BucketName({ bucket, tone }: { bucket: Bucket; tone: Tone }) {
         </Badge>
       )}
     </Group>
+  );
+}
+
+/**
+ * What's left: what the account backs (CAF). While that's less than TF, TF
+ * is struck through beside it, with a bar of how much is covered. An
+ * overspent bucket shows its negative TF.
+ */
+function LeftFunds({ bucket, large }: { bucket: Bucket; large?: boolean }) {
+  const { t } = useTranslation();
+  const { gap, coveredPct, overspent, tone } = coverage(bucket);
+  const money = (amount: string) => formatMoney(amount, bucket.currency);
+  const fz = large ? 22 : "sm";
+  if (overspent) {
+    return (
+      <div>
+        <Text fz={fz} fw={600} c={toneText(tone)} style={{ whiteSpace: "nowrap" }}>
+          {money(bucket.target_funds)}
+        </Text>
+        <Text size="xs" c={toneText(tone)}>
+          {t("buckets.overspentLabel")}
+        </Text>
+      </div>
+    );
+  }
+  const short = compareAmounts(gap, "0") > 0;
+  return (
+    <Stack gap={4}>
+      <Group gap="xs" wrap="wrap" align="baseline">
+        <Text fz={fz} fw={600} style={{ whiteSpace: "nowrap" }}>
+          {money(bucket.current_available_funds)}
+        </Text>
+        {short && (
+          <Text
+            component="del"
+            size="sm"
+            c="dimmed"
+            title={t("buckets.target", { amount: money(bucket.target_funds) })}
+            style={{ whiteSpace: "nowrap" }}
+          >
+            {money(bucket.target_funds)}
+          </Text>
+        )}
+      </Group>
+      {short && (
+        <Progress
+          value={coveredPct}
+          color={TONE_COLOR[tone]}
+          size="sm"
+          aria-label={t("buckets.coveredOf", {
+            covered: money(bucket.current_available_funds),
+            target: money(bucket.target_funds),
+          })}
+        />
+      )}
+      {short ? (
+        <Text size="xs" c={toneText(tone)}>
+          {t("buckets.notCovered", { amount: money(gap) })}
+        </Text>
+      ) : (
+        compareAmounts(bucket.target_funds, "0") > 0 && (
+          <Text size="xs" c="dimmed">
+            {t("buckets.fullyCovered")}
+          </Text>
+        )
+      )}
+    </Stack>
   );
 }
 
@@ -435,7 +492,7 @@ function UsedThisCycle({ bucket, figures, active, long }: BucketProps & { long?:
       )}
       <Progress
         value={Math.min(pct, 100)}
-        color={pct > 100 ? "red" : undefined}
+        color={usageColor(pct)}
         aria-label={t("buckets.usedOfLong", values)}
       />
       {long && <Text size="sm">{t("buckets.usedOfLong", values)}</Text>}
