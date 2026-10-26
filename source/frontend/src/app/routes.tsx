@@ -40,6 +40,7 @@ export const routes: RouteObject[] = [
   // Outside the app shell and the session guard.
   { path: "/login", lazy: lazyPage(() => import("@/pages/Login")) },
   { path: "/change-password", lazy: lazyPage(() => import("@/pages/ChangePassword")) },
+  { path: "/set-password", lazy: lazyPage(() => import("@/pages/SetPassword")) },
   {
     element: <RequireSession />,
     children: [

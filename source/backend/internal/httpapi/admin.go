@@ -29,11 +29,12 @@ func (s *server) ListUsers(ctx context.Context, _ api.ListUsersRequestObject) (a
 
 func (s *server) CreateUser(ctx context.Context, req api.CreateUserRequestObject) (api.CreateUserResponseObject, error) {
 	admin := req.Body.Admin != nil && *req.Body.Admin
-	u, password, err := s.auth.CreateUser(ctx, sessionFrom(ctx).User.ID, req.Body.Username, admin)
+	u, cred, err := s.auth.CreateUser(ctx, sessionFrom(ctx).User.ID, req.Body.Username, admin, credential(req.Body.Credential))
 	if err != nil {
 		return nil, adminError(err)
 	}
-	return api.CreateUser201JSONResponse{User: toAPIAdminUser(u), TemporaryPassword: password}, nil
+	out := toAPICredential(cred)
+	return api.CreateUser201JSONResponse{User: toAPIAdminUser(u), TemporaryPassword: out.TemporaryPassword, Link: out.Link}, nil
 }
 
 func (s *server) UpdateUser(ctx context.Context, req api.UpdateUserRequestObject) (api.UpdateUserResponseObject, error) {
@@ -46,11 +47,30 @@ func (s *server) UpdateUser(ctx context.Context, req api.UpdateUserRequestObject
 }
 
 func (s *server) ResetUserPassword(ctx context.Context, req api.ResetUserPasswordRequestObject) (api.ResetUserPasswordResponseObject, error) {
-	password, err := s.auth.ResetPassword(ctx, sessionFrom(ctx).User.ID, req.UserId)
+	var c *api.Credential
+	if req.Body != nil {
+		c = req.Body.Credential
+	}
+	cred, err := s.auth.ResetPassword(ctx, sessionFrom(ctx).User.ID, req.UserId, credential(c))
 	if err != nil {
 		return nil, adminError(err)
 	}
-	return api.ResetUserPassword200JSONResponse{TemporaryPassword: password}, nil
+	return api.ResetUserPassword200JSONResponse(toAPICredential(cred)), nil
+}
+
+// credential is the credential asked for; a temporary password by default.
+func credential(c *api.Credential) auth.Credential {
+	if c != nil && *c == api.Link {
+		return auth.CredentialLink
+	}
+	return auth.CredentialPassword
+}
+
+func toAPICredential(c auth.NewCredential) api.NewCredential {
+	if c.Link != nil {
+		return api.NewCredential{Link: &api.PasswordLink{Token: c.Link.Token, ExpiresAt: c.Link.ExpiresAt}}
+	}
+	return api.NewCredential{TemporaryPassword: &c.Password}
 }
 
 func adminError(err error) error {

@@ -7,6 +7,7 @@ import {
   Checkbox,
   Group,
   Menu,
+  Radio,
   Stack,
   Table,
   Text,
@@ -30,11 +31,18 @@ import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
 
-import { USERNAME_PATTERN, useAdminUsers, useRefreshUsers, type AdminUser } from "@/api/admin";
+import {
+  USERNAME_PATTERN,
+  useAdminUsers,
+  useRefreshUsers,
+  type AdminUser,
+  type Credential,
+  type NewCredential,
+} from "@/api/admin";
 import { api } from "@/api/client";
 import { ApiError, unwrap } from "@/api/errors";
 import { useSession } from "@/app/session";
-import { TemporaryPassword } from "@/components/admin/TemporaryPassword";
+import { NewCredentialView } from "@/components/admin/NewCredential";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { QueryState } from "@/components/QueryState";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
@@ -44,7 +52,7 @@ import { formatDateTime } from "@/lib/dates";
 type Dialog =
   | { kind: "create" }
   | { kind: "deactivate" | "reset"; user: AdminUser }
-  | { kind: "password"; username: string; password: string }
+  | { kind: "credential"; username: string; credential: NewCredential }
   | null;
 
 /**
@@ -115,21 +123,13 @@ export default function Admin() {
       <ResponsiveModal
         opened={dialog !== null}
         onClose={close}
-        title={
-          dialog?.kind === "create"
-            ? t("admin.newUser")
-            : dialog?.kind === "deactivate"
-              ? t("admin.deactivate.title", { name: dialog.user.username })
-              : dialog?.kind === "reset"
-                ? t("admin.reset.title", { name: dialog.user.username })
-                : t("admin.password.title")
-        }
+        title={dialog && dialogTitle(dialog)}
       >
         {dialog?.kind === "create" && (
           <CreateUser
             onCancel={close}
-            onCreated={(username, password) => {
-              setDialog({ kind: "password", username, password });
+            onCreated={(username, credential) => {
+              setDialog({ kind: "credential", username, credential });
             }}
           />
         )}
@@ -138,17 +138,36 @@ export default function Admin() {
           <ResetPassword
             user={dialog.user}
             onCancel={close}
-            onReset={(password) => {
-              setDialog({ kind: "password", username: dialog.user.username, password });
+            onReset={(credential) => {
+              setDialog({ kind: "credential", username: dialog.user.username, credential });
             }}
           />
         )}
-        {dialog?.kind === "password" && (
-          <TemporaryPassword username={dialog.username} password={dialog.password} onDone={close} />
+        {dialog?.kind === "credential" && (
+          <NewCredentialView
+            username={dialog.username}
+            credential={dialog.credential}
+            onDone={close}
+          />
         )}
       </ResponsiveModal>
     </Stack>
   );
+}
+
+function dialogTitle(dialog: NonNullable<Dialog>): string {
+  switch (dialog.kind) {
+    case "create":
+      return i18n.t("admin.newUser");
+    case "deactivate":
+      return i18n.t("admin.deactivate.title", { name: dialog.user.username });
+    case "reset":
+      return i18n.t("admin.reset.title", { name: dialog.user.username });
+    case "credential":
+      return dialog.credential.link
+        ? i18n.t("admin.link.title", { name: dialog.username })
+        : i18n.t("admin.password.title");
+  }
 }
 
 interface ActionsProps {
@@ -373,25 +392,63 @@ function checkUsername(username: string): string | undefined {
   return USERNAME_PATTERN.test(username) ? undefined : i18n.t("admin.usernameRule");
 }
 
+/** How the user gets in: a link where they choose a password, or a temporary one. */
+function CredentialChoice({
+  value,
+  onChange,
+}: {
+  value: Credential;
+  onChange: (value: Credential) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Radio.Group
+      label={t("admin.credential.label")}
+      value={value}
+      onChange={(v) => {
+        onChange(v === "password" ? "password" : "link");
+      }}
+    >
+      <Stack gap="xs" mt="xs">
+        <Radio
+          value="link"
+          label={t("admin.credential.link")}
+          description={t("admin.credential.linkHint")}
+        />
+        <Radio
+          value="password"
+          label={t("admin.credential.password")}
+          description={t("admin.credential.passwordHint")}
+        />
+      </Stack>
+    </Radio.Group>
+  );
+}
+
 function CreateUser({
   onCancel,
   onCreated,
 }: {
   onCancel: () => void;
-  onCreated: (username: string, password: string) => void;
+  onCreated: (username: string, credential: NewCredential) => void;
 }) {
   const { t } = useTranslation();
   const refresh = useRefreshUsers();
   const [username, setUsername] = useState("");
   const [admin, setAdmin] = useState(false);
+  const [credential, setCredential] = useState<Credential>("link");
   const [error, setError] = useState<string | undefined>();
 
   const create = useMutation({
     mutationFn: () =>
-      unwrap(api.POST("/api/v1/admin/users", { body: { username: username.trim(), admin } })),
+      unwrap(
+        api.POST("/api/v1/admin/users", {
+          body: { username: username.trim(), admin, credential },
+        }),
+      ),
     meta: { silentError: true },
-    onSuccess: async (created) => {
-      onCreated(created.user.username, created.temporary_password);
+    onSuccess: async ({ user, ...given }) => {
+      onCreated(user.username, given);
       await refresh();
     },
     onError: (err) => {
@@ -433,9 +490,7 @@ function CreateUser({
             setAdmin(e.currentTarget.checked);
           }}
         />
-        <Text size="sm" c="dimmed">
-          {t("admin.createHint")}
-        </Text>
+        <CredentialChoice value={credential} onChange={setCredential} />
         {create.error && !usernameProblem(create.error) && <ErrorAlert error={create.error} />}
         <Group justify="flex-end" gap="xs">
           <Button variant="default" onClick={onCancel}>
@@ -507,20 +562,22 @@ function ResetPassword({
 }: {
   user: AdminUser;
   onCancel: () => void;
-  onReset: (password: string) => void;
+  onReset: (credential: NewCredential) => void;
 }) {
   const { t } = useTranslation();
   const refresh = useRefreshUsers();
+  const [credential, setCredential] = useState<Credential>("link");
   const reset = useMutation({
     mutationFn: () =>
       unwrap(
         api.POST("/api/v1/admin/users/{userId}/reset-password", {
           params: { path: { userId: user.id } },
+          body: { credential },
         }),
       ),
     meta: { silentError: true },
     onSuccess: async (result) => {
-      onReset(result.temporary_password);
+      onReset(result);
       await refresh();
     },
   });
@@ -534,6 +591,7 @@ function ResetPassword({
           components={{ b: <strong /> }}
         />
       </Text>
+      <CredentialChoice value={credential} onChange={setCredential} />
       {reset.error && <ErrorAlert error={reset.error} />}
       <Group justify="flex-end" gap="xs">
         <Button variant="default" onClick={onCancel}>

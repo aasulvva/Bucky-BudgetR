@@ -8,6 +8,8 @@ import { unwrap } from "./errors";
 import type { components } from "./schema";
 
 export type AdminUser = components["schemas"]["AdminUser"];
+export type Credential = components["schemas"]["Credential"];
+export type NewCredential = components["schemas"]["NewCredential"];
 
 export const ADMIN_USERS_KEY = ["admin", "users"] as const;
 
@@ -21,6 +23,11 @@ export function useAdminUsers(enabled: boolean) {
     queryFn: () => unwrap(api.GET("/api/v1/admin/users")),
     enabled,
   });
+}
+
+/** A setup or reset link's URL. The token is in the fragment, so it isn't sent to servers. */
+export function passwordLinkUrl(token: string): string {
+  return `${window.location.origin}/set-password#${token}`;
 }
 
 export function useRefreshUsers(): () => Promise<void> {

@@ -110,11 +110,15 @@ func (s *Service) Login(ctx context.Context, username, password string, client C
 	// Forget this user's failures. The IP's count is left to expire, so one
 	// valid account can't be used to reset it.
 	s.limiter.Reset(keys[1])
+	return s.startSession(ctx, s.q, user, client)
+}
 
+// startSession starts a session for user, returning it and its token.
+func (s *Service) startSession(ctx context.Context, q *sqlc.Queries, user sqlc.User, client Client) (*Session, string, error) {
 	token, hash := newToken()
 	now := s.opts.Now()
 	sess := &Session{User: user, TokenHash: hash, ExpiresAt: now.Add(s.opts.MaxAge)}
-	if err := s.q.CreateSession(ctx, sqlc.CreateSessionParams{
+	if err := q.CreateSession(ctx, sqlc.CreateSessionParams{
 		TokenHash: hash,
 		UserID:    user.ID,
 		Now:       now,
@@ -198,7 +202,8 @@ func (s *Service) UpdatePreferences(ctx context.Context, userID string, patch []
 	return s.q.UpdatePreferences(ctx, sqlc.UpdatePreferencesParams{ID: userID, Patch: patch})
 }
 
-// CleanupLoop deletes ended sessions every interval until ctx is done.
+// CleanupLoop deletes ended sessions and expired links every interval
+// until ctx is done.
 func (s *Service) CleanupLoop(ctx context.Context, interval time.Duration) {
 	t := time.NewTicker(interval)
 	defer t.Stop()
@@ -209,6 +214,9 @@ func (s *Service) CleanupLoop(ctx context.Context, interval time.Duration) {
 		case <-t.C:
 			if err := s.DeleteEndedSessions(ctx); err != nil && ctx.Err() == nil {
 				s.logger.WarnContext(ctx, "session cleanup failed", slog.Any("error", err))
+			}
+			if err := s.DeleteExpiredLinks(ctx); err != nil && ctx.Err() == nil {
+				s.logger.WarnContext(ctx, "link cleanup failed", slog.Any("error", err))
 			}
 		}
 	}

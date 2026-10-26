@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/api"
@@ -73,7 +74,7 @@ func TestUserManagement(t *testing.T) {
 	if by, err := kari.CreatedBy.Get(); err != nil || by != admin.ID {
 		t.Errorf("created_by %q, %v", by, err)
 	}
-	w = login(t, e, "kari", created.TemporaryPassword)
+	w = login(t, e, "kari", deref(created.TemporaryPassword))
 	if w.Code != http.StatusOK {
 		t.Fatalf("login with the temporary password: %d %s", w.Code, w.Body)
 	}
@@ -124,7 +125,7 @@ func TestUserManagement(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("reset: %d %s", w.Code, w.Body)
 	}
-	if w := login(t, e, "kari", decodeJSON[api.TemporaryPassword](t, w).TemporaryPassword); w.Code != http.StatusOK {
+	if w := login(t, e, "kari", deref(decodeJSON[api.NewCredential](t, w).TemporaryPassword)); w.Code != http.StatusOK {
 		t.Errorf("login with the reset password: %d", w.Code)
 	}
 
@@ -144,5 +145,70 @@ func TestUserManagement(t *testing.T) {
 		if w := do(tc.method, tc.path, tc.body); w.Code != tc.want || code(w) != tc.code {
 			t.Errorf("%s %s: %d %s", tc.method, tc.path, w.Code, w.Body)
 		}
+	}
+}
+
+func TestPasswordLinks(t *testing.T) {
+	e := setup(t)
+	authtest.NewUser(t, e.pool, "admin", authtest.Admin)
+	c := authtest.Login(t, e.h, "admin")
+	public := func(path string, body any) *httptest.ResponseRecorder {
+		return authtest.Do(t, e.h, http.MethodPost, "/api/v1/auth/password-link"+path, body, nil)
+	}
+
+	w := authtest.Do(t, e.h, http.MethodPost, "/api/v1/admin/users",
+		map[string]any{"username": "kari", "credential": "link"}, c)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", w.Code, w.Body)
+	}
+	created := decodeJSON[api.CreatedUser](t, w)
+	if created.Link == nil || created.TemporaryPassword != nil {
+		t.Fatalf("want only a link: %+v", created)
+	}
+	token := created.Link.Token
+
+	w = public("", map[string]any{"token": token})
+	if info := decodeJSON[api.PasswordLinkInfo](t, w); w.Code != http.StatusOK || info.Username != "kari" || info.Purpose != api.Setup {
+		t.Fatalf("check: %d %+v", w.Code, info)
+	}
+	for _, tc := range []struct {
+		path string
+		body any
+		want int
+		code string
+	}{
+		{"", map[string]any{"token": "not-a-token"}, http.StatusBadRequest, "invalid_request"},
+		{"", map[string]any{"token": strings.Repeat("A", 43)}, http.StatusNotFound, "invalid_link"},
+		{"/use", map[string]any{"token": token, "new_password": "short"}, http.StatusBadRequest, "invalid_request"},
+		{"/use", map[string]any{"token": token, "new_password": strings.Repeat("ø", 40)}, http.StatusBadRequest, "weak_password"},
+	} {
+		if w := public(tc.path, tc.body); w.Code != tc.want || deref(decodeProblem(t, w).Code) != tc.code {
+			t.Errorf("%s %v: %d %s", tc.path, tc.body, w.Code, w.Body)
+		}
+	}
+
+	w = public("/use", map[string]any{"token": token, "new_password": "kari's own password"})
+	if w.Code != http.StatusOK {
+		t.Fatalf("use: %d %s", w.Code, w.Body)
+	}
+	if u := decodeUser(t, w); u.Username != "kari" || u.MustChangePassword {
+		t.Errorf("logged in as %+v", u)
+	}
+	if w := me(t, e, w.Result().Cookies()[0]); w.Code != http.StatusOK {
+		t.Errorf("the link's session: %d", w.Code)
+	}
+	if w := public("", map[string]any{"token": token}); w.Code != http.StatusNotFound {
+		t.Errorf("a used link: %d", w.Code)
+	}
+
+	w = authtest.Do(t, e.h, http.MethodPost, "/api/v1/admin/users/"+created.User.Id+"/reset-password",
+		map[string]any{"credential": "link"}, c)
+	reset := decodeJSON[api.NewCredential](t, w)
+	if w.Code != http.StatusOK || reset.Link == nil || reset.TemporaryPassword != nil {
+		t.Fatalf("reset with a link: %d %+v", w.Code, reset)
+	}
+	w = public("", map[string]any{"token": reset.Link.Token})
+	if info := decodeJSON[api.PasswordLinkInfo](t, w); info.Purpose != api.Reset {
+		t.Errorf("reset link: %+v", info)
 	}
 }

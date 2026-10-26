@@ -84,7 +84,17 @@
     "sameAsCurrent": "The new password must differ from the current one.",
     "noMatch": "The passwords don't match.",
     "wrongPassword": "The current password is wrong.",
-    "weakPassword": "Choose a stronger password."
+    "weakPassword": "Choose a stronger password.",
+    "link": {
+      "setupTitle": "Welcome, {{username}}",
+      "setupIntro": "Choose a password. You'll log in with it and your username, {{username}}.",
+      "resetTitle": "Choose a new password",
+      "resetIntro": "Hi, {{username}}. Choose a new password to log in with.",
+      "submit": "Save and log in",
+      "invalidTitle": "This link doesn't work",
+      "invalidDetail": "It has been used, has expired or was replaced by a newer one. Ask an admin for a new link.",
+      "toLogin": "Go to login"
+    }
   },
   "settings": {
     "preferences": "Preferences",
@@ -664,7 +674,6 @@
     "usernameRule": "3–32 letters, digits, dots, dashes or underscores.",
     "makeAdminToo": "Admin",
     "makeAdminHint": "Admins can manage users.",
-    "createHint": "They get a temporary password, shown next, and must change it when they first log in.",
     "create": "Create user",
     "created": "Created",
     "lastSeen": "Last seen",
@@ -694,7 +703,7 @@
     },
     "reset": {
       "title": "Reset the password for {{name}}?",
-      "question": "<b>{{name}}</b> gets a new temporary password and is logged out everywhere. They must change it when they log in."
+      "question": "The password of <b>{{name}}</b> stops working at once, and they're logged out everywhere."
     },
     "password": {
       "title": "Temporary password",
@@ -703,6 +712,19 @@
       "copied": "Copied",
       "onceOnly": "This is the only time it's shown. Give it to them; they must change it when they log in.",
       "done": "Done"
+    },
+    "credential": {
+      "label": "How they get in",
+      "link": "Link",
+      "linkHint": "They open it, choose their own password and are logged in. It works once, for 24 hours.",
+      "password": "Temporary password",
+      "passwordHint": "You give them a password, and they change it when they log in."
+    },
+    "link": {
+      "title": "Link for {{name}}",
+      "intro": "Send this link to <b>{{name}}</b>. They open it, choose their own password and are logged in.",
+      "copy": "Copy the link",
+      "onceOnly": "It works once, until {{when}}. This is the only time it's shown; a new link or password voids it."
     }
   },
   "errors": {
@@ -741,6 +763,7 @@
       "database_unavailable": "The database is not reachable.",
       "internal_error": "The server ran into a problem.",
       "invalid_credentials": "Wrong username or password.",
+      "invalid_link": "This link doesn't work. Ask an admin for a new one.",
       "last_admin": "This is the last active admin. Make someone else an admin first.",
       "name_taken": "That name is already in use.",
       "no_active_cycle": "Bucket transactions need an active cycle. Start a cycle first.",

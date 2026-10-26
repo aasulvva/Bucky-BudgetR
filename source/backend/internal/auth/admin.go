@@ -21,8 +21,9 @@ import (
 
 // User management for admins (spec §1): creating users, activating and
 // deactivating them, granting and revoking admin, and resetting passwords.
-// Users are never deleted. New and reset passwords are generated temporary
-// ones that the user must change at their next login.
+// Users are never deleted. A new or reset user gets in with a generated
+// temporary password, which they must change at their next login, or with a
+// setup or reset link (links.go).
 
 var (
 	ErrUserNotFound    = errors.New("user not found")
@@ -100,15 +101,15 @@ func (s *Service) ListUsers(ctx context.Context) ([]ManagedUser, error) {
 	return out, nil
 }
 
-// CreateUser creates an active user with a temporary password, which it
-// returns. by is the admin creating them.
-func (s *Service) CreateUser(ctx context.Context, by, username string, admin bool) (ManagedUser, string, error) {
+// CreateUser creates an active user who gets in with cred, which it returns.
+// by is the admin creating them.
+func (s *Service) CreateUser(ctx context.Context, by, username string, admin bool, cred Credential) (ManagedUser, NewCredential, error) {
 	if !usernamePattern.MatchString(username) {
-		return ManagedUser{}, "", ErrInvalidUsername
+		return ManagedUser{}, NewCredential{}, ErrInvalidUsername
 	}
 	password, hash, err := newTemporaryPassword()
 	if err != nil {
-		return ManagedUser{}, "", err
+		return ManagedUser{}, NewCredential{}, err
 	}
 	id, err := ids.Insert(ctx, ids.User, ids.NewUser, func(ctx context.Context, id string) (bool, error) {
 		_, err := s.q.CreateUser(ctx, sqlc.CreateUserParams{
@@ -123,17 +124,21 @@ func (s *Service) CreateUser(ctx context.Context, by, username string, admin boo
 	})
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "users_username_key" {
-		return ManagedUser{}, "", ErrUsernameTaken
+		return ManagedUser{}, NewCredential{}, ErrUsernameTaken
 	}
 	if err != nil {
-		return ManagedUser{}, "", fmt.Errorf("create user: %w", err)
+		return ManagedUser{}, NewCredential{}, fmt.Errorf("create user: %w", err)
+	}
+	out, err := s.issue(ctx, s.q, by, id, cred, LinkSetup, password)
+	if err != nil {
+		return ManagedUser{}, NewCredential{}, err
 	}
 	u, err := s.user(ctx, s.q, id)
-	return u, password, err
+	return u, out, err
 }
 
 // UpdateUser activates or deactivates a user, or grants or revokes admin.
-// Deactivating ends their sessions. by is the admin making the change, who
+// Deactivating ends their sessions and voids their link. by is the admin making the change, who
 // can't change themselves, and the last active admin stays one.
 func (s *Service) UpdateUser(ctx context.Context, by, id string, c UserChanges) (ManagedUser, error) {
 	if id == by {
@@ -175,6 +180,9 @@ func (s *Service) UpdateUser(ctx context.Context, by, id string, c UserChanges) 
 			if err := q.DeleteUserSessions(ctx, id); err != nil {
 				return err
 			}
+			if err := q.DeleteUserPasswordLinks(ctx, id); err != nil {
+				return err
+			}
 		}
 		out, err = s.user(ctx, q, id)
 		return err
@@ -182,17 +190,18 @@ func (s *Service) UpdateUser(ctx context.Context, by, id string, c UserChanges) 
 	return out, err
 }
 
-// ResetPassword gives a user a new temporary password, which it returns,
-// and ends their sessions. by is the admin resetting it; admins change their
-// own password with ChangePassword.
-func (s *Service) ResetPassword(ctx context.Context, by, id string) (string, error) {
+// ResetPassword replaces a user's password at once and ends their sessions;
+// they get back in with cred, which it returns. by is the admin resetting
+// it; admins change their own password with ChangePassword.
+func (s *Service) ResetPassword(ctx context.Context, by, id string, cred Credential) (NewCredential, error) {
 	if id == by {
-		return "", ErrOwnAccount
+		return NewCredential{}, ErrOwnAccount
 	}
 	password, hash, err := newTemporaryPassword()
 	if err != nil {
-		return "", err
+		return NewCredential{}, err
 	}
+	var out NewCredential
 	err = pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
 		n, err := q.SetTemporaryPassword(ctx, sqlc.SetTemporaryPasswordParams{ID: id, PasswordHash: hash})
@@ -202,17 +211,21 @@ func (s *Service) ResetPassword(ctx context.Context, by, id string) (string, err
 		if n == 0 {
 			return ErrUserNotFound
 		}
-		return q.DeleteUserSessions(ctx, id)
+		if err := q.DeleteUserSessions(ctx, id); err != nil {
+			return err
+		}
+		out, err = s.issue(ctx, q, by, id, cred, LinkReset, password)
+		return err
 	})
 	if err != nil {
-		return "", err
+		return NewCredential{}, err
 	}
-	return password, nil
+	return out, nil
 }
 
 // RecoverAdmin is the way back in when no admin can log in (the
 // reset-password command): it gives the user a temporary password, which it
-// returns, makes them an active admin and ends their sessions.
+// returns, makes them an active admin and ends their sessions and link.
 func RecoverAdmin(ctx context.Context, pool *pgxpool.Pool, username string) (string, error) {
 	password, hash, err := newTemporaryPassword()
 	if err != nil {
@@ -225,6 +238,9 @@ func RecoverAdmin(ctx context.Context, pool *pgxpool.Pool, username string) (str
 			return ErrUserNotFound
 		}
 		if err != nil {
+			return err
+		}
+		if err := q.DeleteUserPasswordLinks(ctx, id); err != nil {
 			return err
 		}
 		return q.DeleteUserSessions(ctx, id)

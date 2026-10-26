@@ -88,6 +88,7 @@ describe("Admin", () => {
     await userEvent.clear(dialog.getByRole("textbox", { name: /Username/ }));
     await userEvent.type(dialog.getByRole("textbox", { name: /Username/ }), "per");
     await userEvent.click(dialog.getByRole("checkbox", { name: /Admin/ }));
+    await userEvent.click(dialog.getByRole("radio", { name: /Temporary password/ }));
     await userEvent.click(dialog.getByRole("button", { name: "Create user" }));
 
     expect(await screen.findByTestId("temporary-password")).toHaveTextContent(
@@ -96,12 +97,44 @@ describe("Admin", () => {
     expect(apiMock.calls("POST /api/v1/admin/users")[0]?.body).toEqual({
       username: "per",
       admin: true,
+      credential: "password",
     });
     expect(screen.getByRole("button", { name: "Copy the password" })).toBeInTheDocument();
     expect(screen.getByText(/only time it's shown/)).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Done" }));
     expect(screen.queryByTestId("temporary-password")).not.toBeInTheDocument();
+  });
+
+  it("creates a user with a setup link by default", async () => {
+    const token = "xC9v3gInhD6Z6seIVchYN79dotG3LzQfWKKhmZscPKc";
+    apiMock.on("POST /api/v1/admin/users", {
+      status: 201,
+      body: {
+        user: user({ id: "100004", username: "per" }),
+        link: { token, expires_at: "2026-10-27T22:00:00Z" },
+      },
+    });
+    renderRoute("/admin");
+    await userEvent.click(await screen.findByRole("button", { name: "New user" }));
+    const dialog = within(await screen.findByRole("dialog"));
+    expect(dialog.getByRole("radio", { name: /Link/ })).toBeChecked();
+    await userEvent.type(dialog.getByRole("textbox", { name: /Username/ }), "per");
+    await userEvent.click(dialog.getByRole("button", { name: "Create user" }));
+
+    expect(await screen.findByTestId("password-link")).toHaveTextContent(
+      `${window.location.origin}/set-password#${token}`,
+    );
+    expect(screen.getByRole("dialog", { name: "Link for per" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy the link" })).toBeInTheDocument();
+    expect(
+      screen.getByText(new RegExp(`until ${formatDateTime("2026-10-27T22:00:00Z")}`)),
+    ).toBeInTheDocument();
+    expect(apiMock.calls("POST /api/v1/admin/users")[0]?.body).toEqual({
+      username: "per",
+      admin: false,
+      credential: "link",
+    });
   });
 
   it("shows a taken username on the field", async () => {
@@ -142,20 +175,38 @@ describe("Admin", () => {
   });
 
   it("resets a password after asking", async () => {
-    apiMock.on("POST /api/v1/admin/users/100002/reset-password", {
-      body: { temporary_password: "abcd-efgh-ijkm-npqr" },
-    });
+    apiMock.on("POST /api/v1/admin/users/100002/reset-password", (req) => ({
+      body:
+        (req.body as { credential: string }).credential === "link"
+          ? { link: { token: "A".repeat(43), expires_at: "2026-10-27T22:00:00Z" } }
+          : { temporary_password: "abcd-efgh-ijkm-npqr" },
+    }));
     renderRoute("/admin");
     await openMenu("kari");
     await userEvent.click(await screen.findByRole("menuitem", { name: "Reset password" }));
     const dialog = within(
       await screen.findByRole("dialog", { name: "Reset the password for kari?" }),
     );
+    expect(dialog.getByText(/stops working at once/)).toBeInTheDocument();
+    await userEvent.click(dialog.getByRole("radio", { name: /Temporary password/ }));
     await userEvent.click(dialog.getByRole("button", { name: "Reset password" }));
     expect(await screen.findByTestId("temporary-password")).toHaveTextContent(
       "abcd-efgh-ijkm-npqr",
     );
-    expect(apiMock.calls("POST /api/v1/admin/users/100002/reset-password")).toHaveLength(1);
+    await userEvent.click(screen.getByRole("button", { name: "Done" }));
+
+    // A reset link, the default.
+    await openMenu("kari");
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Reset password" }));
+    await userEvent.click(
+      within(await screen.findByRole("dialog")).getByRole("button", { name: "Reset password" }),
+    );
+    expect(await screen.findByTestId("password-link")).toHaveTextContent(
+      `/set-password#${"A".repeat(43)}`,
+    );
+    expect(
+      apiMock.calls("POST /api/v1/admin/users/100002/reset-password").map((r) => r.body),
+    ).toEqual([{ credential: "password" }, { credential: "link" }]);
   });
 
   it("doesn't change your own account", async () => {

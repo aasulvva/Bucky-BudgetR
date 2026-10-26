@@ -84,7 +84,17 @@
     "sameAsCurrent": "Det nye passordet må vere ulikt det noverande.",
     "noMatch": "Passorda er ikkje like.",
     "wrongPassword": "Det noverande passordet er feil.",
-    "weakPassword": "Vel eit sterkare passord."
+    "weakPassword": "Vel eit sterkare passord.",
+    "link": {
+      "setupTitle": "Velkomen, {{username}}",
+      "setupIntro": "Vel eit passord. Du loggar inn med det og brukarnamnet ditt, {{username}}.",
+      "resetTitle": "Vel eit nytt passord",
+      "resetIntro": "Hei, {{username}}. Vel eit nytt passord å logge inn med.",
+      "submit": "Lagre og logg inn",
+      "invalidTitle": "Denne lenkja verkar ikkje",
+      "invalidDetail": "Ho er brukt, utgått eller bytt ut med ei nyare. Be ein administrator om ei ny lenkje.",
+      "toLogin": "Gå til innlogging"
+    }
   },
   "settings": {
     "preferences": "Innstillingar",
@@ -664,7 +674,6 @@
     "usernameRule": "3–32 bokstavar, siffer, punktum, bindestrekar eller understrekar.",
     "makeAdminToo": "Administrator",
     "makeAdminHint": "Administratorar kan styre brukarar.",
-    "createHint": "Brukaren får eit mellombels passord, som vert vist etterpå, og må byte det første gong dei loggar inn.",
     "create": "Opprett brukar",
     "created": "Oppretta",
     "lastSeen": "Sist sett",
@@ -694,7 +703,7 @@
     },
     "reset": {
       "title": "Tilbakestille passordet til {{name}}?",
-      "question": "<b>{{name}}</b> får eit nytt mellombels passord og vert logga ut overalt. Det må bytast ved innlogging."
+      "question": "Passordet til <b>{{name}}</b> sluttar å verke med ein gong, og brukaren vert logga ut overalt."
     },
     "password": {
       "title": "Mellombels passord",
@@ -703,6 +712,19 @@
       "copied": "Kopiert",
       "onceOnly": "Det vert berre vist denne eine gongen. Gje det vidare; det må bytast ved innlogging.",
       "done": "Ferdig"
+    },
+    "credential": {
+      "label": "Korleis brukaren kjem inn",
+      "link": "Lenkje",
+      "linkHint": "Brukaren opnar ho, vel sitt eige passord og vert logga inn. Ho verkar éin gong, i 24 timar.",
+      "password": "Mellombels passord",
+      "passwordHint": "Du gjev brukaren eit passord, som må bytast ved innlogging."
+    },
+    "link": {
+      "title": "Lenkje for {{name}}",
+      "intro": "Send denne lenkja til <b>{{name}}</b>. Brukaren opnar ho, vel sitt eige passord og vert logga inn.",
+      "copy": "Kopier lenkja",
+      "onceOnly": "Ho verkar éin gong, til {{when}}. Ho vert berre vist denne eine gongen; ei ny lenkje eller eit nytt passord gjer ho ugyldig."
     }
   },
   "errors": {
@@ -741,6 +763,7 @@
       "database_unavailable": "Databasen svarar ikkje.",
       "internal_error": "Tenaren støytte på eit problem.",
       "invalid_credentials": "Feil brukarnamn eller passord.",
+      "invalid_link": "Denne lenkja verkar ikkje. Be ein administrator om ei ny.",
       "last_admin": "Dette er den siste aktive administratoren. Gjer nokon andre til administrator først.",
       "name_taken": "Det namnet er allereie i bruk.",
       "no_active_cycle": "Bøttetransaksjonar treng ein aktiv periode. Start ein periode først.",

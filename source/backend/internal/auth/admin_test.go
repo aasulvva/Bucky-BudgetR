@@ -50,14 +50,14 @@ func TestCreateUser(t *testing.T) {
 	ctx := t.Context()
 	admin := authtest.NewUser(t, pool, "admin", authtest.Admin)
 
-	u, password, err := svc.CreateUser(ctx, admin.ID, "kari", false)
+	u, cred, err := svc.CreateUser(ctx, admin.ID, "kari", false, auth.CredentialPassword)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if u.Username != "kari" || !u.Active || u.Admin || !u.MustChangePassword || u.CreatedBy != admin.ID || u.LastSeenAt != nil {
 		t.Errorf("unexpected user %+v", u)
 	}
-	sess, _, err := svc.Login(ctx, "kari", password, client)
+	sess, _, err := svc.Login(ctx, "kari", cred.Password, client)
 	if err != nil {
 		t.Fatalf("login with the temporary password: %v", err)
 	}
@@ -66,15 +66,15 @@ func TestCreateUser(t *testing.T) {
 	}
 
 	for _, name := range []string{"KARI", "Kari"} {
-		if _, _, err := svc.CreateUser(ctx, admin.ID, name, false); !errors.Is(err, auth.ErrUsernameTaken) {
+		if _, _, err := svc.CreateUser(ctx, admin.ID, name, false, auth.CredentialPassword); !errors.Is(err, auth.ErrUsernameTaken) {
 			t.Errorf("%s: got %v, want ErrUsernameTaken", name, err)
 		}
 	}
-	if _, _, err := svc.CreateUser(ctx, admin.ID, "no spaces", false); !errors.Is(err, auth.ErrInvalidUsername) {
+	if _, _, err := svc.CreateUser(ctx, admin.ID, "no spaces", false, auth.CredentialPassword); !errors.Is(err, auth.ErrInvalidUsername) {
 		t.Errorf("invalid username: got %v", err)
 	}
 
-	boss, _, err := svc.CreateUser(ctx, admin.ID, "boss", true)
+	boss, _, err := svc.CreateUser(ctx, admin.ID, "boss", true, auth.CredentialPassword)
 	if err != nil || !boss.Admin {
 		t.Errorf("admin user: %+v, %v", boss, err)
 	}
@@ -150,7 +150,7 @@ func TestResetPassword(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	password, err := svc.ResetPassword(ctx, admin.ID, kari.ID)
+	cred, err := svc.ResetPassword(ctx, admin.ID, kari.ID, auth.CredentialPassword)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,15 +160,15 @@ func TestResetPassword(t *testing.T) {
 	if _, _, err := svc.Login(ctx, "kari", authtest.Password, client); !errors.Is(err, auth.ErrInvalidCredentials) {
 		t.Errorf("the old password must stop working: %v", err)
 	}
-	sess, _, err := svc.Login(ctx, "kari", password, client)
+	sess, _, err := svc.Login(ctx, "kari", cred.Password, client)
 	if err != nil || !sess.User.MustChangePassword {
 		t.Errorf("login with the temporary password: %v", err)
 	}
 
-	if _, err := svc.ResetPassword(ctx, admin.ID, admin.ID); !errors.Is(err, auth.ErrOwnAccount) {
+	if _, err := svc.ResetPassword(ctx, admin.ID, admin.ID, auth.CredentialPassword); !errors.Is(err, auth.ErrOwnAccount) {
 		t.Errorf("own account: %v", err)
 	}
-	if _, err := svc.ResetPassword(ctx, admin.ID, "999999"); !errors.Is(err, auth.ErrUserNotFound) {
+	if _, err := svc.ResetPassword(ctx, admin.ID, "999999", auth.CredentialPassword); !errors.Is(err, auth.ErrUserNotFound) {
 		t.Errorf("unknown user: %v", err)
 	}
 }

@@ -84,7 +84,17 @@
     "sameAsCurrent": "Det nye passordet må være forskjellig fra det nåværende.",
     "noMatch": "Passordene er ikke like.",
     "wrongPassword": "Det nåværende passordet er feil.",
-    "weakPassword": "Velg et sterkere passord."
+    "weakPassword": "Velg et sterkere passord.",
+    "link": {
+      "setupTitle": "Velkommen, {{username}}",
+      "setupIntro": "Velg et passord. Du logger inn med det og brukernavnet ditt, {{username}}.",
+      "resetTitle": "Velg et nytt passord",
+      "resetIntro": "Hei, {{username}}. Velg et nytt passord å logge inn med.",
+      "submit": "Lagre og logg inn",
+      "invalidTitle": "Denne lenken virker ikke",
+      "invalidDetail": "Den er brukt, utløpt eller erstattet av en nyere. Be en administrator om en ny lenke.",
+      "toLogin": "Gå til innlogging"
+    }
   },
   "settings": {
     "preferences": "Innstillinger",
@@ -664,7 +674,6 @@
     "usernameRule": "3–32 bokstaver, sifre, punktum, bindestreker eller understreker.",
     "makeAdminToo": "Administrator",
     "makeAdminHint": "Administratorer kan styre brukere.",
-    "createHint": "Brukeren får et midlertidig passord, som vises etterpå, og må bytte det første gang de logger inn.",
     "create": "Opprett bruker",
     "created": "Opprettet",
     "lastSeen": "Sist sett",
@@ -694,7 +703,7 @@
     },
     "reset": {
       "title": "Tilbakestille passordet til {{name}}?",
-      "question": "<b>{{name}}</b> får et nytt midlertidig passord og blir logget ut overalt. Det må byttes ved innlogging."
+      "question": "Passordet til <b>{{name}}</b> slutter å virke med en gang, og brukeren blir logget ut overalt."
     },
     "password": {
       "title": "Midlertidig passord",
@@ -703,6 +712,19 @@
       "copied": "Kopiert",
       "onceOnly": "Det vises bare denne ene gangen. Gi det videre; det må byttes ved innlogging.",
       "done": "Ferdig"
+    },
+    "credential": {
+      "label": "Hvordan brukeren kommer inn",
+      "link": "Lenke",
+      "linkHint": "Brukeren åpner den, velger sitt eget passord og blir logget inn. Den virker én gang, i 24 timer.",
+      "password": "Midlertidig passord",
+      "passwordHint": "Du gir brukeren et passord, som må byttes ved innlogging."
+    },
+    "link": {
+      "title": "Lenke for {{name}}",
+      "intro": "Send denne lenken til <b>{{name}}</b>. Brukeren åpner den, velger sitt eget passord og blir logget inn.",
+      "copy": "Kopier lenken",
+      "onceOnly": "Den virker én gang, til {{when}}. Den vises bare denne ene gangen; en ny lenke eller et nytt passord gjør den ugyldig."
     }
   },
   "errors": {
@@ -741,6 +763,7 @@
       "database_unavailable": "Databasen svarer ikke.",
       "internal_error": "Serveren støtte på et problem.",
       "invalid_credentials": "Feil brukernavn eller passord.",
+      "invalid_link": "Denne lenken virker ikke. Be en administrator om en ny.",
       "last_admin": "Dette er den siste aktive administratoren. Gjør noen andre til administrator først.",
       "name_taken": "Det navnet er allerede i bruk.",
       "no_active_cycle": "Bøttetransaksjoner trenger en aktiv periode. Start en periode først.",
