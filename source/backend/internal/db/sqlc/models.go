@@ -403,14 +403,15 @@ func (e TransactionType) Valid() bool {
 }
 
 type BankAccount struct {
-	ID          string
-	UserID      string
-	Name        string
-	Currency    string
-	Deleted     bool
-	CreatedAt   time.Time
-	ModifiedAt  time.Time
-	AccountType AccountType
+	ID             string
+	UserID         string
+	Name           string
+	Currency       string
+	Deleted        bool
+	CreatedAt      time.Time
+	ModifiedAt     time.Time
+	AccountType    AccountType
+	ExpectedIncome decimal.NullDecimal
 }
 
 type BankTransaction struct {

@@ -50,7 +50,7 @@ docker run --rm hello-world   # must work without sudo
 
 ## Backend
 
-The Go service lives in `source/backend`. `make dev-backend` runs it with live reload (air). The server applies pending migrations on startup.
+The Go service lives in `source/backend`. `make dev-backend` runs it with live reload (air). The server applies pending migrations on startup. It first stops a dev server left over from an earlier run: air can lose track of its server, which then keeps the port, so the new one can't start and the old code keeps answering.
 
 ```bash
 go run ./cmd/server           # start the server
@@ -206,6 +206,8 @@ The End cycle confirmation previews the OVF and REF with `lib/cycleEnd.ts`. It m
 The Create transaction screen keeps its rules in `lib/transactionForm.ts`: the bucket split's totals and the pre-fill for a new row, whether the time is inside the active cycle, the "Triggers refill" default (`ruleMatches` mirrors `refill.Triggers` on the backend), and what picking an earlier counterparty fills in (`fromLastTime`). Editing reuses the same form (`components/transactions/TransactionForm.tsx` with `editing`): `editState` gives its start values and `correctionBody` the correction with only what changed.
 
 The Transactions screen keeps its rules in `lib/transactionList.ts`: the filters as URL parameters (`readFilter`, `withFilter`; no `cycle_id` means the active cycle, `cycle_id=all` every cycle), the API query they make (`listQuery`), the day groups, a row's amount, and whether a transaction's bucket lines are locked (`bucketLinesLocked`, as the ledger checks).
+
+Budget setup keeps its rules in `lib/budget.ts`: the edited values (`BudgetDraft`, only what changed, so the saved values show through), an account's totals against its expected income (`accountBudget`), a bucket's capacity after an RA change (`capacityAfter`, mirroring `settings.check` in `internal/buckets`), and what Save sends (`budgetChanges`).
 
 On the backend, `buckets` can't import `refill` (it's the other way round), so `refill.Service.OnCreate` reaches bucket creation through the `buckets.Options.OnCreate` hook, wired in `cmd/server/main.go`.
 

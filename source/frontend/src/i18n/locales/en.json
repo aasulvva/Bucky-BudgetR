@@ -304,6 +304,30 @@
     "deleteBucket": "Delete bucket",
     "deleted": "{{name}} deleted."
   },
+  "budgetSetup": {
+    "intro": "Plan each cycle's refills against the income you expect on each account.",
+    "futureNote": "Saved refill amounts apply from the next refill. What's left in the buckets this cycle doesn't change.",
+    "expectedIncome": "Expected income per cycle",
+    "expectedIncomeFor": "Expected income per cycle for {{name}}",
+    "allocated": "Allocated",
+    "allocatedShare": "{{amount}} ({{percent}}%)",
+    "left": "Left",
+    "over": "Over by",
+    "noIncome": "Enter the expected income to see how much the buckets take of it.",
+    "refillAmount": "Refill amount",
+    "refillAmountFor": "Refill amount for {{name}}",
+    "share": "Share of income",
+    "shareValue": "{{percent}}%",
+    "capacityRaised": "Raised from {{amount}}",
+    "enterRefill": "Enter a refill amount.",
+    "changes_one": "{{count}} change",
+    "changes_other": "{{count}} changes",
+    "discard": "Discard",
+    "saved": "Budget saved.",
+    "leaveQuestion": "You have changes that aren't saved. Leave without saving?",
+    "leave": "Leave without saving",
+    "stay": "Stay"
+  },
   "newTransaction": {
     "type": "Type",
     "types": {

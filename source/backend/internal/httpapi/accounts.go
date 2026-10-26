@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/oapi-codegen/nullable"
 	"github.com/shopspring/decimal"
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/accounts"
@@ -80,6 +81,16 @@ func (s *server) UpdateAccount(ctx context.Context, req api.UpdateAccountRequest
 	if req.Body.Type != nil {
 		t := sqlc.AccountType(*req.Body.Type)
 		c.Type = &t
+	}
+	if e := req.Body.ExpectedIncome; e.IsSpecified() {
+		var income decimal.NullDecimal
+		if !e.IsNull() {
+			if income.Decimal, err = parseAmount(e.MustGet()); err != nil {
+				return nil, err
+			}
+			income.Valid = true
+		}
+		c.ExpectedIncome = &income
 	}
 	a, err := svc.Update(ctx, sessionFrom(ctx).User.ID, req.AccountId, c)
 	if err != nil {
@@ -205,13 +216,18 @@ func parseAmount(s string) (decimal.Decimal, error) {
 }
 
 func toAPIAccount(a accounts.Account) api.Account {
-	return api.Account{
-		Id:          a.ID,
-		Name:        a.Name,
-		Type:        api.AccountType(a.Type),
-		Currency:    a.Currency,
-		Balance:     a.Balance.StringFixed(money.Places),
-		Unallocated: a.Unallocated.StringFixed(money.Places),
-		CreatedAt:   a.CreatedAt.UTC(),
+	out := api.Account{
+		Id:             a.ID,
+		Name:           a.Name,
+		Type:           api.AccountType(a.Type),
+		Currency:       a.Currency,
+		Balance:        a.Balance.StringFixed(money.Places),
+		Unallocated:    a.Unallocated.StringFixed(money.Places),
+		ExpectedIncome: nullable.NewNullNullable[api.Amount](),
+		CreatedAt:      a.CreatedAt.UTC(),
 	}
+	if a.ExpectedIncome.Valid {
+		out.ExpectedIncome = nullable.NewNullableWithValue(a.ExpectedIncome.Decimal.StringFixed(money.Places))
+	}
+	return out
 }

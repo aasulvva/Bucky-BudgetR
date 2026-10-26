@@ -281,6 +281,56 @@ func TestUpdate(t *testing.T) {
 	}
 }
 
+func TestSetRefillAmounts(t *testing.T) {
+	e := setup(t)
+	e.startCycle(t)
+	food := e.create(t, buckets.New{Name: "Food", RefillAmount: dec("1000"), CapMultiplier: dec("2"), OpeningFunds: dec("400")})
+	rent := e.create(t, buckets.New{Name: "Rent", RefillAmount: dec("500"), CapMode: sqlc.BucketCapModeFixed, CapAmount: dec("600")})
+	txs := e.count(t, sqlc.TransactionTypeBUA)
+
+	got, err := e.svc.SetRefillAmounts(t.Context(), e.user, []buckets.RefillAmount{
+		{BucketID: rent.ID, Amount: dec("800")},
+		{BucketID: food.ID, Amount: dec("1200")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].ID != rent.ID || got[1].ID != food.ID {
+		t.Fatalf("returned %+v, want rent then food", got)
+	}
+	// Future mode: RA and BC change, TF doesn't, and nothing is recorded.
+	if !got[0].RefillAmount.Equal(dec("800")) || !got[0].Capacity.Equal(dec("800")) {
+		t.Errorf("rent RA %s BC %s, want 800 with the fixed BC raised", got[0].RefillAmount, got[0].Capacity)
+	}
+	if !got[1].RefillAmount.Equal(dec("1200")) || !got[1].Capacity.Equal(dec("2400")) || !got[1].TargetFunds.Equal(dec("400")) {
+		t.Errorf("food RA %s BC %s TF %s, want 1200, 2400, 400", got[1].RefillAmount, got[1].Capacity, got[1].TargetFunds)
+	}
+	if c := e.count(t, sqlc.TransactionTypeBUA); c != txs {
+		t.Errorf("%d BUA, want %d", c, txs)
+	}
+
+	// All or nothing: a bad item leaves the others as they were.
+	if _, err := e.svc.SetRefillAmounts(t.Context(), e.user, []buckets.RefillAmount{
+		{BucketID: food.ID, Amount: dec("10")},
+		{BucketID: rent.ID, Amount: dec("-1")},
+	}); !errors.Is(err, buckets.ErrInvalid) {
+		t.Errorf("negative RA: %v", err)
+	}
+	if ra := e.get(t, food.ID).RefillAmount; !ra.Equal(dec("1200")) {
+		t.Errorf("food RA %s after a refused batch, want 1200", ra)
+	}
+	if _, err := e.svc.SetRefillAmounts(t.Context(), e.user, []buckets.RefillAmount{
+		{BucketID: food.ID, Amount: dec("10")},
+		{BucketID: food.ID, Amount: dec("20")},
+	}); !errors.Is(err, buckets.ErrInvalid) {
+		t.Errorf("listed twice: %v", err)
+	}
+	bob := authtest.NewUser(t, e.pool, "bob").ID
+	if _, err := e.svc.SetRefillAmounts(t.Context(), bob, []buckets.RefillAmount{{BucketID: food.ID, Amount: dec("10")}}); !errors.Is(err, buckets.ErrNotFound) {
+		t.Errorf("bob sets alice's bucket: %v", err)
+	}
+}
+
 func TestUpdateSource(t *testing.T) {
 	e := setup(t)
 	b := e.create(t, buckets.New{Name: "Fuel"})

@@ -87,8 +87,20 @@ func TestAccountsAPI(t *testing.T) {
 	path := "/api/v1/accounts/" + main.Id
 	w = do(http.MethodPatch, path, map[string]any{"name": "Everyday"}, alice)
 	expect(t, "rename", w, http.StatusOK, "")
-	if a := decode[api.Account](t, w); a.Name != "Everyday" || a.Balance != "1500.50" {
+	if a := decode[api.Account](t, w); a.Name != "Everyday" || a.Balance != "1500.50" || !a.ExpectedIncome.IsNull() {
 		t.Errorf("renamed %+v", a)
+	}
+	w = do(http.MethodPatch, path, map[string]any{"expected_income": "32000"}, alice)
+	expect(t, "set expected income", w, http.StatusOK, "")
+	if a := decode[api.Account](t, w); a.ExpectedIncome.MustGet() != "32000.00" || a.Name != "Everyday" {
+		t.Errorf("expected income %+v", a)
+	}
+	expect(t, "negative expected income", do(http.MethodPatch, path, map[string]any{"expected_income": "-1"}, alice),
+		http.StatusBadRequest, "invalid_request")
+	w = do(http.MethodPatch, path, map[string]any{"expected_income": nil}, alice)
+	expect(t, "clear expected income", w, http.StatusOK, "")
+	if a := decode[api.Account](t, w); !a.ExpectedIncome.IsNull() {
+		t.Errorf("cleared expected income %v", a.ExpectedIncome)
 	}
 
 	w = do(http.MethodPost, path+"/balance-adjustment", map[string]any{"target_balance": "1400"}, alice)

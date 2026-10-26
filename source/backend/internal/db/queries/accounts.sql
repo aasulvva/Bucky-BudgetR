@@ -17,7 +17,7 @@ SELECT * FROM bank_accounts WHERE id = $1 AND user_id = $2 AND NOT deleted;
 SELECT * FROM bank_accounts WHERE id = $1 AND user_id = $2 AND NOT deleted FOR UPDATE;
 
 -- name: UpdateAccount :one
-UPDATE bank_accounts SET name = $3, account_type = $4, modified_at = now()
+UPDATE bank_accounts SET name = $3, account_type = $4, expected_income = $5, modified_at = now()
 WHERE id = $1 AND user_id = $2 AND NOT deleted
 RETURNING *;
 

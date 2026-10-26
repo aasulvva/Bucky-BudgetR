@@ -17,6 +17,7 @@ const pages: Partial<Record<string, () => PageModule>> = {
   "/accounts/setup": () => import("@/pages/AccountSetup"),
   "/buckets": () => import("@/pages/Buckets"),
   "/buckets/setup": () => import("@/pages/BucketSetup"),
+  "/budget": () => import("@/pages/BudgetSetup"),
   "/cycles": () => import("@/pages/Cycles"),
   "/settings": () => import("@/pages/Settings"),
   "/transactions": () => import("@/pages/Transactions"),

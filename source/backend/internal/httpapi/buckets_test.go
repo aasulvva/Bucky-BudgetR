@@ -85,6 +85,21 @@ func TestBucketsAPI(t *testing.T) {
 	if u := decode[api.Bucket](t, w); u.Capacity != "4500.00" || u.CapAmount.MustGet() != "4500.00" || !u.CapMultiplier.IsNull() || !u.Priority {
 		t.Errorf("updated %+v", u)
 	}
+	w = do(http.MethodPost, "/api/v1/buckets/refill-amounts", map[string]any{
+		"items": []map[string]any{{"bucket_id": b.Id, "refill_amount": "4800"}},
+	}, alice)
+	expect(t, "set refill amounts", w, http.StatusOK, "")
+	if u := decode[struct{ Items []api.Bucket }](t, w).Items; len(u) != 1 || u[0].RefillAmount != "4800.00" || u[0].Capacity != "4800.00" {
+		t.Errorf("refill amounts %+v, want RA 4800 with the fixed BC raised", u)
+	}
+	expect(t, "refill amounts twice", do(http.MethodPost, "/api/v1/buckets/refill-amounts", map[string]any{
+		"items": []map[string]any{{"bucket_id": b.Id, "refill_amount": "1"}, {"bucket_id": b.Id, "refill_amount": "2"}},
+	}, alice), http.StatusBadRequest, "invalid_request")
+	expect(t, "no refill amounts", do(http.MethodPost, "/api/v1/buckets/refill-amounts",
+		map[string]any{"items": []map[string]any{}}, alice), http.StatusBadRequest, "invalid_request")
+	expect(t, "bob's refill amounts", do(http.MethodPost, "/api/v1/buckets/refill-amounts", map[string]any{
+		"items": []map[string]any{{"bucket_id": b.Id, "refill_amount": "1"}},
+	}, bob), http.StatusNotFound, "not_found")
 	expect(t, "to EUR", do(http.MethodPatch, "/api/v1/buckets/"+b.Id,
 		map[string]any{"source_account_id": eur.Id}, alice), http.StatusBadRequest, "currency_mismatch")
 	expect(t, "empty update", do(http.MethodPatch, "/api/v1/buckets/"+b.Id, map[string]any{}, alice), http.StatusBadRequest, "invalid_request")
