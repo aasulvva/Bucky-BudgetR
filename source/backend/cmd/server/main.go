@@ -91,7 +91,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, logOut 
 		Auth:         authSvc,
 		Accounts:     accounts.NewService(pool, ledgerSvc, accounts.Options{}),
 		Cycles:       cycles.NewService(pool, cycles.Options{OnEnd: refills.OnEnd, OnStart: refills.OnStart}),
-		Buckets:      buckets.NewService(pool, ledgerSvc, buckets.Options{}),
+		Buckets:      buckets.NewService(pool, ledgerSvc, buckets.Options{OnCreate: refills.OnCreate}),
 		Transactions: transactions.NewService(pool, ledgerSvc, transactions.Options{Refills: refills}),
 		Refills:      refills,
 		Docs:         cfg.Env == config.EnvDevelopment,

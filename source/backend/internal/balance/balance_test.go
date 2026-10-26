@@ -86,6 +86,7 @@ func TestBalancesAndCycleFigures(t *testing.T) {
 	record(sqlc.TransactionTypeREF, "2026-11-01T08:00:00Z", nil, []line{{groceries, "1000"}})
 	record(sqlc.TransactionTypeEXP, "2026-11-02T12:00:00Z", []line{{acc, "-400"}}, []line{{groceries, "-400"}})
 	record(sqlc.TransactionTypeOVF, "2026-11-02T12:00:00Z", nil, []line{{groceries, "-50"}})
+	record(sqlc.TransactionTypeBUA, "2026-11-03T12:00:00Z", nil, []line{{hobby, "-100"}})
 
 	// Another user's money never counts.
 	bob := authtest.NewUser(t, pool, "bob").ID
@@ -133,7 +134,7 @@ func TestBalancesAndCycleFigures(t *testing.T) {
 		t.Errorf("got %d buckets, want 3", len(tf))
 	}
 	same("groceries TF", tf[groceries], dec("2900"))
-	same("hobby TF", tf[hobby], dec("200"))
+	same("hobby TF", tf[hobby], dec("100"))
 	same("unused TF", tf[unused], decimal.Zero)
 
 	check := func(name string, got balance.Figures, start, budget, used, overflow, left string) {
@@ -151,7 +152,14 @@ func TestBalancesAndCycleFigures(t *testing.T) {
 		t.Fatal(err)
 	}
 	check("October groceries", figs[groceries], "0", "2800", "350", "100", "2350")
+	g := figs[groceries]
+	same("October groceries refills", g.Refills, dec("1500"))
+	same("October groceries income", g.Income, dec("1000"))
+	same("October groceries opening", g.Opening, dec("500"))
+	same("October groceries adjustments", g.Adjustments, decimal.Zero)
+	same("October groceries transfers", g.Transfers, dec("-200"))
 	check("October hobby", figs[hobby], "0", "200", "0", "0", "200")
+	same("October hobby transfers", figs[hobby].Transfers, dec("200"))
 	check("October unused", figs[unused], "0", "0", "0", "0", "0")
 
 	figs, err = balance.Cycle(ctx, pool, user, nov)
@@ -159,7 +167,8 @@ func TestBalancesAndCycleFigures(t *testing.T) {
 		t.Fatal(err)
 	}
 	check("November groceries", figs[groceries], "2350", "3350", "400", "50", "2900")
-	check("November hobby", figs[hobby], "200", "200", "0", "0", "200")
+	check("November hobby", figs[hobby], "200", "100", "0", "0", "100")
+	same("November hobby adjustments", figs[hobby].Adjustments, dec("-100"))
 	if !figs[groceries].Left.Equal(tf[groceries]) {
 		t.Errorf("active cycle's Left %s isn't the current TF %s", figs[groceries].Left, tf[groceries])
 	}

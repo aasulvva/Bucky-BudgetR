@@ -1,6 +1,6 @@
 // Sample data for tests, in the API's shapes.
 
-import type { Account, Bucket } from "@/api/accounts";
+import type { Account, Bucket, BucketFigures } from "@/api/accounts";
 import type { Cycle } from "@/api/cycles";
 import { addDays, endAtFor, startAtFor, today } from "@/lib/cycles";
 
@@ -34,6 +34,25 @@ export function bucket(
     importance: 5,
     refilled: false,
     created_at: "2026-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+/** A bucket's figures for a cycle; all 0 unless given. */
+export function bucketFigures(
+  overrides: Partial<BucketFigures> & Pick<BucketFigures, "bucket_id">,
+): BucketFigures {
+  return {
+    start: "0.00",
+    refills: "0.00",
+    income: "0.00",
+    opening_funds: "0.00",
+    adjustments: "0.00",
+    transfers: "0.00",
+    budget: "0.00",
+    used: "0.00",
+    overflow: "0.00",
+    left: "0.00",
     ...overrides,
   };
 }

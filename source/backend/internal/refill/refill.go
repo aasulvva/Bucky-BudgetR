@@ -8,6 +8,9 @@
 //   - On income: when an income triggers it (OnIncome, called by the
 //     transactions service). Reversing the income undoes it (UndoIncome).
 //
+// A bucket created in the active cycle with a refill or opening funds counts
+// as refilled in it, whatever its mode (OnCreate, a buckets hook).
+//
 // At cycle end (OnEnd), buckets without Keep funds are emptied.
 //
 // Every routine runs inside the caller's database transaction, under the
@@ -162,6 +165,35 @@ func (s *Service) Manual(ctx context.Context, userID, bucketID string) error {
 			return err
 		}
 		return s.refill(ctx, tx, b, tf[b.ID], c.ID, sqlc.RefillModeManual, s.now(), "")
+	})
+}
+
+// OnCreate marks a new bucket refilled in the active cycle, refilling it
+// first, dated now, if refill is set; otherwise it holds opening funds,
+// which take the refill's place. It is the buckets OnCreate hook and runs
+// under the user's lock.
+func (s *Service) OnCreate(ctx context.Context, tx pgx.Tx, userID, bucketID string, refill bool) error {
+	q := sqlc.New(tx)
+	b, err := q.GetBucketForUpdate(ctx, sqlc.GetBucketForUpdateParams{ID: bucketID, UserID: userID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("%w: bucket %s", ErrNotFound, bucketID)
+	}
+	if err != nil {
+		return err
+	}
+	c, err := activeCycle(ctx, q, userID)
+	if err != nil {
+		return err
+	}
+	if c == nil {
+		return ledger.ErrNoActiveCycle
+	}
+	if refill {
+		// A new bucket's TF is 0: REF = RA either way, and BC ≥ RA.
+		return s.refill(ctx, tx, b, decimal.Zero, c.ID, sqlc.RefillModeManual, s.now(), "")
+	}
+	return q.CreateRefill(ctx, sqlc.CreateRefillParams{
+		BucketID: b.ID, CycleID: c.ID, UserID: userID, Trigger: sqlc.RefillModeManual,
 	})
 }
 

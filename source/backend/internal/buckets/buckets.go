@@ -83,8 +83,12 @@ type New struct {
 	// Importance is 1–10 and defaults to DefaultImportance.
 	Importance int
 	// OpeningFunds is recorded as an Opening Funds (OPF) transaction now.
-	// Zero records nothing; otherwise the user needs an active cycle.
+	// Zero records nothing; otherwise the user needs an active cycle, and
+	// the opening funds count as the bucket's refill in it.
 	OpeningFunds decimal.Decimal
+	// Refill refills the bucket now in the active cycle, whatever its
+	// refill mode. It can't be combined with OpeningFunds.
+	Refill bool
 }
 
 // Changes are the fields to update; nil leaves a field as it is.
@@ -105,17 +109,27 @@ type Changes struct {
 	Importance          *int
 }
 
+// CreateHook runs in Create's transaction for a bucket created with opening
+// funds or a refill. It marks the bucket refilled in the active cycle, and
+// refills it first if refill is set.
+type CreateHook func(ctx context.Context, tx pgx.Tx, userID, bucketID string, refill bool) error
+
 // Options configures a Service.
 type Options struct {
 	// Now returns the current time. Defaults to time.Now.
 	Now func() time.Time
+	// OnCreate is refill.Service.OnCreate (refill imports this package).
+	// Nil means New.Refill is refused and opening funds don't count as a
+	// refill.
+	OnCreate CreateHook
 }
 
 // Service manages buckets.
 type Service struct {
-	pool   *pgxpool.Pool
-	ledger *ledger.Ledger
-	now    func() time.Time
+	pool     *pgxpool.Pool
+	ledger   *ledger.Ledger
+	now      func() time.Time
+	onCreate CreateHook
 }
 
 // NewService returns a Service that records money movements in l.
@@ -123,7 +137,7 @@ func NewService(pool *pgxpool.Pool, l *ledger.Ledger, opts Options) *Service {
 	if opts.Now == nil {
 		opts.Now = time.Now
 	}
-	return &Service{pool: pool, ledger: l, now: opts.Now}
+	return &Service{pool: pool, ledger: l, now: opts.Now, onCreate: opts.OnCreate}
 }
 
 // List returns the user's buckets, sorted by name.
@@ -140,6 +154,32 @@ func (s *Service) List(ctx context.Context, userID string) ([]Bucket, error) {
 	for i, r := range rows {
 		out[i] = toBucket(r.Bucket, r.Currency, tf[r.Bucket.ID], r.Refilled)
 	}
+	return out, nil
+}
+
+// Figures is a bucket's figures for a cycle.
+type Figures struct {
+	BucketID string
+	balance.Figures
+}
+
+// CycleFigures returns the figures of each of the user's buckets that isn't
+// deleted for a cycle, sorted by bucket ID. It returns balance.ErrNotFound
+// if the cycle isn't the user's.
+func (s *Service) CycleFigures(ctx context.Context, userID, cycleID string) ([]Figures, error) {
+	figs, err := balance.Cycle(ctx, s.pool, userID, cycleID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := sqlc.New(s.pool).ListBuckets(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Figures, len(rows))
+	for i, r := range rows {
+		out[i] = Figures{BucketID: r.Bucket.ID, Figures: figs[r.Bucket.ID]}
+	}
+	slices.SortFunc(out, func(a, b Figures) int { return strings.Compare(a.BucketID, b.BucketID) })
 	return out, nil
 }
 
@@ -171,6 +211,12 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Bucket, err
 	}
 	if n.OpeningFunds.IsNegative() {
 		return Bucket{}, fmt.Errorf("%w: the opening funds are negative", ErrInvalid)
+	}
+	if n.Refill && !n.OpeningFunds.IsZero() {
+		return Bucket{}, fmt.Errorf("%w: a new bucket gets either opening funds or a refill", ErrInvalid)
+	}
+	if n.Refill && s.onCreate == nil {
+		return Bucket{}, fmt.Errorf("%w: refilling a new bucket isn't available", ErrInvalid)
 	}
 
 	var out Bucket
@@ -227,6 +273,11 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Bucket, err
 				BucketLines: []ledger.BucketLine{{BucketID: row.ID, Amount: n.OpeningFunds}},
 			}); err != nil {
 				return fmt.Errorf("record opening funds: %w", err)
+			}
+		}
+		if s.onCreate != nil && (n.Refill || !n.OpeningFunds.IsZero()) {
+			if err := s.onCreate(ctx, tx, userID, row.ID, n.Refill); err != nil {
+				return err
 			}
 		}
 		// A new bucket changes how its account's money is split.

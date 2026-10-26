@@ -122,6 +122,22 @@ export function compareAmounts(a: string, b: string): number {
 }
 
 /**
+ * amount × factor, rounded to cents half away from zero as the API does. The
+ * factor has at most two decimals, like a capacity multiplier ("1.25").
+ */
+export function multiplyAmount(amount: string, factor: string): string {
+  const product = toCents(canonicalAmount(amount)) * toCents(canonicalAmount(factor));
+  const half = product < 0n ? -50n : 50n;
+  return fromCents((product + half) / 100n);
+}
+
+/** What percentage part is of whole, rounded down; 0 when whole isn't positive. */
+export function percentOf(part: string, whole: string): number {
+  const w = toCents(canonicalAmount(whole));
+  return w > 0n ? Number((toCents(canonicalAmount(part)) * 100n) / w) : 0;
+}
+
+/**
  * Currencies to offer for a new account: ISO 4217 codes with at most two
  * decimals, as the API accepts (spec §2), with their names.
  */

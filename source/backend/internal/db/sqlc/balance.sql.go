@@ -95,7 +95,11 @@ const bucketCycleSums = `-- name: BucketCycleSums :many
 SELECT
     b.id,
     COALESCE(SUM(l.amount) FILTER (WHERE c.start_at < this.start_at), 0)::numeric AS start,
-    COALESCE(SUM(l.amount) FILTER (WHERE l.cycle_id = this.id AND h.transaction_type NOT IN ('EXP', 'OVF')), 0)::numeric AS added,
+    COALESCE(SUM(l.amount) FILTER (WHERE l.cycle_id = this.id AND h.transaction_type = 'REF'), 0)::numeric AS refills,
+    COALESCE(SUM(l.amount) FILTER (WHERE l.cycle_id = this.id AND h.transaction_type = 'INC'), 0)::numeric AS income,
+    COALESCE(SUM(l.amount) FILTER (WHERE l.cycle_id = this.id AND h.transaction_type = 'OPF'), 0)::numeric AS opening,
+    COALESCE(SUM(l.amount) FILTER (WHERE l.cycle_id = this.id AND h.transaction_type = 'BUA'), 0)::numeric AS adjustments,
+    COALESCE(SUM(l.amount) FILTER (WHERE l.cycle_id = this.id AND h.transaction_type = 'BAT'), 0)::numeric AS transfers,
     COALESCE(SUM(l.amount) FILTER (WHERE l.cycle_id = this.id AND h.transaction_type = 'EXP'), 0)::numeric AS expenses,
     COALESCE(SUM(l.amount) FILTER (WHERE l.cycle_id = this.id AND h.transaction_type = 'OVF'), 0)::numeric AS overflow
 FROM cycles this
@@ -114,15 +118,19 @@ type BucketCycleSumsParams struct {
 }
 
 type BucketCycleSumsRow struct {
-	ID       string
-	Start    decimal.Decimal
-	Added    decimal.Decimal
-	Expenses decimal.Decimal
-	Overflow decimal.Decimal
+	ID          string
+	Start       decimal.Decimal
+	Refills     decimal.Decimal
+	Income      decimal.Decimal
+	Opening     decimal.Decimal
+	Adjustments decimal.Decimal
+	Transfers   decimal.Decimal
+	Expenses    decimal.Decimal
+	Overflow    decimal.Decimal
 }
 
 // Per bucket: lines from cycles that started before this one, and this
-// cycle's lines split into expenses, overflow and everything else.
+// cycle's lines by type.
 func (q *Queries) BucketCycleSums(ctx context.Context, arg BucketCycleSumsParams) ([]BucketCycleSumsRow, error) {
 	rows, err := q.db.Query(ctx, bucketCycleSums, arg.CycleID, arg.UserID)
 	if err != nil {
@@ -135,7 +143,11 @@ func (q *Queries) BucketCycleSums(ctx context.Context, arg BucketCycleSumsParams
 		if err := rows.Scan(
 			&i.ID,
 			&i.Start,
-			&i.Added,
+			&i.Refills,
+			&i.Income,
+			&i.Opening,
+			&i.Adjustments,
+			&i.Transfers,
 			&i.Expenses,
 			&i.Overflow,
 		); err != nil {

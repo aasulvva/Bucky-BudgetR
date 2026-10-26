@@ -39,6 +39,7 @@ var (
 
 type env struct {
 	pool     *pgxpool.Pool
+	ledger   *ledger.Ledger
 	now      *time.Time
 	user     string
 	refills  *refill.Service
@@ -59,11 +60,13 @@ func setup(t *testing.T) env {
 	l := ledger.New(ledger.Options{AfterRecord: allocation.AfterRecord})
 	r := refill.NewService(pool, l, refill.Options{Now: clock})
 	e := env{
-		pool: pool, now: &now, user: authtest.NewUser(t, pool, "alice").ID, refills: r,
+		pool: pool, ledger: l, now: &now, user: authtest.NewUser(t, pool, "alice").ID, refills: r,
 		cycles:   cycles.NewService(pool, cycles.Options{Now: clock, OnEnd: r.OnEnd, OnStart: r.OnStart}),
 		accounts: accounts.NewService(pool, l, accounts.Options{Now: clock}),
-		buckets:  buckets.NewService(pool, l, buckets.Options{Now: clock}),
-		tx:       transactions.NewService(pool, l, transactions.Options{Now: clock, Refills: r}),
+		// Without the OnCreate hook, so opening funds don't count as a
+		// refill; TestCreate covers it.
+		buckets: buckets.NewService(pool, l, buckets.Options{Now: clock}),
+		tx:      transactions.NewService(pool, l, transactions.Options{Now: clock, Refills: r}),
 	}
 	var err error
 	if e.oct, err = e.cycles.Create(t.Context(), e.user, oct[0], oct[1]); err != nil {
@@ -251,6 +254,76 @@ func TestManualErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := e.refills.Manual(t.Context(), e.user, manual); !errors.Is(err, ledger.ErrNoActiveCycle) {
+		t.Errorf("no active cycle: %v", err)
+	}
+}
+
+// TestCreate: a bucket created in the active cycle with a refill or opening
+// funds counts as refilled in it, whatever its mode.
+func TestCreate(t *testing.T) {
+	e := setup(t)
+	svc := buckets.NewService(e.pool, e.ledger, buckets.Options{
+		Now: func() time.Time { return *e.now }, OnCreate: e.refills.OnCreate,
+	})
+	account := e.account(t, "1000")
+	create := func(name string, mode sqlc.RefillMode, keep bool, opening string, refill bool) (buckets.Bucket, error) {
+		t.Helper()
+		return svc.Create(t.Context(), e.user, buckets.New{
+			Name: name, SourceAccountID: account, RefillAmount: dec("100"), CapMultiplier: dec("1.5"),
+			KeepFunds: keep, RefillMode: mode, OpeningFunds: dec(opening), Refill: refill,
+		})
+	}
+
+	for _, tc := range []struct {
+		name    string
+		mode    sqlc.RefillMode
+		keep    bool
+		opening string
+		refill  bool
+		want    string
+		refs    []string
+	}{
+		{"Refilled auto", sqlc.RefillModeAuto, false, "0", true, "100.00", []string{"100.00"}},
+		{"Refilled keep", sqlc.RefillModeOnIncome, true, "0", true, "100.00", []string{"100.00"}},
+		{"Opening manual", sqlc.RefillModeManual, false, "40", false, "40.00", nil},
+		{"Empty manual", sqlc.RefillModeManual, false, "0", false, "0.00", nil},
+	} {
+		b, err := create(tc.name, tc.mode, tc.keep, tc.opening, tc.refill)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		check(t, tc.name+" TF", b.TargetFunds.StringFixed(2), tc.want)
+		check(t, tc.name+" refilled", b.Refilled, tc.refill || tc.opening != "0")
+		check(t, tc.name+" REF", e.lines(t, b.ID, sqlc.TransactionTypeREF), tc.refs)
+		// Counted as the cycle's refill, or still to come.
+		if tc.mode == sqlc.RefillModeManual {
+			err := e.refills.Manual(t.Context(), e.user, b.ID)
+			if tc.opening != "0" && !errors.Is(err, refill.ErrAlreadyRefilled) {
+				t.Errorf("%s: manual refill after opening funds: %v", tc.name, err)
+			}
+			if tc.opening == "0" && err != nil {
+				t.Errorf("%s: manual refill: %v", tc.name, err)
+			}
+		}
+	}
+
+	if _, err := create("Both", sqlc.RefillModeAuto, false, "40", true); !errors.Is(err, buckets.ErrInvalid) {
+		t.Errorf("opening funds and refill: %v", err)
+	}
+	// The hook needs a service that has it.
+	if _, err := e.buckets.Create(t.Context(), e.user, buckets.New{Name: "No hook", SourceAccountID: account, Refill: true}); !errors.Is(err, buckets.ErrInvalid) {
+		t.Errorf("refill without the hook: %v", err)
+	}
+
+	// Without an active cycle.
+	if err := e.cycles.Delete(t.Context(), e.user, e.nov.ID); err != nil {
+		t.Fatal(err)
+	}
+	*e.now = at("2026-11-02T12:00:00Z")
+	if _, err := e.cycles.End(t.Context(), e.user, e.oct.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := create("Late", sqlc.RefillModeAuto, false, "0", true); !errors.Is(err, ledger.ErrNoActiveCycle) {
 		t.Errorf("no active cycle: %v", err)
 	}
 }
