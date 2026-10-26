@@ -316,6 +316,32 @@ func (s *Service) AdjustBalance(ctx context.Context, userID, id string, a Adjust
 	return out, nil
 }
 
+// Reallocate recalculates the CAF of the buckets funded from the account now,
+// as the Money Allocation Routine would (spec §7). Without a trigger, CAF
+// stays where it is, so an underfunded account can be reshared by hand, for
+// example after a refill. It returns the account.
+func (s *Service) Reallocate(ctx context.Context, userID, id string) (Account, error) {
+	var out Account
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if err := ledger.LockUser(ctx, tx, userID); err != nil {
+			return err
+		}
+		if _, err := sqlc.New(tx).GetAccountForUpdate(ctx, sqlc.GetAccountForUpdateParams{ID: id, UserID: userID}); err != nil {
+			return notFound(err, id)
+		}
+		if err := allocation.Run(ctx, tx, userID, []string{id}, true); err != nil {
+			return err
+		}
+		var err error
+		out, err = s.get(ctx, tx, userID, id)
+		return err
+	})
+	if err != nil {
+		return Account{}, err
+	}
+	return out, nil
+}
+
 // Delete soft-deletes an account after settling it, all in one database
 // transaction: every live bucket funded from it moves to the source in
 // st.BucketSources, and remaining money is transferred or adjusted away as

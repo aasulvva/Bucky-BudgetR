@@ -90,8 +90,9 @@ func (s *Service) OnStart(ctx context.Context, tx pgx.Tx, c sqlc.Cycle) error {
 }
 
 // OnEnd empties the buckets without Keep funds: an OVF brings a positive TF
-// to 0. It first brings CAF up to date, so the funded part is known. It is
-// the cycles OnEnd hook and runs while the cycle is still active.
+// to 0. It first checks that CAF fits the accounts, so the funded part is
+// known, without reallocating otherwise. It is the cycles OnEnd hook and runs
+// while the cycle is still active.
 func (s *Service) OnEnd(ctx context.Context, tx pgx.Tx, c sqlc.Cycle) error {
 	if err := ledger.LockUser(ctx, tx, c.UserID); err != nil {
 		return err
@@ -100,7 +101,7 @@ func (s *Service) OnEnd(ctx context.Context, tx pgx.Tx, c sqlc.Cycle) error {
 	if err != nil {
 		return err
 	}
-	if err := allocation.Run(ctx, tx, c.UserID, slices.Sorted(maps.Keys(accounts)), true); err != nil {
+	if err := allocation.Run(ctx, tx, c.UserID, slices.Sorted(maps.Keys(accounts)), false); err != nil {
 		return err
 	}
 
@@ -218,6 +219,10 @@ func Triggers(ctx context.Context, tx pgx.Tx, userID, counterparty string, amoun
 // been refilled in this cycle, dated at the income's time. The income must be
 // in the active cycle: if it isn't, strict returns ErrUnavailable, and
 // otherwise nothing happens.
+//
+// A refill alone only reallocates when the account crosses Σ TF (spec §7),
+// but the income is money no bucket owns, so the account is recalculated
+// again with the refilled TFs.
 func (s *Service) OnIncome(ctx context.Context, tx pgx.Tx, userID, incomeID, accountID string, at time.Time, strict bool) error {
 	c, err := activeCycle(ctx, sqlc.New(tx), userID)
 	if err != nil {
@@ -229,12 +234,16 @@ func (s *Service) OnIncome(ctx context.Context, tx pgx.Tx, userID, incomeID, acc
 		}
 		return nil
 	}
-	return s.refillAll(ctx, tx, *c, sqlc.RefillModeOnIncome, accountID, at, incomeID)
+	if err := s.refillAll(ctx, tx, *c, sqlc.RefillModeOnIncome, accountID, at, incomeID); err != nil {
+		return err
+	}
+	return allocation.Run(ctx, tx, userID, []string{accountID}, true)
 }
 
 // UndoIncome undoes the refills an income triggered in the active cycle: their
 // REF and OVF are reversed, and the buckets can be refilled again. Refills in
-// finished cycles stay; their bucket lines can't change.
+// finished cycles stay; their bucket lines can't change. Like OnIncome, the
+// accounts are then recalculated.
 func (s *Service) UndoIncome(ctx context.Context, tx pgx.Tx, userID, incomeID string) error {
 	q := sqlc.New(tx)
 	c, err := activeCycle(ctx, q, userID)
@@ -244,8 +253,12 @@ func (s *Service) UndoIncome(ctx context.Context, tx pgx.Tx, userID, incomeID st
 	refills, err := q.ListRefillsByIncome(ctx, sqlc.ListRefillsByIncomeParams{
 		IncomeID: pgtype.Text{String: incomeID, Valid: true}, CycleID: c.ID,
 	})
-	if err != nil {
+	if err != nil || len(refills) == 0 {
 		return err
+	}
+	ids := make([]string, len(refills))
+	for i, r := range refills {
+		ids[i] = r.BucketID
 	}
 	for _, r := range refills {
 		for _, id := range []pgtype.Text{r.OvfID, r.RefID} {
@@ -260,7 +273,11 @@ func (s *Service) UndoIncome(ctx context.Context, tx pgx.Tx, userID, incomeID st
 			return err
 		}
 	}
-	return nil
+	accounts, err := q.BucketSourceAccounts(ctx, ids)
+	if err != nil {
+		return err
+	}
+	return allocation.Run(ctx, tx, userID, accounts, true)
 }
 
 // refillAll refills the user's buckets with this mode that haven't been

@@ -242,6 +242,10 @@
     "refillName": "Refill {{name}}",
     "refillWithAmount": "Refill ({{amount}})",
     "refilledDone": "{{name}} refilled ({{amount}}).",
+    "reallocate": "Reallocate",
+    "reallocateName": "Reallocate {{name}}",
+    "reallocateHint": "Money only moves between buckets on certain events, so a refill can leave a bucket uncovered. Reallocate shares the balance out again now.",
+    "reallocatedDone": "{{name}} reallocated.",
     "noCycleFigures": "No active cycle",
     "setupFor": "Bucket setup for {{name}}"
   },
