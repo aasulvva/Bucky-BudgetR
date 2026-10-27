@@ -201,3 +201,66 @@ func TestRecoverAdmin(t *testing.T) {
 		t.Errorf("unknown user: %v", err)
 	}
 }
+
+func TestLastSeen(t *testing.T) {
+	pool := testdb.New(t)
+	ctx := t.Context()
+	now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+	svc := auth.NewService(pool, slog.New(slog.DiscardHandler), auth.Options{
+		IdleTimeout: time.Hour,
+		MaxAge:      24 * time.Hour,
+		Now:         func() time.Time { return now },
+	})
+	admin := authtest.NewUser(t, pool, "admin", authtest.Admin)
+	kari := authtest.NewUser(t, pool, "kari")
+	seen := func() *time.Time {
+		t.Helper()
+		users, err := svc.ListUsers(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, u := range users {
+			if u.ID == kari.ID {
+				return u.LastSeenAt
+			}
+		}
+		t.Fatal("kari is missing")
+		return nil
+	}
+	if s := seen(); s != nil {
+		t.Errorf("never logged in, but seen at %v", s)
+	}
+
+	_, token, err := svc.Login(ctx, "kari", authtest.Password, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s := seen(); s == nil || !s.Equal(now) {
+		t.Errorf("after login: %v, want %v", s, now)
+	}
+	// Using the app moves it along (sessions record use once a minute).
+	now = now.Add(5 * time.Minute)
+	if _, err := svc.Authenticate(ctx, token); err != nil {
+		t.Fatal(err)
+	}
+	used := now
+	if s := seen(); s == nil || !s.Equal(used) {
+		t.Errorf("after use: %v, want %v", s, used)
+	}
+
+	// Ending the sessions keeps it: a reset, a deactivation and the cleanup.
+	if _, err := svc.ResetPassword(ctx, admin.ID, kari.ID, auth.CredentialLink); err != nil {
+		t.Fatal(err)
+	}
+	off := false
+	if _, err := svc.UpdateUser(ctx, admin.ID, kari.ID, auth.UserChanges{Active: &off}); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(48 * time.Hour)
+	if err := svc.DeleteEndedSessions(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if s := seen(); s == nil || !s.Equal(used) {
+		t.Errorf("after the sessions ended: %v, want %v", s, used)
+	}
+}

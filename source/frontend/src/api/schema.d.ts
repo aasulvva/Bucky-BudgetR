@@ -974,7 +974,7 @@ export interface components {
             created_by: (string & components["schemas"]["UserId"]) | null;
             /**
              * Format: date-time
-             * @description When one of the user's sessions was last used; null without a session.
+             * @description When the user last used the app, to the minute; null if they never logged in. Kept when their sessions end.
              */
             last_seen_at: string | null;
         };

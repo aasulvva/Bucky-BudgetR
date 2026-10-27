@@ -1604,7 +1604,7 @@ components:
           type: string
           format: date-time
           nullable: true
-          description: When one of the user's sessions was last used; null without a session.
+          description: When the user last used the app, to the minute; null if they never logged in. Kept when their sessions end.
 
     UserCreate:
       type: object

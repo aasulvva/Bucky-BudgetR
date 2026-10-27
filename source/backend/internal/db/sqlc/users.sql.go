@@ -7,7 +7,6 @@ package sqlc
 
 import (
 	"context"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -66,7 +65,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (string,
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, username, password_hash, active, admin, must_change_password, preferences, created_at, modified_at, created_by FROM users WHERE id = $1
+SELECT id, username, password_hash, active, admin, must_change_password, preferences, created_at, modified_at, created_by, last_seen_at FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUser(ctx context.Context, id string) (User, error) {
@@ -83,12 +82,13 @@ func (q *Queries) GetUser(ctx context.Context, id string) (User, error) {
 		&i.CreatedAt,
 		&i.ModifiedAt,
 		&i.CreatedBy,
+		&i.LastSeenAt,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, password_hash, active, admin, must_change_password, preferences, created_at, modified_at, created_by FROM users WHERE lower(username) = lower($1)
+SELECT id, username, password_hash, active, admin, must_change_password, preferences, created_at, modified_at, created_by, last_seen_at FROM users WHERE lower(username) = lower($1)
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -105,6 +105,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.CreatedAt,
 		&i.ModifiedAt,
 		&i.CreatedBy,
+		&i.LastSeenAt,
 	)
 	return i, err
 }
@@ -126,40 +127,8 @@ func (q *Queries) GetUserForUpdate(ctx context.Context, id string) (GetUserForUp
 	return i, err
 }
 
-const lastSeenByUser = `-- name: LastSeenByUser :many
-SELECT user_id, max(last_seen_at)::timestamptz AS last_seen_at
-FROM sessions
-GROUP BY user_id
-`
-
-type LastSeenByUserRow struct {
-	UserID     string
-	LastSeenAt time.Time
-}
-
-// When each user's sessions were last used; users without one are left out.
-func (q *Queries) LastSeenByUser(ctx context.Context) ([]LastSeenByUserRow, error) {
-	rows, err := q.db.Query(ctx, lastSeenByUser)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []LastSeenByUserRow{}
-	for rows.Next() {
-		var i LastSeenByUserRow
-		if err := rows.Scan(&i.UserID, &i.LastSeenAt); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listUsers = `-- name: ListUsers :many
-SELECT id, username, password_hash, active, admin, must_change_password, preferences, created_at, modified_at, created_by FROM users ORDER BY lower(username)
+SELECT id, username, password_hash, active, admin, must_change_password, preferences, created_at, modified_at, created_by, last_seen_at FROM users ORDER BY lower(username)
 `
 
 func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
@@ -182,6 +151,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.CreatedAt,
 			&i.ModifiedAt,
 			&i.CreatedBy,
+			&i.LastSeenAt,
 		); err != nil {
 			return nil, err
 		}

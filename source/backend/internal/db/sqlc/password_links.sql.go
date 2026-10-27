@@ -65,7 +65,7 @@ func (q *Queries) DeleteUserPasswordLinks(ctx context.Context, userID string) er
 }
 
 const getPasswordLink = `-- name: GetPasswordLink :one
-SELECT password_links.token_hash, password_links.user_id, password_links.purpose, password_links.created_by, password_links.created_at, password_links.expires_at, users.id, users.username, users.password_hash, users.active, users.admin, users.must_change_password, users.preferences, users.created_at, users.modified_at, users.created_by
+SELECT password_links.token_hash, password_links.user_id, password_links.purpose, password_links.created_by, password_links.created_at, password_links.expires_at, users.id, users.username, users.password_hash, users.active, users.admin, users.must_change_password, users.preferences, users.created_at, users.modified_at, users.created_by, users.last_seen_at
 FROM password_links
 JOIN users ON users.id = password_links.user_id
 WHERE password_links.token_hash = $1
@@ -96,6 +96,7 @@ func (q *Queries) GetPasswordLink(ctx context.Context, tokenHash []byte) (GetPas
 		&i.User.CreatedAt,
 		&i.User.ModifiedAt,
 		&i.User.CreatedBy,
+		&i.User.LastSeenAt,
 	)
 	return i, err
 }

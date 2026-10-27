@@ -52,8 +52,8 @@ type ManagedUser struct {
 	CreatedAt          time.Time
 	// CreatedBy is the admin who created the user; "" for the initial admin.
 	CreatedBy string
-	// LastSeenAt is when one of the user's sessions was last used; nil
-	// without a session.
+	// LastSeenAt is when the user last used the app, to the minute; nil if
+	// they never logged in.
 	LastSeenAt *time.Time
 }
 
@@ -90,13 +90,9 @@ func (s *Service) ListUsers(ctx context.Context) ([]ManagedUser, error) {
 	if err != nil {
 		return nil, err
 	}
-	seen, err := lastSeen(ctx, s.q)
-	if err != nil {
-		return nil, err
-	}
 	out := make([]ManagedUser, len(users))
 	for i, u := range users {
-		out[i] = managed(u, seen)
+		out[i] = managed(u)
 	}
 	return out, nil
 }
@@ -268,26 +264,10 @@ func (s *Service) user(ctx context.Context, q *sqlc.Queries, id string) (Managed
 	if err != nil {
 		return ManagedUser{}, err
 	}
-	seen, err := lastSeen(ctx, q)
-	if err != nil {
-		return ManagedUser{}, err
-	}
-	return managed(u, seen), nil
+	return managed(u), nil
 }
 
-func lastSeen(ctx context.Context, q *sqlc.Queries) (map[string]time.Time, error) {
-	rows, err := q.LastSeenByUser(ctx)
-	if err != nil {
-		return nil, err
-	}
-	seen := make(map[string]time.Time, len(rows))
-	for _, r := range rows {
-		seen[r.UserID] = r.LastSeenAt
-	}
-	return seen, nil
-}
-
-func managed(u sqlc.User, seen map[string]time.Time) ManagedUser {
+func managed(u sqlc.User) ManagedUser {
 	m := ManagedUser{
 		ID:                 u.ID,
 		Username:           u.Username,
@@ -297,8 +277,8 @@ func managed(u sqlc.User, seen map[string]time.Time) ManagedUser {
 		CreatedAt:          u.CreatedAt,
 		CreatedBy:          u.CreatedBy.String,
 	}
-	if t, ok := seen[u.ID]; ok {
-		m.LastSeenAt = &t
+	if u.LastSeenAt.Valid {
+		m.LastSeenAt = &u.LastSeenAt.Time
 	}
 	return m
 }

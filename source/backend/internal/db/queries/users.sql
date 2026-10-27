@@ -29,12 +29,6 @@ RETURNING preferences;
 -- name: ListUsers :many
 SELECT * FROM users ORDER BY lower(username);
 
--- name: LastSeenByUser :many
--- When each user's sessions were last used; users without one are left out.
-SELECT user_id, max(last_seen_at)::timestamptz AS last_seen_at
-FROM sessions
-GROUP BY user_id;
-
 -- name: GetUserForUpdate :one
 SELECT id, active, admin FROM users WHERE id = $1 FOR UPDATE;
 

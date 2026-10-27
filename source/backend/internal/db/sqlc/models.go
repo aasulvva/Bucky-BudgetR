@@ -534,4 +534,5 @@ type User struct {
 	CreatedAt          time.Time
 	ModifiedAt         time.Time
 	CreatedBy          pgtype.Text
+	LastSeenAt         pgtype.Timestamptz
 }
