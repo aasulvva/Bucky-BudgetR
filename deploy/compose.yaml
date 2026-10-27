@@ -1,5 +1,6 @@
-# The production stack: the app, PostgreSQL, Caddy (HTTPS on the LAN and the
-# tailnet) and daily backups. Settings come from deploy/.env; see
+# The production stack: the app, PostgreSQL, Caddy (HTTPS on the LAN) and
+# daily backups. compose.tailnet.yaml adds the tailnet address; .env picks
+# the files with COMPOSE_FILE. Settings come from deploy/.env; see
 # .env.example and docs/DEPLOYMENT.md. Run Compose from this folder.
 name: bucky-budgetr-prod
 
@@ -57,14 +58,14 @@ services:
     depends_on:
       app:
         condition: service_healthy
-    # Only on the LAN and tailnet addresses, not on every interface.
+    # Only on the LAN address (and the tailnet's, compose.tailnet.yaml), not
+    # on every interface.
     ports:
       - ${LAN_ADDR:?set LAN_ADDR in deploy/.env}:443:443
       - ${LAN_ADDR}:80:80
-      - ${TAILNET_ADDR:?set TAILNET_ADDR in deploy/.env}:443:443
-      - ${TAILNET_ADDR}:80:80
     environment:
       BUCKY_HOSTNAMES: ${BUCKY_HOSTNAMES:?set BUCKY_HOSTNAMES in deploy/.env}
+      DEFAULT_SNI: ${LAN_ADDR}
       TLS_CERT_FILE: ${TLS_CERT_FILE:-cert.pem}
       TLS_KEY_FILE: ${TLS_KEY_FILE:-key.pem}
     volumes:

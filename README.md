@@ -18,7 +18,7 @@ Run `make` to list all targets (`db-reset`, `psql`, `generate`, `lint`, `test`, 
 
 ## Deployment
 
-The production stack is in `deploy/`: the app (one container, with the frontend embedded), PostgreSQL, Caddy for HTTPS on the LAN and the tailnet, and daily backups. [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) covers installing, updating, rolling back, backups and restoring. The `compose.yaml` at the root is for development only.
+The production stack is in `deploy/`: the app (one container, with the frontend embedded), PostgreSQL, Caddy for HTTPS on the LAN and, optionally, the tailnet, and daily backups. [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) covers installing, updating, rolling back, backups and restoring. The `compose.yaml` at the root is for development only.
 
 **Locked out?** If no admin can log in, run `docker compose exec app bucky-server reset-password --user admin` in `deploy/` (in development: `cd source/backend && go run ./cmd/server reset-password --user admin`). It prints a temporary password, makes the user an active admin and ends their sessions. They must change the password when they log in.
 

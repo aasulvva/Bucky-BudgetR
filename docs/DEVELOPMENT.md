@@ -233,7 +233,7 @@ Tests never reach a server. `src/test/fixtures.ts` builds sample accounts and bu
   - **Backend:** `go mod verify`, `go vet`, golangci-lint, then `go test -race` against a PostgreSQL service container, then a build.
   - **Frontend:** `npm ci`, ESLint, `tsc`, Vitest and `vite build`.
   - **API contract:** `make lint-spec` and `make generate-check`, which fails if the committed generated code is out of date.
-  - **Production image:** builds the Dockerfile (nothing is pushed) and checks `deploy/compose.yaml` with `docker compose config`.
+  - **Production image:** builds the Dockerfile (nothing is pushed) and checks `deploy/compose.yaml` with `docker compose config`, with and without the tailnet.
 - To reproduce CI locally, run `make lint test generate-check`.
 - Dependabot (`.github/dependabot.yml`) opens weekly PRs for Go modules, npm, GitHub Actions, the Dockerfile's base images and the Compose images. Minor and patch updates are grouped, and a release must be a week old first.
   - Actions are pinned to commit SHAs. Dependabot updates the SHA and its version comment together.

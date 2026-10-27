@@ -3,6 +3,10 @@
 {
 	# The certificate is provided, so no ACME; HTTP still redirects to HTTPS.
 	auto_https disable_certs
+	# Browsers send no server name (SNI) to an IP address; pick the
+	# certificate as if they had asked for the LAN address. Only matters with
+	# IP addresses in BUCKY_HOSTNAMES.
+	default_sni {$DEFAULT_SNI}
 	servers {
 		# Only TCP 443 is published, so don't offer HTTP/3.
 		protocols h1 h2

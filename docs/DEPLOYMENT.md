@@ -1,12 +1,12 @@
 # Deployment
 
-How to run Bucky BudgetR for real on a home server. It is reached over HTTPS from the LAN and over the tailnet (Tailscale clients on a Headscale server). Everything runs in Docker Compose from the `deploy/` folder:
+How to run Bucky BudgetR for real on a home server. It is reached over HTTPS from the LAN and, if you like, over the tailnet (Tailscale clients on a Headscale server). Everything runs in Docker Compose from the `deploy/` folder:
 
 | Service  | What it does |
 | -------- | ------------ |
 | `app`    | The Go server, with the frontend embedded. Runs migrations on start. Not reachable from outside. |
 | `db`     | PostgreSQL 18. Its data is in the `db-data` volume. |
-| `caddy`  | HTTPS with your certificate, on the host's LAN and tailnet addresses only, ports 443 (and 80, which redirects). |
+| `caddy`  | HTTPS with your certificate, on the host's LAN address (and tailnet address) only, ports 443 (and 80, which redirects). |
 | `backup` | A database dump every day, kept in a folder on the host with rotation. |
 
 The app and the database sit on an internal Docker network with no way in or out except through Caddy.
@@ -16,38 +16,30 @@ This is financial data: **set up backups, and copy them off the machine, before 
 ## Requirements
 
 - A Linux host (amd64) with Docker Engine and the Compose plugin.
-- The Tailscale client on the host, logged in to your Headscale (`tailscale up --login-server …`).
-- A TLS certificate and key (PEM) for the name(s) you'll use, e.g. from your own CA. Every device that opens the app must trust it.
+- A fixed LAN address for the host (a DHCP reservation in the router, or set on the host).
+- For the tailnet: the Tailscale client on the host, logged in to your Headscale (`tailscale up --login-server …`).
+- A TLS certificate and key (PEM) for the names or addresses you'll use (see [Names or addresses](#names-or-addresses)), e.g. from your own CA. Every device that opens the app must trust it.
 - A clone of this repository on the host. The image is built there from the source.
 
 ## First install
 
 1. **Clone** the repository, e.g. to `/opt/bucky-budgetr`, and `cd deploy`.
-2. **Choose a name** such as `bucky.home.example`, and make it resolve on both networks:
-   - **LAN:** in your router or LAN DNS server (Pi-hole, …), point it to the host's LAN address.
-   - **Tailnet:** in Headscale's config, add it under `dns.extra_records` with the host's tailnet address (`tailscale ip -4`), then reload Headscale:
-     ```yaml
-     dns:
-       extra_records:
-         - name: bucky.home.example
-           type: A
-           value: 100.64.0.10
-     ```
-   You can also use two names, one per network. Put both in `BUCKY_HOSTNAMES`; the certificate must cover both.
+2. **Choose the address** you'll type in the browser: a name, or the IP addresses (see [Names or addresses](#names-or-addresses)). Set up the DNS records if you use a name.
 3. **Put the certificate in place**, e.g. `/etc/bucky-budgetr/tls/cert.pem` (with any intermediate certificates appended) and `key.pem`. Caddy runs as root in its container, so `root:root` with mode `600` on the key is fine.
 4. **Create the backup folder** outside Docker's volumes, owned by the user who should own the dumps:
    ```bash
    sudo mkdir -p /srv/bucky-budgetr/backups && sudo chown "$(id -u):$(id -g)" /srv/bucky-budgetr/backups
    ```
 5. **Configure:** `cp .env.example .env`, then fill in `.env`. The file explains each setting. At least set:
+   - `COMPOSE_FILE`: keep `compose.yaml:compose.tailnet.yaml` for the LAN and the tailnet, or set `compose.yaml` for the [LAN only](#lan-only);
    - `POSTGRES_PASSWORD`: letters and digits only, e.g. `openssl rand -hex 24`;
-   - `BUCKY_HOSTNAMES`, `LAN_ADDR`, `TAILNET_ADDR`;
+   - `BUCKY_HOSTNAMES`, `LAN_ADDR`, and `TAILNET_ADDR` with the tailnet;
    - the certificate location;
    - `BUCKY_INITIAL_ADMIN_PASSWORD`;
    - the backup settings.
 
    Keep `.env` private (`chmod 600 .env`); it holds the database password.
-6. **Start Docker after Tailscale.** Caddy listens on the tailnet address, which exists only once `tailscaled` is up. After a reboot, Docker must wait for it:
+6. **With the tailnet, start Docker after Tailscale.** Caddy listens on the tailnet address, which exists only once `tailscaled` is up. After a reboot, Docker must wait for it:
    ```bash
    sudo systemctl edit docker.service
    # add:
@@ -60,11 +52,71 @@ This is financial data: **set up backups, and copy them off the machine, before 
    BUCKY_VERSION=$(git describe --tags --always) docker compose up -d --build --wait
    ```
    The first build takes a few minutes. `--wait` returns once every service is healthy.
-8. **Log in** at `https://<your name>` as `admin` with `BUCKY_INITIAL_ADMIN_PASSWORD`. You must choose a new password. Then:
+8. **Log in** at `https://<your name or address>` as `admin` with `BUCKY_INITIAL_ADMIN_PASSWORD`. You must choose a new password. Then:
    - create the other users under **Admin**;
    - check that the first backup appears (see [Backups](#backups)).
 
-If you use a firewall on the host, allow TCP 80 and 443 on the LAN and tailnet interfaces. Docker publishes the ports only on `LAN_ADDR` and `TAILNET_ADDR`, so nothing listens on any other address.
+If you use a firewall on the host, allow TCP 80 and 443 on the LAN (and tailnet) interfaces. Docker publishes the ports only on `LAN_ADDR` (and `TAILNET_ADDR`), so nothing listens on any other address.
+
+## Names or addresses
+
+The certificate must cover exactly what you type in the browser, and the browser only checks that. `BUCKY_HOSTNAMES` lists the same names or addresses, comma-separated. Pick one way:
+
+### One name on both networks (recommended)
+
+One name, such as `bucky.home.example`, that each network resolves to the host's address there (split DNS). The certificate needs just that name, and the app has one address everywhere, so a phone that moves between Wi-Fi and the tailnet stays logged in.
+
+- **LAN:** in your router or LAN DNS server (Pi-hole, …), point the name to the host's LAN address.
+- **Tailnet:** in Headscale's config, add the name under `dns.extra_records` with the host's tailnet address (`tailscale ip -4`), then reload Headscale. Tailnet devices use Headscale's DNS (MagicDNS on), so they reach the host over the tailnet, at home or away:
+  ```yaml
+  dns:
+    extra_records:
+      - name: bucky.home.example
+        type: A
+        value: 100.64.0.10
+  ```
+
+```dotenv
+BUCKY_HOSTNAMES=bucky.home.example
+```
+
+The certificate's SAN is `DNS:bucky.home.example`. Use a domain you own, or a name under `home.arpa`; avoid `.local`, which belongs to mDNS.
+
+You can also use two names, one per network (e.g. the MagicDNS name Headscale gives the host on the tailnet). Put both in `BUCKY_HOSTNAMES`, and the certificate must cover both. Each name then has its own login.
+
+### IP addresses, no DNS
+
+The app is opened at `https://192.168.1.10` on the LAN and `https://100.64.0.10` on the tailnet, with no DNS to set up. The certificate holds the addresses as IP SANs:
+
+```ini
+# e.g. with your own CA, in the certificate request or its extensions:
+subjectAltName = IP:192.168.1.10, IP:100.64.0.10
+```
+
+```dotenv
+BUCKY_HOSTNAMES=192.168.1.10, 100.64.0.10
+```
+
+Browsers send no server name for an IP address, so Caddy picks the certificate as if they had asked for `LAN_ADDR`; that's why one certificate must hold both addresses. Some things to know:
+
+- **Fixed addresses:** if the host's LAN address changes, you need a new certificate. Headscale keeps a node's tailnet address.
+- **Two logins:** each address is its own site to the browser, so you log in once on each, and bookmarks differ by network.
+- Leave out the tailnet address for the [LAN only](#lan-only).
+
+### LAN only
+
+To run without the tailnet, leave Tailscale out:
+
+```dotenv
+COMPOSE_FILE=compose.yaml
+BUCKY_HOSTNAMES=bucky.home.example
+LAN_ADDR=192.168.1.10
+# no TAILNET_ADDR
+```
+
+`compose.tailnet.yaml` is what adds the tailnet address, so Caddy then listens on `LAN_ADDR` only. Use a name in your LAN DNS or the LAN address, as above, and skip the step that makes Docker wait for Tailscale. The app is then reachable at home only.
+
+To add the tailnet later, set `COMPOSE_FILE=compose.yaml:compose.tailnet.yaml` and `TAILNET_ADDR`, add the name or address to the certificate and `BUCKY_HOSTNAMES`, make Docker wait for Tailscale, and run `docker compose up -d --wait` (then `docker compose restart caddy` if you changed the certificate).
 
 ## Everyday commands
 
@@ -170,7 +222,7 @@ docker compose restart caddy
 
 (`caddy reload` is not enough: with the Caddyfile unchanged, it keeps the certificate it already loaded.)
 
-Check the new expiry date with `openssl s_client -connect <your name>:443 </dev/null 2>/dev/null | openssl x509 -noout -enddate`.
+Check the new expiry date with `openssl s_client -connect <your name or address>:443 </dev/null 2>/dev/null | openssl x509 -noout -enddate`.
 
 ## Locked out
 
@@ -184,7 +236,7 @@ It prints a temporary password, makes `admin` an active admin and ends their ses
 
 ## Security notes
 
-- Only Caddy is reachable, on two addresses. The app, the database and the backup service have no published ports and no internet access.
+- Only Caddy is reachable, on the LAN address (and the tailnet address). The app, the database and the backup service have no published ports and no internet access.
 - The app runs as a non-root user on a read-only filesystem with no capabilities. The image has only the binary, with no shell or package manager.
 - Logins are rate limited per user and per client address. The app trusts Caddy's `X-Forwarded-For` (and nobody else's) for the client address.
 - Session cookies are `Secure`, `HttpOnly` and `SameSite=Lax`, and HTTPS is required. Plain HTTP only redirects.

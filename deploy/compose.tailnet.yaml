@@ -1,0 +1,8 @@
+# Adds the tailnet: Caddy also listens on the host's tailnet address. Used
+# when COMPOSE_FILE in deploy/.env lists it (see .env.example); leave it out
+# to run on the LAN only.
+services:
+  caddy:
+    ports:
+      - ${TAILNET_ADDR:?set TAILNET_ADDR in deploy/.env}:443:443
+      - ${TAILNET_ADDR}:80:80
