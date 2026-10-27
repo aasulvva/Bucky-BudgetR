@@ -3,7 +3,8 @@
 # before Dependabot proposes them (supply-chain safety).
 #
 # Not covered, bump by hand: Redocly CLI (Makefile), Scalar (internal/httpapi/docs.html),
-# GO_VERSION (.github/workflows/ci.yml) and Node.js (.nvmrc).
+# GO_VERSION (.github/workflows/ci.yml) and Node.js (.nvmrc); keep the Dockerfile's
+# node and golang majors in step with those two.
 version: 2
 
 updates:
@@ -33,6 +34,22 @@ updates:
       # Node types must match the Node.js major we run (.nvmrc); bump together.
       - dependency-name: "@types/node"
         versions: [">=25"]
+
+  # Base images in the Dockerfile (tags and the distroless digest).
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+
+  # Images in compose.yaml (dev) and deploy/compose.yaml (production).
+  - package-ecosystem: docker-compose
+    directories: [/, /deploy]
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: github-actions
     directory: /

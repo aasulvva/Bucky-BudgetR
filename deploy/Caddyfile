@@ -1,0 +1,22 @@
+# HTTPS for the app on the LAN and the tailnet, with your own certificate
+# (TLS_CERT_DIR in deploy/.env). See docs/DEPLOYMENT.md.
+{
+	# The certificate is provided, so no ACME; HTTP still redirects to HTTPS.
+	auto_https disable_certs
+	servers {
+		# Only TCP 443 is published, so don't offer HTTP/3.
+		protocols h1 h2
+	}
+}
+
+{$BUCKY_HOSTNAMES} {
+	tls /certs/{$TLS_CERT_FILE} /certs/{$TLS_KEY_FILE}
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+	# Keeps the Host header (the app's CSRF check compares it with Origin)
+	# and sets X-Forwarded-For to the client's address.
+	reverse_proxy app:8080
+}

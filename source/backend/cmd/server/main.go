@@ -8,7 +8,11 @@
 //	server reset-password --user NAME
 //	                give NAME a temporary password and make them an active
 //	                admin, for when no admin can log in; prints the password
+//	server healthcheck
+//	                exit 0 if the running server is ready (GET /readyz), for
+//	                container health checks; needs only API_HOST and API_PORT
 //
+// The production image calls the binary bucky-server.
 // Configuration comes from environment variables; see internal/config.
 package main
 
@@ -40,7 +44,11 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/logging"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/refill"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/transactions"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/web"
 )
+
+// version is set at build time (-ldflags "-X main.version=…").
+var version = "dev"
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -59,6 +67,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, out, lo
 	}
 	var username string
 	switch cmd {
+	case "healthcheck":
+		return healthcheck(ctx, getenv)
 	case "serve", "migrate":
 	case "reset-password":
 		fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
@@ -71,7 +81,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, out, lo
 			return errors.New("reset-password needs --user")
 		}
 	default:
-		return fmt.Errorf("unknown command %q (want serve, migrate or reset-password)", cmd)
+		return fmt.Errorf("unknown command %q (want serve, migrate, reset-password or healthcheck)", cmd)
 	}
 
 	cfg, err := config.Load(getenv)
@@ -79,6 +89,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, out, lo
 		return err
 	}
 	logger := logging.New(cfg, logOut)
+	if cmd == "serve" {
+		logger.InfoContext(ctx, "starting", slog.String("version", version), slog.String("env", string(cfg.Env)))
+	}
 
 	pool, err := db.Open(ctx, cfg.DatabaseURL)
 	if err != nil {
@@ -110,13 +123,15 @@ func run(ctx context.Context, args []string, getenv func(string) string, out, lo
 	ledgerSvc := ledger.New(ledger.Options{AfterRecord: allocation.AfterRecord})
 	refills := refill.NewService(pool, ledgerSvc, refill.Options{})
 	handler, err := httpapi.NewHandler(logger, pool, httpapi.Options{
-		Auth:         authSvc,
-		Accounts:     accounts.NewService(pool, ledgerSvc, accounts.Options{}),
-		Cycles:       cycles.NewService(pool, cycles.Options{OnEnd: refills.OnEnd, OnStart: refills.OnStart}),
-		Buckets:      buckets.NewService(pool, ledgerSvc, buckets.Options{OnCreate: refills.OnCreate}),
-		Transactions: transactions.NewService(pool, ledgerSvc, transactions.Options{Refills: refills}),
-		Refills:      refills,
-		Docs:         cfg.Env == config.EnvDevelopment,
+		Auth:           authSvc,
+		Accounts:       accounts.NewService(pool, ledgerSvc, accounts.Options{}),
+		Cycles:         cycles.NewService(pool, cycles.Options{OnEnd: refills.OnEnd, OnStart: refills.OnStart}),
+		Buckets:        buckets.NewService(pool, ledgerSvc, buckets.Options{OnCreate: refills.OnCreate}),
+		Transactions:   transactions.NewService(pool, ledgerSvc, transactions.Options{Refills: refills}),
+		Refills:        refills,
+		Docs:           cfg.Env == config.EnvDevelopment,
+		Web:            web.Handler(),
+		TrustedProxies: cfg.TrustedProxies,
 	})
 	if err != nil {
 		return err
@@ -131,6 +146,38 @@ func run(ctx context.Context, args []string, getenv func(string) string, out, lo
 		IdleTimeout:       2 * time.Minute,
 	}
 	return serve(ctx, srv, cfg.ShutdownTimeout, logger)
+}
+
+// healthcheck asks the server running alongside (same API_HOST and API_PORT)
+// whether it is ready. The image has no curl, so its health check runs this.
+func healthcheck(ctx context.Context, getenv func(string) string) error {
+	host := getenv("API_HOST")
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	port := getenv("API_PORT")
+	if port == "" {
+		port = "8080"
+	}
+	return probe(ctx, "http://"+net.JoinHostPort(host, port)+"/readyz")
+}
+
+func probe(ctx context.Context, url string) error {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("not ready: %w", err)
+	}
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("not ready: %s", res.Status)
+	}
+	return nil
 }
 
 // resetPassword is the way back in when no admin can log in.

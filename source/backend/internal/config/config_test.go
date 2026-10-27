@@ -2,6 +2,8 @@ package config
 
 import (
 	"log/slog"
+	"net/netip"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -27,7 +29,7 @@ func TestLoadDefaults(t *testing.T) {
 		SessionIdleTimeout: 7 * 24 * time.Hour,
 		SessionMaxAge:      30 * 24 * time.Hour,
 	}
-	if cfg != want {
+	if !reflect.DeepEqual(cfg, want) {
 		t.Errorf("got %+v, want %+v", cfg, want)
 	}
 	if got := cfg.Addr(); got != ":8080" {
@@ -69,11 +71,12 @@ func TestLoadReportsAllErrors(t *testing.T) {
 		"SHUTDOWN_TIMEOUT":     "-1s",
 		"SESSION_IDLE_TIMEOUT": "soon",
 		"SESSION_MAX_AGE":      "0s",
+		"TRUSTED_PROXIES":      "10.0.0.0/8, proxy",
 	}))
 	if err == nil {
 		t.Fatal("expected an error")
 	}
-	for _, key := range []string{"APP_ENV", "DATABASE_URL", "API_PORT", "LOG_LEVEL", "LOG_FORMAT", "MIGRATE_ON_START", "SHUTDOWN_TIMEOUT", "SESSION_IDLE_TIMEOUT", "SESSION_MAX_AGE"} {
+	for _, key := range []string{"APP_ENV", "DATABASE_URL", "API_PORT", "LOG_LEVEL", "LOG_FORMAT", "MIGRATE_ON_START", "SHUTDOWN_TIMEOUT", "SESSION_IDLE_TIMEOUT", "SESSION_MAX_AGE", "TRUSTED_PROXIES"} {
 		if !strings.Contains(err.Error(), key) {
 			t.Errorf("error does not mention %s: %v", key, err)
 		}
@@ -88,5 +91,24 @@ func TestLoadSessionMaxAgeAtLeastIdle(t *testing.T) {
 	}))
 	if err == nil || !strings.Contains(err.Error(), "must not be shorter") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestLoadTrustedProxies(t *testing.T) {
+	cfg, err := Load(env(map[string]string{
+		"DATABASE_URL":    "postgres://x",
+		"TRUSTED_PROXIES": " 172.30.0.0/24, 10.1.2.3 ,, ::1, 192.168.1.77/24",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []netip.Prefix{
+		netip.MustParsePrefix("172.30.0.0/24"),
+		netip.MustParsePrefix("10.1.2.3/32"),
+		netip.MustParsePrefix("::1/128"),
+		netip.MustParsePrefix("192.168.1.0/24"),
+	}
+	if !reflect.DeepEqual(cfg.TrustedProxies, want) {
+		t.Errorf("got %v, want %v", cfg.TrustedProxies, want)
 	}
 }

@@ -1,0 +1,12 @@
+# Only the sources the Dockerfile needs; never local config or data.
+*
+!source/frontend/
+!source/backend/
+source/frontend/node_modules/
+source/frontend/dist/
+source/frontend/coverage/
+source/backend/tmp/
+source/backend/bin/
+source/backend/internal/web/dist/*
+**/.env*
+**/*.log

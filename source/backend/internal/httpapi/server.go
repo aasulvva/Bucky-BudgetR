@@ -8,6 +8,8 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/netip"
+	"strings"
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/accounts"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/api"
@@ -42,6 +44,12 @@ type Options struct {
 	// Docs serves the interactive API docs at /api/docs and the spec at
 	// /api/openapi.json. Meant for development only.
 	Docs bool
+	// Web serves the frontend: every GET or HEAD outside /api/ and the
+	// health probes that no route matches. Nil leaves those as 404s.
+	Web http.Handler
+	// TrustedProxies are the reverse proxies whose X-Forwarded-For header
+	// gives the client's address (see ClientAddr).
+	TrustedProxies []netip.Prefix
 }
 
 // NewHandler returns the root handler with all routes and middleware.
@@ -67,14 +75,16 @@ func NewHandler(logger *slog.Logger, db Pinger, opts Options) (http.Handler, err
 		return nil, err
 	}
 
-	// Outermost first: request ID, access log, panic recovery, CSRF, session,
-	// then the spec-driven gate (auth and validation) and the routes.
-	h := problemOnUnmatched(mux)
+	// Outermost first: request ID, client address, access log, panic
+	// recovery, CSRF, session, then the spec-driven gate (auth and
+	// validation) and the routes, with the frontend for the rest.
+	h := problemOnUnmatched(mux, opts.Web)
 	h = gate(h)
 	h = Sessions(opts.Auth, logger)(h)
 	h = CSRF(h)
 	h = Recover(logger)(h)
 	h = AccessLog(logger)(h)
+	h = ClientAddr(opts.TrustedProxies)(h)
 	h = RequestID(h)
 	return h, nil
 }
@@ -131,12 +141,17 @@ func serveSpec(logger *slog.Logger) http.HandlerFunc {
 }
 
 // problemOnUnmatched replaces ServeMux's plain-text 404 and 405 responses with
-// problem details. The Allow header that ServeMux sets on a 405 is kept.
-func problemOnUnmatched(mux *http.ServeMux) http.Handler {
+// problem details. The Allow header that ServeMux sets on a 405 is kept. A
+// page request outside the API goes to web, the frontend, if there is one.
+func problemOnUnmatched(mux *http.ServeMux, web http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h, pattern := mux.Handler(r)
 		if pattern != "" {
 			mux.ServeHTTP(w, r)
+			return
+		}
+		if web != nil && isPageRequest(r) {
+			web.ServeHTTP(w, r)
 			return
 		}
 		uw := &unmatchedWriter{ResponseWriter: w}
@@ -148,6 +163,12 @@ func problemOnUnmatched(mux *http.ServeMux) http.Handler {
 			WriteProblem(w, r, http.StatusMethodNotAllowed, "method_not_allowed", "")
 		}
 	})
+}
+
+func isPageRequest(r *http.Request) bool {
+	p := r.URL.Path
+	return (r.Method == http.MethodGet || r.Method == http.MethodHead) &&
+		p != "/api" && !strings.HasPrefix(p, "/api/") && p != "/healthz" && p != "/readyz"
 }
 
 // unmatchedWriter swallows 404 and 405 responses so a problem can be written in

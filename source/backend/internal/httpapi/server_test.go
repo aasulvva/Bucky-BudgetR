@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 	"testing"
 
@@ -228,5 +229,65 @@ func TestAccessLog(t *testing.T) {
 	serve(t, h, http.MethodGet, "/healthz")
 	if !strings.Contains(logs.String(), `"level":"DEBUG"`) {
 		t.Errorf("health check not logged at debug: %s", logs.String())
+	}
+}
+
+func TestClientAddr(t *testing.T) {
+	trusted := []netip.Prefix{netip.MustParsePrefix("172.30.0.0/24"), netip.MustParsePrefix("::1/128")}
+	var got string
+	h := httpapi.ClientAddr(trusted)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		got = httpapi.ClientIPFromContext(r.Context())
+	}))
+	for _, tc := range []struct {
+		name, remote string
+		xff          []string
+		want         string
+	}{
+		{"direct", "192.0.2.7:5000", nil, "192.0.2.7"},
+		{"direct, forged header", "192.0.2.7:5000", []string{"198.51.100.1"}, "192.0.2.7"},
+		{"through the proxy", "172.30.0.5:4000", []string{"192.0.2.7"}, "192.0.2.7"},
+		{"forged hop before the proxy's", "172.30.0.5:4000", []string{"198.51.100.1, 192.0.2.7"}, "192.0.2.7"},
+		{"several headers", "172.30.0.5:4000", []string{"198.51.100.1", "192.0.2.7"}, "192.0.2.7"},
+		{"trusted hops skipped", "172.30.0.5:4000", []string{"192.0.2.7, 172.30.0.9"}, "192.0.2.7"},
+		{"proxy without the header", "172.30.0.5:4000", nil, "172.30.0.5"},
+		{"garbled header", "172.30.0.5:4000", []string{"nonsense"}, "172.30.0.5"},
+		{"IPv6 proxy", "[::1]:4000", []string{"2001:db8::7"}, "2001:db8::7"},
+		{"IPv4-mapped", "[::ffff:172.30.0.5]:4000", []string{"::ffff:192.0.2.7"}, "192.0.2.7"},
+	} {
+		r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/healthz", nil)
+		r.RemoteAddr = tc.remote
+		for _, v := range tc.xff {
+			r.Header.Add("X-Forwarded-For", v)
+		}
+		h.ServeHTTP(httptest.NewRecorder(), r)
+		if got != tc.want {
+			t.Errorf("%s: got %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestServesTheFrontend(t *testing.T) {
+	web := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("the app"))
+	})
+	h := newHandler(t, discard(), dbUp, httpapi.Options{Web: web})
+	for _, path := range []string{"/", "/admin", "/assets/app.js"} {
+		w := serve(t, h, http.MethodGet, path)
+		if w.Code != http.StatusOK || w.Body.String() != "the app" {
+			t.Errorf("%s: %d %q", path, w.Code, w.Body)
+		}
+	}
+	// The API and the probes keep their own answers.
+	for _, path := range []string{"/api/v1/nope", "/api", "/api/"} {
+		w := serve(t, h, http.MethodGet, path)
+		if w.Code != http.StatusNotFound || w.Header().Get("Content-Type") != "application/problem+json" {
+			t.Errorf("%s: %d %s", path, w.Code, w.Header().Get("Content-Type"))
+		}
+	}
+	if w := serve(t, h, http.MethodGet, "/healthz"); w.Code != http.StatusOK || w.Body.String() == "the app" {
+		t.Errorf("/healthz: %d %q", w.Code, w.Body)
+	}
+	if w := serve(t, h, http.MethodPost, "/admin"); w.Code != http.StatusMethodNotAllowed && w.Code != http.StatusNotFound {
+		t.Errorf("POST /admin: %d", w.Code)
 	}
 }

@@ -4,9 +4,12 @@ import (
 	"context"
 	"crypto/rand"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/netip"
 	"regexp"
 	"runtime/debug"
+	"strings"
 	"time"
 )
 
@@ -37,6 +40,62 @@ func RequestIDFromContext(ctx context.Context) string {
 	return id
 }
 
+type clientIPKey struct{}
+
+// ClientAddr stores the client's IP address in the context, for login rate
+// limiting and the access log. It is the connection's address; behind a
+// trusted reverse proxy, the X-Forwarded-For address that proxy added. Other
+// X-Forwarded-For headers are ignored, since clients can send anything.
+func ClientAddr(trusted []netip.Prefix) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := context.WithValue(r.Context(), clientIPKey{}, clientIP(r, trusted))
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+// ClientIPFromContext returns the address set by ClientAddr, or "".
+func ClientIPFromContext(ctx context.Context) string {
+	ip, _ := ctx.Value(clientIPKey{}).(string)
+	return ip
+}
+
+// clientIP is the connection's address or, when that is a trusted proxy, the
+// rightmost X-Forwarded-For address that isn't one: each proxy appends the
+// address it got the request from, so hops further left could be forged.
+func clientIP(r *http.Request, trusted []netip.Prefix) string {
+	remote := r.RemoteAddr
+	if host, _, err := net.SplitHostPort(remote); err == nil {
+		remote = host
+	}
+	addr, err := netip.ParseAddr(remote)
+	if err != nil || !isTrusted(addr, trusted) {
+		return remote
+	}
+	hops := strings.Split(strings.Join(r.Header.Values("X-Forwarded-For"), ","), ",")
+	for i := len(hops) - 1; i >= 0; i-- {
+		hop, err := netip.ParseAddr(strings.TrimSpace(hops[i]))
+		if err != nil {
+			return remote // missing or garbled: the proxy is all we know
+		}
+		if !isTrusted(hop.Unmap(), trusted) {
+			return hop.Unmap().String()
+		}
+	}
+	return remote
+}
+
+func isTrusted(addr netip.Addr, trusted []netip.Prefix) bool {
+	addr = addr.Unmap()
+	for _, p := range trusted {
+		if p.Contains(addr) {
+			return true
+		}
+	}
+	return false
+}
+
 // AccessLog logs one line per request. Successful health checks are logged at
 // debug level so that probes don't flood the log.
 func AccessLog(logger *slog.Logger) func(http.Handler) http.Handler {
@@ -59,6 +118,7 @@ func AccessLog(logger *slog.Logger) func(http.Handler) http.Handler {
 				slog.Int("status", rec.status()),
 				slog.Int("bytes", rec.bytes),
 				slog.Duration("duration", time.Since(start)),
+				slog.String("client_ip", ClientIPFromContext(r.Context())),
 				slog.String("request_id", RequestIDFromContext(r.Context())),
 			)
 		})
