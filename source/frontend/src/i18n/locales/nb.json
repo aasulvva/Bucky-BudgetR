@@ -781,5 +781,63 @@
     },
     "tooManyAttempts_one": "For mange mislykkede forsøk. Prøv igjen om {{count}} sekund.",
     "tooManyAttempts_other": "For mange mislykkede forsøk. Prøv igjen om {{count}} sekunder."
+  },
+  "debug": {
+    "open": "Feilsøkingsinnstillinger",
+    "title": "Feilsøkingsinnstillinger",
+    "devOnly": "Bare under utvikling: produksjonsbygg har dem ikke.",
+    "change": "Endre",
+    "banner": "Simulert tid: {{time}}",
+    "bannerFrozen": "Simulert tid: {{time}} (fryst)",
+    "tabs": {
+      "time": "Tid",
+      "snapshots": "Øyeblikksbilder"
+    },
+    "time": {
+      "now": "Servertid",
+      "real": "Virkelig tid: {{time}}",
+      "modes": {
+        "real": "Virkelig",
+        "running": "Simulert, går",
+        "frozen": "Simulert, fryst"
+      },
+      "setTo": "Sett tiden til",
+      "set": "Sett",
+      "jump": "Hopp fram",
+      "hour": "+1 time",
+      "day": "+1 dag",
+      "week": "+1 uke",
+      "month": "+1 måned",
+      "cycleEnd": "Til periodens slutt",
+      "freeze": "Frys",
+      "freezeHint": "Tiden står stille i stedet for å gå videre fra tidspunktet du satte.",
+      "reset": "Tilbake til virkelig tid",
+      "affects": "Flytter tiden for hele serveren: kontoer, bøtter, perioder, påfyll og transaksjoner. Innlogging bruker fortsatt virkelig tid."
+    },
+    "snapshots": {
+      "name": "Navn",
+      "namePlaceholder": "f.eks. Før perioden slutter",
+      "save": "Lagre øyeblikksbilde",
+      "import": "Importer",
+      "empty": "Ingen øyeblikksbilder ennå.",
+      "takenAt": "Tatt {{time}}",
+      "from": "Fra {{user}}",
+      "oldSchema": "Eldre skjema",
+      "oldSchemaHint": "Tatt før en databasemigrering, så det kan ikke gjenopprettes.",
+      "restore": "Gjenopprett",
+      "rename": "Gi nytt navn",
+      "export": "Eksporter",
+      "more": "Mer for {{name}}",
+      "restoreTitle": "Gjenopprette «{{name}}»?",
+      "renameTitle": "Gi «{{name}}» nytt navn",
+      "deleteTitle": "Slette «{{name}}»?",
+      "restoreText": "Alle dataene dine (kontoer, bøtter, perioder, transaksjoner og innstillinger) erstattes med øyeblikksbildets.",
+      "cloneText": "Øyeblikksbildet er {{user}} sitt: du får en kopi med nye ID-er.",
+      "setClock": "Sett også tiden til {{time}}",
+      "deleteText": "Bare øyeblikksbildet slettes; dataene dine er som før.",
+      "saved": "Øyeblikksbildet er lagret",
+      "restored": "Øyeblikksbildet er gjenopprettet",
+      "imported": "Øyeblikksbildet er importert"
+    }
   }
 }

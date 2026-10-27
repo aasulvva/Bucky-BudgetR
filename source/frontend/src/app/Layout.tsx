@@ -3,6 +3,7 @@ import {
   AppShell,
   Avatar,
   Badge,
+  Box,
   Button,
   Drawer,
   Group,
@@ -26,6 +27,8 @@ import { Link, Outlet, useLocation } from "react-router";
 
 import { CycleBanners } from "@/components/cycles/CycleBanners";
 import { CycleStatus } from "@/components/cycles/CycleStatus";
+import { DebugButton, DebugMenuItem, DebugRoot } from "@/components/debug";
+import { useClockVersion } from "@/lib/clock";
 
 import classes from "./Layout.module.css";
 import { findNav, navTabs, profileItems, type NavItem, type NavTab } from "./nav";
@@ -42,6 +45,8 @@ export function Layout() {
   const theme = useMantineTheme();
   const isDesktop = useMediaQuery(`(min-width: ${theme.breakpoints.sm})`, true);
   const current = findNav(useLocation().pathname);
+  // Moving the debug clock (development only) redraws the screen.
+  const clockVersion = useClockVersion();
 
   return (
     <AppShell
@@ -74,8 +79,9 @@ export function Layout() {
       {isDesktop && <ReactQueryDevtools buttonPosition="bottom-right" />}
 
       <AppShell.Main>
+        <DebugRoot />
         <CycleBanners />
-        <Outlet />
+        <Outlet key={clockVersion} />
       </AppShell.Main>
 
       {!isDesktop && (
@@ -163,7 +169,12 @@ function SideNav({ current }: { current: Current }) {
         </Stack>
       </AppShell.Section>
       <AppShell.Section pt="sm">
-        <ProfileMenu placement="sidebar" />
+        <Group gap={4} wrap="nowrap">
+          <Box flex={1} miw={0}>
+            <ProfileMenu placement="sidebar" />
+          </Box>
+          <DebugButton />
+        </Group>
       </AppShell.Section>
     </>
   );
@@ -330,6 +341,7 @@ function ProfileMenu({ placement }: { placement: "sidebar" | "header" }) {
             </Menu.Item>
           ))}
         <ColorSchemeItem />
+        {placement === "header" && <DebugMenuItem />}
         <Menu.Divider />
         <SignOutItem />
       </Menu.Dropdown>

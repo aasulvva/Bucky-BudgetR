@@ -14,7 +14,7 @@ make migrate   # apply database migrations
 make dev       # run the backend and frontend with live reload
 ```
 
-Run `make` to list all targets (`db-reset`, `psql`, `generate`, `lint`, `test`, …).
+Run `make` to list all targets (`db-reset`, `psql`, `generate`, `lint`, `test`, …). In development, the bug icon next to your username opens the debug settings: simulated time and snapshots of your data (see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#debug-settings)).
 
 ## Deployment
 

@@ -781,5 +781,63 @@
     },
     "tooManyAttempts_one": "Too many failed attempts. Try again in {{count}} second.",
     "tooManyAttempts_other": "Too many failed attempts. Try again in {{count}} seconds."
+  },
+  "debug": {
+    "open": "Debug settings",
+    "title": "Debug settings",
+    "devOnly": "Development only: production builds don't have these.",
+    "change": "Change",
+    "banner": "Simulated time: {{time}}",
+    "bannerFrozen": "Simulated time: {{time}} (frozen)",
+    "tabs": {
+      "time": "Time",
+      "snapshots": "Snapshots"
+    },
+    "time": {
+      "now": "Server time",
+      "real": "Real time: {{time}}",
+      "modes": {
+        "real": "Real",
+        "running": "Simulated, running",
+        "frozen": "Simulated, frozen"
+      },
+      "setTo": "Set the time to",
+      "set": "Set",
+      "jump": "Jump ahead",
+      "hour": "+1 hour",
+      "day": "+1 day",
+      "week": "+1 week",
+      "month": "+1 month",
+      "cycleEnd": "To the cycle's end",
+      "freeze": "Freeze",
+      "freezeHint": "Time stands still instead of running on from the set moment.",
+      "reset": "Back to real time",
+      "affects": "Moves the time for the whole server: accounts, buckets, cycles, refills and transactions. Logins keep the real time."
+    },
+    "snapshots": {
+      "name": "Name",
+      "namePlaceholder": "e.g. Before the cycle ends",
+      "save": "Save snapshot",
+      "import": "Import",
+      "empty": "No snapshots yet.",
+      "takenAt": "Taken {{time}}",
+      "from": "From {{user}}",
+      "oldSchema": "Older schema",
+      "oldSchemaHint": "Taken before a database migration, so it can't be restored.",
+      "restore": "Restore",
+      "rename": "Rename",
+      "export": "Export",
+      "more": "More for {{name}}",
+      "restoreTitle": "Restore “{{name}}”?",
+      "renameTitle": "Rename “{{name}}”",
+      "deleteTitle": "Delete “{{name}}”?",
+      "restoreText": "All your data (accounts, buckets, cycles, transactions and preferences) is replaced by the snapshot's.",
+      "cloneText": "It's {{user}}'s snapshot: you get a copy with new IDs.",
+      "setClock": "Also set the time to {{time}}",
+      "deleteText": "Only the snapshot is deleted; your data stays as it is.",
+      "saved": "Snapshot saved",
+      "restored": "Snapshot restored",
+      "imported": "Snapshot imported"
+    }
   }
 }

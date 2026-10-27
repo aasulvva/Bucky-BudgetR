@@ -1,6 +1,11 @@
 # golangci-lint v2 (go tool golangci-lint). Run with `make lint`.
 version: "2"
 
+run:
+  # Lint the debug settings too (cmd/server/debug_on.go); go vet covers the
+  # untagged debug_off.go.
+  build-tags: [debug]
+
 linters:
   # The standard set (errcheck, govet, ineffassign, staticcheck, unused) plus:
   enable:

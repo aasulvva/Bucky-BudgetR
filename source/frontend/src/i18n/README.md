@@ -39,5 +39,8 @@ The words for the app's concepts, so the same thing is called the same everywher
 | temporary password          | midlertidig passord                               | mellombels passord                    |
 | setup / reset link          | lenke (lenken)                                    | lenkje (lenkja, ho)                   |
 | deactivate / activate       | deaktivere / aktivere                             | deaktivere / aktivere                 |
+| debug settings (dev only)   | feilsøkingsinnstillinger                          | feilsøkingsinnstillingar              |
+| simulated time              | simulert tid                                      | simulert tid                          |
+| snapshot                    | øyeblikksbilde (-bildet, -bilder)                 | augneblinksbilete (-biletet)          |
 
 Nynorsk uses the _a_-endings and _vert_ for the passive (_vert fylt på_), and _han/ho_ for masculine and feminine nouns (_perioden … han_).

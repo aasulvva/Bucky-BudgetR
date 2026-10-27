@@ -2,6 +2,7 @@ import { DateTimePicker, type DateTimePickerProps } from "@mantine/dates";
 import dayjs from "dayjs";
 import { useTranslation } from "react-i18next";
 
+import { now } from "@/lib/clock";
 import { formatDateTime } from "@/lib/dates";
 
 interface DateTimeInputProps extends Omit<
@@ -23,7 +24,8 @@ export function DateTimeInput({ value, onChange, ...props }: DateTimeInputProps)
     <DateTimePicker
       clearable
       placeholder={t("common.now")}
-      maxDate={new Date()}
+      maxDate={now()}
+      defaultDate={now()}
       valueFormat={(local) => formatDateTime(dayjs(local).toDate())}
       {...props}
       value={value === null ? null : dayjs(value).format("YYYY-MM-DD HH:mm:ss")}

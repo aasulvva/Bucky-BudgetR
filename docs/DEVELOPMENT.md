@@ -156,6 +156,17 @@ curl -c jar -H 'X-Bucky-CSRF: 1' -H 'Content-Type: application/json' \
 curl -b jar localhost:8080/api/v1/me
 ```
 
+### Debug settings
+
+In development, the bug icon next to the user block (on mobile, in the profile menu) opens the **debug settings** (#100). Any logged-in user can use them.
+
+- **Simulated time:** moves the clock for the whole server, running on from the set moment or frozen, with shortcuts (+1 hour/day/week/month, to the active cycle's end). The accounts, buckets, cycles, refill and transactions services use it (`main.go` passes `debug.Clock.Now` as their `Now`), and so does the frontend (`lib/clock.ts`), so "today", overdue cycles and the latest pickable time agree with the server. Auth keeps the real time, so jumping ahead doesn't end sessions. The database's own `now()` stays real too; it only fills audit columns (`created_at`, `modified_at`). The setting is kept in the database (`debug_clock`), so it survives air's rebuilds; a violet banner shows while it isn't the real time.
+- **Snapshots:** save all of your data (accounts, cycles, buckets, tags, transactions and their lines, refills and preferences) under a name, and restore it later. Restoring your own snapshot keeps its IDs. Someone else's, or an imported file, is restored as a copy with new IDs (`debug/remap.go`; `TestIDColumns` checks its list of ID columns against the schema's keys). Restore can also set the clock to when the snapshot was taken. Export downloads a snapshot as JSON, and import reads one back, e.g. to share a scenario. A snapshot only restores at the schema version it was taken at.
+- **How restore works:** the ledger is immutable (`ledger_immutable` triggers), so a restore deletes and re-inserts the user's rows with `SET LOCAL session_replication_role = replica`, which skips triggers, foreign key checks included, for that transaction. That needs a superuser role, as the dev database's `bucky` is. The stored CAF, cycle states and refills come back as they were, so nothing is recomputed.
+- **Only in development builds:** `internal/debug` is linked only with `-tags debug` (`cmd/server/debug_on.go`; `debug_off.go` is the real clock and no routes), and only `APP_ENV=development` turns it on. air, `make test` and `make lint` use the tag; the Dockerfile doesn't, and `make debug-tag-check` (also in CI) fails if a production build links the package. Its tables (`debug_clock`, `debug_snapshots`) are created at start, not by migrations, so production databases never have them. The routes (`/api/dev/…`) are outside the OpenAPI spec and check the session themselves. The frontend loads `components/debug` only when `import.meta.env.DEV`, so production bundles drop it.
+
+After pulling this change, restart `make dev`: air only reads `.air.toml` when it starts.
+
 ### Tests
 
 `make test` starts the dev database and runs the tests. A test that needs PostgreSQL calls `testdb.New(t)` and gets its own database. That database is copied from a migrated template (`bucky_test_tmpl_<hash>`) and dropped when the test ends, so tests can commit and run in parallel. The template is rebuilt whenever the migrations change. Set `TEST_DATABASE_URL` to use another server. Without a database URL these tests are skipped, except when `CI` is set, where they fail.
@@ -230,7 +241,7 @@ Tests never reach a server. `src/test/fixtures.ts` builds sample accounts and bu
 
 - Work on a branch and merge to `main` through a pull request. The repo is private on GitHub's free plan, which doesn't enforce branch protection, so this is a convention: **merge only when CI is green**.
 - `.github/workflows/ci.yml` runs on every PR and on every push to `main`. It has four jobs:
-  - **Backend:** `go mod verify`, `go vet`, golangci-lint, then `go test -race` against a PostgreSQL service container, then a build.
+  - **Backend:** `go mod verify`, `go vet` (with and without the `debug` tag), golangci-lint, then `go test -race -tags debug` against a PostgreSQL service container, the debug tag check, then a build.
   - **Frontend:** `npm ci`, ESLint, `tsc`, Vitest and `vite build`.
   - **API contract:** `make lint-spec` and `make generate-check`, which fails if the committed generated code is out of date.
   - **Production image:** builds the Dockerfile (nothing is pushed) and checks `deploy/compose.yaml` with `docker compose config`, with and without the tailnet.

@@ -50,6 +50,9 @@ type Options struct {
 	// TrustedProxies are the reverse proxies whose X-Forwarded-For header
 	// gives the client's address (see ClientAddr).
 	TrustedProxies []netip.Prefix
+	// Debug registers the development-only debug routes (/api/dev/), which
+	// are outside the spec. Nil in production.
+	Debug func(*http.ServeMux)
 }
 
 // NewHandler returns the root handler with all routes and middleware.
@@ -68,6 +71,9 @@ func NewHandler(logger *slog.Logger, db Pinger, opts Options) (http.Handler, err
 	if opts.Docs {
 		mux.HandleFunc("GET /api/docs", serveDocs)
 		mux.HandleFunc("GET /api/openapi.json", serveSpec(logger))
+	}
+	if opts.Debug != nil {
+		opts.Debug(mux)
 	}
 
 	gate, err := Gate()

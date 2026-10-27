@@ -21,6 +21,7 @@ import {
   today,
   type DateRange,
 } from "@/lib/cycles";
+import { now as clockNow } from "@/lib/clock";
 import { formatDate } from "@/lib/dates";
 
 import { CycleDates } from "./CycleDates";
@@ -87,7 +88,7 @@ function StartCycleForm({
     onError: () => refresh(),
   });
 
-  const [openedAt] = useState(() => Date.now());
+  const [openedAt] = useState(() => clockNow().getTime());
   const startsLater = next !== null && new Date(next.start_at).getTime() > openedAt;
 
   return (
