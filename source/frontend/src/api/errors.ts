@@ -62,7 +62,8 @@ export async function unwrap<R extends FetchResult>(request: Promise<R>): Promis
   return result.data as SuccessData<R>;
 }
 
-function toProblem(body: unknown, response: Response): Problem {
+/** The problem details of a failed response, made up if the body has none. */
+export function toProblem(body: unknown, response: Response): Problem {
   if (isProblem(body)) return body;
   // Not from our API, e.g. the dev proxy failing to reach the backend.
   return {

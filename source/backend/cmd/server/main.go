@@ -120,18 +120,25 @@ func run(ctx context.Context, args []string, getenv func(string) string, out, lo
 	})
 	go authSvc.CleanupLoop(ctx, time.Hour)
 
+	// now is the business services' clock: the real one, or in development
+	// the debug clock. Auth always keeps the real time.
+	now, debugRoutes, err := setupDebug(ctx, cfg, pool, logger)
+	if err != nil {
+		return err
+	}
 	ledgerSvc := ledger.New(ledger.Options{AfterRecord: allocation.AfterRecord})
-	refills := refill.NewService(pool, ledgerSvc, refill.Options{})
+	refills := refill.NewService(pool, ledgerSvc, refill.Options{Now: now})
 	handler, err := httpapi.NewHandler(logger, pool, httpapi.Options{
 		Auth:           authSvc,
-		Accounts:       accounts.NewService(pool, ledgerSvc, accounts.Options{}),
-		Cycles:         cycles.NewService(pool, cycles.Options{OnEnd: refills.OnEnd, OnStart: refills.OnStart}),
-		Buckets:        buckets.NewService(pool, ledgerSvc, buckets.Options{OnCreate: refills.OnCreate}),
-		Transactions:   transactions.NewService(pool, ledgerSvc, transactions.Options{Refills: refills}),
+		Accounts:       accounts.NewService(pool, ledgerSvc, accounts.Options{Now: now}),
+		Cycles:         cycles.NewService(pool, cycles.Options{Now: now, OnEnd: refills.OnEnd, OnStart: refills.OnStart}),
+		Buckets:        buckets.NewService(pool, ledgerSvc, buckets.Options{Now: now, OnCreate: refills.OnCreate}),
+		Transactions:   transactions.NewService(pool, ledgerSvc, transactions.Options{Now: now, Refills: refills}),
 		Refills:        refills,
 		Docs:           cfg.Env == config.EnvDevelopment,
 		Web:            web.Handler(),
 		TrustedProxies: cfg.TrustedProxies,
+		Debug:          debugRoutes,
 	})
 	if err != nil {
 		return err

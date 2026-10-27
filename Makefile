@@ -24,7 +24,7 @@ DATABASE_URL      ?= postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@localhost:
 export
 
 .DEFAULT_GOAL := help
-.PHONY: help dev dev-backend dev-frontend db-up db-down db-reset psql migrate generate generate-check lint lint-spec test
+.PHONY: help dev dev-backend dev-frontend db-up db-down db-reset psql migrate generate generate-check lint lint-spec debug-tag-check test
 
 help: ## Show this help
 	@grep -hE '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -106,7 +106,8 @@ lint-spec: ## Lint the OpenAPI spec (Redocly CLI)
 
 lint: lint-spec ## Lint the API spec, backend (go vet, golangci-lint) and frontend (ESLint, tsc)
 ifneq ($(HAS_BACKEND),)
-	cd $(BACKEND) && go vet ./... && go tool golangci-lint run
+	cd $(BACKEND) && go vet ./... && go vet -tags debug ./... && go tool golangci-lint run
+	$(MAKE) -s debug-tag-check
 else
 	$(call skip,backend)
 endif
@@ -116,9 +117,17 @@ else
 	$(call skip,frontend)
 endif
 
+# The debug settings (#100) must only be in -tags debug builds: never in the
+# production image, always in development.
+debug-tag-check: ## Check that only debug builds (-tags debug) link the debug settings
+	@cd $(BACKEND) && if go list -deps ./cmd/server | grep -q '/internal/debug$$'; then \
+		echo "The production build links internal/debug."; exit 1; fi
+	@cd $(BACKEND) && if ! go list -tags debug -deps ./cmd/server | grep -q '/internal/debug$$'; then \
+		echo "The debug build doesn't link internal/debug."; exit 1; fi
+
 test: db-up ## Run the backend and frontend tests (backend tests use the dev database)
 ifneq ($(HAS_BACKEND),)
-	cd $(BACKEND) && go test ./...
+	cd $(BACKEND) && go test -tags debug ./...
 else
 	$(call skip,backend)
 endif

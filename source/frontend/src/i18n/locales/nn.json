@@ -781,5 +781,63 @@
     },
     "tooManyAttempts_one": "For mange mislukka forsøk. Prøv igjen om {{count}} sekund.",
     "tooManyAttempts_other": "For mange mislukka forsøk. Prøv igjen om {{count}} sekund."
+  },
+  "debug": {
+    "open": "Feilsøkingsinnstillingar",
+    "title": "Feilsøkingsinnstillingar",
+    "devOnly": "Berre under utvikling: produksjonsbygg har dei ikkje.",
+    "change": "Endre",
+    "banner": "Simulert tid: {{time}}",
+    "bannerFrozen": "Simulert tid: {{time}} (fryst)",
+    "tabs": {
+      "time": "Tid",
+      "snapshots": "Augneblinksbilete"
+    },
+    "time": {
+      "now": "Servertid",
+      "real": "Verkeleg tid: {{time}}",
+      "modes": {
+        "real": "Verkeleg",
+        "running": "Simulert, går",
+        "frozen": "Simulert, fryst"
+      },
+      "setTo": "Set tida til",
+      "set": "Set",
+      "jump": "Hopp fram",
+      "hour": "+1 time",
+      "day": "+1 dag",
+      "week": "+1 veke",
+      "month": "+1 månad",
+      "cycleEnd": "Til slutten av perioden",
+      "freeze": "Frys",
+      "freezeHint": "Tida står stille i staden for å gå vidare frå tidspunktet du sette.",
+      "reset": "Tilbake til verkeleg tid",
+      "affects": "Flyttar tida for heile serveren: kontoar, bøtter, periodar, påfyll og transaksjonar. Innlogging brukar framleis verkeleg tid."
+    },
+    "snapshots": {
+      "name": "Namn",
+      "namePlaceholder": "t.d. Før perioden sluttar",
+      "save": "Lagre augneblinksbilete",
+      "import": "Importer",
+      "empty": "Ingen augneblinksbilete enno.",
+      "takenAt": "Teke {{time}}",
+      "from": "Frå {{user}}",
+      "oldSchema": "Eldre skjema",
+      "oldSchemaHint": "Teke før ei databasemigrering, så det kan ikkje gjenopprettast.",
+      "restore": "Gjenopprett",
+      "rename": "Gje nytt namn",
+      "export": "Eksporter",
+      "more": "Meir for {{name}}",
+      "restoreTitle": "Gjenopprette «{{name}}»?",
+      "renameTitle": "Gje «{{name}}» nytt namn",
+      "deleteTitle": "Slette «{{name}}»?",
+      "restoreText": "Alle dataa dine (kontoar, bøtter, periodar, transaksjonar og innstillingar) vert bytte ut med dataa i augneblinksbiletet.",
+      "cloneText": "Augneblinksbiletet er {{user}} sitt: du får ein kopi med nye ID-ar.",
+      "setClock": "Set òg tida til {{time}}",
+      "deleteText": "Berre augneblinksbiletet vert sletta; dataa dine er som før.",
+      "saved": "Augneblinksbiletet er lagra",
+      "restored": "Augneblinksbiletet er gjenoppretta",
+      "imported": "Augneblinksbiletet er importert"
+    }
   }
 }

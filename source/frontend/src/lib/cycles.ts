@@ -6,6 +6,7 @@ import dayjs from "dayjs";
 
 import i18n from "@/i18n";
 
+import { now as clockNow } from "./clock";
 import { parseDate } from "./dates";
 import { getLocale } from "./locale";
 
@@ -20,7 +21,7 @@ interface CycleTimes {
 const FORMAT = "YYYY-MM-DD";
 
 /** Today's local date. */
-export function today(now = new Date()): LocalDate {
+export function today(now = clockNow()): LocalDate {
   return dayjs(now).format(FORMAT);
 }
 
@@ -62,24 +63,24 @@ export function formatDateRange(from: LocalDate, to: LocalDate, locale = getLoca
 }
 
 /** Days from today to the cycle's last day: 0 on the last day, negative when overdue. */
-export function daysLeft(cycle: CycleTimes, now = new Date()): number {
+export function daysLeft(cycle: CycleTimes, now = clockNow()): number {
   return dayjs(lastDay(cycle)).diff(dayjs(now).startOf("day"), "day");
 }
 
 /** The active cycle's planned end has passed: bucket transactions are refused. */
-export function isOverdue(cycle: CycleTimes, now = new Date()): boolean {
+export function isOverdue(cycle: CycleTimes, now = clockNow()): boolean {
   return new Date(cycle.end_at).getTime() <= now.getTime();
 }
 
 /** "6 days left", "Last day" or "Overdue". */
-export function daysLeftLabel(cycle: CycleTimes, now = new Date()): string {
+export function daysLeftLabel(cycle: CycleTimes, now = clockNow()): string {
   if (isOverdue(cycle, now)) return i18n.t("cycles.overdue");
   const days = daysLeft(cycle, now);
   return days <= 0 ? i18n.t("cycles.lastDay") : i18n.t("cycles.daysLeft", { count: days });
 }
 
 /** The same, short for the mobile header: "6 d left". */
-export function daysLeftShort(cycle: CycleTimes, now = new Date()): string {
+export function daysLeftShort(cycle: CycleTimes, now = clockNow()): string {
   if (isOverdue(cycle, now)) return i18n.t("cycles.overdue");
   const days = daysLeft(cycle, now);
   return days <= 0 ? i18n.t("cycles.lastDay") : i18n.t("cycles.daysLeftShort", { count: days });
@@ -102,7 +103,7 @@ export interface DateRange {
 }
 
 /** What's wrong with the dates of a cycle that must still lie ahead, if anything. */
-export function rangeProblem(range: DateRange, now = new Date()): string | undefined {
+export function rangeProblem(range: DateRange, now = clockNow()): string | undefined {
   if (range.end < range.start) return i18n.t("cycles.endBeforeStart");
   if (range.end < today(now)) return i18n.t("cycles.endInFuture");
   return undefined;

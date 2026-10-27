@@ -11,6 +11,7 @@ import { unwrap } from "@/api/errors";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { QueryState } from "@/components/QueryState";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
+import { now as clockNow } from "@/lib/clock";
 import { endPreview } from "@/lib/cycleEnd";
 import { cycleRange, daysLeft, isOverdue, lastDay } from "@/lib/cycles";
 import { formatDate } from "@/lib/dates";
@@ -50,7 +51,7 @@ function EndForm({
   const { t } = useTranslation();
   const refresh = useRefreshCycles();
   const buckets = useBuckets();
-  const now = new Date();
+  const now = clockNow();
   const early = !isOverdue(active, now);
   // Where the cycle will end: now when early, else its planned end.
   const endsAt = early ? now : new Date(active.end_at);

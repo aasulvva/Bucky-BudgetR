@@ -11,6 +11,7 @@ import type {
   TransactionCorrection,
 } from "@/api/transactions";
 
+import { now as clockNow } from "./clock";
 import { addAmounts, compareAmounts, splitAmount, subtractAmounts } from "./money";
 
 type IncomeRefillRule = components["schemas"]["IncomeRefillRule"];
@@ -102,7 +103,7 @@ export function ruleMatches(
 }
 
 /** Whether a transaction at `at` (null for now) falls inside the cycle. */
-export function insideCycle(at: string | null, cycle: Cycle | null, now = new Date()): boolean {
+export function insideCycle(at: string | null, cycle: Cycle | null, now = clockNow()): boolean {
   if (!cycle) return false;
   const t = at === null ? now.getTime() : new Date(at).getTime();
   return t >= new Date(cycle.start_at).getTime() && t < new Date(cycle.end_at).getTime();

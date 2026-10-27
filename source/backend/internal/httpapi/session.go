@@ -33,6 +33,11 @@ func sessionFrom(ctx context.Context) *auth.Session {
 	return s
 }
 
+// SessionFromContext returns the request's session, or nil if it has none.
+// It's for handlers outside the spec (the debug routes), which the gate
+// doesn't check.
+func SessionFromContext(ctx context.Context) *auth.Session { return sessionFrom(ctx) }
+
 func clientFrom(ctx context.Context) auth.Client {
 	c, _ := ctx.Value(clientKey{}).(auth.Client)
 	return c
