@@ -84,7 +84,17 @@
     "sameAsCurrent": "Det nye passordet må vere ulikt det noverande.",
     "noMatch": "Passorda er ikkje like.",
     "wrongPassword": "Det noverande passordet er feil.",
-    "weakPassword": "Vel eit sterkare passord."
+    "weakPassword": "Vel eit sterkare passord.",
+    "link": {
+      "setupTitle": "Velkomen, {{username}}",
+      "setupIntro": "Vel eit passord. Du loggar inn med det og brukarnamnet ditt, {{username}}.",
+      "resetTitle": "Vel eit nytt passord",
+      "resetIntro": "Hei, {{username}}. Vel eit nytt passord å logge inn med.",
+      "submit": "Lagre og logg inn",
+      "invalidTitle": "Denne lenkja verkar ikkje",
+      "invalidDetail": "Ho er brukt, utgått eller bytt ut med ei nyare. Be ein administrator om ei ny lenkje.",
+      "toLogin": "Gå til innlogging"
+    }
   },
   "settings": {
     "preferences": "Innstillingar",
@@ -655,6 +665,68 @@
     "endedStarted": "Perioden er avslutta. {{range}} har starta.",
     "ended": "Perioden er avslutta. Det er ingen aktiv periode før du startar ein."
   },
+  "admin": {
+    "intro": "Alle som kan logge inn. Brukarar vert aldri sletta: deaktiver dei i staden, så vert dataa deira tekne vare på. Administratorar styrer brukarane, men ser ikkje pengane til andre.",
+    "adminsOnly": "Berre for administratorar",
+    "adminsOnlyDetail": "Berre administratorar kan styre brukarar.",
+    "newUser": "Ny brukar",
+    "username": "Brukarnamn",
+    "usernameRule": "3–32 bokstavar, siffer, punktum, bindestrekar eller understrekar.",
+    "makeAdminToo": "Administrator",
+    "makeAdminHint": "Administratorar kan styre brukarar.",
+    "create": "Opprett brukar",
+    "created": "Oppretta",
+    "lastSeen": "Sist sett",
+    "lastSeenAt": "Sist sett: {{when}}",
+    "never": "Aldri",
+    "actions": "Handlingar",
+    "actionsFor": "Handlingar for {{name}}",
+    "ownAccount": "Dette er deg. Byt ditt eige passord i Innstillingar.",
+    "makeAdmin": "Gjer til administrator",
+    "removeAdmin": "Fjern som administrator",
+    "resetPassword": "Tilbakestill passord",
+    "deactivateUser": "Deaktiver",
+    "activate": "Aktiver",
+    "madeAdmin": "{{name}} er no administrator.",
+    "removedAdmin": "{{name}} er ikkje lenger administrator.",
+    "activated": "{{name}} kan logge inn att.",
+    "badges": {
+      "you": "Deg",
+      "admin": "Administrator",
+      "inactive": "Inaktiv",
+      "mustChange": "Må byte passord"
+    },
+    "deactivate": {
+      "title": "Deaktivere {{name}}?",
+      "question": "<b>{{name}}</b> kan ikkje lenger logge inn, og vert logga ut overalt. Dataa vert tekne vare på, og du kan aktivere brukaren att seinare.",
+      "done": "{{name}} er deaktivert."
+    },
+    "reset": {
+      "title": "Tilbakestille passordet til {{name}}?",
+      "question": "Passordet til <b>{{name}}</b> sluttar å verke med ein gong, og brukaren vert logga ut overalt."
+    },
+    "password": {
+      "title": "Mellombels passord",
+      "intro": "Det mellombelse passordet til <b>{{name}}</b>:",
+      "copy": "Kopier passordet",
+      "copied": "Kopiert",
+      "onceOnly": "Det vert berre vist denne eine gongen. Gje det vidare; det må bytast ved innlogging.",
+      "done": "Ferdig"
+    },
+    "credential": {
+      "label": "Korleis brukaren kjem inn",
+      "link": "Lenkje",
+      "linkHint": "Brukaren opnar ho, vel sitt eige passord og vert logga inn. Ho verkar éin gong, i 24 timar.",
+      "password": "Mellombels passord",
+      "passwordHint": "Du gjev brukaren eit passord, som må bytast ved innlogging."
+    },
+    "link": {
+      "title": "Lenkje for {{name}}",
+      "intro": "Send denne lenkja til <b>{{name}}</b>. Brukaren opnar ho, vel sitt eige passord og vert logga inn.",
+      "copy": "Kopier lenkja",
+      "onceOnly": "Ho verkar éin gong, til {{when}}. Ho vert berre vist denne eine gongen; ei ny lenkje eller eit nytt passord gjer ho ugyldig."
+    }
+  },
   "errors": {
     "generic": "Noko gjekk gale",
     "network": "Nettverksfeil",
@@ -675,6 +747,7 @@
     "codes": {
       "account_has_buckets": "Bøtter brukar denne kontoen som kjelde. Vel ein ny kjeldekonto for kvar av dei, eller slett dei i bøtteoppsettet.",
       "active_cycle_exists": "Ein annan periode er aktiv. Avslutt han først.",
+      "admin_only": "Berre administratorar kan gjere dette.",
       "already_refilled": "Bøtta er allereie fylt på i denne perioden.",
       "already_reversed": "Transaksjonen er reversert.",
       "balance_not_zero": "Det er framleis pengar på kontoen. Overfør dei til ein annan konto, eller juster saldoen til 0.",
@@ -690,15 +763,19 @@
       "database_unavailable": "Databasen svarar ikkje.",
       "internal_error": "Tenaren støytte på eit problem.",
       "invalid_credentials": "Feil brukarnamn eller passord.",
+      "invalid_link": "Denne lenkja verkar ikkje. Be ein administrator om ei ny.",
+      "last_admin": "Dette er den siste aktive administratoren. Gjer nokon andre til administrator først.",
       "name_taken": "Det namnet er allereie i bruk.",
       "no_active_cycle": "Bøttetransaksjonar treng ein aktiv periode. Start ein periode først.",
       "no_change": "Saldoen er allereie dette beløpet.",
       "not_correctable": "Systemtransaksjonar av denne typen kan ikkje korrigerast eller reverserast.",
       "not_found": "Det finst ikkje, eller det er sletta.",
       "not_next_cycle": "Ein tidlegare periode er planlagd. Start han først.",
+      "own_account": "Du kan ikkje endre din eigen konto her. Bruk Innstillingar.",
       "password_change_required": "Byt passordet ditt først.",
       "refill_unavailable": "Berre inntekt i den aktive perioden kan utløyse påfyll.",
       "unauthenticated": "Logg inn først.",
+      "username_taken": "Det brukarnamnet er allereie i bruk.",
       "wrong_password": "Det noverande passordet er feil.",
       "wrong_refill_mode": "Berre bøtter med manuelt påfyll kan fyllast på for hand."
     },

@@ -35,5 +35,9 @@ The words for the app's concepts, so the same thing is called the same everywher
 | settings                    | innstillinger                                     | innstillingar                         |
 | sign out / log in           | logg ut / logg inn                                | logg ut / logg inn                    |
 | session                     | økt                                               | økt                                   |
+| admin                       | administrator (administratorer)                   | administrator (administratorar)       |
+| temporary password          | midlertidig passord                               | mellombels passord                    |
+| setup / reset link          | lenke (lenken)                                    | lenkje (lenkja, ho)                   |
+| deactivate / activate       | deaktivere / aktivere                             | deaktivere / aktivere                 |
 
 Nynorsk uses the _a_-endings and _vert_ for the passive (_vert fylt på_), and _han/ho_ for masculine and feminine nouns (_perioden … han_).

@@ -466,6 +466,15 @@ type Cycle struct {
 	ModifiedAt time.Time
 }
 
+type PasswordLink struct {
+	TokenHash []byte
+	UserID    string
+	Purpose   string
+	CreatedBy pgtype.Text
+	CreatedAt time.Time
+	ExpiresAt time.Time
+}
+
 type Refill struct {
 	BucketID  string
 	CycleID   string
@@ -525,4 +534,5 @@ type User struct {
 	CreatedAt          time.Time
 	ModifiedAt         time.Time
 	CreatedBy          pgtype.Text
+	LastSeenAt         pgtype.Timestamptz
 }

@@ -16,6 +16,7 @@ const pages: Partial<Record<string, () => PageModule>> = {
   "/": () => import("@/pages/Dashboard"),
   "/accounts": () => import("@/pages/Accounts"),
   "/accounts/setup": () => import("@/pages/AccountSetup"),
+  "/admin": () => import("@/pages/Admin"),
   "/buckets": () => import("@/pages/Buckets"),
   "/buckets/setup": () => import("@/pages/BucketSetup"),
   "/budget": () => import("@/pages/BudgetSetup"),
@@ -39,6 +40,7 @@ export const routes: RouteObject[] = [
   // Outside the app shell and the session guard.
   { path: "/login", lazy: lazyPage(() => import("@/pages/Login")) },
   { path: "/change-password", lazy: lazyPage(() => import("@/pages/ChangePassword")) },
+  { path: "/set-password", lazy: lazyPage(() => import("@/pages/SetPassword")) },
   {
     element: <RequireSession />,
     children: [

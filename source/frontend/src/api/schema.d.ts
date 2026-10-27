@@ -66,6 +66,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/password-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check a setup or reset link
+         * @description Tells whether a link from an admin works, and for whom. An unknown,
+         *     used or expired link, or one for an inactive user, is 404
+         *     `invalid_link`. The token is sent in the body rather than the URL, so
+         *     it stays out of logs.
+         */
+        post: operations["checkPasswordLink"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/password-link/use": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set a password with a link and log in
+         * @description Sets the user's password with a setup or reset link, uses the link
+         *     up, ends the user's other sessions and starts a session (sets the
+         *     session cookie). A weak password is 400 `weak_password` and leaves
+         *     the link working; a link that doesn't work is 404 `invalid_link`.
+         */
+        post: operations["usePasswordLink"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/logout": {
         parameters: {
             query?: never;
@@ -142,6 +188,85 @@ export interface paths {
          * @description Merges the given fields into the stored preferences. `null` resets a field to its default.
          */
         patch: operations["updatePreferences"];
+        trace?: never;
+    };
+    "/api/v1/admin/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List users
+         * @description Every user, sorted by username, with when they last used the app.
+         */
+        get: operations["listUsers"];
+        put?: never;
+        /**
+         * Create a user
+         * @description Creates an active user who gets in with `credential`: a generated
+         *     temporary password, which they must change at first login, or a setup
+         *     link where they choose their own password. Either is returned only
+         *     here. A taken username (ignoring case) is 409 `username_taken`.
+         */
+        post: operations["createUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Activate, deactivate, grant or revoke admin
+         * @description Deactivating ends the user's sessions and blocks login; their data is
+         *     kept. The last active admin can't be deactivated or demoted (409
+         *     `last_admin`), and admins can't change themselves here (409
+         *     `own_account`).
+         */
+        patch: operations["updateUser"];
+        trace?: never;
+    };
+    "/api/v1/admin/users/{userId}/reset-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset a user's password
+         * @description Replaces the user's password at once and ends their sessions. They
+         *     get back in with `credential` (by default a temporary password):
+         *     a generated temporary password, which they must change at their next
+         *     login, or a reset link where they choose a new one. Either is
+         *     returned only here, and voids an earlier link. Admins change their
+         *     own password with `POST /me/password` (409 `own_account`).
+         */
+        post: operations["resetUserPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/accounts": {
@@ -831,6 +956,95 @@ export interface components {
          * @example 482913
          */
         UserId: string;
+        /**
+         * @description 3–32 letters, digits, `.`, `_` or `-`. Unique, ignoring case.
+         * @example kari
+         */
+        Username: string;
+        AdminUser: {
+            id: components["schemas"]["UserId"];
+            username: components["schemas"]["Username"];
+            /** @description An inactive user can't log in. */
+            active: boolean;
+            admin: boolean;
+            must_change_password: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** @description The admin who created the user; null for the initial admin. */
+            created_by: (string & components["schemas"]["UserId"]) | null;
+            /**
+             * Format: date-time
+             * @description When the user last used the app, to the minute; null if they never logged in. Kept when their sessions end.
+             */
+            last_seen_at: string | null;
+        };
+        UserCreate: {
+            username: components["schemas"]["Username"];
+            /** @default false */
+            admin: boolean;
+            credential?: components["schemas"]["Credential"];
+        };
+        UserUpdate: {
+            active?: boolean;
+            admin?: boolean;
+        };
+        /**
+         * @description How the user gets in: `password`, a generated temporary password the
+         *     admin hands over, which the user must change when they log in; or
+         *     `link`, a link (valid 24 hours, once) where the user chooses their
+         *     own password.
+         * @default password
+         * @enum {string}
+         */
+        Credential: "password" | "link";
+        CreatedUser: {
+            user: components["schemas"]["AdminUser"];
+            /** @description With `credential` `password`. Shown once. The user must change it at first login. */
+            temporary_password?: string;
+            link?: components["schemas"]["PasswordLink"];
+        };
+        PasswordReset: {
+            credential?: components["schemas"]["Credential"];
+        };
+        /** @description One of the two, as asked for. Shown once. */
+        NewCredential: {
+            /** @description The user must change it at their next login. */
+            temporary_password?: string;
+            link?: components["schemas"]["PasswordLink"];
+        };
+        /**
+         * @description A setup or reset link. The app's link is `/set-password#<token>`; the
+         *     token is in the fragment, so it isn't sent to servers or in Referer
+         *     headers. Shown once.
+         */
+        PasswordLink: {
+            token: components["schemas"]["PasswordLinkToken"];
+            /** Format: date-time */
+            expires_at: string;
+        };
+        /** @description 32 random bytes, base64url without padding. */
+        PasswordLinkToken: string;
+        PasswordLinkCheck: {
+            token: components["schemas"]["PasswordLinkToken"];
+        };
+        PasswordLinkInfo: {
+            username: string;
+            /**
+             * @description `setup` for a new user, `reset` after an admin reset the password.
+             * @enum {string}
+             */
+            purpose: "setup" | "reset";
+            /** Format: date-time */
+            expires_at: string;
+        };
+        PasswordLinkUse: {
+            token: components["schemas"]["PasswordLinkToken"];
+            /**
+             * Format: password
+             * @description 12 to 72 bytes (UTF-8).
+             */
+            new_password: string;
+        };
         User: {
             id: components["schemas"]["UserId"];
             /** @example admin */
@@ -1404,6 +1618,7 @@ export interface components {
         };
     };
     parameters: {
+        UserId: components["schemas"]["UserId"];
         AccountId: components["schemas"]["AccountId"];
         CycleId: components["schemas"]["CycleId"];
         BucketId: components["schemas"]["BucketId"];
@@ -1507,6 +1722,61 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    checkPasswordLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordLinkCheck"];
+            };
+        };
+        responses: {
+            /** @description The link works. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasswordLinkInfo"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    usePasswordLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordLinkUse"];
+            };
+        };
+        responses: {
+            /** @description Password set and logged in. */
+            200: {
+                headers: {
+                    "Set-Cookie": components["headers"]["SessionCookie"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
     logout: {
         parameters: {
             query?: never;
@@ -1599,6 +1869,122 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listUsers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The users. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUser"][];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserCreate"];
+            };
+        };
+        responses: {
+            /** @description The user, and their temporary password or setup link. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedUser"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    updateUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserUpdate"];
+            };
+        };
+        responses: {
+            /** @description The updated user. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUser"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    resetUserPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PasswordReset"];
+            };
+        };
+        responses: {
+            /** @description The temporary password or reset link. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewCredential"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };

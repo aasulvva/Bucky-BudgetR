@@ -68,6 +68,39 @@ func (s *server) Login(ctx context.Context, req api.LoginRequestObject) (api.Log
 	return api.Login200JSONResponse{Body: user, Headers: api.Login200ResponseHeaders{SetCookie: &cookie}}, nil
 }
 
+func (s *server) CheckPasswordLink(ctx context.Context, req api.CheckPasswordLinkRequestObject) (api.CheckPasswordLinkResponseObject, error) {
+	info, err := s.auth.CheckLink(ctx, req.Body.Token)
+	if err != nil {
+		return nil, linkError(err)
+	}
+	return api.CheckPasswordLink200JSONResponse{
+		Username:  info.Username,
+		Purpose:   api.PasswordLinkInfoPurpose(info.Purpose),
+		ExpiresAt: info.ExpiresAt,
+	}, nil
+}
+
+func (s *server) UsePasswordLink(ctx context.Context, req api.UsePasswordLinkRequestObject) (api.UsePasswordLinkResponseObject, error) {
+	sess, token, err := s.auth.UseLink(ctx, req.Body.Token, req.Body.NewPassword, clientFrom(ctx))
+	if err != nil {
+		return nil, linkError(err)
+	}
+	user, err := toAPIUser(sess.User)
+	if err != nil {
+		return nil, err
+	}
+	cookie := sessionCookie(token, s.auth.MaxAge()).String()
+	return api.UsePasswordLink200JSONResponse{Body: user, Headers: api.UsePasswordLink200ResponseHeaders{SetCookie: &cookie}}, nil
+}
+
+func linkError(err error) error {
+	if errors.Is(err, auth.ErrInvalidLink) {
+		return &Error{Status: http.StatusNotFound, Code: "invalid_link",
+			Detail: "This link doesn't work: it has been used, has expired or was replaced. Ask an admin for a new one."}
+	}
+	return authError(err, http.StatusBadRequest, "invalid_request", "")
+}
+
 func (s *server) Logout(ctx context.Context, _ api.LogoutRequestObject) (api.LogoutResponseObject, error) {
 	if err := s.auth.Logout(ctx, sessionFrom(ctx)); err != nil {
 		return nil, err

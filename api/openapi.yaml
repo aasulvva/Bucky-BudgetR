@@ -28,7 +28,8 @@ info:
 
     A user whose `must_change_password` is set may only call operations
     marked `x-allowed-before-password-change`; everything else gets 403
-    `password_change_required`.
+    `password_change_required`. Operations marked `x-admin-only` need an
+    admin; others get 403 `admin_only`.
 
 servers:
   - url: /
@@ -50,6 +51,8 @@ tags:
     description: Buckets, their settings and their funds.
   - name: transactions
     description: Income, expenses and transfers, and the transaction list.
+  - name: admin
+    description: User management, for admins only.
 
 paths:
   /healthz:
@@ -131,6 +134,71 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/auth/password-link:
+    post:
+      operationId: checkPasswordLink
+      tags: [auth]
+      summary: Check a setup or reset link
+      description: |
+        Tells whether a link from an admin works, and for whom. An unknown,
+        used or expired link, or one for an inactive user, is 404
+        `invalid_link`. The token is sent in the body rather than the URL, so
+        it stays out of logs.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordLinkCheck"
+      responses:
+        "200":
+          description: The link works.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasswordLinkInfo"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/auth/password-link/use:
+    post:
+      operationId: usePasswordLink
+      tags: [auth]
+      summary: Set a password with a link and log in
+      description: |
+        Sets the user's password with a setup or reset link, uses the link
+        up, ends the user's other sessions and starts a session (sets the
+        session cookie). A weak password is 400 `weak_password` and leaves
+        the link working; a link that doesn't work is 404 `invalid_link`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordLinkUse"
+      responses:
+        "200":
+          description: Password set and logged in.
+          headers:
+            Set-Cookie:
+              $ref: "#/components/headers/SessionCookie"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
         default:
           $ref: "#/components/responses/Error"
 
@@ -217,6 +285,142 @@ paths:
         "400":
           $ref: "#/components/responses/Error"
         "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/admin/users:
+    get:
+      operationId: listUsers
+      x-admin-only: true
+      tags: [admin]
+      summary: List users
+      description: Every user, sorted by username, with when they last used the app.
+      responses:
+        "200":
+          description: The users.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminUser"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+    post:
+      operationId: createUser
+      x-admin-only: true
+      tags: [admin]
+      summary: Create a user
+      description: |
+        Creates an active user who gets in with `credential`: a generated
+        temporary password, which they must change at first login, or a setup
+        link where they choose their own password. Either is returned only
+        here. A taken username (ignoring case) is 409 `username_taken`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserCreate"
+      responses:
+        "201":
+          description: The user, and their temporary password or setup link.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatedUser"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/admin/users/{userId}:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    patch:
+      operationId: updateUser
+      x-admin-only: true
+      tags: [admin]
+      summary: Activate, deactivate, grant or revoke admin
+      description: |
+        Deactivating ends the user's sessions and blocks login; their data is
+        kept. The last active admin can't be deactivated or demoted (409
+        `last_admin`), and admins can't change themselves here (409
+        `own_account`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdate"
+      responses:
+        "200":
+          description: The updated user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/admin/users/{userId}/reset-password:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    post:
+      operationId: resetUserPassword
+      x-admin-only: true
+      tags: [admin]
+      summary: Reset a user's password
+      description: |
+        Replaces the user's password at once and ends their sessions. They
+        get back in with `credential` (by default a temporary password):
+        a generated temporary password, which they must change at their next
+        login, or a reset link where they choose a new one. Either is
+        returned only here, and voids an earlier link. Admins change their
+        own password with `POST /me/password` (409 `own_account`).
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordReset"
+      responses:
+        "200":
+          description: The temporary password or reset link.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NewCredential"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
           $ref: "#/components/responses/Error"
         default:
           $ref: "#/components/responses/Error"
@@ -1307,6 +1511,13 @@ components:
         type: string
 
   parameters:
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/UserId"
+
     AccountId:
       name: accountId
       in: path
@@ -1357,6 +1568,164 @@ components:
       description: 6-digit user ID.
       pattern: "^[1-9][0-9]{5}$"
       example: "482913"
+
+    Username:
+      type: string
+      description: 3–32 letters, digits, `.`, `_` or `-`. Unique, ignoring case.
+      pattern: "^[A-Za-z0-9._-]{3,32}$"
+      example: kari
+
+    AdminUser:
+      type: object
+      additionalProperties: false
+      required: [id, username, active, admin, must_change_password, created_at, created_by, last_seen_at]
+      properties:
+        id:
+          $ref: "#/components/schemas/UserId"
+        username:
+          $ref: "#/components/schemas/Username"
+        active:
+          type: boolean
+          description: An inactive user can't log in.
+        admin:
+          type: boolean
+        must_change_password:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        created_by:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/UserId"
+          nullable: true
+          description: The admin who created the user; null for the initial admin.
+        last_seen_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the user last used the app, to the minute; null if they never logged in. Kept when their sessions end.
+
+    UserCreate:
+      type: object
+      additionalProperties: false
+      required: [username]
+      properties:
+        username:
+          $ref: "#/components/schemas/Username"
+        admin:
+          type: boolean
+          default: false
+        credential:
+          $ref: "#/components/schemas/Credential"
+
+    UserUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        active:
+          type: boolean
+        admin:
+          type: boolean
+
+    Credential:
+      type: string
+      enum: [password, link]
+      default: password
+      description: |
+        How the user gets in: `password`, a generated temporary password the
+        admin hands over, which the user must change when they log in; or
+        `link`, a link (valid 24 hours, once) where the user chooses their
+        own password.
+
+    CreatedUser:
+      type: object
+      additionalProperties: false
+      required: [user]
+      properties:
+        user:
+          $ref: "#/components/schemas/AdminUser"
+        temporary_password:
+          type: string
+          description: With `credential` `password`. Shown once. The user must change it at first login.
+        link:
+          $ref: "#/components/schemas/PasswordLink"
+
+    PasswordReset:
+      type: object
+      additionalProperties: false
+      properties:
+        credential:
+          $ref: "#/components/schemas/Credential"
+
+    NewCredential:
+      type: object
+      additionalProperties: false
+      description: One of the two, as asked for. Shown once.
+      properties:
+        temporary_password:
+          type: string
+          description: The user must change it at their next login.
+        link:
+          $ref: "#/components/schemas/PasswordLink"
+
+    PasswordLink:
+      type: object
+      additionalProperties: false
+      description: |
+        A setup or reset link. The app's link is `/set-password#<token>`; the
+        token is in the fragment, so it isn't sent to servers or in Referer
+        headers. Shown once.
+      required: [token, expires_at]
+      properties:
+        token:
+          $ref: "#/components/schemas/PasswordLinkToken"
+        expires_at:
+          type: string
+          format: date-time
+
+    PasswordLinkToken:
+      type: string
+      pattern: "^[A-Za-z0-9_-]{43}$"
+      description: 32 random bytes, base64url without padding.
+
+    PasswordLinkCheck:
+      type: object
+      additionalProperties: false
+      required: [token]
+      properties:
+        token:
+          $ref: "#/components/schemas/PasswordLinkToken"
+
+    PasswordLinkInfo:
+      type: object
+      additionalProperties: false
+      required: [username, purpose, expires_at]
+      properties:
+        username:
+          type: string
+        purpose:
+          type: string
+          enum: [setup, reset]
+          description: "`setup` for a new user, `reset` after an admin reset the password."
+        expires_at:
+          type: string
+          format: date-time
+
+    PasswordLinkUse:
+      type: object
+      additionalProperties: false
+      required: [token, new_password]
+      properties:
+        token:
+          $ref: "#/components/schemas/PasswordLinkToken"
+        new_password:
+          type: string
+          description: 12 to 72 bytes (UTF-8).
+          minLength: 12
+          maxLength: 72
+          format: password
 
     User:
       type: object

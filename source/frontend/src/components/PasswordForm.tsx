@@ -20,13 +20,18 @@ interface PasswordFormProps {
   /** Called once the password has changed. */
   onChanged: () => void;
   submitLabel?: string;
+  /**
+   * Saves the new password some other way than with the current one, e.g.
+   * with a setup link. The current password isn't asked for then.
+   */
+  save?: (next: string) => Promise<unknown>;
 }
 
 /**
  * Changes the user's password: the current one, the new one twice. The
  * server ends the user's other sessions.
  */
-export function PasswordForm({ onChanged, submitLabel }: PasswordFormProps) {
+export function PasswordForm({ onChanged, submitLabel, save }: PasswordFormProps) {
   const { t } = useTranslation();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
@@ -35,11 +40,13 @@ export function PasswordForm({ onChanged, submitLabel }: PasswordFormProps) {
 
   const change = useMutation({
     mutationFn: () =>
-      unwrap(
-        api.POST("/api/v1/me/password", {
-          body: { current_password: current, new_password: next },
-        }),
-      ),
+      save
+        ? save(next)
+        : unwrap(
+            api.POST("/api/v1/me/password", {
+              body: { current_password: current, new_password: next },
+            }),
+          ),
     meta: { silentError: true },
     onSuccess: () => {
       setCurrent("");
@@ -59,7 +66,7 @@ export function PasswordForm({ onChanged, submitLabel }: PasswordFormProps) {
 
   const submit = (e: { preventDefault: () => void }) => {
     e.preventDefault();
-    const found = check(current, next, confirm);
+    const found = check(save ? undefined : current, next, confirm);
     setErrors(found);
     if (Object.keys(found).length === 0) change.mutate();
   };
@@ -74,16 +81,18 @@ export function PasswordForm({ onChanged, submitLabel }: PasswordFormProps) {
   return (
     <form onSubmit={submit} noValidate>
       <Stack gap="sm">
-        <PasswordInput
-          label={t("auth.currentPassword")}
-          autoComplete="current-password"
-          value={current}
-          onChange={(e) => {
-            setCurrent(e.currentTarget.value);
-          }}
-          error={errors.current}
-          required
-        />
+        {!save && (
+          <PasswordInput
+            label={t("auth.currentPassword")}
+            autoComplete="current-password"
+            value={current}
+            onChange={(e) => {
+              setCurrent(e.currentTarget.value);
+            }}
+            error={errors.current}
+            required
+          />
+        )}
         <PasswordInput
           label={t("auth.newPassword")}
           description={t("auth.newPasswordHint", { count: MIN_CHARS })}
@@ -114,7 +123,8 @@ export function PasswordForm({ onChanged, submitLabel }: PasswordFormProps) {
   );
 }
 
-function check(current: string, next: string, confirm: string) {
+/** current is undefined when it isn't asked for. */
+function check(current: string | undefined, next: string, confirm: string) {
   const errors: { current?: string; next?: string; confirm?: string } = {};
   const bytes = new TextEncoder().encode(next).length;
   if (current === "") errors.current = i18n.t("auth.enterCurrent");

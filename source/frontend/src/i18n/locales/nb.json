@@ -84,7 +84,17 @@
     "sameAsCurrent": "Det nye passordet må være forskjellig fra det nåværende.",
     "noMatch": "Passordene er ikke like.",
     "wrongPassword": "Det nåværende passordet er feil.",
-    "weakPassword": "Velg et sterkere passord."
+    "weakPassword": "Velg et sterkere passord.",
+    "link": {
+      "setupTitle": "Velkommen, {{username}}",
+      "setupIntro": "Velg et passord. Du logger inn med det og brukernavnet ditt, {{username}}.",
+      "resetTitle": "Velg et nytt passord",
+      "resetIntro": "Hei, {{username}}. Velg et nytt passord å logge inn med.",
+      "submit": "Lagre og logg inn",
+      "invalidTitle": "Denne lenken virker ikke",
+      "invalidDetail": "Den er brukt, utløpt eller erstattet av en nyere. Be en administrator om en ny lenke.",
+      "toLogin": "Gå til innlogging"
+    }
   },
   "settings": {
     "preferences": "Innstillinger",
@@ -655,6 +665,68 @@
     "endedStarted": "Perioden er avsluttet. {{range}} har startet.",
     "ended": "Perioden er avsluttet. Det er ingen aktiv periode før du starter en."
   },
+  "admin": {
+    "intro": "Alle som kan logge inn. Brukere slettes aldri: deaktiver dem i stedet, så beholdes dataene deres. Administratorer styrer brukerne, men ser ikke andres penger.",
+    "adminsOnly": "Bare for administratorer",
+    "adminsOnlyDetail": "Bare administratorer kan styre brukere.",
+    "newUser": "Ny bruker",
+    "username": "Brukernavn",
+    "usernameRule": "3–32 bokstaver, sifre, punktum, bindestreker eller understreker.",
+    "makeAdminToo": "Administrator",
+    "makeAdminHint": "Administratorer kan styre brukere.",
+    "create": "Opprett bruker",
+    "created": "Opprettet",
+    "lastSeen": "Sist sett",
+    "lastSeenAt": "Sist sett: {{when}}",
+    "never": "Aldri",
+    "actions": "Handlinger",
+    "actionsFor": "Handlinger for {{name}}",
+    "ownAccount": "Dette er deg. Bytt ditt eget passord i Innstillinger.",
+    "makeAdmin": "Gjør til administrator",
+    "removeAdmin": "Fjern som administrator",
+    "resetPassword": "Tilbakestill passord",
+    "deactivateUser": "Deaktiver",
+    "activate": "Aktiver",
+    "madeAdmin": "{{name}} er nå administrator.",
+    "removedAdmin": "{{name}} er ikke lenger administrator.",
+    "activated": "{{name}} kan logge inn igjen.",
+    "badges": {
+      "you": "Deg",
+      "admin": "Administrator",
+      "inactive": "Inaktiv",
+      "mustChange": "Må bytte passord"
+    },
+    "deactivate": {
+      "title": "Deaktivere {{name}}?",
+      "question": "<b>{{name}}</b> kan ikke lenger logge inn, og blir logget ut overalt. Dataene beholdes, og du kan aktivere brukeren igjen senere.",
+      "done": "{{name}} er deaktivert."
+    },
+    "reset": {
+      "title": "Tilbakestille passordet til {{name}}?",
+      "question": "Passordet til <b>{{name}}</b> slutter å virke med en gang, og brukeren blir logget ut overalt."
+    },
+    "password": {
+      "title": "Midlertidig passord",
+      "intro": "Det midlertidige passordet til <b>{{name}}</b>:",
+      "copy": "Kopier passordet",
+      "copied": "Kopiert",
+      "onceOnly": "Det vises bare denne ene gangen. Gi det videre; det må byttes ved innlogging.",
+      "done": "Ferdig"
+    },
+    "credential": {
+      "label": "Hvordan brukeren kommer inn",
+      "link": "Lenke",
+      "linkHint": "Brukeren åpner den, velger sitt eget passord og blir logget inn. Den virker én gang, i 24 timer.",
+      "password": "Midlertidig passord",
+      "passwordHint": "Du gir brukeren et passord, som må byttes ved innlogging."
+    },
+    "link": {
+      "title": "Lenke for {{name}}",
+      "intro": "Send denne lenken til <b>{{name}}</b>. Brukeren åpner den, velger sitt eget passord og blir logget inn.",
+      "copy": "Kopier lenken",
+      "onceOnly": "Den virker én gang, til {{when}}. Den vises bare denne ene gangen; en ny lenke eller et nytt passord gjør den ugyldig."
+    }
+  },
   "errors": {
     "generic": "Noe gikk galt",
     "network": "Nettverksfeil",
@@ -675,6 +747,7 @@
     "codes": {
       "account_has_buckets": "Bøtter bruker denne kontoen som kilde. Velg en ny kildekonto for hver av dem, eller slett dem i bøtteoppsettet.",
       "active_cycle_exists": "En annen periode er aktiv. Avslutt den først.",
+      "admin_only": "Bare administratorer kan gjøre dette.",
       "already_refilled": "Bøtta er allerede fylt på i denne perioden.",
       "already_reversed": "Transaksjonen er reversert.",
       "balance_not_zero": "Det er fortsatt penger på kontoen. Overfør dem til en annen konto, eller juster saldoen til 0.",
@@ -690,15 +763,19 @@
       "database_unavailable": "Databasen svarer ikke.",
       "internal_error": "Serveren støtte på et problem.",
       "invalid_credentials": "Feil brukernavn eller passord.",
+      "invalid_link": "Denne lenken virker ikke. Be en administrator om en ny.",
+      "last_admin": "Dette er den siste aktive administratoren. Gjør noen andre til administrator først.",
       "name_taken": "Det navnet er allerede i bruk.",
       "no_active_cycle": "Bøttetransaksjoner trenger en aktiv periode. Start en periode først.",
       "no_change": "Saldoen er allerede dette beløpet.",
       "not_correctable": "Systemtransaksjoner av denne typen kan ikke korrigeres eller reverseres.",
       "not_found": "Det finnes ikke, eller det er slettet.",
       "not_next_cycle": "En tidligere periode er planlagt. Start den først.",
+      "own_account": "Du kan ikke endre din egen konto her. Bruk Innstillinger.",
       "password_change_required": "Bytt passordet ditt først.",
       "refill_unavailable": "Bare inntekt i den aktive perioden kan utløse påfyll.",
       "unauthenticated": "Logg inn først.",
+      "username_taken": "Det brukernavnet er allerede i bruk.",
       "wrong_password": "Det nåværende passordet er feil.",
       "wrong_refill_mode": "Bare bøtter med manuelt påfyll kan fylles på for hånd."
     },

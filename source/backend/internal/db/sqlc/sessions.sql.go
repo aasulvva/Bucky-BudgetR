@@ -11,25 +11,30 @@ import (
 )
 
 const createSession = `-- name: CreateSession :exec
-INSERT INTO sessions (token_hash, user_id, created_at, last_seen_at, expires_at, user_agent, ip)
-VALUES ($1, $2, $3, $3, $4,
-        $5, $6)
+WITH s AS (
+    INSERT INTO sessions (token_hash, user_id, created_at, last_seen_at, expires_at, user_agent, ip)
+    VALUES ($2, $3, $1, $1, $4,
+            $5, $6)
+    RETURNING user_id
+)
+UPDATE users SET last_seen_at = $1::timestamptz FROM s WHERE users.id = s.user_id
 `
 
 type CreateSessionParams struct {
+	Now       time.Time
 	TokenHash []byte
 	UserID    string
-	Now       time.Time
 	ExpiresAt time.Time
 	UserAgent string
 	Ip        string
 }
 
+// Also records when the user was last seen.
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) error {
 	_, err := q.db.Exec(ctx, createSession,
+		arg.Now,
 		arg.TokenHash,
 		arg.UserID,
-		arg.Now,
 		arg.ExpiresAt,
 		arg.UserAgent,
 		arg.Ip,
@@ -89,7 +94,7 @@ func (q *Queries) DeleteUserSessions(ctx context.Context, userID string) error {
 }
 
 const getSessionWithUser = `-- name: GetSessionWithUser :one
-SELECT sessions.token_hash, sessions.user_id, sessions.created_at, sessions.last_seen_at, sessions.expires_at, sessions.user_agent, sessions.ip, users.id, users.username, users.password_hash, users.active, users.admin, users.must_change_password, users.preferences, users.created_at, users.modified_at, users.created_by
+SELECT sessions.token_hash, sessions.user_id, sessions.created_at, sessions.last_seen_at, sessions.expires_at, sessions.user_agent, sessions.ip, users.id, users.username, users.password_hash, users.active, users.admin, users.must_change_password, users.preferences, users.created_at, users.modified_at, users.created_by, users.last_seen_at
 FROM sessions
 JOIN users ON users.id = sessions.user_id
 WHERE sessions.token_hash = $1
@@ -121,20 +126,26 @@ func (q *Queries) GetSessionWithUser(ctx context.Context, tokenHash []byte) (Get
 		&i.User.CreatedAt,
 		&i.User.ModifiedAt,
 		&i.User.CreatedBy,
+		&i.User.LastSeenAt,
 	)
 	return i, err
 }
 
 const touchSession = `-- name: TouchSession :exec
-UPDATE sessions SET last_seen_at = $2 WHERE token_hash = $1
+WITH s AS (
+    UPDATE sessions SET last_seen_at = $1::timestamptz WHERE token_hash = $2
+    RETURNING user_id
+)
+UPDATE users SET last_seen_at = $1::timestamptz FROM s WHERE users.id = s.user_id
 `
 
 type TouchSessionParams struct {
-	TokenHash  []byte
 	LastSeenAt time.Time
+	TokenHash  []byte
 }
 
+// Also records when the user was last seen.
 func (q *Queries) TouchSession(ctx context.Context, arg TouchSessionParams) error {
-	_, err := q.db.Exec(ctx, touchSession, arg.TokenHash, arg.LastSeenAt)
+	_, err := q.db.Exec(ctx, touchSession, arg.LastSeenAt, arg.TokenHash)
 	return err
 }
