@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/netip"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -36,6 +38,9 @@ type Config struct {
 	// InitialAdminPassword overrides the spec's default password for the admin
 	// account created on first start. Empty means the default.
 	InitialAdminPassword string
+	// TrustedProxies are the reverse proxies in front of the server, whose
+	// X-Forwarded-For header gives the client's address. Empty means none.
+	TrustedProxies []netip.Prefix
 }
 
 // Addr is the listen address for the HTTP server.
@@ -109,8 +114,34 @@ func Load(getenv func(string) string) (Config, error) {
 		errs = append(errs, errors.New("SESSION_MAX_AGE: must not be shorter than SESSION_IDLE_TIMEOUT"))
 	}
 
+	for v := range strings.SplitSeq(getenv("TRUSTED_PROXIES"), ",") {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			continue
+		}
+		p, err := parsePrefix(v)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("TRUSTED_PROXIES: %q is not an IP address or CIDR range", v))
+			continue
+		}
+		cfg.TrustedProxies = append(cfg.TrustedProxies, p)
+	}
+
 	if len(errs) > 0 {
 		return Config{}, fmt.Errorf("invalid configuration: %w", errors.Join(errs...))
 	}
 	return cfg, nil
+}
+
+// parsePrefix reads a CIDR range, or a single address as a range of one.
+func parsePrefix(s string) (netip.Prefix, error) {
+	if strings.Contains(s, "/") {
+		p, err := netip.ParsePrefix(s)
+		return p.Masked(), err
+	}
+	addr, err := netip.ParseAddr(s)
+	if err != nil {
+		return netip.Prefix{}, err
+	}
+	return netip.PrefixFrom(addr, addr.BitLen()), nil
 }

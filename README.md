@@ -18,9 +18,9 @@ Run `make` to list all targets (`db-reset`, `psql`, `generate`, `lint`, `test`, 
 
 ## Deployment
 
-Not available yet. Production images, a production Compose stack, HTTPS over Tailscale and backups are tracked in [#26](https://github.com/aasulvva/Bucky-BudgetR/issues/26). `compose.yaml` in this repo is for development only.
+The production stack is in `deploy/`: the app (one container, with the frontend embedded), PostgreSQL, Caddy for HTTPS on the LAN and, optionally, the tailnet, and daily backups. [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) covers installing, updating, rolling back, backups and restoring. The `compose.yaml` at the root is for development only.
 
-**Locked out?** If no admin can log in, run `server reset-password --user <name>` with the server's configuration (in development: `cd source/backend && go run ./cmd/server reset-password --user admin`; #26 adds the production command). It prints a temporary password, makes the user an active admin and ends their sessions. They must change the password when they log in.
+**Locked out?** If no admin can log in, run `docker compose exec app bucky-server reset-password --user admin` in `deploy/` (in development: `cd source/backend && go run ./cmd/server reset-password --user admin`). It prints a temporary password, makes the user an active admin and ends their sessions. They must change the password when they log in.
 
 ## Layout
 
@@ -29,6 +29,8 @@ source/backend/    Go module (cmd/server, internal/…)
 source/frontend/   Vite + React + TypeScript
 api/openapi.yaml   REST API contract (OpenAPI)
 compose.yaml       dev services (PostgreSQL)
-docs/              spec and developer docs
+Dockerfile         production image (frontend embedded in the Go binary)
+deploy/            production stack: Compose, Caddy, backup/restore/update scripts
+docs/              spec, developer and deployment docs
 scripts/           machine setup
 ```

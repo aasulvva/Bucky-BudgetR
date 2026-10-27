@@ -12,7 +12,7 @@ Self-hosted, envelope-style ("bucket") budgeting application.
 | Frontend | React + TypeScript         |
 | Backend  | Go (REST API)              |
 | Database | PostgreSQL                 |
-| Runtime  | Docker containers (Compose) |
+| Runtime  | Docker containers (Compose): one app container (the frontend embedded in the Go binary), PostgreSQL, Caddy for HTTPS, daily backups |
 
 ## Glossary
 
@@ -44,7 +44,7 @@ Self-hosted, envelope-style ("bucket") budgeting application.
 
 **User management (admins):** admins create users, activate and deactivate them, grant and revoke admin, and reset passwords. A new or reset user gets in with what the admin picks, shown to the admin once: a **link** (the default) where they choose their own password and are logged in, which works once for 24 hours; or a generated **temporary password**, which they must change at their next login. A new link or password voids the old link, and a reset ends the old password and sessions at once. Users are never deleted: deactivating blocks login and ends their sessions, and keeps their data. Admins manage accounts only, never other users' money. An admin can't change their own account there (they use Settings), and the last active admin can't be demoted or deactivated.
 
-**Recovery:** when no admin can log in, `server reset-password --user <name>` on the server gives that user a temporary password (printed), makes them an active admin and ends their sessions.
+**Recovery:** when no admin can log in, `bucky-server reset-password --user <name>` on the server (`docker compose exec app …` in production) gives that user a temporary password (printed), makes them an active admin and ends their sessions.
 
 ## 2. Bank accounts
 

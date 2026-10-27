@@ -53,8 +53,9 @@ docker run --rm hello-world   # must work without sudo
 The Go service lives in `source/backend`. `make dev-backend` runs it with live reload (air). The server applies pending migrations on startup. It first stops a dev server left over from an earlier run: air can lose track of its server, which then keeps the port, so the new one can't start and the old code keeps answering.
 
 ```bash
-go run ./cmd/server           # start the server
-go run ./cmd/server migrate   # apply migrations and exit
+go run ./cmd/server               # start the server
+go run ./cmd/server migrate       # apply migrations and exit
+go run ./cmd/server healthcheck   # exit 0 if the running server is ready (the image's health check)
 ```
 
 It is configured with environment variables. The Makefile exports everything in `.env`, so `make` targets pick them up.
@@ -72,8 +73,13 @@ It is configured with environment variables. The Makefile exports everything in 
 | `SESSION_IDLE_TIMEOUT` | `168h` | A session ends after this long without use. |
 | `SESSION_MAX_AGE` | `720h` | A session ends this long after login, however much it's used. At least `SESSION_IDLE_TIMEOUT`. |
 | `BUCKY_INITIAL_ADMIN_PASSWORD` | `BuckyBudgetR_ADMIN_Pa$$w0rd` | Password of the `admin` account created on first start. Must meet the password policy. |
+| `TRUSTED_PROXIES` | (none) | Comma-separated addresses or CIDR ranges of reverse proxies whose `X-Forwarded-For` gives the client's address. `deploy/compose.yaml` sets Caddy's. |
 
 `GET /healthz` reports that the process is up. `GET /readyz` also checks the database. Every error response is an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem (`application/problem+json`) with extra `code` and `request_id` fields.
+
+**The frontend in production:** `internal/web` embeds `internal/web/dist` and serves it for every GET outside `/api/` and the health probes. Unknown paths get `index.html`, so the app's routes load the app. It also sets caching and the Content-Security-Policy. The Dockerfile copies the frontend build there. The repo holds only a `.gitkeep`, so in development every page is a 404 from the Go server, and Vite serves the frontend instead.
+
+**The production image:** the root `Dockerfile` builds the frontend, then the Go binary with the frontend embedded, as `bucky-server` on distroless (non-root, no shell). Build it with `docker build --build-arg VERSION=$(git describe --tags --always) .`. The version is logged at startup. Deploying it is described in [DEPLOYMENT.md](DEPLOYMENT.md).
 
 Migrations are goose SQL files in `internal/db/migrations`, embedded in the binary. Create one with `go tool goose -dir internal/db/migrations create <name> sql`. Never edit a migration once it has been merged.
 
@@ -138,7 +144,7 @@ With `APP_ENV=development`, the interactive docs (Scalar) are at <http://localho
 - **Sessions:** login sets the `__Host-bucky_session` cookie (`HttpOnly; Secure; SameSite=Lax; Path=/`). The token is 32 random bytes; the database stores only its SHA-256. A session ends after `SESSION_IDLE_TIMEOUT` without use or `SESSION_MAX_AGE` after login. Changing the password ends the user's other sessions. Browsers accept `Secure` cookies on `http://localhost`, so dev works through the Vite proxy without TLS.
 - **Access rules come from the spec:** an operation is public only if it has `security: []`, `x-allowed-before-password-change: true` lets a user who must change their password call it, and `x-admin-only: true` refuses non-admins (403 `admin_only`). Requests are also validated against the spec (parameters, body schema, no unknown fields) before the handler runs: 400 `invalid_request`, or 413 above 1 MB.
 - **CSRF:** every POST, PUT, PATCH and DELETE under `/api/` must send `X-Bucky-CSRF: 1`, and its `Origin`, if present, must match the host (403 `csrf` otherwise). The frontend's `api` client adds the header. Other clients, such as curl or scripts, must add it themselves.
-- **Rate limiting:** after 5 failed logins within 15 minutes for a username or a client IP, logins are refused with 429 `too_many_attempts` and `Retry-After`. The lockout starts at 1 minute and doubles up to 15. The counters are in memory and reset on restart. The client IP is the connection's address; `X-Forwarded-For` is ignored until a trusted proxy is configured (#26).
+- **Rate limiting:** after 5 failed logins within 15 minutes for a username or a client IP, logins are refused with 429 `too_many_attempts` and `Retry-After`. The lockout starts at 1 minute and doubles up to 15. The counters are in memory and reset on restart. The client IP is the connection's address, or behind a proxy in `TRUSTED_PROXIES`, the address that proxy put in `X-Forwarded-For` (`httpapi.ClientAddr`). The access log records it as `client_ip`.
 - **User management:** `auth/admin.go` creates users, activates and deactivates them, grants and revokes admin and resets passwords, for the `/api/v1/admin/users` endpoints. The user gets in with a temporary password from `auth.TemporaryPassword`, which they must change at the next login, or with a setup or reset link (`auth/links.go`, table `password_links`): a 32-byte token in the fragment of `/set-password#<token>`, stored as its SHA-256, single use and valid for `auth.LinkTTL` (24 hours). The public `POST /api/v1/auth/password-link` checks a link and `…/use` sets the password and logs in. Admin changes run under an advisory lock so the last active admin can't be removed by two requests at once. `auth.RecoverAdmin` backs `server reset-password --user <name>`, for when no admin can log in.
 - **Tests:** `internal/authtest` creates users (`authtest.NewUser`) and logs them in (`authtest.Login`) against a real handler. Every feature that stores user data should have a test that one user can't see or change another's.
 
@@ -223,12 +229,13 @@ Tests never reach a server. `src/test/fixtures.ts` builds sample accounts and bu
 ## Workflow and CI
 
 - Work on a branch and merge to `main` through a pull request. The repo is private on GitHub's free plan, which doesn't enforce branch protection, so this is a convention: **merge only when CI is green**.
-- `.github/workflows/ci.yml` runs on every PR and on every push to `main`. It has three jobs:
+- `.github/workflows/ci.yml` runs on every PR and on every push to `main`. It has four jobs:
   - **Backend:** `go mod verify`, `go vet`, golangci-lint, then `go test -race` against a PostgreSQL service container, then a build.
   - **Frontend:** `npm ci`, ESLint, `tsc`, Vitest and `vite build`.
   - **API contract:** `make lint-spec` and `make generate-check`, which fails if the committed generated code is out of date.
+  - **Production image:** builds the Dockerfile (nothing is pushed) and checks `deploy/compose.yaml` with `docker compose config`, with and without the tailnet.
 - To reproduce CI locally, run `make lint test generate-check`.
-- Dependabot (`.github/dependabot.yml`) opens weekly PRs for Go modules, npm, GitHub Actions and the Compose image. Minor and patch updates are grouped, and a release must be a week old first.
+- Dependabot (`.github/dependabot.yml`) opens weekly PRs for Go modules, npm, GitHub Actions, the Dockerfile's base images and the Compose images. Minor and patch updates are grouped, and a release must be a week old first.
   - Actions are pinned to commit SHAs. Dependabot updates the SHA and its version comment together.
   - A few versions are outside Dependabot's reach and are bumped by hand. They're listed at the top of `dependabot.yml`.
 

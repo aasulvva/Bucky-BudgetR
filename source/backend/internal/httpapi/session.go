@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -46,7 +45,7 @@ func Sessions(svc *auth.Service, logger *slog.Logger) func(http.Handler) http.Ha
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := context.WithValue(r.Context(), clientKey{}, auth.Client{
-				IP:        clientIP(r),
+				IP:        ClientIPFromContext(r.Context()),
 				UserAgent: r.UserAgent(),
 			})
 			if c, err := r.Cookie(SessionCookie); err == nil && c.Value != "" && svc != nil {
@@ -91,16 +90,6 @@ func CSRF(next http.Handler) http.Handler {
 
 func isSafeMethod(m string) bool {
 	return m == http.MethodGet || m == http.MethodHead || m == http.MethodOptions
-}
-
-// clientIP is the address the request came from. X-Forwarded-For is not
-// trusted until a reverse proxy is part of the deployment (#26).
-func clientIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }
 
 func sessionCookie(token string, maxAge time.Duration) *http.Cookie {
