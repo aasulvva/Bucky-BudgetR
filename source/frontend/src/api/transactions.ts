@@ -4,6 +4,8 @@
 import { useDebouncedValue } from "@mantine/hooks";
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 
+import { SYSTEM_TYPES, USER_TYPES } from "@/lib/transactionList";
+
 import { api } from "./client";
 import { unwrap } from "./errors";
 import type { components, operations } from "./schema";
@@ -74,5 +76,37 @@ export function useTransaction(id: string | null) {
         }),
       ),
     enabled: id !== null,
+  });
+}
+
+/** At most this many pages of a bucket's history are fetched. */
+const HISTORY_PAGES = 10;
+
+/**
+ * Every transaction with a line on the bucket in the cycle, newest first.
+ * `truncated` says there were more than HISTORY_PAGES pages.
+ */
+export function useBucketTransactions(bucketId: string, cycleId: string | undefined) {
+  return useQuery({
+    queryKey: ["transactions", "bucket", bucketId, cycleId],
+    queryFn: async () => {
+      const items: Transaction[] = [];
+      let cursor: string | undefined;
+      for (let page = 0; page < HISTORY_PAGES; page++) {
+        const query: TransactionQuery = {
+          bucket_id: bucketId,
+          cycle_id: cycleId,
+          type: [...USER_TYPES, ...SYSTEM_TYPES],
+          limit: 200,
+          ...(cursor ? { cursor } : {}),
+        };
+        const res = await unwrap(api.GET("/api/v1/transactions", { params: { query } }));
+        items.push(...res.items);
+        cursor = res.next_cursor ?? undefined;
+        if (!cursor) return { items, truncated: false };
+      }
+      return { items, truncated: true };
+    },
+    enabled: cycleId !== undefined,
   });
 }

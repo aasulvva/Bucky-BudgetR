@@ -1,9 +1,10 @@
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import { addDays, cycleRange, startAtFor, today } from "@/lib/cycles";
 import { formatMoney } from "@/lib/money";
 import { apiMock, testUser } from "@/test/api";
-import { account, bucket, bucketFigures } from "@/test/fixtures";
+import { account, bucket, bucketFigures, cycle, transaction } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
 
@@ -96,7 +97,12 @@ describe("Buckets", () => {
     const row = within((await section.findByText("Groceries")).closest("tr") as HTMLElement);
     expect(await row.findByText(`${m("3000.00")} of ${m("4000.00")}`)).toBeInTheDocument();
     expect(row.getByText("75%")).toBeInTheDocument();
-    expect(row.getByText(`Start ${m("500.00")} + refill ${m("3500.00")}`)).toBeInTheDocument();
+    // The breakdown, its parts but the start linking to the transactions.
+    const breakdown = row.getByText(`Start ${m("500.00")}`).parentElement;
+    expect(breakdown).toHaveTextContent(`Start ${m("500.00")} + refill ${m("3500.00")}`);
+    expect(
+      row.getByRole("button", { name: `refill ${name("3500.00")}: the transactions in Groceries` }),
+    ).toBeInTheDocument();
     // Left is what the account backs; TF is struck through while it's short.
     expect(row.getByText(m("650.00"))).toBeInTheDocument();
     expect(row.getByText(m("1000.00"), { selector: "del" })).toBeInTheDocument();
@@ -219,5 +225,104 @@ describe("Buckets", () => {
     expect(await screen.findByRole("heading", { name: "Bøtter", level: 2 })).toBeInTheDocument();
     expect(await screen.findAllByRole("columnheader", { name: "Bøtte" })).toHaveLength(2);
     expect(screen.getAllByRole("img", { name: "Ikkje fullt dekt" })).toHaveLength(2);
+  });
+});
+
+describe("a bucket's transactions", () => {
+  const active = "100001000001";
+  const ref = transaction({
+    id: "20260101000001",
+    type: "REF",
+    created_by: null,
+    bank_lines: [],
+    bucket_lines: [{ bucket_id: groceries.id, cycle_id: active, amount: "3500.00" }],
+  });
+  const exp = transaction({
+    id: "20260101000002",
+    counterparty: "Rema 1000",
+    bank_lines: [{ account_id: main.id, amount: "-3000.00" }],
+    bucket_lines: [{ bucket_id: groceries.id, cycle_id: active, amount: "-3000.00" }],
+  });
+  const previous = cycle({
+    id: "100001000000",
+    state: "finished",
+    start_at: startAtFor(addDays(today(), -40)),
+    end_at: startAtFor(addDays(today(), -10)),
+  });
+
+  beforeEach(() => {
+    apiMock.on("GET /api/v1/transactions", (req) => ({
+      body: {
+        items: req.query.get("cycle_id") === active ? [exp, ref] : [],
+        next_cursor: null,
+      },
+    }));
+  });
+
+  it("lists the cycle's lines with what's left after each", async () => {
+    renderRoute("/buckets");
+    await userEvent.click(await screen.findByRole("button", { name: "Transactions in Groceries" }));
+    const dialog = within(await screen.findByRole("dialog", { name: "Groceries: transactions" }));
+    // Groceries' account backs 650 of its 1 000.
+    expect(
+      await dialog.findByText(
+        `The account only covers ${m("650.00")} of the ${m("1000.00")} right now, so Buckets shows ${m("650.00")} left.`,
+      ),
+    ).toBeInTheDocument();
+    const rows = within(dialog.getByRole("list", { name: "Transactions" })).getAllByRole(
+      "listitem",
+    );
+    expect(rows.map((r) => r.textContent.replace(/\s/g, " "))).toEqual([
+      expect.stringMatching(new RegExp(`^Rema 1000Expense.*Left ${m("1000.00")}$`)),
+      expect.stringMatching(new RegExp(`^RefillRefill.*Left ${m("4000.00")}$`)),
+      `At the start of the cycle${m("500.00")}`,
+    ]);
+    const query = apiMock.calls("GET /api/v1/transactions")[0]?.query;
+    expect(query?.get("bucket_id")).toBe(groceries.id);
+    expect(query?.get("cycle_id")).toBe(active);
+    expect(query?.getAll("type")).toHaveLength(10);
+    // A row opens it on the Transactions screen.
+    expect(dialog.getByRole("link", { name: /Rema 1000/ })).toHaveAttribute(
+      "href",
+      `/transactions?bucket_id=${groceries.id}&cycle_id=${active}&system=1&open=${exp.id}`,
+    );
+
+    await userEvent.click(dialog.getByRole("combobox", { name: "Show" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Bucket transactions only" }));
+    expect(dialog.queryByRole("link", { name: /Rema 1000/ })).not.toBeInTheDocument();
+    expect(dialog.getByRole("link", { name: /Refill/ })).toBeInTheDocument();
+  });
+
+  it("opens from a part of the breakdown, showing that kind", async () => {
+    renderRoute("/buckets");
+    await userEvent.click(
+      await screen.findByRole("button", {
+        name: `refill ${name("3500.00")}: the transactions in Groceries`,
+      }),
+    );
+    const dialog = within(await screen.findByRole("dialog", { name: "Groceries: transactions" }));
+    expect(dialog.getByRole("combobox", { name: "Show" })).toHaveValue("Refill");
+    expect(await dialog.findByRole("link", { name: /Refill/ })).toBeInTheDocument();
+    expect(dialog.queryByRole("link", { name: /Rema 1000/ })).not.toBeInTheDocument();
+  });
+
+  it("shows an earlier cycle", async () => {
+    apiMock.on("GET /api/v1/cycles", { body: [previous, cycle()] });
+    apiMock.on(`GET /api/v1/cycles/${previous.id}/bucket-figures`, {
+      // Without Keep funds: it started and ended at 0.
+      body: [bucketFigures({ bucket_id: groceries.id })],
+    });
+    renderRoute("/buckets");
+    await userEvent.click(await screen.findByRole("button", { name: "Transactions in Groceries" }));
+    const dialog = within(await screen.findByRole("dialog", { name: "Groceries: transactions" }));
+    await userEvent.click(dialog.getByRole("combobox", { name: "Cycle" }));
+    await userEvent.click(await screen.findByRole("option", { name: cycleRange(previous) }));
+    expect(await dialog.findByText("Nothing in this cycle.")).toBeInTheDocument();
+    // No start row at 0, and no coverage note outside the active cycle.
+    expect(dialog.queryByText("At the start of the cycle")).not.toBeInTheDocument();
+    expect(dialog.queryByText(/The account only covers/)).not.toBeInTheDocument();
+    expect(apiMock.calls("GET /api/v1/transactions").at(-1)?.query.get("cycle_id")).toBe(
+      previous.id,
+    );
   });
 });

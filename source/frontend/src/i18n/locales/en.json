@@ -384,6 +384,29 @@
       "enterAmount": "Enter an amount above 0.",
       "noTargets": "There's no other bucket in {{currency}} to move funds to.",
       "pickBucket": "Choose a bucket."
+    },
+    "history": {
+      "button": "Transactions",
+      "open": "Transactions in {{name}}",
+      "title": "{{name}}: transactions",
+      "partLink": "{{part}}: the transactions in {{name}}",
+      "list": "Transactions",
+      "cycle": "Cycle",
+      "activeCycle": "{{range}} (active)",
+      "show": "Show",
+      "kinds": {
+        "all": "All lines",
+        "bucket": "Bucket transactions only"
+      },
+      "noCycles": "No cycles yet.",
+      "covered": "The account only covers {{caf}} of the {{tf}} right now, so Buckets shows {{caf}} left.",
+      "truncated": "Only the latest {{count}} transactions are shown.",
+      "empty": "Nothing in this cycle.",
+      "emptyKind": "None of these in this cycle.",
+      "startRow": "At the start of the cycle",
+      "tfAfter": "Left {{amount}}",
+      "to": "To {{name}}",
+      "from": "From {{name}}"
     }
   },
   "bucketSetup": {

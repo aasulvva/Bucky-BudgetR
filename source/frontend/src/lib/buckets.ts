@@ -93,16 +93,29 @@ export function breakdown(figures: BucketFigures): { part: BreakdownPart; amount
   );
 }
 
+/** One part of the breakdown as shown: "Start 500.00", or the sign and "refill 1 500.00". */
+export interface BreakdownPiece {
+  part: BreakdownPart;
+  /** "+" or "−" before every part but the first. */
+  sign: string;
+  text: string;
+}
+
+/** The breakdown's parts, ready to show. */
+export function breakdownPieces(figures: BucketFigures, currency: string): BreakdownPiece[] {
+  return breakdown(figures).map(({ part, amount }, i) => {
+    const negative = compareAmounts(amount, "0") < 0;
+    const shown = i > 0 && negative ? subtractAmounts("0", amount) : amount;
+    const text = i18n.t(`buckets.parts.${part}`, { amount: formatMoney(shown, currency) });
+    if (i === 0) return { part, sign: "", text: text.charAt(0).toUpperCase() + text.slice(1) };
+    return { part, sign: negative ? "−" : "+", text };
+  });
+}
+
 /** The breakdown as a line: "Start 500.00 + refill 1 500.00 − adjusted 200.00". */
 export function breakdownText(figures: BucketFigures, currency: string): string {
-  return breakdown(figures)
-    .map(({ part, amount }, i) => {
-      const negative = compareAmounts(amount, "0") < 0;
-      const shown = i > 0 && negative ? subtractAmounts("0", amount) : amount;
-      const text = i18n.t(`buckets.parts.${part}`, { amount: formatMoney(shown, currency) });
-      if (i === 0) return text.charAt(0).toUpperCase() + text.slice(1);
-      return `${negative ? "−" : "+"} ${text}`;
-    })
+  return breakdownPieces(figures, currency)
+    .map(({ sign, text }) => (sign ? `${sign} ${text}` : text))
     .join(" ");
 }
 

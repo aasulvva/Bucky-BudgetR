@@ -384,6 +384,29 @@
       "enterAmount": "Skriv inn eit beløp over 0.",
       "noTargets": "Det finst inga anna bøtte i {{currency}} å flytte midlar til.",
       "pickBucket": "Vel ei bøtte."
+    },
+    "history": {
+      "button": "Transaksjonar",
+      "open": "Transaksjonar i {{name}}",
+      "title": "{{name}}: transaksjonar",
+      "partLink": "{{part}}: transaksjonane i {{name}}",
+      "list": "Transaksjonar",
+      "cycle": "Periode",
+      "activeCycle": "{{range}} (aktiv)",
+      "show": "Vis",
+      "kinds": {
+        "all": "Alle linjer",
+        "bucket": "Berre bøttetransaksjonar"
+      },
+      "noCycles": "Ingen periodar enno.",
+      "covered": "Kontoen dekkjer berre {{caf}} av {{tf}} no, så Bøtter viser {{caf}} att.",
+      "truncated": "Berre dei siste {{count}} transaksjonane vert viste.",
+      "empty": "Ingenting i denne perioden.",
+      "emptyKind": "Ingen av desse i denne perioden.",
+      "startRow": "Ved starten av perioden",
+      "tfAfter": "Att {{amount}}",
+      "to": "Til {{name}}",
+      "from": "Frå {{name}}"
     }
   },
   "bucketSetup": {
