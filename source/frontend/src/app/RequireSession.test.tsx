@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { apiMock, problem, testUser } from "@/test/api";
@@ -31,6 +31,20 @@ describe("the session guard", () => {
       await screen.findByRole("heading", { name: "Choose a new password" }),
     ).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/change-password");
+  });
+
+  it("sets the browser's time zone once, when there is none", async () => {
+    apiMock.on("GET /api/v1/me", { body: { ...testUser, preferences: {} } });
+    apiMock.on("PATCH /api/v1/me/preferences", (req) => ({ body: req.body }));
+    renderRoute("/settings");
+    await screen.findByRole("heading", { level: 2, name: "Settings" });
+    await waitFor(() => {
+      expect(apiMock.calls("PATCH /api/v1/me/preferences")).toHaveLength(1);
+    });
+    // vite.config.ts runs the tests in Los Angeles.
+    expect(apiMock.calls("PATCH /api/v1/me/preferences")[0]?.body).toEqual({
+      time_zone: "America/Los_Angeles",
+    });
   });
 
   it("goes to the login page with a notice when the session ends", async () => {

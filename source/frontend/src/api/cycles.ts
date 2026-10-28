@@ -1,6 +1,9 @@
 // Budget cycles: the queries the shell and the Cycles screen share.
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
+
+import type { LocalDate } from "@/lib/cycles";
+import type { CycleRule } from "@/lib/cycleRule";
 
 import { useRefreshMoney } from "./accounts";
 import { api } from "./client";
@@ -25,6 +28,20 @@ export function useCurrentCycles() {
   return useQuery({
     queryKey: CURRENT_CYCLES_KEY,
     queryFn: () => unwrap(api.GET("/api/v1/cycles/active")),
+  });
+}
+
+/**
+ * The periods a cycle rule gives, from the one containing `from` (today
+ * without it). Nothing is fetched without a rule.
+ */
+export function useCyclePeriods(rule: CycleRule | null, from?: LocalDate, count = 4) {
+  return useQuery({
+    queryKey: ["cycle-rule-periods", rule, from, count],
+    queryFn: rule
+      ? () => unwrap(api.POST("/api/v1/cycle-rule/periods", { body: { rule, from, count } }))
+      : skipToken,
+    placeholderData: keepPreviousData,
   });
 }
 

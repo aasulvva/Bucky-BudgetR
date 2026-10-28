@@ -136,6 +136,11 @@ export default function Cycles() {
                             {t("cycles.next")}
                           </Badge>
                         )}
+                        {c.generated && (
+                          <Badge variant="light" color="gray" size="sm">
+                            {t("cycles.fromRule")}
+                          </Badge>
+                        )}
                         <ActionIcon
                           variant="subtle"
                           color="gray"

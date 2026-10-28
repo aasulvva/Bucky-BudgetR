@@ -426,6 +426,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cycle-rule/periods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a cycle rule
+         * @description The periods a cycle rule gives, as local dates, from the one
+         *     containing `from`. Changes nothing; the rule needn't be saved.
+         */
+        post: operations["cycleRulePeriods"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cycles/active": {
         parameters: {
             query?: never;
@@ -1074,6 +1095,21 @@ export interface components {
             income_refill_rules?: components["schemas"]["IncomeRefillRule"][] | null;
             /** @description The Dashboard widgets' settings. Replaced as a whole on update. Null means the defaults. */
             dashboard?: components["schemas"]["DashboardSettings"] | null;
+            /**
+             * @description The user's IANA time zone, e.g. `Europe/Oslo` (400
+             *     `invalid_request` for an unknown zone). The cycle rule plans
+             *     cycles from local midnight in it. The web app sets it to the
+             *     browser's zone when it's null.
+             * @example Europe/Oslo
+             */
+            time_zone?: string | null;
+            /**
+             * @description Plans cycles automatically (spec §3). Setting it needs a
+             *     `time_zone` (400 `invalid_request`). Setting it or `time_zone`
+             *     replans the cycles the rule planned that haven't been moved by
+             *     hand or begun. Null means no rule; the planned cycles stay.
+             */
+            cycle_rule?: components["schemas"]["CycleRule"] | null;
         };
         /** @description Settings per Dashboard widget. A missing widget uses its defaults. */
         DashboardSettings: {
@@ -1111,6 +1147,41 @@ export interface components {
          * @enum {string}
          */
         Language: "en" | "nb" | "nn";
+        CycleRule: {
+            /** @description The day of the month a cycle starts. A day the month doesn't have is its last day. */
+            day: number;
+            /**
+             * @description Where the day moves when it's a weekend or a holiday.
+             * @enum {string}
+             */
+            shift: "previous" | "next" | "none";
+            /**
+             * @description The holidays besides weekends. `NO` is Norwegian bank holidays, including 24 and 31 December.
+             * @enum {string}
+             */
+            holidays: "none" | "NO";
+            /** @description How many planned cycles to keep. */
+            ahead: number;
+        };
+        CyclePeriodsRequest: {
+            rule: components["schemas"]["CycleRule"];
+            /**
+             * Format: date
+             * @description The first period is the one containing this date. Defaults to today in the user's time zone.
+             */
+            from?: string;
+            /** @default 4 */
+            count: number;
+        };
+        CyclePeriod: {
+            /** Format: date */
+            start: string;
+            /**
+             * Format: date
+             * @description The period's last day.
+             */
+            end: string;
+        };
         IncomeRefillRule: {
             counterparty: string;
             /**
@@ -1217,6 +1288,8 @@ export interface components {
              */
             end_at: string;
             state: components["schemas"]["CycleState"];
+            /** @description The cycle rule planned it, and it hasn't been moved by hand since. */
+            generated: boolean;
             /** Format: date-time */
             created_at: string;
         };
@@ -2225,6 +2298,33 @@ export interface operations {
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    cycleRulePeriods: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CyclePeriodsRequest"];
+            };
+        };
+        responses: {
+            /** @description The periods. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CyclePeriod"][];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };

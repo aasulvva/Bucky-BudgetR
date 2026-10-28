@@ -49,7 +49,7 @@ func TestCorrectionsAPI(t *testing.T) {
 	w = do(http.MethodPost, path+"/correction", map[string]any{"amount": "150", "counterparty": "Rema 1000"}, alice)
 	expect(t, "correct", w, http.StatusOK, "")
 	if got := decode[api.Transaction](t, w); !got.Corrected || got.BankLines[0].Amount != "-150.00" || got.Counterparty != "Rema 1000" ||
-		got.History == nil || len(*got.History) != 2 || (*got.History)[1].CorrectionType != api.Adjustment {
+		got.History == nil || len(*got.History) != 2 || (*got.History)[1].CorrectionType != api.CorrectionTypeAdjustment {
 		t.Errorf("corrected %+v", got)
 	}
 	expect(t, "no change", do(http.MethodPost, path+"/correction", map[string]any{"amount": "150"}, alice), http.StatusBadRequest, "no_change")

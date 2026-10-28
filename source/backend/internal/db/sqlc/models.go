@@ -464,6 +464,7 @@ type Cycle struct {
 	State      CycleState
 	CreatedAt  time.Time
 	ModifiedAt time.Time
+	Generated  bool
 }
 
 type PasswordLink struct {

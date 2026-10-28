@@ -2,11 +2,13 @@
 // here means "nobody" rather than an error.
 
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router";
 
 import { api } from "@/api/client";
 import { ApiError, unwrap } from "@/api/errors";
 import type { components } from "@/api/schema";
+import { browserTimeZone } from "@/lib/cycleRule";
 
 export type User = components["schemas"]["User"];
 export type Preferences = components["schemas"]["Preferences"];
@@ -36,6 +38,27 @@ export function useUpdatePreferences() {
       client.setQueryData<User | null>(SESSION_KEY, (user) => user && { ...user, preferences });
     },
   });
+}
+
+/**
+ * Sets the time_zone preference to the browser's zone once, when it isn't
+ * set: the server plans cycles from the cycle rule in it (#72).
+ */
+export function useDefaultTimeZone(user: User | null | undefined) {
+  const client = useQueryClient();
+  const tried = useRef(false);
+  const missing = user != null && user.preferences.time_zone == null;
+  useEffect(() => {
+    if (!missing || tried.current) return;
+    tried.current = true;
+    api
+      .PATCH("/api/v1/me/preferences", { body: { time_zone: browserTimeZone() } })
+      .then(({ data }) => {
+        if (data)
+          client.setQueryData<User | null>(SESSION_KEY, (u) => u && { ...u, preferences: data });
+      })
+      .catch(() => undefined); // tried again on the next visit
+  }, [missing, client]);
 }
 
 let ended = false;

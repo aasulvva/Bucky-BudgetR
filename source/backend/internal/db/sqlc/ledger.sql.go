@@ -167,7 +167,7 @@ func (q *Queries) CreateTransactionHeader(ctx context.Context, arg CreateTransac
 }
 
 const getActiveCycle = `-- name: GetActiveCycle :one
-SELECT id, user_id, start_at, end_at, state, created_at, modified_at FROM cycles WHERE user_id = $1 AND state = 'active' FOR SHARE
+SELECT id, user_id, start_at, end_at, state, created_at, modified_at, generated FROM cycles WHERE user_id = $1 AND state = 'active' FOR SHARE
 `
 
 // Locks the cycle until the transaction ends, so it can't be ended meanwhile.
@@ -182,6 +182,7 @@ func (q *Queries) GetActiveCycle(ctx context.Context, userID string) (Cycle, err
 		&i.State,
 		&i.CreatedAt,
 		&i.ModifiedAt,
+		&i.Generated,
 	)
 	return i, err
 }

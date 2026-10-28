@@ -152,6 +152,7 @@ describe("Create transaction", () => {
       body: {
         ...testUser,
         preferences: {
+          ...testUser.preferences,
           income_refill_rules: [{ counterparty: "Employer AS", min_amount: "20000" }],
         },
       },
@@ -231,7 +232,9 @@ describe("Create transaction", () => {
   });
 
   it("speaks nynorsk", async () => {
-    apiMock.on("GET /api/v1/me", { body: { ...testUser, preferences: { language: "nn" } } });
+    apiMock.on("GET /api/v1/me", {
+      body: { ...testUser, preferences: { ...testUser.preferences, language: "nn" } },
+    });
     renderRoute("/transactions/new");
     expect(await screen.findByRole("radio", { name: "Utgift" })).toBeChecked();
     expect(screen.getByRole("combobox", { name: "Betalt til" })).toBeInTheDocument();

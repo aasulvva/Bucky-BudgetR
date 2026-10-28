@@ -249,7 +249,9 @@ describe("Admin", () => {
   });
 
   it("speaks nynorsk", async () => {
-    apiMock.on("GET /api/v1/me", { body: { ...me, preferences: { language: "nn" } } });
+    apiMock.on("GET /api/v1/me", {
+      body: { ...me, preferences: { ...me.preferences, language: "nn" } },
+    });
     renderRoute("/admin");
     expect(await screen.findByRole("button", { name: "Ny brukar" })).toBeInTheDocument();
     expect(await screen.findByText("Må byte passord")).toBeInTheDocument();

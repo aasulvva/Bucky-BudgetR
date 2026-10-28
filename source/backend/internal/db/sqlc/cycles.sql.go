@@ -10,18 +10,30 @@ import (
 	"time"
 )
 
+const countFutureCycles = `-- name: CountFutureCycles :one
+SELECT count(*) FROM cycles WHERE user_id = $1 AND state = 'future'
+`
+
+func (q *Queries) CountFutureCycles(ctx context.Context, userID string) (int64, error) {
+	row := q.db.QueryRow(ctx, countFutureCycles, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createCycle = `-- name: CreateCycle :one
-INSERT INTO cycles (id, user_id, start_at, end_at)
-VALUES ($1, $2, $3, $4)
+INSERT INTO cycles (id, user_id, start_at, end_at, generated)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (id) DO NOTHING
-RETURNING id, user_id, start_at, end_at, state, created_at, modified_at
+RETURNING id, user_id, start_at, end_at, state, created_at, modified_at, generated
 `
 
 type CreateCycleParams struct {
-	ID      string
-	UserID  string
-	StartAt time.Time
-	EndAt   time.Time
+	ID        string
+	UserID    string
+	StartAt   time.Time
+	EndAt     time.Time
+	Generated bool
 }
 
 // Use with ids.Insert: a taken ID returns no row.
@@ -31,6 +43,7 @@ func (q *Queries) CreateCycle(ctx context.Context, arg CreateCycleParams) (Cycle
 		arg.UserID,
 		arg.StartAt,
 		arg.EndAt,
+		arg.Generated,
 	)
 	var i Cycle
 	err := row.Scan(
@@ -41,7 +54,27 @@ func (q *Queries) CreateCycle(ctx context.Context, arg CreateCycleParams) (Cycle
 		&i.State,
 		&i.CreatedAt,
 		&i.ModifiedAt,
+		&i.Generated,
 	)
+	return i, err
+}
+
+const cycleRuleOf = `-- name: CycleRuleOf :one
+SELECT COALESCE(preferences -> 'cycle_rule', 'null')::jsonb AS rule,
+       COALESCE(preferences ->> 'time_zone', '')::text AS time_zone
+FROM users WHERE id = $1
+`
+
+type CycleRuleOfRow struct {
+	Rule     []byte
+	TimeZone string
+}
+
+// The user's cycle_rule and time_zone preferences (” when unset).
+func (q *Queries) CycleRuleOf(ctx context.Context, id string) (CycleRuleOfRow, error) {
+	row := q.db.QueryRow(ctx, cycleRuleOf, id)
+	var i CycleRuleOfRow
+	err := row.Scan(&i.Rule, &i.TimeZone)
 	return i, err
 }
 
@@ -59,8 +92,24 @@ func (q *Queries) DeleteCycle(ctx context.Context, arg DeleteCycleParams) error 
 	return err
 }
 
+const deleteUntouchedGenerated = `-- name: DeleteUntouchedGenerated :exec
+DELETE FROM cycles
+WHERE user_id = $1 AND state = 'future' AND generated AND start_at > $2
+`
+
+type DeleteUntouchedGeneratedParams struct {
+	UserID string
+	Now    time.Time
+}
+
+// The planned cycles the rule made that nobody moved and that haven't begun.
+func (q *Queries) DeleteUntouchedGenerated(ctx context.Context, arg DeleteUntouchedGeneratedParams) error {
+	_, err := q.db.Exec(ctx, deleteUntouchedGenerated, arg.UserID, arg.Now)
+	return err
+}
+
 const getActiveCycleForUpdate = `-- name: GetActiveCycleForUpdate :one
-SELECT id, user_id, start_at, end_at, state, created_at, modified_at FROM cycles WHERE user_id = $1 AND state = 'active' FOR UPDATE
+SELECT id, user_id, start_at, end_at, state, created_at, modified_at, generated FROM cycles WHERE user_id = $1 AND state = 'active' FOR UPDATE
 `
 
 func (q *Queries) GetActiveCycleForUpdate(ctx context.Context, userID string) (Cycle, error) {
@@ -74,12 +123,13 @@ func (q *Queries) GetActiveCycleForUpdate(ctx context.Context, userID string) (C
 		&i.State,
 		&i.CreatedAt,
 		&i.ModifiedAt,
+		&i.Generated,
 	)
 	return i, err
 }
 
 const getCycle = `-- name: GetCycle :one
-SELECT id, user_id, start_at, end_at, state, created_at, modified_at FROM cycles WHERE id = $1 AND user_id = $2
+SELECT id, user_id, start_at, end_at, state, created_at, modified_at, generated FROM cycles WHERE id = $1 AND user_id = $2
 `
 
 type GetCycleParams struct {
@@ -98,12 +148,13 @@ func (q *Queries) GetCycle(ctx context.Context, arg GetCycleParams) (Cycle, erro
 		&i.State,
 		&i.CreatedAt,
 		&i.ModifiedAt,
+		&i.Generated,
 	)
 	return i, err
 }
 
 const getCycleForUpdate = `-- name: GetCycleForUpdate :one
-SELECT id, user_id, start_at, end_at, state, created_at, modified_at FROM cycles WHERE id = $1 AND user_id = $2 FOR UPDATE
+SELECT id, user_id, start_at, end_at, state, created_at, modified_at, generated FROM cycles WHERE id = $1 AND user_id = $2 FOR UPDATE
 `
 
 type GetCycleForUpdateParams struct {
@@ -122,6 +173,7 @@ func (q *Queries) GetCycleForUpdate(ctx context.Context, arg GetCycleForUpdatePa
 		&i.State,
 		&i.CreatedAt,
 		&i.ModifiedAt,
+		&i.Generated,
 	)
 	return i, err
 }
@@ -141,8 +193,20 @@ func (q *Queries) LastBucketLineAt(ctx context.Context, cycleID string) (time.Ti
 	return last_at, err
 }
 
+const latestCycleEnd = `-- name: LatestCycleEnd :one
+SELECT COALESCE(max(end_at), 'epoch')::timestamptz AS end_at FROM cycles WHERE user_id = $1
+`
+
+// Where the latest of the user's cycles ends, or the epoch without cycles.
+func (q *Queries) LatestCycleEnd(ctx context.Context, userID string) (time.Time, error) {
+	row := q.db.QueryRow(ctx, latestCycleEnd, userID)
+	var end_at time.Time
+	err := row.Scan(&end_at)
+	return end_at, err
+}
+
 const listCycles = `-- name: ListCycles :many
-SELECT id, user_id, start_at, end_at, state, created_at, modified_at FROM cycles WHERE user_id = $1 ORDER BY start_at
+SELECT id, user_id, start_at, end_at, state, created_at, modified_at, generated FROM cycles WHERE user_id = $1 ORDER BY start_at
 `
 
 func (q *Queries) ListCycles(ctx context.Context, userID string) ([]Cycle, error) {
@@ -162,6 +226,7 @@ func (q *Queries) ListCycles(ctx context.Context, userID string) ([]Cycle, error
 			&i.State,
 			&i.CreatedAt,
 			&i.ModifiedAt,
+			&i.Generated,
 		); err != nil {
 			return nil, err
 		}
@@ -174,7 +239,7 @@ func (q *Queries) ListCycles(ctx context.Context, userID string) ([]Cycle, error
 }
 
 const nextFutureCycle = `-- name: NextFutureCycle :one
-SELECT id, user_id, start_at, end_at, state, created_at, modified_at FROM cycles WHERE user_id = $1 AND state = 'future' ORDER BY start_at LIMIT 1 FOR UPDATE
+SELECT id, user_id, start_at, end_at, state, created_at, modified_at, generated FROM cycles WHERE user_id = $1 AND state = 'future' ORDER BY start_at LIMIT 1 FOR UPDATE
 `
 
 // The earliest planned cycle, locked so it can be started or moved.
@@ -189,6 +254,7 @@ func (q *Queries) NextFutureCycle(ctx context.Context, userID string) (Cycle, er
 		&i.State,
 		&i.CreatedAt,
 		&i.ModifiedAt,
+		&i.Generated,
 	)
 	return i, err
 }
@@ -196,7 +262,7 @@ func (q *Queries) NextFutureCycle(ctx context.Context, userID string) (Cycle, er
 const setCycleState = `-- name: SetCycleState :one
 UPDATE cycles SET state = $2, modified_at = now()
 WHERE id = $1
-RETURNING id, user_id, start_at, end_at, state, created_at, modified_at
+RETURNING id, user_id, start_at, end_at, state, created_at, modified_at, generated
 `
 
 type SetCycleStateParams struct {
@@ -215,14 +281,15 @@ func (q *Queries) SetCycleState(ctx context.Context, arg SetCycleStateParams) (C
 		&i.State,
 		&i.CreatedAt,
 		&i.ModifiedAt,
+		&i.Generated,
 	)
 	return i, err
 }
 
 const setCycleTimes = `-- name: SetCycleTimes :one
-UPDATE cycles SET start_at = $2, end_at = $3, modified_at = now()
+UPDATE cycles SET start_at = $2, end_at = $3, generated = false, modified_at = now()
 WHERE id = $1
-RETURNING id, user_id, start_at, end_at, state, created_at, modified_at
+RETURNING id, user_id, start_at, end_at, state, created_at, modified_at, generated
 `
 
 type SetCycleTimesParams struct {
@@ -231,6 +298,7 @@ type SetCycleTimesParams struct {
 	EndAt   time.Time
 }
 
+// A cycle moved by hand (or pushed along) is no longer the rule's.
 func (q *Queries) SetCycleTimes(ctx context.Context, arg SetCycleTimesParams) (Cycle, error) {
 	row := q.db.QueryRow(ctx, setCycleTimes, arg.ID, arg.StartAt, arg.EndAt)
 	var i Cycle
@@ -242,6 +310,31 @@ func (q *Queries) SetCycleTimes(ctx context.Context, arg SetCycleTimesParams) (C
 		&i.State,
 		&i.CreatedAt,
 		&i.ModifiedAt,
+		&i.Generated,
 	)
 	return i, err
+}
+
+const usersWithCycleRule = `-- name: UsersWithCycleRule :many
+SELECT id FROM users WHERE active AND preferences ? 'cycle_rule' ORDER BY id
+`
+
+func (q *Queries) UsersWithCycleRule(ctx context.Context) ([]string, error) {
+	rows, err := q.db.Query(ctx, usersWithCycleRule)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

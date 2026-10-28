@@ -671,6 +671,36 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/v1/cycle-rule/periods:
+    post:
+      operationId: cycleRulePeriods
+      tags: [cycles]
+      summary: Preview a cycle rule
+      description: |
+        The periods a cycle rule gives, as local dates, from the one
+        containing `from`. Changes nothing; the rule needn't be saved.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CyclePeriodsRequest"
+      responses:
+        "200":
+          description: The periods.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CyclePeriod"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
   /api/v1/cycles/active:
     get:
       operationId: getCurrentCycles
@@ -1786,6 +1816,26 @@ components:
             - $ref: "#/components/schemas/DashboardSettings"
           nullable: true
           description: The Dashboard widgets' settings. Replaced as a whole on update. Null means the defaults.
+        time_zone:
+          type: string
+          nullable: true
+          maxLength: 64
+          description: |
+            The user's IANA time zone, e.g. `Europe/Oslo` (400
+            `invalid_request` for an unknown zone). The cycle rule plans
+            cycles from local midnight in it. The web app sets it to the
+            browser's zone when it's null.
+          example: Europe/Oslo
+        cycle_rule:
+          type: object
+          allOf:
+            - $ref: "#/components/schemas/CycleRule"
+          nullable: true
+          description: |
+            Plans cycles automatically (spec §3). Setting it needs a
+            `time_zone` (400 `invalid_request`). Setting it or `time_zone`
+            replans the cycles the rule planned that haven't been moved by
+            hand or begun. Null means no rule; the planned cycles stay.
 
     DashboardSettings:
       type: object
@@ -1848,6 +1898,60 @@ components:
       type: string
       description: "A web app language: English, Norwegian bokmål or Norwegian nynorsk."
       enum: [en, nb, nn]
+
+    CycleRule:
+      type: object
+      additionalProperties: false
+      required: [day, shift, holidays, ahead]
+      properties:
+        day:
+          type: integer
+          minimum: 1
+          maximum: 31
+          description: The day of the month a cycle starts. A day the month doesn't have is its last day.
+        shift:
+          type: string
+          enum: [previous, next, none]
+          description: Where the day moves when it's a weekend or a holiday.
+        holidays:
+          type: string
+          enum: [none, "NO"]
+          description: The holidays besides weekends. `NO` is Norwegian bank holidays, including 24 and 31 December.
+        ahead:
+          type: integer
+          minimum: 1
+          maximum: 12
+          description: How many planned cycles to keep.
+
+    CyclePeriodsRequest:
+      type: object
+      additionalProperties: false
+      required: [rule]
+      properties:
+        rule:
+          $ref: "#/components/schemas/CycleRule"
+        from:
+          type: string
+          format: date
+          description: The first period is the one containing this date. Defaults to today in the user's time zone.
+        count:
+          type: integer
+          minimum: 1
+          maximum: 12
+          default: 4
+
+    CyclePeriod:
+      type: object
+      additionalProperties: false
+      required: [start, end]
+      properties:
+        start:
+          type: string
+          format: date
+        end:
+          type: string
+          format: date
+          description: The period's last day.
 
     IncomeRefillRule:
       type: object
@@ -2008,7 +2112,7 @@ components:
     Cycle:
       type: object
       additionalProperties: false
-      required: [id, start_at, end_at, state, created_at]
+      required: [id, start_at, end_at, state, generated, created_at]
       properties:
         id:
           $ref: "#/components/schemas/CycleId"
@@ -2021,6 +2125,9 @@ components:
           description: Exclusive. For the active cycle this is the planned end; once it has passed, bucket transactions are refused until the cycle is extended or ended.
         state:
           $ref: "#/components/schemas/CycleState"
+        generated:
+          type: boolean
+          description: The cycle rule planned it, and it hasn't been moved by hand since.
         created_at:
           type: string
           format: date-time

@@ -32,6 +32,9 @@ The words for the app's concepts, so the same thing is called the same everywher
 | tag                         | tagg (taggen, tagger)                             | tagg (taggen, taggar)                 |
 | expected income             | forventet inntekt                                 | venta inntekt                         |
 | overdue                     | på overtid                                        | på overtid                            |
+| cycle rule                  | perioderegel                                      | perioderegel (regelen … han)          |
+| time zone                   | tidssone                                          | tidssone                              |
+| working day / holiday       | virkedag / helligdag                              | yrkedag / heilagdag                   |
 | settings                    | innstillinger                                     | innstillingar                         |
 | sign out / log in           | logg ut / logg inn                                | logg ut / logg inn                    |
 | session                     | økt                                               | økt                                   |

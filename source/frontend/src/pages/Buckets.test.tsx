@@ -212,7 +212,9 @@ describe("Buckets", () => {
   });
 
   it("speaks nynorsk", async () => {
-    apiMock.on("GET /api/v1/me", { body: { ...testUser, preferences: { language: "nn" } } });
+    apiMock.on("GET /api/v1/me", {
+      body: { ...testUser, preferences: { ...testUser.preferences, language: "nn" } },
+    });
     renderRoute("/buckets");
     expect(await screen.findByRole("heading", { name: "Bøtter", level: 2 })).toBeInTheDocument();
     expect(await screen.findAllByRole("columnheader", { name: "Bøtte" })).toHaveLength(2);

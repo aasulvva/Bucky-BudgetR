@@ -8,7 +8,8 @@
 // is a gap without an active cycle.
 //
 // Ending and starting run the OnEnd and OnStart hooks in the same database
-// transaction. The cycle routines (OVF, REF; #19) plug in there.
+// transaction. The cycle routines (OVF, REF; #19) plug in there. Both then
+// top up the cycles the user's cycle rule plans (rule.go).
 package cycles
 
 import (
@@ -280,8 +281,10 @@ func (s *Service) Start(ctx context.Context, userID, id string) (sqlc.Cycle, err
 				return constraint(err)
 			}
 		}
-		out, err = s.activate(ctx, tx, q, c)
-		return err
+		if out, err = s.activate(ctx, tx, q, c); err != nil {
+			return err
+		}
+		return s.topUp(ctx, tx, userID)
 	})
 	if err != nil {
 		return sqlc.Cycle{}, err
@@ -332,7 +335,7 @@ func (s *Service) End(ctx context.Context, userID, id string, startNext bool) (E
 
 		next, err := q.NextFutureCycle(ctx, userID)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil
+			return s.topUp(ctx, tx, userID)
 		}
 		if err != nil {
 			return err
@@ -344,14 +347,14 @@ func (s *Service) End(ctx context.Context, userID, id string, startNext bool) (E
 				return constraint(err)
 			}
 		default:
-			return nil // a gap until the user starts it
+			return s.topUp(ctx, tx, userID) // a gap until the user starts it
 		}
 		started, err := s.activate(ctx, tx, q, next)
 		if err != nil {
 			return err
 		}
 		out.Started = &started
-		return nil
+		return s.topUp(ctx, tx, userID)
 	})
 	if err != nil {
 		return Ended{}, err
