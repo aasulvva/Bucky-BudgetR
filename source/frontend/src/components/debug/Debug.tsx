@@ -37,6 +37,7 @@ import { ErrorAlert } from "@/components/ErrorAlert";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
 import { now, setServerClock } from "@/lib/clock";
 import { formatDateTime } from "@/lib/dates";
+import { autofocusField } from "@/lib/device";
 
 import {
   exportUrl,
@@ -585,7 +586,7 @@ function RenameForm({ snapshot, onDone }: { snapshot: Snapshot; onDone: () => vo
           label={t("debug.snapshots.name")}
           value={name}
           maxLength={100}
-          data-autofocus
+          {...autofocusField()}
           onChange={(e) => {
             setName(e.currentTarget.value);
           }}

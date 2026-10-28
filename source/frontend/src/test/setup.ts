@@ -23,15 +23,17 @@ afterEach(() => {
   localStorage.clear();
 });
 
-/** Width the stubbed matchMedia answers for; tests can change it. */
-export const viewport = { width: 1280 };
+/** What the stubbed matchMedia answers for; tests can change it. */
+export const viewport = { width: 1280, touch: false };
 
 Object.defineProperty(window, "matchMedia", {
   writable: true,
   value: (query: string) => {
     const min = /min-width:\s*([\d.]+)em/.exec(query);
+    let matches = min ? viewport.width >= Number(min[1]) * 16 : false;
+    if (query.includes("pointer: coarse")) matches = viewport.touch;
     return {
-      matches: min ? viewport.width >= Number(min[1]) * 16 : false,
+      matches,
       media: query,
       onchange: null,
       addEventListener: () => undefined,

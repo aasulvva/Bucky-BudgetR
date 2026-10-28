@@ -48,6 +48,7 @@ import { QueryState } from "@/components/QueryState";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
 import i18n from "@/i18n";
 import { formatDateTime } from "@/lib/dates";
+import { autofocusField } from "@/lib/device";
 
 type Dialog =
   | { kind: "create" }
@@ -480,7 +481,7 @@ function CreateUser({
           }}
           error={error}
           required
-          data-autofocus
+          {...autofocusField()}
         />
         <Checkbox
           label={t("admin.makeAdminToo")}

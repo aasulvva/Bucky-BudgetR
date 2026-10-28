@@ -47,6 +47,7 @@ import i18n from "@/i18n";
 import { isOverdue } from "@/lib/cycles";
 import { compareAmounts, formatMoney, multiplyAmount, subtractAmounts } from "@/lib/money";
 import { checkName } from "@/lib/names";
+import { autofocusField } from "@/lib/device";
 
 type BucketCreate = components["schemas"]["BucketCreate"];
 type BucketUpdate = components["schemas"]["BucketUpdate"];
@@ -482,7 +483,7 @@ function BucketForm({
             }}
             error={errors.name}
             required
-            data-autofocus
+            {...autofocusField()}
           />
           <Select
             label={t("bucketSetup.source")}

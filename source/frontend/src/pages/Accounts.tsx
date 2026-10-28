@@ -39,6 +39,7 @@ import { DateTimeInput } from "@/components/DateTimeInput";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { QueryState } from "@/components/QueryState";
 import i18n from "@/i18n";
+import { autofocusField } from "@/lib/device";
 import {
   addAmounts,
   canonicalAmount,
@@ -453,7 +454,7 @@ function AdjustForm({ account, onDone }: { account: Account; onDone: () => void 
           value={actual}
           onChange={setActual}
           error={error}
-          data-autofocus
+          {...autofocusField()}
         />
         <DateTimeInput
           label={t("common.dateTime")}
@@ -545,7 +546,7 @@ function InterestForm({ account, onDone }: { account: Account; onDone: () => voi
           value={amount}
           onChange={setAmount}
           error={error}
-          data-autofocus
+          {...autofocusField()}
         />
         <DateTimeInput
           label={t("common.dateTime")}
