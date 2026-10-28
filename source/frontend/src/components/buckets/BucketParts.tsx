@@ -8,7 +8,15 @@ import { Link } from "react-router";
 
 import type { Bucket, BucketFigures } from "@/api/accounts";
 import type { Cycle } from "@/api/cycles";
-import { TONE_COLOR, breakdownText, coverage, toneText, usageColor } from "@/lib/buckets";
+import { BREAKDOWN_KIND, type HistoryKind } from "@/lib/bucketHistory";
+import {
+  TONE_COLOR,
+  breakdownPieces,
+  breakdownText,
+  coverage,
+  toneText,
+  usageColor,
+} from "@/lib/buckets";
 import { compareAmounts, formatMoney, percentOf } from "@/lib/money";
 
 export interface BucketProps {
@@ -112,8 +120,18 @@ export function LeftFunds({ bucket, large }: { bucket: Bucket; large?: boolean }
   );
 }
 
-/** The cycle's spending out of the budget, with the bar and the breakdown. */
-export function UsedThisCycle({ bucket, figures, active, long }: BucketProps & { long?: boolean }) {
+/**
+ * The cycle's spending out of the budget, with the bar and the breakdown.
+ * With onPart, each part of the breakdown but the start opens the bucket's
+ * transactions of that kind.
+ */
+export function UsedThisCycle({
+  bucket,
+  figures,
+  active,
+  long,
+  onPart,
+}: BucketProps & { long?: boolean; onPart?: (kind: HistoryKind) => void }) {
   const { t } = useTranslation();
   if (!active || !figures) {
     return (
@@ -142,7 +160,30 @@ export function UsedThisCycle({ bucket, figures, active, long }: BucketProps & {
       />
       {long && <Text size="sm">{t("buckets.usedOfLong", values)}</Text>}
       <Text size="xs" c="dimmed">
-        {breakdownText(figures, bucket.currency)}
+        {onPart
+          ? breakdownPieces(figures, bucket.currency).map(({ part, sign, text }, i) => (
+              <span key={part}>
+                {i > 0 && ` ${sign} `}
+                {part === "start" ? (
+                  text
+                ) : (
+                  <Anchor
+                    component="button"
+                    type="button"
+                    size="xs"
+                    c="dimmed"
+                    underline="always"
+                    aria-label={t("buckets.history.partLink", { part: text, name: bucket.name })}
+                    onClick={() => {
+                      onPart(BREAKDOWN_KIND[part]);
+                    }}
+                  >
+                    {text}
+                  </Anchor>
+                )}
+              </span>
+            ))
+          : breakdownText(figures, bucket.currency)}
       </Text>
     </Stack>
   );

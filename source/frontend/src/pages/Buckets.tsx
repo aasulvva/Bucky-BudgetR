@@ -20,6 +20,7 @@ import {
   IconArrowsShuffle,
   IconLayoutGrid,
   IconList,
+  IconHistory,
   IconSettings,
 } from "@tabler/icons-react";
 import { useMutation } from "@tanstack/react-query";
@@ -41,6 +42,7 @@ import { api } from "@/api/client";
 import { useCurrentCycles, type Cycle } from "@/api/cycles";
 import { unwrap } from "@/api/errors";
 import { AdjustButton } from "@/components/buckets/AdjustFunds";
+import { BucketHistory } from "@/components/buckets/BucketHistory";
 import {
   BucketName,
   LeftFunds,
@@ -49,6 +51,7 @@ import {
 } from "@/components/buckets/BucketParts";
 import { QueryState } from "@/components/QueryState";
 import i18n from "@/i18n";
+import type { HistoryKind } from "@/lib/bucketHistory";
 import { accountSummary, coverage, refillOf, toneStyle } from "@/lib/buckets";
 import { cycleRange, daysLeftLabel, isOverdue } from "@/lib/cycles";
 import { compareAmounts, formatMoney } from "@/lib/money";
@@ -94,6 +97,11 @@ export default function Buckets() {
   const active = useCurrentCycles().data?.active ?? null;
   const figures = useBucketFigures(active?.id);
   const [view, setView] = useView();
+  // The bucket whose transactions are open, and what they show.
+  const [history, setHistory] = useState<{ bucket: Bucket; kind: HistoryKind } | null>(null);
+  const openHistory = (bucket: Bucket, kind: HistoryKind) => {
+    setHistory({ bucket, kind });
+  };
 
   return (
     <Stack gap="lg">
@@ -162,12 +170,20 @@ export default function Buckets() {
                     figures={byId}
                     active={active}
                     view={isDesktop ? view : "cards"}
+                    onHistory={openHistory}
                   />
                 ));
             }}
           </QueryState>
         )}
       </QueryState>
+      <BucketHistory
+        bucket={history?.bucket ?? null}
+        kind={history?.kind ?? "all"}
+        onClose={() => {
+          setHistory(null);
+        }}
+      />
     </Stack>
   );
 }
@@ -178,12 +194,14 @@ function AccountSection({
   figures,
   active,
   view,
+  onHistory,
 }: {
   account: Account;
   buckets: Bucket[];
   figures: Map<string, BucketFigures>;
   active: Cycle | null;
   view: View | "cards";
+  onHistory: OnHistory;
 }) {
   const { t } = useTranslation();
   const summary = accountSummary(account, buckets);
@@ -232,7 +250,7 @@ function AccountSection({
         </Alert>
       )}
       {view === "list" ? (
-        <BucketTable buckets={buckets} figures={figures} active={active} />
+        <BucketTable buckets={buckets} figures={figures} active={active} onHistory={onHistory} />
       ) : (
         <Box
           style={{
@@ -248,6 +266,7 @@ function AccountSection({
               figures={figures.get(b.id)}
               active={active}
               mobile={view === "cards"}
+              onHistory={onHistory}
             />
           ))}
         </Box>
@@ -267,14 +286,19 @@ function Figure({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** Opens a bucket's transactions, showing a kind. */
+type OnHistory = (bucket: Bucket, kind: HistoryKind) => void;
+
 function BucketTable({
   buckets,
   figures,
   active,
+  onHistory,
 }: {
   buckets: Bucket[];
   figures: Map<string, BucketFigures>;
   active: Cycle | null;
+  onHistory: OnHistory;
 }) {
   const { t } = useTranslation();
   return (
@@ -287,7 +311,7 @@ function BucketTable({
               <Table.Th w="30%">{t("buckets.usedThisCycle")}</Table.Th>
               <Table.Th w="22%">{t("buckets.left")}</Table.Th>
               <Table.Th>{t("buckets.refill")}</Table.Th>
-              <Table.Th w={88}>
+              <Table.Th w={124}>
                 <span className="mantine-visually-hidden">{t("buckets.actions")}</span>
               </Table.Th>
             </Table.Tr>
@@ -301,7 +325,14 @@ function BucketTable({
                     <BucketName bucket={b} />
                   </Table.Td>
                   <Table.Td>
-                    <UsedThisCycle bucket={b} figures={figures.get(b.id)} active={active} />
+                    <UsedThisCycle
+                      bucket={b}
+                      figures={figures.get(b.id)}
+                      active={active}
+                      onPart={(kind) => {
+                        onHistory(b, kind);
+                      }}
+                    />
                   </Table.Td>
                   <Table.Td>
                     <LeftFunds bucket={b} />
@@ -316,6 +347,7 @@ function BucketTable({
                   </Table.Td>
                   <Table.Td>
                     <Group gap={4} wrap="nowrap">
+                      <HistoryButton bucket={b} size={32} onHistory={onHistory} />
                       <AdjustButton bucket={b} size={32} />
                       <SetupLink bucket={b} size={32} />
                     </Group>
@@ -330,7 +362,13 @@ function BucketTable({
   );
 }
 
-function BucketCard({ bucket, figures, active, mobile }: BucketProps & { mobile: boolean }) {
+function BucketCard({
+  bucket,
+  figures,
+  active,
+  mobile,
+  onHistory,
+}: BucketProps & { mobile: boolean; onHistory: OnHistory }) {
   const { t } = useTranslation();
   const { tone } = coverage(bucket);
   return (
@@ -339,6 +377,7 @@ function BucketCard({ bucket, figures, active, mobile }: BucketProps & { mobile:
         <Group gap="xs" wrap="nowrap" justify="space-between">
           <BucketName bucket={bucket} />
           <Group gap={4} wrap="nowrap">
+            <HistoryButton bucket={bucket} size={mobile ? 44 : 32} onHistory={onHistory} />
             <AdjustButton bucket={bucket} size={mobile ? 44 : 32} />
             <SetupLink bucket={bucket} size={mobile ? 44 : 32} />
           </Group>
@@ -349,7 +388,15 @@ function BucketCard({ bucket, figures, active, mobile }: BucketProps & { mobile:
           </Text>
           <LeftFunds bucket={bucket} large />
         </div>
-        <UsedThisCycle bucket={bucket} figures={figures} active={active} long />
+        <UsedThisCycle
+          bucket={bucket}
+          figures={figures}
+          active={active}
+          long
+          onPart={(kind) => {
+            onHistory(bucket, kind);
+          }}
+        />
         <Group
           justify="space-between"
           gap="xs"
@@ -378,6 +425,32 @@ function modeText(bucket: Bucket, active: Cycle | null): string {
   ]
     .filter(Boolean)
     .join(" · ");
+}
+
+function HistoryButton({
+  bucket,
+  size,
+  onHistory,
+}: {
+  bucket: Bucket;
+  size: number;
+  onHistory: OnHistory;
+}) {
+  const { t } = useTranslation();
+  return (
+    <ActionIcon
+      variant="subtle"
+      color="gray"
+      size={size}
+      aria-label={t("buckets.history.open", { name: bucket.name })}
+      title={t("buckets.history.button")}
+      onClick={() => {
+        onHistory(bucket, "all");
+      }}
+    >
+      <IconHistory size={18} />
+    </ActionIcon>
+  );
 }
 
 function SetupLink({ bucket, size }: { bucket: Bucket; size: number }) {
