@@ -399,8 +399,7 @@
         "bucket": "Bare bøttetransaksjoner"
       },
       "noCycles": "Ingen perioder ennå.",
-      "summaryActive": "Startet perioden med {{start}}, har {{now}} igjen nå.",
-      "summaryFinished": "Startet perioden med {{start}}, endte den med {{end}} igjen.",
+      "covered": "Kontoen dekker bare {{caf}} av {{tf}} nå, så Bøtter viser {{caf}} igjen.",
       "truncated": "Bare de siste {{count}} transaksjonene vises.",
       "empty": "Ingenting i denne perioden.",
       "emptyKind": "Ingen av disse i denne perioden.",

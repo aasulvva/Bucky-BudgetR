@@ -399,8 +399,7 @@
         "bucket": "Berre bøttetransaksjonar"
       },
       "noCycles": "Ingen periodar enno.",
-      "summaryActive": "Starta perioden med {{start}}, har {{now}} att no.",
-      "summaryFinished": "Starta perioden med {{start}}, enda han med {{end}} att.",
+      "covered": "Kontoen dekkjer berre {{caf}} av {{tf}} no, så Bøtter viser {{caf}} att.",
       "truncated": "Berre dei siste {{count}} transaksjonane vert viste.",
       "empty": "Ingenting i denne perioden.",
       "emptyKind": "Ingen av desse i denne perioden.",

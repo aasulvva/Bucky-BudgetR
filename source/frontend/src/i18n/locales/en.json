@@ -399,8 +399,7 @@
         "bucket": "Bucket transactions only"
       },
       "noCycles": "No cycles yet.",
-      "summaryActive": "Started the cycle with {{start}}, has {{now}} left now.",
-      "summaryFinished": "Started the cycle with {{start}}, ended it with {{end}} left.",
+      "covered": "The account only covers {{caf}} of the {{tf}} right now, so Buckets shows {{caf}} left.",
       "truncated": "Only the latest {{count}} transactions are shown.",
       "empty": "Nothing in this cycle.",
       "emptyKind": "None of these in this cycle.",

@@ -263,9 +263,10 @@ describe("a bucket's transactions", () => {
     renderRoute("/buckets");
     await userEvent.click(await screen.findByRole("button", { name: "Transactions in Groceries" }));
     const dialog = within(await screen.findByRole("dialog", { name: "Groceries: transactions" }));
+    // Groceries' account backs 650 of its 1 000.
     expect(
       await dialog.findByText(
-        `Started the cycle with ${m("500.00")}, has ${m("1000.00")} left now.`,
+        `The account only covers ${m("650.00")} of the ${m("1000.00")} right now, so Buckets shows ${m("650.00")} left.`,
       ),
     ).toBeInTheDocument();
     const rows = within(dialog.getByRole("list", { name: "Transactions" })).getAllByRole(
@@ -308,19 +309,18 @@ describe("a bucket's transactions", () => {
   it("shows an earlier cycle", async () => {
     apiMock.on("GET /api/v1/cycles", { body: [previous, cycle()] });
     apiMock.on(`GET /api/v1/cycles/${previous.id}/bucket-figures`, {
-      body: [bucketFigures({ bucket_id: groceries.id, start: "200.00", left: "0.00" })],
+      // Without Keep funds: it started and ended at 0.
+      body: [bucketFigures({ bucket_id: groceries.id })],
     });
     renderRoute("/buckets");
     await userEvent.click(await screen.findByRole("button", { name: "Transactions in Groceries" }));
     const dialog = within(await screen.findByRole("dialog", { name: "Groceries: transactions" }));
     await userEvent.click(dialog.getByRole("combobox", { name: "Cycle" }));
     await userEvent.click(await screen.findByRole("option", { name: cycleRange(previous) }));
-    expect(
-      await dialog.findByText(
-        `Started the cycle with ${m("200.00")}, ended it with ${m("0.00")} left.`,
-      ),
-    ).toBeInTheDocument();
-    expect(dialog.getByText("Nothing in this cycle.")).toBeInTheDocument();
+    expect(await dialog.findByText("Nothing in this cycle.")).toBeInTheDocument();
+    // No start row at 0, and no coverage note outside the active cycle.
+    expect(dialog.queryByText("At the start of the cycle")).not.toBeInTheDocument();
+    expect(dialog.queryByText(/The account only covers/)).not.toBeInTheDocument();
     expect(apiMock.calls("GET /api/v1/transactions").at(-1)?.query.get("cycle_id")).toBe(
       previous.id,
     );

@@ -23,7 +23,7 @@ import {
 } from "@/lib/bucketHistory";
 import { cycleRange } from "@/lib/cycles";
 import { formatDateTime } from "@/lib/dates";
-import { formatMoney } from "@/lib/money";
+import { compareAmounts, formatMoney } from "@/lib/money";
 
 interface BucketHistoryProps {
   /** The bucket to show; null keeps the dialog closed. */
@@ -135,16 +135,21 @@ function CycleHistory({
               const rows = historyRows(items, bucket.id, cycle.id, now).filter((r) =>
                 ofKind(r, kind),
               );
+              // The rows are TF. While the account doesn't back all of it,
+              // Buckets shows less left (CAF); say why they differ.
+              const uncovered =
+                cycle.state === "active" &&
+                compareAmounts(bucket.current_available_funds, bucket.target_funds) < 0;
               return (
                 <Stack gap="sm">
-                  <Text size="sm">
-                    {cycle.state === "active"
-                      ? t("buckets.history.summaryActive", { start: money(start), now: money(now) })
-                      : t("buckets.history.summaryFinished", {
-                          start: money(start),
-                          end: money(now),
-                        })}
-                  </Text>
+                  {uncovered && (
+                    <Text size="sm" c="dimmed">
+                      {t("buckets.history.covered", {
+                        caf: money(bucket.current_available_funds),
+                        tf: money(bucket.target_funds),
+                      })}
+                    </Text>
+                  )}
                   {truncated && (
                     <Text size="sm" c="dimmed">
                       {t("buckets.history.truncated", { count: items.length })}
@@ -173,7 +178,8 @@ function CycleHistory({
                         <HistoryLine row={row} bucket={bucket} cycle={cycle} names={names} />
                       </li>
                     ))}
-                    {kind === "all" && !truncated && (
+                    {/* Without Keep funds a cycle starts at 0, unless an overspend carried over. */}
+                    {kind === "all" && !truncated && compareAmounts(start, "0") !== 0 && (
                       <Group component="li" justify="space-between" px="md" py={10} gap="sm">
                         <Text size="sm" c="dimmed">
                           {t("buckets.history.startRow")}
