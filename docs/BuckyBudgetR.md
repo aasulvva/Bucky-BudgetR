@@ -37,7 +37,7 @@ Self-hosted, envelope-style ("bucket") budgeting application.
 | Password | bcrypt hash |
 | Active | bool |
 | Admin | bool |
-| Preferences | JSON: default refill mode for new buckets, income rules for *On income* refills (§6), locale (number and date format), language (English, Norwegian bokmål or nynorsk; follows the locale by default) |
+| Preferences | JSON: default refill mode for new buckets, income rules for *On income* refills (§6), locale (number and date format), language (English, Norwegian bokmål or nynorsk; follows the locale by default), time zone, cycle rule (§3) |
 | Created / Modified, Created by | audit |
 
 **Initial setup:** on first start a default admin account is created with password `BuckyBudgetR_ADMIN_Pa$$w0rd`. The user must change it at first login. The default can be overridden with an environment variable.
@@ -77,6 +77,7 @@ A budget period. Usually a month, but its start and end dates can be set freely,
 | Start | the moment the cycle starts, stored in UTC |
 | End | the moment the cycle ends (exclusive), stored in UTC |
 | State | future / active / finished |
+| Generated | planned by the cycle rule, and not moved by hand since |
 
 **Rules**
 - Cycles apply to the whole user. A user has **at most one active cycle**.
@@ -90,6 +91,13 @@ A budget period. Usually a month, but its start and end dates can be set freely,
 - Extending the active cycle pushes the next planned cycle's start along if they would overlap. The active cycle's start can't change, and its end can't move before now or before its last bucket transaction.
 - Future cycles can be planned, edited and deleted in advance. Finished cycles are read-only.
 - Ending a cycle runs the **cycle-end routine**, then the **cycle-start routine** of the cycle that starts (see §6).
+
+**Cycle rule** (optional, in the preferences; #72)
+- Plans cycles automatically, e.g. from payday: a **day of the month** (1–31; a day the month doesn't have is its last day), moved to the **previous working day** (default), the **next working day**, or **not moved** when it's a weekend or a holiday. The **holidays** are none (weekends only) or **Norwegian bank holidays**: the public holidays, Easter-based ones included, plus 24 and 31 December.
+- Each planned cycle runs from one of the rule's dates up to the next, at local midnight in the user's **time zone** (a preference, set to the browser's zone the first time). The cycles are adjacent, so the next one starts by itself when the active one ends on time.
+- The rule keeps **N cycles planned** (1–12, default 3). It tops up when a cycle starts or ends, hourly, and when the rule changes. New cycles go after the latest cycle, on the first of the rule's dates on or after its end (and not before today's period), so there may be a gap until then. It never touches the active or finished cycles, or planned cycles the user made or moved.
+- Changing the rule (or the time zone) replans the generated cycles that haven't started. Turning it off keeps the planned cycles. A deleted planned cycle is planned again; to plan fewer, lower N.
+- *Plan a cycle* and the start prompt suggest the rule's dates.
 
 ## 4. Buckets
 
@@ -297,13 +305,13 @@ Desktop and mobile use the same groups (decided in #8; wireframes in the design 
 | Bucket setup | Create/edit (name, importance, priority, options)/delete buckets, listed with their IDs. A new bucket in a running cycle starts with *Refill now* (default), *Set starting funds* or *Start at 0* (§6). Delete is one confirmation that says where what's left goes (unallocated in the source account, §4). Changing a bucket's funds is *Adjust funds* on Buckets. |
 | Budget setup | All buckets at once, by source account: enter the expected income per cycle on each account, set RAs inline, and see live what the RAs take of the income (allocated, %, left or *over by*) and each bucket's share and capacity. One Save sets every changed RA at once (`POST /buckets/refill-amounts`, all or nothing) as the *Future* adjustment: TF is unchanged and no transaction is recorded; a fixed BC below the new RA is raised. Leaving with unsaved changes asks first |
 | Accounts | Balances, drill into transactions, balance adjustment (BLA), register interest (INC); a cog opens the account in Account setup |
-| Cycles | The active cycle (extend, end) and planned cycles. Ending asks for confirmation, listing the buckets that will be emptied (OVF) and the Auto buckets the next cycle refills, with the amounts (REF, and any overflow). Without an active cycle, a prompt offers to start the planned one or a new one. |
+| Cycles | The active cycle (extend, end) and planned cycles, the ones the cycle rule planned marked *From rule*. Ending asks for confirmation, listing the buckets that will be emptied (OVF) and the Auto buckets the next cycle refills, with the amounts (REF, and any overflow). Without an active cycle, a prompt offers to start the planned one or a new one. |
 | Account setup | Create/manage bank accounts |
 | Transactions | Newest first, grouped by day, a page at a time. Filters (kept in the URL, so Accounts and Buckets drill in with theirs): counterparty search, account, bucket, cycle (the active one by default, or all), type, tag and dates. Refills, overflow and bucket adjustments are hidden unless *Show refills & adjustments* is on. A row shows the effective amount, marked *Edited*, *Reversed* (with the amount it had) or *Moved*. The detail (beside the list, full screen on mobile) shows its ID, the account lines and bucket lines as separate sections, and the history. **Edit** opens the Create transaction form filled in: the type and time stay, only what changed is sent as a correction, and another account moves it. **Reverse** asks first. While the bucket lines are in a finished cycle they can't change: Reverse is disabled with the reason, and Edit still changes the amount (not below what's in the buckets), counterparty and tags. System transactions can't be edited or reversed. |
 | Savings | Expected deposits per savings target. "Done" creates the transfers |
 | Savings setup | Savings targets and priority rules |
 | Stats & reports | Spending and balance graphs over time; yearly PDF report; filter by bucket, tag, counterparty |
-| Settings | Profile menu. Password, preferences (locale, language, default refill mode, income rules), data export/import *(later)* |
+| Settings | Profile menu. Password, preferences (locale, language, time zone, default refill mode, income rules), the cycle rule (§3) with a preview of the next cycles, data export/import *(later)* |
 | Admin | Profile menu, admins only. Users: create, activate/deactivate, make/remove admin, reset password (a setup/reset link or a temporary password, shown once) |
 
 ## 10. Roadmap

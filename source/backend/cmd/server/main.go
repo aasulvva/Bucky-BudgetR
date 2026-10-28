@@ -29,6 +29,7 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	_ "time/tzdata" // the cycle rule's time zones, also without zone files (distroless)
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -128,10 +129,12 @@ func run(ctx context.Context, args []string, getenv func(string) string, out, lo
 	}
 	ledgerSvc := ledger.New(ledger.Options{AfterRecord: allocation.AfterRecord})
 	refills := refill.NewService(pool, ledgerSvc, refill.Options{Now: now})
+	cyclesSvc := cycles.NewService(pool, cycles.Options{Now: now, OnEnd: refills.OnEnd, OnStart: refills.OnStart})
+	go cyclesSvc.PlanLoop(ctx, time.Hour, logger)
 	handler, err := httpapi.NewHandler(logger, pool, httpapi.Options{
 		Auth:           authSvc,
 		Accounts:       accounts.NewService(pool, ledgerSvc, accounts.Options{Now: now}),
-		Cycles:         cycles.NewService(pool, cycles.Options{Now: now, OnEnd: refills.OnEnd, OnStart: refills.OnStart}),
+		Cycles:         cyclesSvc,
 		Buckets:        buckets.NewService(pool, ledgerSvc, buckets.Options{Now: now, OnCreate: refills.OnCreate}),
 		Transactions:   transactions.NewService(pool, ledgerSvc, transactions.Options{Now: now, Refills: refills}),
 		Refills:        refills,

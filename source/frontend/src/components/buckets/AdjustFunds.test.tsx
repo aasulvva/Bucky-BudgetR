@@ -181,7 +181,9 @@ describe("Adjust funds", () => {
   });
 
   it("speaks nynorsk", async () => {
-    apiMock.on("GET /api/v1/me", { body: { ...testUser, preferences: { language: "nn" } } });
+    apiMock.on("GET /api/v1/me", {
+      body: { ...testUser, preferences: { ...testUser.preferences, language: "nn" } },
+    });
     renderRoute("/buckets");
     await userEvent.click(await screen.findByRole("button", { name: "Juster midlar for Fuel" }));
     const adjust = within(await screen.findByRole("dialog", { name: "Juster midlar: Fuel" }));

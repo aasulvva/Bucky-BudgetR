@@ -69,6 +69,7 @@ export function cycle(overrides: Partial<Cycle> = {}): Cycle {
     start_at: startAtFor(addDays(today(), -10)),
     end_at: endAtFor(addDays(today(), 19)),
     state: "active",
+    generated: false,
     created_at: "2026-01-01T00:00:00Z",
     ...overrides,
   };

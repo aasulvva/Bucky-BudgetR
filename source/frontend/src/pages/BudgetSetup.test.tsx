@@ -188,7 +188,9 @@ describe("Budget setup", () => {
   });
 
   it("speaks nynorsk", async () => {
-    apiMock.on("GET /api/v1/me", { body: { ...testUser, preferences: { language: "nn" } } });
+    apiMock.on("GET /api/v1/me", {
+      body: { ...testUser, preferences: { ...testUser.preferences, language: "nn" } },
+    });
     renderRoute("/budget");
     const mainSection = await section("Main account");
     expect(

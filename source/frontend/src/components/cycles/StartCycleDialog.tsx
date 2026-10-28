@@ -5,8 +5,9 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { api } from "@/api/client";
-import { useRefreshCycles, type Cycle } from "@/api/cycles";
+import { useCyclePeriods, useRefreshCycles, type Cycle } from "@/api/cycles";
 import { unwrap } from "@/api/errors";
+import { useSession } from "@/app/session";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
 import {
@@ -55,7 +56,13 @@ function StartCycleForm({
   const { t } = useTranslation();
   const refresh = useRefreshCycles();
   const [choice, setChoice] = useState<"planned" | "new">(next ? "planned" : "new");
-  const [range, setRange] = useState<DateRange>(() => monthFrom(today()));
+  // A new cycle starts today, and with a cycle rule ends with the rule's
+  // current period; without one (or until it's known), a month from today.
+  const rule = useSession().data?.preferences.cycle_rule ?? null;
+  const periods = useCyclePeriods(rule, today(), 1);
+  const current = rule ? periods.data?.[0] : undefined;
+  const [picked, setRange] = useState<DateRange | null>(null);
+  const range = picked ?? (current ? { start: today(), end: current.end } : monthFrom(today()));
   const [problem, setProblem] = useState<string>();
 
   const start = useMutation({

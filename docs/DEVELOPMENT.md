@@ -156,6 +156,14 @@ curl -c jar -H 'X-Bucky-CSRF: 1' -H 'Content-Type: application/json' \
 curl -b jar localhost:8080/api/v1/me
 ```
 
+### Cycle rule
+
+The cycle rule (#72, spec §3) plans cycles on the server, in the user's `time_zone` preference.
+- `internal/calendar` holds the dates, with no database: `Rule.Start` gives a month's date (clamped to the month, then moved off weekends and holidays), `Rule.Periods` the periods from one date to the next, and `norwegian` the Norwegian bank holidays (Easter from the Gregorian computus).
+- `cycles/rule.go` plans with them. `topUp` adds cycles after the latest one, flagged `generated`, until the rule's `ahead` are planned. It runs inside `Start` and `End`, hourly (`PlanLoop`), and through `Replan` when a preferences PATCH touches `cycle_rule` or `time_zone`. `Replan` first deletes the generated cycles that haven't started. `SetCycleTimes` clears the flag, so a cycle moved by hand (or pushed along) is the user's.
+- `POST /api/v1/cycle-rule/periods` previews a rule without saving it; Settings and the cycle dialogs use it, so the holidays live only in Go.
+- The binary embeds `time/tzdata`, so zones work in the distroless image.
+
 ### Debug settings
 
 In development, the bug icon next to the user block (on mobile, in the profile menu) opens the **debug settings** (#100). Any logged-in user can use them.
@@ -235,9 +243,11 @@ Phones (#103): iOS Safari zooms in on a focused field whose text is under 16px, 
 
 On the backend, `buckets` can't import `refill` (it's the other way round), so `refill.Service.OnCreate` reaches bucket creation through the `buckets.Options.OnCreate` hook, wired in `cmd/server/main.go`.
 
+The time zone preference is set to the browser's zone the first time a user has none (`useDefaultTimeZone` in `app/session.ts`). The cycle rule's Settings card is `components/cycles/CycleRuleCard.tsx`, with its helpers in `lib/cycleRule.ts`. *Plan a cycle* and the start prompt suggest the rule's dates through `useCyclePeriods` (`api/cycles.ts`).
+
 Tests run in jsdom. `src/test/render.tsx` has helpers that render a component with the app's providers (the real query client, minus retries), or the whole app at a given path. `viewport.width` from `src/test/setup.ts` switches between the desktop and mobile layouts, and `viewport.touch` makes it a touch screen.
 
-Tests never reach a server. `src/test/fixtures.ts` builds sample accounts and buckets. `src/test/api.ts` is a fake backend that `setup.ts` installs as `fetch`. By default it answers as a logged-in normal user, `testUser`. A test changes an answer with `apiMock.on("PATCH /api/v1/me/preferences", { body: … })`, or with a function of the request; `problem(status, code, detail)` builds an error. The test then checks what was sent with `apiMock.calls(route)`. The answers reset after each test.
+Tests never reach a server. `src/test/fixtures.ts` builds sample accounts and buckets. `src/test/api.ts` is a fake backend that `setup.ts` installs as `fetch`. By default it answers as a logged-in normal user, `testUser`, with a time zone set; a test that changes the user's preferences keeps `...testUser.preferences`, or the guard sets the zone. A test changes an answer with `apiMock.on("PATCH /api/v1/me/preferences", { body: … })`, or with a function of the request; `problem(status, code, detail)` builds an error. The test then checks what was sent with `apiMock.calls(route)`. The answers reset after each test.
 
 ## Workflow and CI
 

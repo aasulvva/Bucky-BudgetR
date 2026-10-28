@@ -111,6 +111,8 @@
       "manual": "Manuelt",
       "on_income": "Ved inntekt"
     },
+    "timeZone": "Tidssone",
+    "timeZoneHint": "Periodar som vert planlagde frå perioderegelen, startar ved midnatt her.",
     "rules": {
       "title": "Inntektsreglar",
       "intro1": "Bøtter med påfyllingsmåten «Ved inntekt» vert ikkje fylte på når ein ny periode startar. Dei ventar til inntekta di, til dømes løna, kjem, slik at du berre budsjetterer med pengar du har.",
@@ -127,6 +129,30 @@
       "enterCounterparty": "Skriv motparten.",
       "enterAmount": "Skriv eit beløp.",
       "tooLarge": "Det er for stort."
+    },
+    "cycleRule": {
+      "title": "Perioderegel",
+      "intro": "Held dei neste periodane dine planlagde, kvar frå éin startdato til den neste. Set han til lønningsdagen din.",
+      "enabled": "Planlegg periodar frå ein regel",
+      "day": "Startar på dag",
+      "dayRange": "Skriv inn ein dag frå 1 til 31.",
+      "ahead": "Periodar planlagde framover",
+      "aheadRange": "Skriv inn 1 til {{max}}.",
+      "shift": "Når dagen er helg eller heilagdag",
+      "shifts": {
+        "previous": "Start på yrkedagen før",
+        "next": "Start på yrkedagen etter",
+        "none": "Start den dagen likevel"
+      },
+      "holidays": "Heilagdagar",
+      "calendars": {
+        "NO": "Noreg (bankfridagar, også 24. og 31. desember)",
+        "none": "Ingen, berre helgar"
+      },
+      "preview": "Neste periodar",
+      "note": "Når du endrar regelen, vert periodane han har planlagt, planlagde på nytt, så sant dei ikkje har starta og du ikkje har endra dei sjølv. Ein planlagd periode du slettar, vert planlagd igjen; for å planleggje færre, set ned talet framover. Ein dag månaden ikkje har, vert den siste dagen i månaden.",
+      "save": "Lagre perioderegel",
+      "saved": "Perioderegelen er lagra."
     },
     "password": "Passord",
     "passwordChanged": "Passordet er bytt. Dei andre øktene dine vart logga ut.",
@@ -592,6 +618,7 @@
     "needed": "Bøtter, påfyll og bøttelinjer på transaksjonar treng ein.",
     "start": "Start perioden",
     "planned": "Planlagde",
+    "fromRule": "Frå regel",
     "nonePlanned": "Ingen periodar er planlagde.",
     "next": "Neste",
     "editRange": "Rediger {{range}}",
@@ -623,6 +650,7 @@
     "endInFuture": "Perioden må slutte i framtida.",
     "editPlanned": "Rediger planlagd periode",
     "nextMonth": "Neste månad",
+    "nextFromRule": "Neste frå regel",
     "planSubmit": "Planlegg perioden",
     "rangeSaved": "{{range}} er lagra.",
     "rangePlanned": "{{range}} er planlagd.",

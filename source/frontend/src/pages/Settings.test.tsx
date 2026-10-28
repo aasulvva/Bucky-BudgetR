@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { apiMock, testUser, type MockRequest } from "@/test/api";
@@ -6,7 +6,7 @@ import { renderRoute } from "@/test/render";
 
 /** Answers a preferences PATCH as the API does: merged, null resets. */
 function patchPreferences(initial: Record<string, unknown>) {
-  let prefs = initial;
+  let prefs = { ...testUser.preferences, ...initial };
   return (req: MockRequest) => {
     const merged = Object.entries({ ...prefs, ...(req.body as object) });
     prefs = Object.fromEntries(merged.filter(([, v]) => v !== null));
@@ -65,6 +65,7 @@ describe("Settings", () => {
       body: {
         ...testUser,
         preferences: {
+          ...testUser.preferences,
           income_refill_rules: [{ counterparty: "Employer AS", min_amount: "20000" }],
         },
       },
@@ -142,6 +143,43 @@ describe("Settings", () => {
       await screen.findByText("Password changed. Your other sessions were signed out."),
     ).toBeInTheDocument();
     expect(within(card).getByLabelText(/Current password/)).toHaveValue("");
+  });
+
+  it("plans cycles from a rule, with a preview", async () => {
+    apiMock.on("PATCH /api/v1/me/preferences", patchPreferences({}));
+    apiMock.on("POST /api/v1/cycle-rule/periods", {
+      body: [
+        { start: "2026-10-23", end: "2026-11-24" },
+        { start: "2026-11-25", end: "2026-12-22" },
+      ],
+    });
+    renderRoute("/settings");
+    await userEvent.click(await screen.findByRole("switch", { name: "Plan cycles from a rule" }));
+    const preview = await screen.findByRole("list", { name: "Next cycles" });
+    expect(await within(preview).findAllByRole("listitem")).toHaveLength(2);
+    // English in the US: no Norwegian holidays.
+    expect(apiMock.calls("POST /api/v1/cycle-rule/periods")[0]?.body).toEqual({
+      rule: { day: 25, shift: "previous", holidays: "none", ahead: 3 },
+      count: 4,
+    });
+
+    const day = screen.getByRole("textbox", { name: "Starts on day" });
+    await userEvent.clear(day);
+    expect(screen.getByText("Enter a day from 1 to 31.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save cycle rule" })).toBeDisabled();
+    await userEvent.type(day, "1");
+    await userEvent.click(screen.getByRole("button", { name: "Save cycle rule" }));
+    expect(await screen.findByText("Cycle rule saved.")).toBeInTheDocument();
+    expect(apiMock.calls("PATCH /api/v1/me/preferences")[0]?.body).toEqual({
+      cycle_rule: { day: 1, shift: "previous", holidays: "none", ahead: 3 },
+    });
+
+    // Off again.
+    await userEvent.click(screen.getByRole("switch", { name: "Plan cycles from a rule" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save cycle rule" }));
+    await waitFor(() => {
+      expect(apiMock.calls("PATCH /api/v1/me/preferences")[1]?.body).toEqual({ cycle_rule: null });
+    });
   });
 
   it("shows the server status", async () => {

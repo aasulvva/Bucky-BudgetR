@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/oapi-codegen/nullable"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/api"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/calendar"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/cycles"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 )
@@ -112,6 +115,36 @@ func (s *server) EndCycle(ctx context.Context, req api.EndCycleRequestObject) (a
 	return api.EndCycle200JSONResponse{Ended: toAPICycle(res.Ended), Started: nullableCycle(res.Started)}, nil
 }
 
+func (s *server) CycleRulePeriods(ctx context.Context, req api.CycleRulePeriodsRequestObject) (api.CycleRulePeriodsResponseObject, error) {
+	svc, err := s.cycleService()
+	if err != nil {
+		return nil, err
+	}
+	r := req.Body.Rule
+	rule := cycles.Rule{Day: r.Day, Shift: calendar.Shift(r.Shift), Holidays: calendar.Holidays(r.Holidays), Ahead: r.Ahead}
+	var from *calendar.Date
+	if req.Body.From != nil {
+		d := calendar.DateOf(req.Body.From.Time)
+		from = &d
+	}
+	n := 4
+	if req.Body.Count != nil {
+		n = *req.Body.Count
+	}
+	periods, err := svc.Periods(ctx, sessionFrom(ctx).User.ID, rule, from, n)
+	if err != nil {
+		return nil, err
+	}
+	out := make(api.CycleRulePeriods200JSONResponse, len(periods))
+	for i, p := range periods {
+		out[i] = api.CyclePeriod{
+			Start: openapi_types.Date{Time: p.Start.Time(time.UTC)},
+			End:   openapi_types.Date{Time: p.End.Time(time.UTC)},
+		}
+	}
+	return out, nil
+}
+
 func (s *server) cycleService() (*cycles.Service, error) {
 	if s.cycles == nil {
 		return nil, NewError(http.StatusServiceUnavailable, "cycles_unavailable", "")
@@ -151,6 +184,7 @@ func toAPICycle(c sqlc.Cycle) api.Cycle {
 		StartAt:   c.StartAt.UTC(),
 		EndAt:     c.EndAt.UTC(),
 		State:     api.CycleState(c.State),
+		Generated: c.Generated,
 		CreatedAt: c.CreatedAt.UTC(),
 	}
 }

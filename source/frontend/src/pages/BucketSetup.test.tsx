@@ -65,7 +65,10 @@ describe("Bucket setup", () => {
 
   it("creates a bucket, with the default refill mode and the capacity worked out", async () => {
     apiMock.on("GET /api/v1/me", {
-      body: { ...testUser, preferences: { default_refill_mode: "manual" } },
+      body: {
+        ...testUser,
+        preferences: { ...testUser.preferences, default_refill_mode: "manual" },
+      },
     });
     apiMock.on("POST /api/v1/buckets", (req) => ({
       status: 201,

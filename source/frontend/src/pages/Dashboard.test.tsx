@@ -49,7 +49,9 @@ const fun = bucket({
 });
 
 const withPreferences = (preferences: Preferences) => {
-  apiMock.on("GET /api/v1/me", { body: { ...testUser, preferences } });
+  apiMock.on("GET /api/v1/me", {
+    body: { ...testUser, preferences: { ...testUser.preferences, ...preferences } },
+  });
 };
 
 beforeEach(() => {
@@ -77,7 +79,9 @@ beforeEach(() => {
       next_cursor: null,
     },
   });
-  apiMock.on("PATCH /api/v1/me/preferences", (req) => ({ body: req.body }));
+  apiMock.on("PATCH /api/v1/me/preferences", (req) => ({
+    body: { ...testUser.preferences, ...(req.body as object) },
+  }));
 });
 
 const widget = async (name: string) => within(await screen.findByRole("region", { name }));

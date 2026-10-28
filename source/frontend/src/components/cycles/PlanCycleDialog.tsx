@@ -5,8 +5,9 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { api } from "@/api/client";
-import { useRefreshCycles, type Cycle } from "@/api/cycles";
+import { useCyclePeriods, useRefreshCycles, type Cycle } from "@/api/cycles";
 import { unwrap } from "@/api/errors";
+import { useSession } from "@/app/session";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
 import {
@@ -20,14 +21,16 @@ import {
   startAtAfter,
   today,
   type DateRange,
+  type LocalDate,
 } from "@/lib/cycles";
+import { periodFrom } from "@/lib/cycleRule";
 
 import { CycleDates } from "./CycleDates";
 
 interface PlanCycleDialogProps {
   opened: boolean;
   onClose: () => void;
-  /** All the user's cycles, for the "next month" shortcut. */
+  /** All the user's cycles, for the "next month" (or "next from rule") shortcut. */
   cycles: Cycle[];
   /** A planned cycle to edit; without it, a new one is planned. */
   cycle?: Cycle;
@@ -47,11 +50,11 @@ export function PlanCycleDialog({ opened, onClose, cycles, cycle }: PlanCycleDia
   );
 }
 
-/** The month after the latest cycle (or from today, if that's later). */
-function nextMonth(cycles: Cycle[]): DateRange {
+/** Where the next cycle can start: after the latest cycle, or today if that's later. */
+function nextFree(cycles: Cycle[]): LocalDate {
   const after = latestEnd(cycles);
   const now = today();
-  return monthFrom(after && after > now ? after : now);
+  return after && after > now ? after : now;
 }
 
 function PlanCycleForm({
@@ -61,9 +64,17 @@ function PlanCycleForm({
 }: Omit<PlanCycleDialogProps, "opened" | "onClose"> & { onDone: () => void }) {
   const { t } = useTranslation();
   const refresh = useRefreshCycles();
-  const [range, setRange] = useState<DateRange>(() =>
-    cycle ? { start: firstDay(cycle), end: lastDay(cycle) } : nextMonth(cycles),
+  // With a cycle rule, a new cycle is suggested from it: its first period
+  // from where the next cycle can start. Until it's known, a month.
+  const rule = useSession().data?.preferences.cycle_rule ?? null;
+  const from = nextFree(cycles);
+  const periods = useCyclePeriods(rule, from, 2);
+  const fromRule = rule && periods.data ? periodFrom(periods.data, from) : undefined;
+  const suggested: DateRange = fromRule ?? monthFrom(from);
+  const [picked, setRange] = useState<DateRange | null>(() =>
+    cycle ? { start: firstDay(cycle), end: lastDay(cycle) } : null,
   );
+  const range = picked ?? suggested;
   const [problem, setProblem] = useState<string>();
 
   const save = useMutation({
@@ -120,10 +131,10 @@ function PlanCycleForm({
             size="xs"
             style={{ alignSelf: "flex-start" }}
             onClick={() => {
-              setRange(nextMonth(cycles));
+              setRange(suggested);
             }}
           >
-            {t("cycles.nextMonth")}
+            {fromRule ? t("cycles.nextFromRule") : t("cycles.nextMonth")}
           </Button>
         )}
         {save.error && <ErrorAlert error={save.error} />}

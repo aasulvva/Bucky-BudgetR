@@ -127,19 +127,58 @@ func (s *server) ChangePassword(ctx context.Context, req api.ChangePasswordReque
 }
 
 func (s *server) UpdatePreferences(ctx context.Context, req api.UpdatePreferencesRequestObject) (api.UpdatePreferencesResponseObject, error) {
+	user := sessionFrom(ctx).User
+	current, err := toAPIPreferences(user.Preferences)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkCycleRule(current, *req.Body); err != nil {
+		return nil, err
+	}
 	patch, err := json.Marshal(req.Body)
 	if err != nil {
 		return nil, err
 	}
-	stored, err := s.auth.UpdatePreferences(ctx, sessionFrom(ctx).User.ID, patch)
+	stored, err := s.auth.UpdatePreferences(ctx, user.ID, patch)
 	if err != nil {
 		return nil, err
+	}
+	// A new rule or zone replans the cycles the rule planned (#72).
+	if s.cycles != nil && (req.Body.CycleRule.IsSpecified() || req.Body.TimeZone.IsSpecified()) {
+		if err := s.cycles.Replan(ctx, user.ID); err != nil {
+			return nil, err
+		}
 	}
 	prefs, err := toAPIPreferences(stored)
 	if err != nil {
 		return nil, err
 	}
 	return api.UpdatePreferences200JSONResponse(prefs), nil
+}
+
+// checkCycleRule checks a preferences patch: a time zone must exist, and a
+// cycle rule needs one.
+func checkCycleRule(current, patch api.Preferences) error {
+	invalid := func(detail string) error {
+		return &Error{Status: http.StatusBadRequest, Code: "invalid_request", Detail: detail}
+	}
+	zone, _ := current.TimeZone.Get()
+	if patch.TimeZone.IsSpecified() {
+		zone, _ = patch.TimeZone.Get()
+		if !patch.TimeZone.IsNull() {
+			if _, err := time.LoadLocation(zone); err != nil || zone == "" || zone == "Local" {
+				return invalid("Unknown time zone " + strconv.Quote(zone) + ".")
+			}
+		}
+	}
+	rule := current.CycleRule.IsSpecified() && !current.CycleRule.IsNull()
+	if patch.CycleRule.IsSpecified() {
+		rule = !patch.CycleRule.IsNull()
+	}
+	if rule && zone == "" {
+		return invalid("A cycle rule needs a time zone.")
+	}
+	return nil
 }
 
 // authError maps auth errors to problems. A wrong password gets the given

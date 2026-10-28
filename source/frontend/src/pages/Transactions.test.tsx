@@ -246,7 +246,9 @@ describe("Transactions", () => {
   });
 
   it("speaks nynorsk", async () => {
-    apiMock.on("GET /api/v1/me", { body: { ...testUser, preferences: { language: "nn" } } });
+    apiMock.on("GET /api/v1/me", {
+      body: { ...testUser, preferences: { ...testUser.preferences, language: "nn" } },
+    });
     renderRoute("/transactions");
     expect(await screen.findByRole("link", { name: /Rema 1000/ })).toHaveTextContent("Endra");
     expect(screen.getByRole("checkbox", { name: "Vis påfyll og justeringar" })).toBeInTheDocument();

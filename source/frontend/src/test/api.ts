@@ -29,7 +29,8 @@ export const testUser: User = {
   username: "kari",
   admin: false,
   must_change_password: false,
-  preferences: {},
+  // Set, so the guard doesn't set it (vite.config.ts runs tests there).
+  preferences: { time_zone: "America/Los_Angeles" },
 };
 
 /** A problem details response, as the API sends it. */

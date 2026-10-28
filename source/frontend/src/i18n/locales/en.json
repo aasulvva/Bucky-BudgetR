@@ -111,6 +111,8 @@
       "manual": "Manual",
       "on_income": "On income"
     },
+    "timeZone": "Time zone",
+    "timeZoneHint": "Cycles planned from the cycle rule start at midnight here.",
     "rules": {
       "title": "Income rules",
       "intro1": "Buckets with the refill mode “On income” aren't refilled when a new cycle starts. They wait until your income, such as your salary, arrives, so you only budget money you have.",
@@ -127,6 +129,30 @@
       "enterCounterparty": "Enter the counterparty.",
       "enterAmount": "Enter an amount.",
       "tooLarge": "That's too large."
+    },
+    "cycleRule": {
+      "title": "Cycle rule",
+      "intro": "Keeps your next cycles planned, each from one start date to the next. Set it to your payday.",
+      "enabled": "Plan cycles from a rule",
+      "day": "Starts on day",
+      "dayRange": "Enter a day from 1 to 31.",
+      "ahead": "Cycles planned ahead",
+      "aheadRange": "Enter 1 to {{max}}.",
+      "shift": "When that day is a weekend or holiday",
+      "shifts": {
+        "previous": "Start on the working day before",
+        "next": "Start on the working day after",
+        "none": "Start on that day anyway"
+      },
+      "holidays": "Holidays",
+      "calendars": {
+        "NO": "Norway (bank holidays, including 24 and 31 December)",
+        "none": "None, only weekends"
+      },
+      "preview": "Next cycles",
+      "note": "Changing the rule replans the cycles it planned that haven't started, unless you changed them yourself. A planned cycle you delete is planned again; to plan fewer, lower the number ahead. A day a month doesn't have is its last day.",
+      "save": "Save cycle rule",
+      "saved": "Cycle rule saved."
     },
     "password": "Password",
     "passwordChanged": "Password changed. Your other sessions were signed out.",
@@ -592,6 +618,7 @@
     "needed": "Buckets, refills and bucket lines on transactions need one.",
     "start": "Start cycle",
     "planned": "Planned",
+    "fromRule": "From rule",
     "nonePlanned": "No cycles planned.",
     "next": "Next",
     "editRange": "Edit {{range}}",
@@ -623,6 +650,7 @@
     "endInFuture": "The cycle must end in the future.",
     "editPlanned": "Edit planned cycle",
     "nextMonth": "Next month",
+    "nextFromRule": "Next from rule",
     "planSubmit": "Plan cycle",
     "rangeSaved": "{{range}} saved.",
     "rangePlanned": "{{range}} planned.",

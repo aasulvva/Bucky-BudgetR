@@ -21,10 +21,12 @@ import { unwrap } from "@/api/errors";
 import type { components } from "@/api/schema";
 import { useSession, useUpdatePreferences, type Preferences } from "@/app/session";
 import { AmountInput } from "@/components/AmountInput";
+import { CycleRuleCard } from "@/components/cycles/CycleRuleCard";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { PasswordForm } from "@/components/PasswordForm";
 import { QueryState } from "@/components/QueryState";
 import i18n from "@/i18n";
+import { browserTimeZone } from "@/lib/cycleRule";
 import { LANGUAGES } from "@/lib/language";
 import { LOCALE_OPTIONS } from "@/lib/locale";
 import { parseAmount } from "@/lib/money";
@@ -34,7 +36,10 @@ type RefillMode = components["schemas"]["RefillMode"];
 /** The API's limit on income rules. */
 const MAX_RULES = 20;
 
-/** Settings (spec §9, canvas): preferences, income rules, password, status. */
+/**
+ * Settings (spec §9, canvas): preferences, the cycle rule, income rules,
+ * password, status.
+ */
 export default function Settings() {
   const { t } = useTranslation();
   const user = useSession().data;
@@ -44,6 +49,7 @@ export default function Settings() {
       {user && (
         <>
           <PreferencesCard preferences={user.preferences} />
+          <CycleRuleCard preferences={user.preferences} />
           <IncomeRulesCard rules={user.preferences.income_refill_rules ?? []} />
         </>
       )}
@@ -60,6 +66,12 @@ const BROWSER = "browser";
 const FOLLOW = "follow";
 
 const REFILL_MODES: RefillMode[] = ["auto", "manual", "on_income"];
+
+/** The time zones to pick from, with the user's own even if it isn't listed. */
+function timeZones(current: string): string[] {
+  const zones = Intl.supportedValuesOf("timeZone");
+  return zones.includes(current) ? zones : [current, ...zones];
+}
 
 function PreferencesCard({ preferences }: { preferences: Preferences }) {
   const { t } = useTranslation();
@@ -90,6 +102,18 @@ function PreferencesCard({ preferences }: { preferences: Preferences }) {
           disabled={update.isPending}
           onChange={(value) => {
             update.mutate({ locale: value === BROWSER || value === null ? null : value });
+          }}
+        />
+        <Select
+          label={t("settings.timeZone")}
+          description={t("settings.timeZoneHint")}
+          data={timeZones(preferences.time_zone ?? browserTimeZone())}
+          value={preferences.time_zone ?? browserTimeZone()}
+          searchable
+          allowDeselect={false}
+          disabled={update.isPending}
+          onChange={(value) => {
+            if (value) update.mutate({ time_zone: value });
           }}
         />
         <Select

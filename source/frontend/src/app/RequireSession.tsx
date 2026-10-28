@@ -6,16 +6,18 @@ import { ErrorAlert } from "@/components/ErrorAlert";
 import { applyLanguage, resolveLanguage } from "@/lib/language";
 import { setLocale } from "@/lib/locale";
 
-import { useSession } from "./session";
+import { useDefaultTimeZone, useSession } from "./session";
 
 /**
  * Guards the app's screens: without a session it sends the user to the login
  * page (coming back here afterwards), and a user who must change the password
- * to the password page. It also applies the user's locale and language.
+ * to the password page. It also applies the user's locale and language, and
+ * sets the time zone the first time.
  */
 export function RequireSession() {
   const session = useSession();
   const location = useLocation();
+  useDefaultTimeZone(session.data);
 
   if (session.isPending) {
     return (

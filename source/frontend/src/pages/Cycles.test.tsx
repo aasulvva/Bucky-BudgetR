@@ -1,5 +1,6 @@
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import dayjs from "dayjs";
 
 import { formatMoney } from "@/lib/money";
 import {
@@ -15,7 +16,7 @@ import {
   startAtFor,
   today,
 } from "@/lib/cycles";
-import { apiMock, problem } from "@/test/api";
+import { apiMock, problem, testUser } from "@/test/api";
 import { bucket, cycle } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
@@ -213,6 +214,76 @@ describe("Cycles screen", () => {
     await screen.findByText(/The cycle now runs/);
     expect(apiMock.calls(`PATCH /api/v1/cycles/${active.id}`)[0]?.body).toEqual({
       end_at: endAtFor(addDays(lastDay(active), 7)),
+    });
+  });
+});
+
+describe("with a cycle rule", () => {
+  const rule = { day: 25, shift: "previous", holidays: "NO", ahead: 3 } as const;
+  /** As the date fields show a date. */
+  const shown = (date: string) => dayjs(date).format("D MMM YYYY");
+
+  beforeEach(() => {
+    apiMock.on("GET /api/v1/me", {
+      body: { ...testUser, preferences: { ...testUser.preferences, cycle_rule: rule } },
+    });
+  });
+
+  it("marks the cycles the rule planned", async () => {
+    given({ active, next: planned }, [finished, active, { ...planned, generated: true }]);
+    renderRoute("/cycles");
+    expect(await screen.findByText("From rule")).toBeInTheDocument();
+  });
+
+  it("plans the rule's next period", async () => {
+    given({ active, next: null }, [finished, active]);
+    const from = localDate(active.end_at);
+    const period = { start: addDays(from, 3), end: addDays(from, 33) };
+    apiMock.on("POST /api/v1/cycle-rule/periods", {
+      body: [{ start: addDays(from, -27), end: addDays(from, 2) }, period],
+    });
+    apiMock.on("POST /api/v1/cycles", (req) => ({
+      status: 201,
+      body: { ...planned, ...(req.body as object) },
+    }));
+    renderRoute("/cycles");
+    await userEvent.click(await screen.findByRole("button", { name: "Plan a cycle" }));
+    const dialog = within(await screen.findByRole("dialog", { name: "Plan a cycle" }));
+    expect(await dialog.findByRole("button", { name: "Next from rule" })).toBeInTheDocument();
+    expect(dialog.getByText(shown(period.end))).toBeInTheDocument();
+    expect(apiMock.calls("POST /api/v1/cycle-rule/periods")[0]?.body).toEqual({
+      rule,
+      from,
+      count: 2,
+    });
+
+    await userEvent.click(dialog.getByRole("button", { name: "Plan cycle" }));
+    await screen.findByText(`${plain(formatDateRange(period.start, period.end))} planned.`);
+    expect(apiMock.calls("POST /api/v1/cycles")[0]?.body).toEqual({
+      start_at: startAtFor(period.start),
+      end_at: endAtFor(period.end),
+    });
+  });
+
+  it("starts a new cycle that ends with the rule's period", async () => {
+    given({ active: null, next: null }, [finished]);
+    const end = addDays(today(), 12);
+    apiMock.on("POST /api/v1/cycle-rule/periods", {
+      body: [{ start: addDays(today(), -18), end }],
+    });
+    const created = cycle({ id: "100001000009", state: "future" });
+    apiMock.on("POST /api/v1/cycles", { status: 201, body: created });
+    apiMock.on(`POST /api/v1/cycles/${created.id}/start`, {
+      body: { ...created, state: "active" },
+    });
+    renderRoute("/accounts");
+    const dialog = within(await screen.findByRole("dialog", { name: "Start a budget cycle" }));
+    expect(await dialog.findByText(shown(end))).toBeInTheDocument();
+    await userEvent.click(dialog.getByRole("button", { name: "Start cycle" }));
+    await screen.findByText(/Cycle .* started\./);
+    expect(apiMock.calls("POST /api/v1/cycles")[0]?.body).toEqual({
+      start_at: startAtFor(today()),
+      end_at: endAtFor(end),
     });
   });
 });
