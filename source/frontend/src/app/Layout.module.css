@@ -67,3 +67,8 @@
   display: flex;
   flex-direction: column;
 }
+
+/* The bottom sheet's items stay clear of the iPhone's home indicator. */
+.sheetList {
+  padding-bottom: calc(var(--mantine-spacing-md) + env(safe-area-inset-bottom));
+}

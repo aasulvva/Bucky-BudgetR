@@ -231,9 +231,11 @@ The Buckets screen's *Adjust funds* dialog (`components/buckets/AdjustFunds.tsx`
 
 The Dashboard's rules are in `lib/dashboard.ts`: its widgets' settings with their defaults (`dashboardSettings`; saved as `preferences.dashboard`, which the API replaces as a whole, so send all of it with `toPreferences`), the health per account (`accountHealth`), which buckets Bucket status shows (`needsAttention`, `mostUsed`), and the account or bucket a widget shows, falling back when it's gone (`shownAccounts`, `shownBucketStatus`). It shares `components/buckets/BucketParts.tsx` with Buckets and `components/transactions/TransactionRow.tsx` with Transactions.
 
+Phones (#103): iOS Safari zooms in on a focused field whose text is under 16px, and stays zoomed. `src/styles/global.css` therefore gives Mantine's fields 16px on touch screens and narrow widths, so new fields need nothing extra. Dialogs and drawers allow pinch-zoom (`theme.ts`). To focus a field when a dialog opens, spread `{...autofocusField()}` from `lib/device.ts` instead of writing `data-autofocus`. It does nothing on touch screens, so the keyboard doesn't pop up over the dialog.
+
 On the backend, `buckets` can't import `refill` (it's the other way round), so `refill.Service.OnCreate` reaches bucket creation through the `buckets.Options.OnCreate` hook, wired in `cmd/server/main.go`.
 
-Tests run in jsdom. `src/test/render.tsx` has helpers that render a component with the app's providers (the real query client, minus retries), or the whole app at a given path. `viewport.width` from `src/test/setup.ts` switches between the desktop and mobile layouts.
+Tests run in jsdom. `src/test/render.tsx` has helpers that render a component with the app's providers (the real query client, minus retries), or the whole app at a given path. `viewport.width` from `src/test/setup.ts` switches between the desktop and mobile layouts, and `viewport.touch` makes it a touch screen.
 
 Tests never reach a server. `src/test/fixtures.ts` builds sample accounts and buckets. `src/test/api.ts` is a fake backend that `setup.ts` installs as `fetch`. By default it answers as a logged-in normal user, `testUser`. A test changes an answer with `apiMock.on("PATCH /api/v1/me/preferences", { body: … })`, or with a function of the request; `problem(status, code, detail)` builds an error. The test then checks what was sent with `apiMock.calls(route)`. The answers reset after each test.
 

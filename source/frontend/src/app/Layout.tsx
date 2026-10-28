@@ -264,7 +264,7 @@ function BottomTabs({ current, pathname }: { current: NavTab | undefined; pathna
         size="auto"
         title={sheet && t(`nav.tabs.${sheet.id}`)}
       >
-        <Stack gap={4} pb="md">
+        <Stack gap={4} className={classes.sheetList}>
           {sheet?.items.map((item) => (
             <NavLink
               key={item.path}

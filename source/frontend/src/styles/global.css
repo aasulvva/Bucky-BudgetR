@@ -1,0 +1,17 @@
+/* App-wide rules on top of Mantine's styles (App.tsx imports this last). */
+
+/* iOS Safari zooms in when a field with text under 16px gets focus, and
+   doesn't zoom back out (#103). Mantine's fields are 14px (size "sm"), so
+   touch screens and narrow windows get 16px. Every Mantine field has this
+   class; password, tags and date fields inherit from it. */
+@media (pointer: coarse), (max-width: 47.99em) {
+  .mantine-Input-input {
+    font-size: max(1rem, 16px);
+  }
+}
+
+/* Full-screen dialogs (ResponsiveModal on mobile) reach the bottom edge;
+   keep their buttons clear of the iPhone's home indicator. */
+.mantine-Modal-content[data-full-screen] .mantine-Modal-body {
+  padding-bottom: calc(var(--mb-padding, var(--mantine-spacing-md)) + env(safe-area-inset-bottom));
+}

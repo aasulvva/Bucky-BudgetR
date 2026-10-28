@@ -41,6 +41,7 @@ import {
 } from "@/lib/bucketAdjust";
 import { isOverdue } from "@/lib/cycles";
 import { compareAmounts, formatMoney, subtractAmounts } from "@/lib/money";
+import { autofocusField } from "@/lib/device";
 
 /** A signed amount: "+300.00" or "−300.00". */
 function signed(amount: string, currency: string): string {
@@ -200,7 +201,7 @@ function AdjustForm({
               : undefined
         }
         maw={260}
-        data-autofocus
+        {...autofocusField()}
       />
 
       {preview && (

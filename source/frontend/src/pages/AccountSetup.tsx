@@ -41,6 +41,7 @@ import i18n from "@/i18n";
 import { CURRENCY } from "@/lib/locale";
 import { checkName } from "@/lib/names";
 import { compareAmounts, currencyOptions, formatMoney } from "@/lib/money";
+import { autofocusField } from "@/lib/device";
 
 type AccountDelete = components["schemas"]["AccountDelete"];
 
@@ -255,7 +256,7 @@ function CreateAccount({ onDone }: { onDone: () => void }) {
           }}
           error={errors.name}
           required
-          data-autofocus
+          {...autofocusField()}
         />
         <Select
           label={t("accountSetup.type")}

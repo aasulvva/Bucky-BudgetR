@@ -472,7 +472,9 @@ export function TransactionForm({
         submit(false);
       }}
     >
-      <Card withBorder padding={isDesktop ? "lg" : "md"} maw={960}>
+      {/* Not Card's overflow: hidden, which would make the card the save bar's
+          scroll container and push the bar up over the last fields (#103). */}
+      <Card withBorder padding={isDesktop ? "lg" : "md"} maw={960} style={{ overflow: "visible" }}>
         <Stack gap="lg">
           {!editing && (
             <SegmentedControl
