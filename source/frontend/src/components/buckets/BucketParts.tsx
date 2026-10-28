@@ -13,6 +13,7 @@ import {
   TONE_COLOR,
   breakdownPieces,
   breakdownText,
+  carriesDebt,
   coverage,
   toneText,
   usageColor,
@@ -70,7 +71,7 @@ export function LeftFunds({ bucket, large }: { bucket: Bucket; large?: boolean }
           {money(bucket.target_funds)}
         </Text>
         <Text size="xs" c={toneText(tone)}>
-          {t("buckets.overspentLabel")}
+          {t(carriesDebt(bucket) ? "buckets.debtLabel" : "buckets.clearedLabel")}
         </Text>
       </div>
     );

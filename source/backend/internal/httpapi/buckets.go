@@ -93,6 +93,9 @@ func (s *server) CreateBucket(ctx context.Context, req api.CreateBucketRequestOb
 	if b.KeepFunds != nil {
 		n.KeepFunds = *b.KeepFunds
 	}
+	if b.NegativeTf != nil {
+		n.NegativeTF = sqlc.NegativeTf(*b.NegativeTf)
+	}
 	if b.RefillMode != nil {
 		n.RefillMode = sqlc.RefillMode(*b.RefillMode)
 	}
@@ -156,6 +159,10 @@ func (s *server) UpdateBucket(ctx context.Context, req api.UpdateBucketRequestOb
 	if b.CapMode != nil {
 		m := sqlc.BucketCapMode(*b.CapMode)
 		c.CapMode = &m
+	}
+	if b.NegativeTf != nil {
+		m := sqlc.NegativeTf(*b.NegativeTf)
+		c.NegativeTF = &m
 	}
 	if b.RefillMode != nil {
 		m := sqlc.RefillMode(*b.RefillMode)
@@ -343,6 +350,7 @@ func toAPIBucket(b buckets.Bucket) api.Bucket {
 		TargetFunds:           b.TargetFunds.StringFixed(money.Places),
 		CurrentAvailableFunds: b.Caf.StringFixed(money.Places),
 		KeepFunds:             b.KeepFunds,
+		NegativeTf:            api.NegativeTf(b.NegativeTf),
 		RefillMode:            api.RefillMode(b.RefillMode),
 		OverflowDestination:   api.OverflowDestination(b.OverflowDestination),
 		Priority:              b.Priority,

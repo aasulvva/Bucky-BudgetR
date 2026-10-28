@@ -111,6 +111,12 @@
       "manual": "Manual",
       "on_income": "On income"
     },
+    "negativeTf": "Overspent buckets with Keep funds",
+    "negativeTfHint": "What new buckets with Keep funds do at the refill after an overspend.",
+    "negativeTfs": {
+      "debt": "Carry it as debt",
+      "clear": "Clear it at the refill"
+    },
     "timeZone": "Time zone",
     "timeZoneHint": "Cycles planned from the cycle rule start at midnight here.",
     "rules": {
@@ -313,6 +319,8 @@
     "notCovered": "{{amount}} not covered",
     "fullyCovered": "Fully covered",
     "overspentLabel": "Overspent",
+    "debtLabel": "Debt · paid back at the next refill",
+    "clearedLabel": "Overspent · cleared at the next refill",
     "coveredOf": "Covered {{covered}} of {{target}}",
     "target": "Target {{amount}}",
     "warnLabel": "Not fully covered",
@@ -440,6 +448,13 @@
     "refillMode": "Refill mode",
     "keepFunds": "Keep funds",
     "keepFundsHint": "Roll what's left over to the next cycle, up to the capacity.",
+    "negativeTf": {
+      "label": "When overspent",
+      "debt": "Carry it as debt",
+      "debtHint": "The next refill pays it back first, so the bucket starts the cycle with less.",
+      "clear": "Clear it at the refill",
+      "clearHint": "The next refill starts again from the refill amount; the overspend is forgiven."
+    },
     "overflow": "Overflow goes to",
     "overflowUnallocated": "Unallocated (stays in the account)",
     "overflowDistribution": "Savings distribution (later)",

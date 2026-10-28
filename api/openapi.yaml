@@ -1799,6 +1799,12 @@ components:
             - $ref: "#/components/schemas/RefillMode"
           nullable: true
           description: The refill mode new buckets get when none is given. Null means `auto`.
+        default_negative_tf:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/NegativeTf"
+          nullable: true
+          description: The `negative_tf` new buckets get when none is given. Null means `debt`.
         income_refill_rules:
           type: array
           nullable: true
@@ -2259,6 +2265,15 @@ components:
       enum: [auto, manual, on_income]
       description: "`auto` refills at cycle start, `manual` with a button once per cycle, `on_income` when income arrives."
 
+    NegativeTf:
+      type: string
+      enum: [debt, clear]
+      description: |
+        What a refill does with a negative TF (an overspent bucket, spec §6).
+        Only used with `keep_funds`; without it the refill always sets TF to
+        RA. `debt` adds RA as usual, so the overspend is paid back from the
+        refill; `clear` brings TF to 0 first, so TF becomes RA.
+
     OverflowDestination:
       type: string
       enum: [unallocated, savings_distribution, savings_target]
@@ -2280,6 +2295,7 @@ components:
         - target_funds
         - current_available_funds
         - keep_funds
+        - negative_tf
         - refill_mode
         - overflow_destination
         - priority
@@ -2328,6 +2344,8 @@ components:
             the account can't cover all its buckets.
         keep_funds:
           type: boolean
+        negative_tf:
+          $ref: "#/components/schemas/NegativeTf"
         refill_mode:
           $ref: "#/components/schemas/RefillMode"
         overflow_destination:
@@ -2420,6 +2438,10 @@ components:
           $ref: "#/components/schemas/Amount"
         keep_funds:
           type: boolean
+        negative_tf:
+          allOf:
+            - $ref: "#/components/schemas/NegativeTf"
+          description: Defaults to the user's `default_negative_tf` preference, or `debt`.
         refill_mode:
           allOf:
             - $ref: "#/components/schemas/RefillMode"
@@ -2521,6 +2543,8 @@ components:
           $ref: "#/components/schemas/Amount"
         keep_funds:
           type: boolean
+        negative_tf:
+          $ref: "#/components/schemas/NegativeTf"
         refill_mode:
           $ref: "#/components/schemas/RefillMode"
         overflow_destination:

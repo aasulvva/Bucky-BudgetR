@@ -1086,6 +1086,8 @@ export interface components {
             language?: (string & components["schemas"]["Language"]) | null;
             /** @description The refill mode new buckets get when none is given. Null means `auto`. */
             default_refill_mode?: (string & components["schemas"]["RefillMode"]) | null;
+            /** @description The `negative_tf` new buckets get when none is given. Null means `debt`. */
+            default_negative_tf?: (string & components["schemas"]["NegativeTf"]) | null;
             /**
              * @description An income from `counterparty` (the same text, ignoring case) of at
              *     least `min_amount` triggers the refill of its account's *on
@@ -1363,6 +1365,14 @@ export interface components {
          */
         RefillMode: "auto" | "manual" | "on_income";
         /**
+         * @description What a refill does with a negative TF (an overspent bucket, spec §6).
+         *     Only used with `keep_funds`; without it the refill always sets TF to
+         *     RA. `debt` adds RA as usual, so the overspend is paid back from the
+         *     refill; `clear` brings TF to 0 first, so TF becomes RA.
+         * @enum {string}
+         */
+        NegativeTf: "debt" | "clear";
+        /**
          * @description Where overflow goes. Only `unallocated` is available until the savings module; the others get 400.
          * @enum {string}
          */
@@ -1389,6 +1399,7 @@ export interface components {
              */
             current_available_funds: components["schemas"]["Amount"];
             keep_funds: boolean;
+            negative_tf: components["schemas"]["NegativeTf"];
             refill_mode: components["schemas"]["RefillMode"];
             overflow_destination: components["schemas"]["OverflowDestination"];
             priority: boolean;
@@ -1439,6 +1450,8 @@ export interface components {
             cap_multiplier?: components["schemas"]["CapMultiplier"];
             cap_amount?: components["schemas"]["Amount"];
             keep_funds?: boolean;
+            /** @description Defaults to the user's `default_negative_tf` preference, or `debt`. */
+            negative_tf?: components["schemas"]["NegativeTf"];
             /** @description Defaults to the user's `default_refill_mode` preference, or `auto`. */
             refill_mode?: components["schemas"]["RefillMode"];
             overflow_destination?: components["schemas"]["OverflowDestination"];
@@ -1482,6 +1495,7 @@ export interface components {
             cap_multiplier?: components["schemas"]["CapMultiplier"];
             cap_amount?: components["schemas"]["Amount"];
             keep_funds?: boolean;
+            negative_tf?: components["schemas"]["NegativeTf"];
             refill_mode?: components["schemas"]["RefillMode"];
             overflow_destination?: components["schemas"]["OverflowDestination"];
             priority?: boolean;

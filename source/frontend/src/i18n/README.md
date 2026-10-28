@@ -15,6 +15,9 @@ The words for the app's concepts, so the same thing is called the same everywher
 | refill mode                 | påfyllingsmåte                                    | påfyllingsmåte                        |
 | Auto / Manual / On income   | Automatisk / Manuelt / Ved inntekt                | Automatisk / Manuelt / Ved inntekt    |
 | overflow                    | overløp                                           | overløp                               |
+| overspent / overspend       | overforbrukt / overforbruk                        | overforbrukt / overforbruk            |
+| debt (carry as debt)        | gjeld (føre som gjeld)                            | gjeld (føre som gjeld)                |
+| clear (an overspend)        | nullstille                                        | nullstille                            |
 | unallocated                 | ufordelt                                          | ufordelt                              |
 | reallocate                  | fordele på nytt                                   | fordele på nytt                       |
 | Keep funds                  | Behold midler                                     | Behald midlar                         |

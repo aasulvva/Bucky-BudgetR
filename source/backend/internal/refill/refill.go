@@ -308,6 +308,8 @@ func (s *Service) refillAll(ctx context.Context, tx pgx.Tx, c sqlc.Cycle, mode s
 //
 //   - Keep funds off: TF is set to RA, so REF = RA − TF.
 //   - Keep funds on: REF = RA, and an OVF removes what the new TF has above BC.
+//     A negative TF is debt that REF pays back, unless the bucket clears it
+//     (#62): then TF is set to RA, as without Keep funds.
 //
 // A REF or OVF of 0 isn't recorded, but the refill still counts.
 func (s *Service) refill(ctx context.Context, tx pgx.Tx, b sqlc.Bucket, tf decimal.Decimal, cycleID string, trigger sqlc.RefillMode, at time.Time, incomeID string) error {
@@ -316,7 +318,7 @@ func (s *Service) refill(ctx context.Context, tx pgx.Tx, b sqlc.Bucket, tf decim
 		IncomeID: pgtype.Text{String: incomeID, Valid: incomeID != ""},
 	}
 	ref := b.RefillAmount
-	if !b.KeepFunds {
+	if !b.KeepFunds || b.NegativeTf == sqlc.NegativeTfClear && tf.IsNegative() {
 		ref = ref.Sub(tf)
 	}
 	if !ref.IsZero() {

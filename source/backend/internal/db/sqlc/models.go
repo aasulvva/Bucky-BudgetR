@@ -227,6 +227,57 @@ func (e CycleState) Valid() bool {
 	return false
 }
 
+type NegativeTf string
+
+const (
+	NegativeTfDebt  NegativeTf = "debt"
+	NegativeTfClear NegativeTf = "clear"
+)
+
+func (e *NegativeTf) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = NegativeTf(s)
+	case string:
+		*e = NegativeTf(s)
+	default:
+		return fmt.Errorf("unsupported scan type for NegativeTf: %T", src)
+	}
+	return nil
+}
+
+type NullNegativeTf struct {
+	NegativeTf NegativeTf
+	Valid      bool // Valid is true if NegativeTf is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullNegativeTf) Scan(value interface{}) error {
+	if value == nil {
+		ns.NegativeTf, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.NegativeTf.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullNegativeTf) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.NegativeTf), nil
+}
+
+func (e NegativeTf) Valid() bool {
+	switch e {
+	case NegativeTfDebt,
+		NegativeTfClear:
+		return true
+	}
+	return false
+}
+
 type OverflowDestination string
 
 const (
@@ -444,6 +495,7 @@ type Bucket struct {
 	OverflowDestination OverflowDestination
 	Priority            bool
 	Importance          int16
+	NegativeTf          NegativeTf
 }
 
 type BucketTransaction struct {

@@ -30,6 +30,24 @@ describe("Settings", () => {
     expect(apiMock.calls("PATCH /api/v1/me/preferences")[1]?.body).toEqual({ locale: null });
   });
 
+  it("sets what new Keep funds buckets do when overspent", async () => {
+    apiMock.on("PATCH /api/v1/me/preferences", patchPreferences({}));
+    renderRoute("/settings");
+    const select = await screen.findByRole("combobox", { name: /Overspent buckets/ });
+    expect(select).toHaveValue("Carry it as debt");
+    await userEvent.click(select);
+    await userEvent.click(await screen.findByRole("option", { name: "Clear it at the refill" }));
+    expect(apiMock.calls("PATCH /api/v1/me/preferences")[0]?.body).toEqual({
+      default_negative_tf: "clear",
+    });
+
+    await userEvent.click(screen.getByRole("combobox", { name: /Overspent buckets/ }));
+    await userEvent.click(await screen.findByRole("option", { name: "Carry it as debt" }));
+    expect(apiMock.calls("PATCH /api/v1/me/preferences")[1]?.body).toEqual({
+      default_negative_tf: null,
+    });
+  });
+
   it("switches the language, which follows the locale by default", async () => {
     apiMock.on("PATCH /api/v1/me/preferences", patchPreferences({}));
     renderRoute("/settings");

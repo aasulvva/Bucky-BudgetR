@@ -193,6 +193,34 @@ func TestDefaultRefillMode(t *testing.T) {
 	}
 }
 
+func TestNegativeTF(t *testing.T) {
+	e := setup(t)
+	if b := e.create(t, buckets.New{Name: "Fun", KeepFunds: true}); b.NegativeTf != sqlc.NegativeTfDebt {
+		t.Errorf("negative TF %s without a preference, want debt", b.NegativeTf)
+	}
+	if _, err := e.pool.Exec(t.Context(), `UPDATE users SET preferences = '{"default_negative_tf": "clear"}' WHERE id = $1`, e.user); err != nil {
+		t.Fatal(err)
+	}
+	b := e.create(t, buckets.New{Name: "Trips", KeepFunds: true})
+	if b.NegativeTf != sqlc.NegativeTfClear {
+		t.Errorf("negative TF %s, want the preference clear", b.NegativeTf)
+	}
+	if b := e.create(t, buckets.New{Name: "Gifts", NegativeTF: sqlc.NegativeTfDebt}); b.NegativeTf != sqlc.NegativeTfDebt {
+		t.Errorf("negative TF %s, want the given debt", b.NegativeTf)
+	}
+
+	got, err := e.svc.Update(t.Context(), e.user, b.ID, buckets.Changes{NegativeTF: ptr(sqlc.NegativeTfDebt)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.NegativeTf != sqlc.NegativeTfDebt {
+		t.Errorf("updated negative TF %s, want debt", got.NegativeTf)
+	}
+	if _, err := e.svc.Update(t.Context(), e.user, b.ID, buckets.Changes{NegativeTF: ptr(sqlc.NegativeTf("forgive"))}); !errors.Is(err, buckets.ErrInvalid) {
+		t.Errorf("invalid negative TF: %v", err)
+	}
+}
+
 func TestOpeningFunds(t *testing.T) {
 	e := setup(t)
 	n := buckets.New{Name: "Groceries", SourceAccountID: e.account, OpeningFunds: dec("250")}

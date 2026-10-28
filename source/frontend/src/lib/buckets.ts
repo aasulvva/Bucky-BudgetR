@@ -120,18 +120,29 @@ export function breakdownText(figures: BucketFigures, currency: string): string 
 }
 
 /**
+ * Whether the next refill pays back a negative TF instead of clearing it
+ * (#62): only with Keep funds and the debt option.
+ */
+export function carriesDebt(bucket: Bucket): boolean {
+  return bucket.keep_funds && bucket.negative_tf === "debt";
+}
+
+/**
  * What refilling a bucket whose TF is `tf` records. This mirrors
  * internal/refill/refill.go (spec §6); change both together.
  * - Keep funds off: TF is set to RA, so REF = RA − TF.
- * - Keep funds on: REF = RA, and what the new TF has above BC overflows.
+ * - Keep funds on: REF = RA, and what the new TF has above BC overflows. A
+ *   negative TF is debt that REF pays back, unless the bucket clears it:
+ *   then TF is set to RA, as without Keep funds.
  */
 export function refillOf(
   bucket: Bucket,
   tf = bucket.target_funds,
 ): { amount: string; overflow: string } {
-  const amount = bucket.keep_funds
-    ? addAmounts(bucket.refill_amount)
-    : subtractAmounts(bucket.refill_amount, tf);
+  const clears = !bucket.keep_funds || (!carriesDebt(bucket) && compareAmounts(tf, "0") < 0);
+  const amount = clears
+    ? subtractAmounts(bucket.refill_amount, tf)
+    : addAmounts(bucket.refill_amount);
   const excess = subtractAmounts(addAmounts(tf, amount), bucket.capacity);
   return { amount, overflow: bucket.keep_funds && positive(excess) ? excess : "0.00" };
 }

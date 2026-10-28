@@ -67,7 +67,11 @@ describe("Bucket setup", () => {
     apiMock.on("GET /api/v1/me", {
       body: {
         ...testUser,
-        preferences: { ...testUser.preferences, default_refill_mode: "manual" },
+        preferences: {
+          ...testUser.preferences,
+          default_refill_mode: "manual",
+          default_negative_tf: "clear",
+        },
       },
     });
     apiMock.on("POST /api/v1/buckets", (req) => ({
@@ -94,7 +98,10 @@ describe("Bucket setup", () => {
     await userEvent.clear(form.getByRole("textbox", { name: "Multiplier" }));
     await userEvent.type(form.getByRole("textbox", { name: "Multiplier" }), "2,5");
     expect(form.getByText(`Capacity ${m("2500.00")}`)).toBeInTheDocument();
+    // What an overspend does only matters with Keep funds.
+    expect(form.queryByRole("radio", { name: /Clear it at the refill/ })).not.toBeInTheDocument();
     await userEvent.click(form.getByRole("checkbox", { name: /Keep funds/ }));
+    expect(form.getByRole("radio", { name: /Clear it at the refill/ })).toBeChecked();
     expect(form.getByRole("radio", { name: `Refill now (+${name("1000.00")})` })).toBeChecked();
     await userEvent.click(form.getByRole("radio", { name: "Set starting funds" }));
     await userEvent.click(form.getByRole("button", { name: "Create bucket" }));
@@ -113,6 +120,7 @@ describe("Bucket setup", () => {
       cap_multiplier: "2.5",
       refill_mode: "manual",
       keep_funds: true,
+      negative_tf: "clear",
       overflow_destination: "unallocated",
       opening_funds: "300.00",
     });
@@ -213,6 +221,23 @@ describe("Bucket setup", () => {
       priority: true,
       cap_mode: "multiplier",
       cap_multiplier: "1.50",
+    });
+  });
+
+  it("changes what a Keep funds bucket does when overspent", async () => {
+    apiMock.on("GET /api/v1/buckets", { body: [groceries, { ...hobby, keep_funds: true }] });
+    apiMock.on("PATCH /api/v1/buckets/1000000002", (req) => ({
+      body: { ...hobby, keep_funds: true, ...(req.body as object) },
+    }));
+    renderRoute("/buckets/setup?edit=1000000002");
+    const form = within(await screen.findByRole("form", { name: "Hobby" }));
+    expect(form.getByRole("radio", { name: /Carry it as debt/ })).toBeChecked();
+    await userEvent.click(form.getByRole("radio", { name: /Clear it at the refill/ }));
+    await userEvent.click(form.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByText("Hobby saved.")).toBeInTheDocument();
+    expect(apiMock.calls("PATCH /api/v1/buckets/1000000002")[0]?.body).toEqual({
+      negative_tf: "clear",
     });
   });
 
