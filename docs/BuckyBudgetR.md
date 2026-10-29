@@ -293,10 +293,11 @@ Desktop and mobile use the same groups (decided in #8; wireframes in the design 
 | (+) New | Create transaction |
 | Budget & Reporting | Buckets, Accounts, Cycles, Savings *(later)*, Stats & reports *(later)* |
 | Setup | Account setup, Bucket setup, Budget setup, Savings setup *(later)* |
-| Profile menu | Settings, Admin (admins only), Sign out |
+| Profile menu | Settings, Admin (admins only), What's New, About, the color scheme, the app's version, Sign out |
 
 - **Desktop:** a side menu. Dashboard and Transactions are links, New transaction is a button, and Budget & Reporting and Setup are groups that expand and collapse. Budget & Reporting and the group of the current screen start open. The profile button (avatar and username) sits at the bottom and opens the profile menu.
 - **Mobile:** bottom tabs `Overview · Transactions · (+ New) · Budget · Setup`. A tab with several screens opens them in a sheet. The header shows the screen's name and the profile avatar, which opens the profile menu.
+- **Version:** the app is versioned `vX.YY.ZZ`: X goes up when a milestone is done (1 = MVP), YY for a new feature, ZZ for a bugfix or minor change. The login page and the profile menu show it (with *· dev* in development). **About** shows the version, the commit it was built from and the environment (development or production). **What's New** lists every version's changes, each headed `<title> (yyyy-mm-dd) - vX.YY.ZZ`, in the app's language. It pops up when the app opens on a newer feature or major version than the user last saw (`whats_new_seen`), not after a patch, showing what changed since; closing it saves the version as seen, and *Don't show this after updates* (or the Settings switch) turns that off (`whats_new_popup`).
 - **Notifications** (#57, later): above the profile button on desktop, a bell next to the avatar on mobile.
 - The day-to-day budget screen is **Cycles**. Budget setup is part of Setup.
 
@@ -316,7 +317,7 @@ Desktop and mobile use the same groups (decided in #8; wireframes in the design 
 | Savings | Expected deposits per savings target. "Done" creates the transfers |
 | Savings setup | Savings targets and priority rules |
 | Stats & reports | Spending and balance graphs over time; yearly PDF report; filter by bucket, tag, counterparty |
-| Settings | Profile menu. Password, preferences (locale, language, time zone, default refill mode, what new Keep funds buckets do when overspent, income rules), the cycle rule (§3) with a preview of the next cycles, data export/import *(later)* |
+| Settings | Profile menu. Password, preferences (locale, language, time zone, default refill mode, what new Keep funds buckets do when overspent, whether What's New pops up after updates, income rules), the cycle rule (§3) with a preview of the next cycles, data export/import *(later)* |
 | Admin | Profile menu, admins only. Users: create, activate/deactivate, make/remove admin, reset password (a setup/reset link or a temporary password, shown once) |
 
 ## 10. Roadmap

@@ -1842,6 +1842,19 @@ components:
             `time_zone` (400 `invalid_request`). Setting it or `time_zone`
             replans the cycles the rule planned that haven't been moved by
             hand or begun. Null means no rule; the planned cycles stay.
+        whats_new_seen:
+          type: string
+          nullable: true
+          description: |
+            The last app version whose What's New the user was shown. The
+            web app shows What's New when it opens a newer feature or major
+            version.
+          pattern: "^v\\d+\\.\\d{2}\\.\\d{2}$"
+          example: v1.04.00
+        whats_new_popup:
+          type: boolean
+          nullable: true
+          description: Whether What's New pops up after an update. Null means true.
 
     DashboardSettings:
       type: object

@@ -20,14 +20,25 @@ import {
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import { IconLogout, IconMoon, IconShield, IconSettings, IconSun } from "@tabler/icons-react";
+import {
+  IconInfoCircle,
+  IconLogout,
+  IconMoon,
+  IconShield,
+  IconSettings,
+  IconSparkles,
+  IconSun,
+} from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, Outlet, useLocation } from "react-router";
 
 import { CycleBanners } from "@/components/cycles/CycleBanners";
 import { CycleStatus } from "@/components/cycles/CycleStatus";
+import { About } from "@/components/About";
 import { DebugButton, DebugMenuItem, DebugRoot } from "@/components/debug";
+import { WhatsNew, WhatsNewPopup } from "@/components/WhatsNew";
+import { versionLabel } from "@/lib/changelog";
 import { useClockVersion } from "@/lib/clock";
 
 import classes from "./Layout.module.css";
@@ -80,6 +91,7 @@ export function Layout() {
 
       <AppShell.Main>
         <DebugRoot />
+        <WhatsNewPopup />
         <CycleBanners />
         <Outlet key={clockVersion} />
       </AppShell.Main>
@@ -285,13 +297,18 @@ function BottomTabs({ current, pathname }: { current: NavTab | undefined; pathna
 }
 
 /**
- * The profile menu: Settings, Admin (admins only), the color scheme and sign
- * out. In the side menu it is a button with the username; in the mobile
- * header an avatar.
+ * The profile menu: Settings, Admin (admins only), What's New, About, the
+ * color scheme, the version and sign out. In the side menu it is a button
+ * with the username; in the mobile header an avatar.
  */
 function ProfileMenu({ placement }: { placement: "sidebar" | "header" }) {
   const { t } = useTranslation();
   const user = useSession().data;
+  // Outside the menu, which closes when an item is picked.
+  const [dialog, setDialog] = useState<"whatsNew" | "about" | null>(null);
+  const closeDialog = () => {
+    setDialog(null);
+  };
   const avatar = (
     <Avatar size={32} radius="xl" color="blue" aria-hidden>
       {user?.username.slice(0, 1).toUpperCase()}
@@ -299,53 +316,80 @@ function ProfileMenu({ placement }: { placement: "sidebar" | "header" }) {
   );
 
   return (
-    <Menu position={placement === "sidebar" ? "top-start" : "bottom-end"} width={260}>
-      <Menu.Target>
-        {placement === "sidebar" ? (
-          <UnstyledButton className={classes.profileButton}>
-            {avatar}
-            <span className={classes.profileText}>
-              <Text fw={600} size="sm" truncate>
-                {user?.username ?? t("nav.profile")}
-              </Text>
-              <Text size="xs" c="dimmed">
-                {t("nav.profileAndSettings")}
-              </Text>
-            </span>
-          </UnstyledButton>
-        ) : (
-          <ActionIcon variant="subtle" size={44} radius="xl" aria-label={t("nav.profile")}>
-            {avatar}
-          </ActionIcon>
-        )}
-      </Menu.Target>
-      <Menu.Dropdown>
-        {user && (
-          <Menu.Label>
-            {user.username} · {user.admin ? t("nav.roleAdmin") : t("nav.roleUser")}
-          </Menu.Label>
-        )}
-        {profileItems
-          .filter((item) => !item.adminOnly || user?.admin)
-          .map((item) => (
-            <Menu.Item
-              key={item.path}
-              component={Link}
-              to={item.path}
-              leftSection={item.adminOnly ? <IconShield size={18} /> : <IconSettings size={18} />}
-            >
-              <Text size="sm">{t(`nav.items.${item.key}`)}</Text>
-              <Text size="xs" c="dimmed">
-                {t(`nav.descriptions.${item.key}`)}
-              </Text>
-            </Menu.Item>
-          ))}
-        <ColorSchemeItem />
-        {placement === "header" && <DebugMenuItem />}
-        <Menu.Divider />
-        <SignOutItem />
-      </Menu.Dropdown>
-    </Menu>
+    <>
+      <Menu position={placement === "sidebar" ? "top-start" : "bottom-end"} width={260}>
+        <Menu.Target>
+          {placement === "sidebar" ? (
+            <UnstyledButton className={classes.profileButton}>
+              {avatar}
+              <span className={classes.profileText}>
+                <Text fw={600} size="sm" truncate>
+                  {user?.username ?? t("nav.profile")}
+                </Text>
+                <Text size="xs" c="dimmed">
+                  {t("nav.profileAndSettings")}
+                </Text>
+              </span>
+            </UnstyledButton>
+          ) : (
+            <ActionIcon variant="subtle" size={44} radius="xl" aria-label={t("nav.profile")}>
+              {avatar}
+            </ActionIcon>
+          )}
+        </Menu.Target>
+        <Menu.Dropdown>
+          {user && (
+            <Menu.Label>
+              {user.username} · {user.admin ? t("nav.roleAdmin") : t("nav.roleUser")}
+            </Menu.Label>
+          )}
+          {profileItems
+            .filter((item) => !item.adminOnly || user?.admin)
+            .map((item) => (
+              <Menu.Item
+                key={item.path}
+                component={Link}
+                to={item.path}
+                leftSection={item.adminOnly ? <IconShield size={18} /> : <IconSettings size={18} />}
+              >
+                <Text size="sm">{t(`nav.items.${item.key}`)}</Text>
+                <Text size="xs" c="dimmed">
+                  {t(`nav.descriptions.${item.key}`)}
+                </Text>
+              </Menu.Item>
+            ))}
+          <Menu.Item
+            leftSection={<IconSparkles size={18} />}
+            onClick={() => {
+              setDialog("whatsNew");
+            }}
+          >
+            {t("nav.whatsNew")}
+          </Menu.Item>
+          <Menu.Item
+            leftSection={<IconInfoCircle size={18} />}
+            onClick={() => {
+              setDialog("about");
+            }}
+          >
+            {t("nav.about")}
+          </Menu.Item>
+          <ColorSchemeItem />
+          {placement === "header" && <DebugMenuItem />}
+          <Menu.Divider />
+          <Menu.Label>Bucky BudgetR {versionLabel()}</Menu.Label>
+          <SignOutItem />
+        </Menu.Dropdown>
+      </Menu>
+      <WhatsNew opened={dialog === "whatsNew"} onClose={closeDialog} />
+      <About
+        opened={dialog === "about"}
+        onClose={closeDialog}
+        onWhatsNew={() => {
+          setDialog("whatsNew");
+        }}
+      />
+    </>
   );
 }
 

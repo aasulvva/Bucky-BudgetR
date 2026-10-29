@@ -60,7 +60,9 @@
       "title": "Page not found",
       "text": "There is nothing at this address.",
       "home": "Go to the dashboard"
-    }
+    },
+    "whatsNew": "What's New",
+    "about": "About"
   },
   "auth": {
     "username": "Username",
@@ -165,7 +167,9 @@
     "data": "Data export and import",
     "dataText": "Download all your data, or bring it into another server (#36).",
     "serverStatus": "Server status",
-    "serverReachable": "API and database are reachable."
+    "serverReachable": "API and database are reachable.",
+    "whatsNewPopup": "Show What's New after updates",
+    "whatsNewPopupHint": "Opens What's New when the app gets new features. You can always open it from the profile menu."
   },
   "accounts": {
     "types": {
@@ -905,5 +909,19 @@
       "restored": "Snapshot restored",
       "imported": "Snapshot imported"
     }
+  },
+  "whatsNew": {
+    "title": "What's New",
+    "updated": "Bucky BudgetR has been updated to {{version}}.",
+    "dontShow": "Don't show this after updates"
+  },
+  "about": {
+    "title": "About Bucky BudgetR",
+    "version": "Version",
+    "commit": "Commit",
+    "environment": "Environment",
+    "development": "Development",
+    "production": "Production",
+    "whatsNew": "What's New"
   }
 }

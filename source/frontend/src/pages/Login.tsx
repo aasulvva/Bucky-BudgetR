@@ -19,6 +19,7 @@ import { api } from "@/api/client";
 import { ApiError, errorMessage, unwrap } from "@/api/errors";
 import { SESSION_KEY, clearSessionEnded, sessionEnded, useSession } from "@/app/session";
 import { ErrorAlert } from "@/components/ErrorAlert";
+import { versionLabel } from "@/lib/changelog";
 
 /** Where to go after logging in: a path in the app, never another site. */
 function safeNext(next: string | null): string {
@@ -69,7 +70,11 @@ export default function Login() {
   };
 
   return (
-    <Center mih="100vh" p="md">
+    <Center
+      mih="100vh"
+      p="md"
+      style={{ flexDirection: "column", gap: "var(--mantine-spacing-sm)" }}
+    >
       <Card withBorder radius="md" p="xl" w="100%" maw={400}>
         <form onSubmit={submit}>
           <Stack gap="md">
@@ -103,6 +108,9 @@ export default function Login() {
           </Stack>
         </form>
       </Card>
+      <Text size="xs" c="dimmed">
+        Bucky BudgetR {versionLabel()}
+      </Text>
     </Center>
   );
 }

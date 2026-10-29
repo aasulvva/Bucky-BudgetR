@@ -1112,6 +1112,15 @@ export interface components {
              *     hand or begun. Null means no rule; the planned cycles stay.
              */
             cycle_rule?: components["schemas"]["CycleRule"] | null;
+            /**
+             * @description The last app version whose What's New the user was shown. The
+             *     web app shows What's New when it opens a newer feature or major
+             *     version.
+             * @example v1.04.00
+             */
+            whats_new_seen?: string | null;
+            /** @description Whether What's New pops up after an update. Null means true. */
+            whats_new_popup?: boolean | null;
         };
         /** @description Settings per Dashboard widget. A missing widget uses its defaults. */
         DashboardSettings: {
