@@ -1,6 +1,7 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import { APP_VERSION } from "@/lib/changelog";
 import { apiMock, problem, testUser } from "@/test/api";
 import { renderRoute } from "@/test/render";
 
@@ -25,6 +26,11 @@ describe("Login", () => {
       username: "kari",
       password: "a long password",
     });
+  });
+
+  it("shows the app's version", async () => {
+    renderRoute("/login");
+    expect(await screen.findByText(`Bucky BudgetR ${APP_VERSION} · dev`)).toBeInTheDocument();
   });
 
   it("says when the username or password is wrong", async () => {

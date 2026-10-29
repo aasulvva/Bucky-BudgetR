@@ -6,6 +6,7 @@ import {
   Group,
   Select,
   Stack,
+  Switch,
   Text,
   TextInput,
   Title,
@@ -142,6 +143,16 @@ function PreferencesCard({ preferences }: { preferences: Preferences }) {
           onChange={(value) => {
             const next = NEGATIVE_TFS.find((n) => n === value);
             if (next) update.mutate({ default_negative_tf: next === "debt" ? null : next });
+          }}
+        />
+        <Switch
+          label={t("settings.whatsNewPopup")}
+          description={t("settings.whatsNewPopupHint")}
+          checked={preferences.whats_new_popup !== false}
+          disabled={update.isPending}
+          onChange={(e) => {
+            // On is the default (null).
+            update.mutate({ whats_new_popup: e.currentTarget.checked ? null : false });
           }}
         />
       </Stack>

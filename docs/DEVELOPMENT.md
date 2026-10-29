@@ -251,9 +251,25 @@ Tests run in jsdom. `src/test/render.tsx` has helpers that render a component wi
 
 Tests never reach a server. `src/test/fixtures.ts` builds sample accounts and buckets. `src/test/api.ts` is a fake backend that `setup.ts` installs as `fetch`. By default it answers as a logged-in normal user, `testUser`, with a time zone set; a test that changes the user's preferences keeps `...testUser.preferences`, or the guard sets the zone. A test changes an answer with `apiMock.on("PATCH /api/v1/me/preferences", { body: … })`, or with a function of the request; `problem(status, code, detail)` builds an error. The test then checks what was sent with `apiMock.calls(route)`. The answers reset after each test.
 
+## Versions and What's New
+
+The app's version is `vX.YY.ZZ` (zero-padded):
+- **X** goes up when a milestone is done (1 = MVP), and YY and ZZ go back to 00.
+- **YY** goes up for a new feature, and ZZ goes back to 00.
+- **ZZ** goes up for a bugfix or a minor change, including development-only features.
+
+Every PR bumps the version by one step. It adds an entry at the top of `CHANGELOG` in `source/frontend/src/lib/changelog.ts`: the new version, the date it's merged (`yyyy-mm-dd`), a title, and the changes in en, nb and nn. The PR description says `Version: vX.YY.ZZ`. If another PR merges first, renumber yours. `lib/changelog.test.ts` checks that each version is one step after the one before, with dates in order and text in every language.
+
+- The newest entry is the app's version (`APP_VERSION`); no other file has it.
+- What's New shows each entry as `<title> (yyyy-mm-dd) - vX.YY.ZZ`.
+- It pops up on a feature or major version (`isFeatureUpdate`), not a patch, so a patch's entry shows in the next feature version's popup.
+- The commit comes from `vite.config.ts` as `__APP_COMMIT__`: `GIT_COMMIT` when set (the image build passes `BUCKY_COMMIT` through), else `git rev-parse --short HEAD`. The server binary gets the same commit (`main.commit`) for its first log line.
+- *Development* in About is `import.meta.env.DEV`, which is true on the Vite dev server and in tests.
+- `testUser` has seen the current version, so the popup doesn't open over other tests.
+
 ## Workflow and CI
 
-- Work on a branch and merge to `main` through a pull request. The repo is private on GitHub's free plan, which doesn't enforce branch protection, so this is a convention: **merge only when CI is green**.
+- Work on a branch and merge to `main` through a pull request. Each PR bumps the version and adds its What's New entry (see above). The repo is private on GitHub's free plan, which doesn't enforce branch protection, so this is a convention: **merge only when CI is green**.
 - `.github/workflows/ci.yml` runs on every PR and on every push to `main`. It has four jobs:
   - **Backend:** `go mod verify`, `go vet` (with and without the `debug` tag), golangci-lint, then `go test -race -tags debug` against a PostgreSQL service container, the debug tag check, then a build.
   - **Frontend:** `npm ci`, ESLint, `tsc`, Vitest and `vite build`.

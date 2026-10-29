@@ -48,6 +48,24 @@ describe("Settings", () => {
     });
   });
 
+  it("turns the What's New popup off and on", async () => {
+    apiMock.on("PATCH /api/v1/me/preferences", patchPreferences({}));
+    renderRoute("/settings");
+    const toggle = await screen.findByRole("switch", { name: /Show What's New after updates/ });
+    expect(toggle).toBeChecked();
+    await userEvent.click(toggle);
+    expect(apiMock.calls("PATCH /api/v1/me/preferences")[0]?.body).toEqual({
+      whats_new_popup: false,
+    });
+    await waitFor(() => {
+      expect(toggle).not.toBeChecked();
+    });
+    await userEvent.click(toggle);
+    expect(apiMock.calls("PATCH /api/v1/me/preferences")[1]?.body).toEqual({
+      whats_new_popup: null,
+    });
+  });
+
   it("switches the language, which follows the locale by default", async () => {
     apiMock.on("PATCH /api/v1/me/preferences", patchPreferences({}));
     renderRoute("/settings");

@@ -60,7 +60,9 @@
       "title": "Fann ikkje sida",
       "text": "Det finst ingenting på denne adressa.",
       "home": "Gå til oversikta"
-    }
+    },
+    "whatsNew": "Nytt i appen",
+    "about": "Om appen"
   },
   "auth": {
     "username": "Brukarnamn",
@@ -165,7 +167,9 @@
     "data": "Eksport og import av data",
     "dataText": "Last ned alle dataa dine, eller ta dei med til ein annan tenar (#36).",
     "serverStatus": "Tenarstatus",
-    "serverReachable": "API-et og databasen svarar."
+    "serverReachable": "API-et og databasen svarar.",
+    "whatsNewPopup": "Vis Nytt i appen etter oppdateringar",
+    "whatsNewPopupHint": "Opnar Nytt i appen når appen får nye funksjonar. Du kan alltid opne det frå profilmenyen."
   },
   "accounts": {
     "types": {
@@ -905,5 +909,19 @@
       "restored": "Augneblinksbiletet er gjenoppretta",
       "imported": "Augneblinksbiletet er importert"
     }
+  },
+  "whatsNew": {
+    "title": "Nytt i appen",
+    "updated": "Bucky BudgetR er oppdatert til {{version}}.",
+    "dontShow": "Ikkje vis dette etter oppdateringar"
+  },
+  "about": {
+    "title": "Om Bucky BudgetR",
+    "version": "Versjon",
+    "commit": "Commit",
+    "environment": "Miljø",
+    "development": "Utvikling",
+    "production": "Produksjon",
+    "whatsNew": "Nytt i appen"
   }
 }

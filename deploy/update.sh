@@ -10,10 +10,10 @@ docker compose exec -T backup sh /usr/local/bin/backup.sh now pre-update
 
 before=$(git rev-parse --short HEAD)
 git pull --ff-only
-BUCKY_VERSION=$(git describe --tags --always)
-export BUCKY_VERSION
+BUCKY_COMMIT=$(git rev-parse --short HEAD)
+export BUCKY_COMMIT
 
 docker compose build app
 docker compose up -d --wait
-echo "Updated from $before to $BUCKY_VERSION."
+echo "Updated from $before to $BUCKY_COMMIT."
 echo "To roll back, see \"Rolling back\" in docs/DEPLOYMENT.md (the pre-update dump is in manual/)."

@@ -48,8 +48,10 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/web"
 )
 
-// version is set at build time (-ldflags "-X main.version=…").
-var version = "dev"
+// commit is the commit the binary was built from, set at build time
+// (-ldflags "-X main.commit=…"). The app's version is the frontend's
+// (source/frontend/src/lib/changelog.ts).
+var commit = "dev"
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -91,7 +93,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, out, lo
 	}
 	logger := logging.New(cfg, logOut)
 	if cmd == "serve" {
-		logger.InfoContext(ctx, "starting", slog.String("version", version), slog.String("env", string(cfg.Env)))
+		logger.InfoContext(ctx, "starting", slog.String("commit", commit), slog.String("env", string(cfg.Env)))
 	}
 
 	pool, err := db.Open(ctx, cfg.DatabaseURL)

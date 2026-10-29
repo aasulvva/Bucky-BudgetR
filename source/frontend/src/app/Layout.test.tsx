@@ -1,7 +1,8 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import i18n from "@/i18n";
+import { APP_COMMIT, APP_VERSION, CHANGELOG } from "@/lib/changelog";
 import { apiMock, problem, testUser } from "@/test/api";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
@@ -82,6 +83,36 @@ describe("desktop layout", () => {
       "href",
       "/admin",
     );
+  });
+
+  it("shows the version, What's New and About", async () => {
+    renderRoute("/");
+    const nav = await screen.findByRole("navigation");
+    await userEvent.click(within(nav).getByRole("button", { name: /Profile/ }));
+    let menu = await screen.findByRole("menu");
+    expect(within(menu).getByText(`Bucky BudgetR ${APP_VERSION} · dev`)).toBeInTheDocument();
+
+    await userEvent.click(within(menu).getByRole("menuitem", { name: "What's New" }));
+    let dialog = await screen.findByRole("dialog", { name: "What's New" });
+    // Every version.
+    expect(within(dialog).getAllByRole("heading", { level: 3 })).toHaveLength(CHANGELOG.length);
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    await userEvent.click(within(nav).getByRole("button", { name: /Profile/ }));
+    menu = await screen.findByRole("menu");
+    await userEvent.click(within(menu).getByRole("menuitem", { name: "About" }));
+    dialog = await screen.findByRole("dialog", { name: "About Bucky BudgetR" });
+    expect(within(dialog).getByRole("row", { name: `Version ${APP_VERSION}` })).toBeInTheDocument();
+    expect(within(dialog).getByRole("row", { name: `Commit ${APP_COMMIT}` })).toBeInTheDocument();
+    // Vitest runs like the dev server.
+    expect(
+      within(dialog).getByRole("row", { name: "Environment Development" }),
+    ).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "What's New" }));
+    expect(await screen.findByRole("dialog", { name: "What's New" })).toBeInTheDocument();
   });
 
   it("signs out to the login page", async () => {

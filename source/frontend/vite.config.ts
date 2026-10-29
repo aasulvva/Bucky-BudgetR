@@ -1,4 +1,5 @@
 /// <reference types="vitest/config" />
+import { execSync } from "node:child_process";
 import { fileURLToPath, URL } from "node:url";
 
 import react from "@vitejs/plugin-react";
@@ -13,8 +14,20 @@ const apiTarget = {
   changeOrigin: false,
 };
 
+// The commit shown in About: GIT_COMMIT from the image build (the Docker
+// context has no .git), else the checkout's.
+function gitCommit(): string {
+  if (process.env.GIT_COMMIT) return process.env.GIT_COMMIT;
+  try {
+    return execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim();
+  } catch {
+    return "unknown";
+  }
+}
+
 export default defineConfig({
   plugins: [react()],
+  define: { __APP_COMMIT__: JSON.stringify(gitCommit()) },
   resolve: {
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
   },

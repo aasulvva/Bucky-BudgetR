@@ -49,7 +49,7 @@ This is financial data: **set up backups, and copy them off the machine, before 
    ```
 7. **Start:**
    ```bash
-   BUCKY_VERSION=$(git describe --tags --always) docker compose up -d --build --wait
+   BUCKY_COMMIT=$(git rev-parse --short HEAD) docker compose up -d --build --wait
    ```
    The first build takes a few minutes. `--wait` returns once every service is healthy.
 8. **Log in** at `https://<your name or address>` as `admin` with `BUCKY_INITIAL_ADMIN_PASSWORD`. You must choose a new password. Then:
@@ -142,14 +142,14 @@ This does four things:
 3. rebuilds the image;
 4. restarts with `docker compose up -d --wait`.
 
-The app applies new migrations when it starts. Its first log line says the version it runs (`"msg":"starting","version":…`).
+The app applies new migrations when it starts. Its first log line says the commit it runs (`"msg":"starting","commit":…`). The app's version and commit are also under **About** in the profile menu, and **What's New** lists what changed.
 
 ### Rolling back
 
 Migrations only go forward, so going back means older code and the data from before the update:
 
 1. `git log` to find the commit you were on before, then `git checkout <commit>`.
-2. `BUCKY_VERSION=$(git describe --tags --always) docker compose up -d --build --wait`. The older app may refuse to start on the newer schema; that's fine, the next step replaces it.
+2. `BUCKY_COMMIT=$(git rev-parse --short HEAD) docker compose up -d --build --wait`. The older app may refuse to start on the newer schema; that's fine, the next step replaces it.
 3. Restore the `pre-update` dump (see [Restoring](#restoring)).
 4. Later, `git checkout main` returns to the normal update path.
 

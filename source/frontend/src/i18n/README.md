@@ -48,5 +48,7 @@ The words for the app's concepts, so the same thing is called the same everywher
 | debug settings (dev only)   | feilsøkingsinnstillinger                          | feilsøkingsinnstillingar              |
 | simulated time              | simulert tid                                      | simulert tid                          |
 | snapshot                    | øyeblikksbilde (-bildet, -bilder)                 | augneblinksbilete (-biletet)          |
+| What's New                  | Nytt i appen                                      | Nytt i appen                          |
+| About                       | Om appen                                          | Om appen                              |
 
 Nynorsk uses the _a_-endings and _vert_ for the passive (_vert fylt på_), and _han/ho_ for masculine and feminine nouns (_perioden … han_).

@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # The production image: the frontend built to static files and embedded in
 # the Go binary, on a minimal non-root base. Build from the repo root:
-#   docker build --build-arg VERSION=$(git describe --tags --always) .
+#   docker build --build-arg GIT_COMMIT=$(git rev-parse --short HEAD) .
 # deploy/compose.yaml builds it this way; see docs/DEPLOYMENT.md.
 
 FROM node:24.22.1-alpine3.24 AS frontend
@@ -9,7 +9,9 @@ WORKDIR /src/source/frontend
 COPY source/frontend/package.json source/frontend/package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
 COPY source/frontend/ ./
-RUN npm run build
+# Shown in About (the context has no .git).
+ARG GIT_COMMIT=unknown
+RUN GIT_COMMIT=${GIT_COMMIT} npm run build
 
 FROM golang:1.26.10-alpine3.24 AS backend
 WORKDIR /src
@@ -17,9 +19,9 @@ COPY source/backend/go.mod source/backend/go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY source/backend/ ./
 COPY --from=frontend /src/source/frontend/dist/ ./internal/web/dist/
-ARG VERSION=dev
+ARG GIT_COMMIT=unknown
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" \
+    CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.commit=${GIT_COMMIT}" \
     -o /out/bucky-server ./cmd/server
 
 # Distroless static: no shell or package manager; runs as uid 65532.

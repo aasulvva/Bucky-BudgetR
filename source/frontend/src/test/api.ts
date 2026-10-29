@@ -4,6 +4,7 @@
 // that with apiMock.on().
 
 import type { components } from "@/api/schema";
+import { APP_VERSION } from "@/lib/changelog";
 
 import { cycle } from "./fixtures";
 
@@ -30,7 +31,8 @@ export const testUser: User = {
   admin: false,
   must_change_password: false,
   // Set, so the guard doesn't set it (vite.config.ts runs tests there).
-  preferences: { time_zone: "America/Los_Angeles" },
+  // What's New already seen, so it doesn't pop up over the screens.
+  preferences: { time_zone: "America/Los_Angeles", whats_new_seen: APP_VERSION },
 };
 
 /** A problem details response, as the API sends it. */

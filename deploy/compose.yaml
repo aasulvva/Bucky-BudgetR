@@ -27,7 +27,7 @@ services:
     build:
       context: ..
       args:
-        VERSION: ${BUCKY_VERSION:-dev}
+        GIT_COMMIT: ${BUCKY_COMMIT:-unknown}
     image: bucky-budgetr:latest
     restart: unless-stopped
     depends_on:
