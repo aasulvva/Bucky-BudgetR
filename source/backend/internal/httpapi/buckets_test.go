@@ -66,11 +66,25 @@ func TestBucketsAPI(t *testing.T) {
 	}, alice)
 	expect(t, "create", w, http.StatusCreated, "")
 	b := decode[api.Bucket](t, w)
-	if b.Capacity != "5000.00" || b.CapMultiplier.MustGet() != "1.25" || !b.CapAmount.IsNull() ||
+	if b.Capacity.MustGet() != "5000.00" || b.CapMultiplier.MustGet() != "1.25" || !b.CapAmount.IsNull() ||
 		b.RefillMode != api.Manual || b.Currency != "NOK" || b.TargetFunds != "0.00" || b.CurrentAvailableFunds != "0.00" ||
 		b.NegativeTf != api.Clear {
 		t.Errorf("created %+v", b)
 	}
+
+	// A Fully manual bucket (#76) has no RA and, here, no capacity.
+	w = do(http.MethodPost, "/api/v1/buckets", map[string]any{
+		"name": "Gifts", "source_account_id": acc.Id, "refill_mode": "fully_manual",
+	}, alice)
+	expect(t, "create fully manual", w, http.StatusCreated, "")
+	if m := decode[api.Bucket](t, w); !m.Capacity.IsNull() || m.CapMode != api.CapModeNone || m.RefillAmount != "0.00" || !m.KeepFunds {
+		t.Errorf("fully manual %+v", m)
+	} else {
+		expect(t, "delete fully manual", do(http.MethodDelete, "/api/v1/buckets/"+m.Id, nil, alice), http.StatusNoContent, "")
+	}
+	expect(t, "fully manual with a refill amount", do(http.MethodPost, "/api/v1/buckets", map[string]any{
+		"name": "Gifts 2", "source_account_id": acc.Id, "refill_mode": "fully_manual", "refill_amount": "100",
+	}, alice), http.StatusBadRequest, "invalid_request")
 
 	expect(t, "duplicate name", do(http.MethodPost, "/api/v1/buckets",
 		map[string]any{"name": "groceries", "source_account_id": acc.Id}, alice), http.StatusConflict, "name_taken")
@@ -90,7 +104,7 @@ func TestBucketsAPI(t *testing.T) {
 
 	w = do(http.MethodPatch, "/api/v1/buckets/"+b.Id, map[string]any{"cap_mode": "fixed", "cap_amount": "4500", "priority": true, "negative_tf": "debt"}, alice)
 	expect(t, "update", w, http.StatusOK, "")
-	if u := decode[api.Bucket](t, w); u.Capacity != "4500.00" || u.CapAmount.MustGet() != "4500.00" || !u.CapMultiplier.IsNull() || !u.Priority ||
+	if u := decode[api.Bucket](t, w); u.Capacity.MustGet() != "4500.00" || u.CapAmount.MustGet() != "4500.00" || !u.CapMultiplier.IsNull() || !u.Priority ||
 		u.NegativeTf != api.Debt {
 		t.Errorf("updated %+v", u)
 	}
@@ -98,7 +112,7 @@ func TestBucketsAPI(t *testing.T) {
 		"items": []map[string]any{{"bucket_id": b.Id, "refill_amount": "4800"}},
 	}, alice)
 	expect(t, "set refill amounts", w, http.StatusOK, "")
-	if u := decode[struct{ Items []api.Bucket }](t, w).Items; len(u) != 1 || u[0].RefillAmount != "4800.00" || u[0].Capacity != "4800.00" {
+	if u := decode[struct{ Items []api.Bucket }](t, w).Items; len(u) != 1 || u[0].RefillAmount != "4800.00" || u[0].Capacity.MustGet() != "4800.00" {
 		t.Errorf("refill amounts %+v, want RA 4800 with the fixed BC raised", u)
 	}
 	expect(t, "refill amounts twice", do(http.MethodPost, "/api/v1/buckets/refill-amounts", map[string]any{

@@ -1,6 +1,11 @@
 // Package buckets manages buckets (spec §4): creating one with its opening
 // funds, changing its settings and deleting it.
 //
+// A Fully manual bucket (#76) is never refilled: it has no refill amount,
+// always keeps its funds, and its capacity is a fixed amount or none. Its
+// funds only change through adjustments (Add and Remove funds are temporary
+// adjustments) and transfers.
+//
 // Every change that moves money goes through the ledger in the same database
 // transaction as the bucket change, so a bucket never exists without its
 // opening funds, and is never deleted with target funds left in it.
@@ -53,12 +58,12 @@ const (
 )
 
 // Bucket is a bucket with its currency, its Target Funds (TF, from the
-// ledger) and its calculated Bucket Capacity (BC).
+// ledger) and its calculated Bucket Capacity (BC), unset with no capacity.
 type Bucket struct {
 	sqlc.Bucket
 	Currency    string
 	TargetFunds decimal.Decimal
-	Capacity    decimal.Decimal
+	Capacity    decimal.NullDecimal
 	// Refilled is set when the bucket has been refilled in the active cycle.
 	Refilled bool
 }
@@ -68,12 +73,13 @@ type New struct {
 	Name            string
 	SourceAccountID string
 	RefillAmount    decimal.Decimal
-	// CapMode defaults to multiplier.
+	// CapMode defaults to multiplier, or none for a Fully manual bucket.
 	CapMode sqlc.BucketCapMode
 	// CapMultiplier is for the multiplier mode and defaults to 1.
 	CapMultiplier decimal.Decimal
 	// CapAmount is for the fixed mode. It is raised to RefillAmount if lower.
 	CapAmount decimal.Decimal
+	// KeepFunds is always on for a Fully manual bucket.
 	KeepFunds bool
 	// NegativeTF defaults to the user's default_negative_tf preference, or
 	// debt.
@@ -92,7 +98,8 @@ type New struct {
 	// the opening funds count as the bucket's refill in it.
 	OpeningFunds decimal.Decimal
 	// Refill refills the bucket now in the active cycle, whatever its
-	// refill mode. It can't be combined with OpeningFunds.
+	// refill mode except Fully manual. It can't be combined with
+	// OpeningFunds.
 	Refill bool
 }
 
@@ -200,9 +207,6 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Bucket, err
 	if err != nil {
 		return Bucket{}, err
 	}
-	if n.CapMode == "" {
-		n.CapMode = sqlc.BucketCapModeMultiplier
-	}
 	if n.CapMultiplier.IsZero() {
 		n.CapMultiplier = decimal.NewFromInt(1)
 	}
@@ -245,6 +249,19 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Bucket, err
 				n.RefillMode = sqlc.RefillModeAuto
 			}
 		}
+		manual := n.RefillMode == sqlc.RefillModeFullyManual
+		if n.CapMode == "" {
+			n.CapMode = sqlc.BucketCapModeMultiplier
+			if manual {
+				n.CapMode = sqlc.BucketCapModeNone
+			}
+		}
+		if manual {
+			if n.Refill {
+				return errNeverRefilled
+			}
+			n.KeepFunds = true
+		}
 		if n.NegativeTF == "" {
 			pref, err := q.GetDefaultNegativeTF(ctx, userID)
 			if err != nil {
@@ -260,13 +277,19 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Bucket, err
 			RefillMode: n.RefillMode, OverflowDestination: n.OverflowDestination,
 			Priority: n.Priority, Importance: n.Importance,
 		}
-		if n.CapMode == sqlc.BucketCapModeFixed {
+		switch n.CapMode {
+		case sqlc.BucketCapModeFixed:
 			st.CapAmount = decimal.NewNullDecimal(n.CapAmount)
-		} else {
+		case sqlc.BucketCapModeMultiplier:
 			st.CapMultiplier = decimal.NewNullDecimal(n.CapMultiplier)
 		}
 		if err := st.check(); err != nil {
 			return err
+		}
+		if manual {
+			if err := checkCapacity(st.capacity(), n.OpeningFunds); err != nil {
+				return err
+			}
 		}
 
 		var row sqlc.Bucket
@@ -291,7 +314,8 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Bucket, err
 				return fmt.Errorf("record opening funds: %w", err)
 			}
 		}
-		if s.onCreate != nil && (n.Refill || !n.OpeningFunds.IsZero()) {
+		// A Fully manual bucket is never refilled, so it isn't marked.
+		if s.onCreate != nil && !manual && (n.Refill || !n.OpeningFunds.IsZero()) {
 			if err := s.onCreate(ctx, tx, userID, row.ID, n.Refill); err != nil {
 				return err
 			}
@@ -369,6 +393,9 @@ func (s *Service) SetRefillAmounts(ctx context.Context, userID string, items []R
 			before, err := s.get(ctx, tx, userID, it.BucketID)
 			if err != nil {
 				return err
+			}
+			if before.RefillMode == sqlc.RefillModeFullyManual {
+				return fmt.Errorf("%w: bucket %s: %w", ErrInvalid, it.BucketID, errNoRefillAmount)
 			}
 			if thisCycle && before.Refilled {
 				changes[it.BucketID] = it.Amount.Sub(before.RefillAmount)
@@ -482,6 +509,10 @@ func (s *Service) Adjust(ctx context.Context, userID, id string, a Adjustment) (
 			return notFound(err, id)
 		}
 		var change decimal.Decimal
+		manual := row.RefillMode == sqlc.RefillModeFullyManual
+		if manual && a.Mode != ModeTemporary {
+			return fmt.Errorf("%w: %w", ErrInvalid, errNoRefillAmount)
+		}
 		switch a.Mode {
 		case ModeTemporary:
 			if a.TargetFunds == nil || a.RefillAmount != nil {
@@ -492,6 +523,11 @@ func (s *Service) Adjust(ctx context.Context, userID, id string, a Adjustment) (
 			}
 			if a.TargetFunds.IsNegative() {
 				return fmt.Errorf("%w: the target funds can't be negative", ErrInvalid)
+			}
+			if manual {
+				if err := checkCapacity(Capacity(row), *a.TargetFunds); err != nil {
+					return err
+				}
 			}
 			tf, err := balance.Buckets(ctx, tx, userID)
 			if err != nil {
@@ -579,9 +615,22 @@ func (s *Service) Transfer(ctx context.Context, userID, from string, t Transfer)
 		if err := checkNewSource(ctx, q, userID, src.SourceAccountID, dst.SourceAccountID); err != nil {
 			return err
 		}
+		srcManual, dstManual := src.RefillMode == sqlc.RefillModeFullyManual, dst.RefillMode == sqlc.RefillModeFullyManual
 		switch t.Mode {
 		case ModeTemporary:
+			if dstManual {
+				tf, err := balance.Buckets(ctx, tx, userID)
+				if err != nil {
+					return err
+				}
+				if err := checkCapacity(Capacity(dst), tf[t.To].Add(t.Amount)); err != nil {
+					return err
+				}
+			}
 		case ModeFuture, ModeBoth:
+			if srcManual || dstManual {
+				return fmt.Errorf("%w: %w", ErrInvalid, errNoRefillAmount)
+			}
 			if src.RefillAmount.LessThan(t.Amount) {
 				return fmt.Errorf("%w: the refill amount is only %s", ErrInvalid, src.RefillAmount.StringFixed(money.Places))
 			}
@@ -671,11 +720,29 @@ func (s *Service) get(ctx context.Context, db sqlc.DBTX, userID, id string) (Buc
 }
 
 // Capacity is a bucket's BC: RA × multiplier, rounded, or the fixed amount.
-func Capacity(b sqlc.Bucket) decimal.Decimal {
-	if b.CapMode == sqlc.BucketCapModeFixed {
-		return b.CapAmount.Decimal
+// It is unset with no capacity.
+func Capacity(b sqlc.Bucket) decimal.NullDecimal {
+	switch b.CapMode {
+	case sqlc.BucketCapModeFixed:
+		return b.CapAmount
+	case sqlc.BucketCapModeNone:
+		return decimal.NullDecimal{}
 	}
-	return money.Round(b.RefillAmount.Mul(b.CapMultiplier.Decimal))
+	return decimal.NewNullDecimal(money.Round(b.RefillAmount.Mul(b.CapMultiplier.Decimal)))
+}
+
+var (
+	errNoRefillAmount = errors.New("a fully manual bucket has no refill amount")
+	errNeverRefilled  = fmt.Errorf("%w: a fully manual bucket is never refilled", ErrInvalid)
+)
+
+// checkCapacity refuses funds above a Fully manual bucket's capacity, if it
+// has one (#76).
+func checkCapacity(capacity decimal.NullDecimal, funds decimal.Decimal) error {
+	if capacity.Valid && funds.GreaterThan(capacity.Decimal) {
+		return fmt.Errorf("%w: the bucket's capacity is %s", ErrInvalid, capacity.Decimal.StringFixed(money.Places))
+	}
+	return nil
 }
 
 func toBucket(r sqlc.Bucket, currency string, tf decimal.Decimal, refilled bool) Bucket {
@@ -698,18 +765,29 @@ type settings struct {
 	dbImportance int16
 }
 
+// capacity is the capacity st gives, as Capacity.
+func (st *settings) capacity() decimal.NullDecimal {
+	return Capacity(sqlc.Bucket{RefillAmount: st.RefillAmount, CapMode: st.CapMode, CapMultiplier: st.CapMultiplier, CapAmount: st.CapAmount})
+}
+
 // apply applies c. Switching the capacity mode without giving the new mode's
 // value uses its default: multiplier 1, or a fixed amount equal to RA.
+//
+// Switching to Fully manual sets what c doesn't give: RA 0, Keep funds on,
+// and no capacity instead of a multiplier. Switching away from it with no
+// capacity and none given uses multiplier 1.
 func (st *settings) apply(c Changes) error {
+	was := st.RefillMode
 	if c.RefillAmount != nil {
 		st.RefillAmount = *c.RefillAmount
 	}
 	if c.CapMode != nil && *c.CapMode != st.CapMode {
 		st.CapMode = *c.CapMode
 		st.CapMultiplier, st.CapAmount = decimal.NullDecimal{}, decimal.NullDecimal{}
-		if st.CapMode == sqlc.BucketCapModeFixed {
+		switch st.CapMode {
+		case sqlc.BucketCapModeFixed:
 			st.CapAmount = decimal.NewNullDecimal(decimal.Zero)
-		} else {
+		case sqlc.BucketCapModeMultiplier:
 			st.CapMultiplier = decimal.NewNullDecimal(decimal.NewFromInt(1))
 		}
 	}
@@ -743,6 +821,21 @@ func (st *settings) apply(c Changes) error {
 	if c.Importance != nil {
 		st.Importance = *c.Importance
 	}
+	manual := st.RefillMode == sqlc.RefillModeFullyManual
+	switch {
+	case manual && was != sqlc.RefillModeFullyManual:
+		if c.RefillAmount == nil {
+			st.RefillAmount = decimal.Zero
+		}
+		if c.KeepFunds == nil {
+			st.KeepFunds = true
+		}
+		if c.CapMode == nil && st.CapMode == sqlc.BucketCapModeMultiplier {
+			st.CapMode, st.CapMultiplier = sqlc.BucketCapModeNone, decimal.NullDecimal{}
+		}
+	case !manual && c.CapMode == nil && st.CapMode == sqlc.BucketCapModeNone:
+		st.CapMode, st.CapMultiplier = sqlc.BucketCapModeMultiplier, decimal.NewNullDecimal(decimal.NewFromInt(1))
+	}
 	return nil
 }
 
@@ -767,11 +860,25 @@ func (st *settings) check() error {
 		if st.CapAmount.Decimal.LessThan(st.RefillAmount) {
 			st.CapAmount.Decimal = st.RefillAmount
 		}
+	case sqlc.BucketCapModeNone:
+		if st.RefillMode != sqlc.RefillModeFullyManual {
+			return fmt.Errorf("%w: only a fully manual bucket can have no capacity", ErrInvalid)
+		}
 	default:
 		return fmt.Errorf("%w: capacity mode %q", ErrInvalid, st.CapMode)
 	}
 	if !st.RefillMode.Valid() {
 		return fmt.Errorf("%w: refill mode %q", ErrInvalid, st.RefillMode)
+	}
+	if st.RefillMode == sqlc.RefillModeFullyManual {
+		switch {
+		case !st.RefillAmount.IsZero():
+			return fmt.Errorf("%w: %w", ErrInvalid, errNoRefillAmount)
+		case !st.KeepFunds:
+			return fmt.Errorf("%w: a fully manual bucket always keeps its funds", ErrInvalid)
+		case st.CapMode == sqlc.BucketCapModeMultiplier:
+			return fmt.Errorf("%w: a fully manual bucket's capacity is a fixed amount or none", ErrInvalid)
+		}
 	}
 	if !st.NegativeTF.Valid() {
 		return fmt.Errorf("%w: negative TF handling %q", ErrInvalid, st.NegativeTF)

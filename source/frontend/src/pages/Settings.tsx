@@ -67,7 +67,7 @@ const BROWSER = "browser";
 /** The value the language select uses for "follow the locale". */
 const FOLLOW = "follow";
 
-const REFILL_MODES: RefillMode[] = ["auto", "manual", "on_income"];
+const REFILL_MODES: RefillMode[] = ["auto", "manual", "on_income", "fully_manual"];
 const NEGATIVE_TFS: NegativeTf[] = ["debt", "clear"];
 
 /** The time zones to pick from, with the user's own even if it isn't listed. */

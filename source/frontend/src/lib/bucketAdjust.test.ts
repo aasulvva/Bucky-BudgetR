@@ -1,8 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { bucket } from "@/test/fixtures";
+import { account, bucket } from "@/test/fixtures";
 
-import { adjustPreview, adjustProblem, movePreview, moveProblem } from "./bucketAdjust";
+import {
+  adjustPreview,
+  adjustProblem,
+  fundsPreview,
+  fundsProblem,
+  fundsRoom,
+  movePreview,
+  moveProblem,
+} from "./bucketAdjust";
 
 const fuel = bucket({
   id: "1000000001",
@@ -90,5 +98,81 @@ describe("moveProblem", () => {
     expect(moveProblem(fuel, "temporary", "5000.00")).toBeNull();
     expect(moveProblem(fuel, "future", "1000.01")).toBe("overRefill");
     expect(moveProblem(fuel, "both", "1000.00")).toBeNull();
+  });
+});
+
+const holiday = bucket({
+  id: "1000000003",
+  name: "Holiday",
+  source_account_id: "1234",
+  refill_mode: "fully_manual",
+  keep_funds: true,
+  cap_mode: "fixed",
+  cap_multiplier: null,
+  cap_amount: "1000.00",
+  capacity: "1000.00",
+  target_funds: "700.00",
+});
+const gifts = bucket({
+  id: "1000000004",
+  name: "Gifts",
+  source_account_id: "1234",
+  refill_mode: "fully_manual",
+  keep_funds: true,
+  cap_mode: "none",
+  cap_multiplier: null,
+  capacity: null,
+});
+
+describe("moveProblem into a Fully manual bucket", () => {
+  it("keeps it within its capacity", () => {
+    expect(moveProblem(fuel, "temporary", "300", holiday)).toBeNull();
+    expect(moveProblem(fuel, "temporary", "300.01", holiday)).toBe("overCapacity");
+    expect(moveProblem(fuel, "temporary", "5000", gifts)).toBeNull();
+    // Only Fully manual buckets are held to it.
+    expect(moveProblem(holiday, "temporary", "5000", fuel)).toBeNull();
+  });
+});
+
+describe("fundsPreview", () => {
+  // Σ positive TF 850 of a 1 000 balance.
+  const main = account({ id: "1234", name: "Main", balance: "1000.00", unallocated: "150.00" });
+  const all = [fuel, fun, holiday, gifts];
+
+  it("adds and removes TF with a BUA", () => {
+    expect(fundsPreview(holiday, main, all, "add", "100")).toEqual({
+      tf: { from: "700.00", to: "800.00" },
+      bua: "100.00",
+      short: "0.00",
+    });
+    expect(fundsPreview(holiday, main, all, "remove", "700")).toEqual({
+      tf: { from: "700.00", to: "0.00" },
+      bua: "-700.00",
+      short: "0.00",
+    });
+  });
+
+  it("says how much more the account falls short", () => {
+    expect(fundsPreview(gifts, main, all, "add", "400").short).toBe("250.00");
+    const short = { ...main, balance: "800.00" };
+    expect(fundsPreview(gifts, short, all, "add", "100").short).toBe("100.00");
+  });
+});
+
+describe("fundsProblem", () => {
+  it("adds up to the capacity and removes down to 0", () => {
+    expect(fundsProblem(holiday, "add", null)).toBe("empty");
+    expect(fundsProblem(holiday, "add", "0")).toBe("notPositive");
+    expect(fundsProblem(holiday, "add", "300")).toBeNull();
+    expect(fundsProblem(holiday, "add", "300.01")).toBe("overCapacity");
+    expect(fundsProblem(gifts, "add", "100000")).toBeNull();
+    expect(fundsProblem(holiday, "remove", "700")).toBeNull();
+    expect(fundsProblem(holiday, "remove", "700.01")).toBe("overFunds");
+  });
+
+  it("knows the room left", () => {
+    expect(fundsRoom(holiday)).toBe("300.00");
+    expect(fundsRoom({ ...holiday, target_funds: "1200.00" })).toBe("0.00");
+    expect(fundsRoom(gifts)).toBeNull();
   });
 });

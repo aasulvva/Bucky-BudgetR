@@ -119,6 +119,11 @@ export function breakdownText(figures: BucketFigures, currency: string): string 
     .join(" ");
 }
 
+/** A Fully manual bucket (#76): never refilled, its funds only change by hand. */
+export function isFullyManual(bucket: Bucket): boolean {
+  return bucket.refill_mode === "fully_manual";
+}
+
 /**
  * Whether the next refill pays back a negative TF instead of clearing it
  * (#62): only with Keep funds and the debt option.
@@ -143,7 +148,9 @@ export function refillOf(
   const amount = clears
     ? subtractAmounts(bucket.refill_amount, tf)
     : addAmounts(bucket.refill_amount);
-  const excess = subtractAmounts(addAmounts(tf, amount), bucket.capacity);
+  // Only a Fully manual bucket, which is never refilled, has no capacity.
+  const excess =
+    bucket.capacity === null ? "0.00" : subtractAmounts(addAmounts(tf, amount), bucket.capacity);
   return { amount, overflow: bucket.keep_funds && positive(excess) ? excess : "0.00" };
 }
 

@@ -111,7 +111,8 @@
     "refillModes": {
       "auto": "Automatic, at the start of each cycle",
       "manual": "Manual",
-      "on_income": "On income"
+      "on_income": "On income",
+      "fully_manual": "Fully manual, funds added and removed by hand"
     },
     "negativeTf": "Overspent buckets with Keep funds",
     "negativeTfHint": "What new buckets with Keep funds do at the refill after an overspend.",
@@ -301,7 +302,8 @@
     "modes": {
       "auto": "Auto",
       "manual": "Manual",
-      "on_income": "On income"
+      "on_income": "On income",
+      "fully_manual": "Fully manual"
     },
     "layout": "Layout",
     "listView": "List view",
@@ -395,7 +397,10 @@
       "overRefill": "{{name}}'s refill amount is only {{amount}}.",
       "enterAmount": "Enter an amount above 0.",
       "noTargets": "There's no other bucket in {{currency}} to move funds to.",
-      "pickBucket": "Choose a bucket."
+      "pickBucket": "Choose a bucket.",
+      "currentManual": "Holds {{tf}} · fully manual",
+      "overCapacity": "{{name}} can hold at most {{amount}}.",
+      "fullyManualMove": "A fully manual bucket has no refill amount, so only what's left moves."
     },
     "history": {
       "button": "Transactions",
@@ -419,6 +424,24 @@
       "tfAfter": "Left {{amount}}",
       "to": "To {{name}}",
       "from": "From {{name}}"
+    },
+    "funds": {
+      "add": "Add funds",
+      "remove": "Remove funds",
+      "addName": "Add funds to {{name}}",
+      "removeName": "Remove funds from {{name}}",
+      "addTitle": "Add funds: {{name}}",
+      "removeTitle": "Remove funds: {{name}}",
+      "addHint": "Taken from the unallocated money in {{account}} ({{amount}}).",
+      "removeHint": "Goes back to the unallocated money in {{account}}.",
+      "amount": "Amount",
+      "preview": "{{name}}: {{from}} → {{to}}, a bucket adjustment of {{amount}}",
+      "short": "{{account}} doesn't have that much unallocated: its balance will be {{amount}} short of what's left in its buckets.",
+      "overCapacity": "The capacity is {{capacity}}, so you can add at most {{amount}}.",
+      "full": "{{name}} is at its capacity of {{amount}}.",
+      "overFunds": "{{name}} only has {{amount}}.",
+      "added": "Added {{amount}} to {{name}}.",
+      "removed": "Removed {{amount}} from {{name}}."
     }
   },
   "bucketSetup": {
@@ -481,7 +504,19 @@
     "deleteSettles": "It's {{amount}} overspent, which is taken from the unallocated money in {{account}}.",
     "deleteNeedsCycle": "Releasing what's left needs an active cycle. Start or extend one first.",
     "deleteBucket": "Delete bucket",
-    "deleted": "{{name}} deleted."
+    "deleted": "{{name}} deleted.",
+    "refillModeHints": {
+      "auto": "Refilled at the start of each cycle.",
+      "manual": "Refilled with a button on Buckets, once per cycle.",
+      "on_income": "Refilled when an income triggers it, once per cycle.",
+      "fully_manual": "Never refilled: add and remove funds by hand on Buckets. It keeps its funds from cycle to cycle."
+    },
+    "noCap": "No cap",
+    "noCapHint": "The bucket can hold any amount.",
+    "capacityHintManual": "The most the bucket holds: adding funds can't take it above this.",
+    "startZeroHintManual": "Add funds on Buckets when you need them.",
+    "openingHintManual": "What the bucket already holds. Recorded as opening funds.",
+    "overCapacity": "The capacity is {{amount}}."
   },
   "budgetSetup": {
     "intro": "Plan each cycle's refills against the income you expect on each account.",
@@ -518,7 +553,9 @@
       "short": "The account is short by {{amount}} afterwards.",
       "covered": "The account still covers its buckets.",
       "apply": "Save and change this cycle"
-    }
+    },
+    "fullyManualSkipped_one": "{{count}} fully manual bucket isn't budgeted here: it has no refill amount.",
+    "fullyManualSkipped_other": "{{count}} fully manual buckets aren't budgeted here: they have no refill amount."
   },
   "newTransaction": {
     "type": "Type",

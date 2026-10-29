@@ -50,6 +50,7 @@ import {
   type BudgetDraft,
   type CycleAccount,
 } from "@/lib/budget";
+import { isFullyManual } from "@/lib/buckets";
 import { isOverdue } from "@/lib/cycles";
 import { getLocale } from "@/lib/locale";
 import { compareAmounts, formatMoney, subtractAmounts } from "@/lib/money";
@@ -338,7 +339,7 @@ type Edit = (kind: keyof BudgetDraft, id: string, value: string | null) => void;
 
 function AccountSection({
   account,
-  buckets,
+  buckets: all,
   draft,
   onEdit,
   isDesktop,
@@ -350,6 +351,9 @@ function AccountSection({
   isDesktop: boolean;
 }) {
   const { t } = useTranslation();
+  // A Fully manual bucket has no refill amount to budget (#76).
+  const buckets = all.filter((b) => !isFullyManual(b));
+  const skipped = all.length - buckets.length;
   const budget = accountBudget(draft, account, buckets);
   const money = (amount: string) => formatMoney(amount, account.currency);
   const income = draftIncome(draft, account);
@@ -413,7 +417,7 @@ function AccountSection({
         )}
       </Stack>
 
-      {isDesktop ? (
+      {buckets.length === 0 ? null : isDesktop ? (
         <Card withBorder padding={0}>
           <Table.ScrollContainer minWidth={720}>
             <Table verticalSpacing="sm">
@@ -452,6 +456,11 @@ function AccountSection({
             />
           ))}
         </Stack>
+      )}
+      {skipped > 0 && (
+        <Text size="xs" c="dimmed" px={4}>
+          {t("budgetSetup.fullyManualSkipped", { count: skipped })}
+        </Text>
       )}
     </Stack>
   );
@@ -496,7 +505,9 @@ function useBucketValues({ bucket, draft, expected }: Omit<BucketProps, "onEdit"
     share: share === null ? "–" : t("budgetSetup.shareValue", { percent: formatPercent(share) }),
     capacity: money(after.capacity),
     raised:
-      after.raised && compareAmounts(after.capacity, bucket.capacity) !== 0
+      after.raised &&
+      bucket.capacity !== null &&
+      compareAmounts(after.capacity, bucket.capacity) !== 0
         ? t("budgetSetup.capacityRaised", { amount: money(bucket.capacity) })
         : null,
     left: money(bucket.target_funds),

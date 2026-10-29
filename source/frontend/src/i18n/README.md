@@ -14,6 +14,9 @@ The words for the app's concepts, so the same thing is called the same everywher
 | refill (noun / verb)        | påfyll / fylle på                                 | påfyll / fylle på                     |
 | refill mode                 | påfyllingsmåte                                    | påfyllingsmåte                        |
 | Auto / Manual / On income   | Automatisk / Manuelt / Ved inntekt                | Automatisk / Manuelt / Ved inntekt    |
+| Fully manual                | Helt manuelt                                      | Heilt manuelt                         |
+| add / remove funds          | legge til / fjerne midler                         | leggje til / fjerne midlar            |
+| no cap (capacity)           | ingen grense                                      | inga grense                           |
 | overflow                    | overløp                                           | overløp                               |
 | overspent / overspend       | overforbrukt / overforbruk                        | overforbrukt / overforbruk            |
 | debt (carry as debt)        | gjeld (føre som gjeld)                            | gjeld (føre som gjeld)                |

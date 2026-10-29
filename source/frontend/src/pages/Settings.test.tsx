@@ -30,6 +30,18 @@ describe("Settings", () => {
     expect(apiMock.calls("PATCH /api/v1/me/preferences")[1]?.body).toEqual({ locale: null });
   });
 
+  it("can make new buckets Fully manual", async () => {
+    apiMock.on("PATCH /api/v1/me/preferences", patchPreferences({}));
+    renderRoute("/settings");
+    await userEvent.click(await screen.findByRole("combobox", { name: /Default refill mode/ }));
+    await userEvent.click(
+      await screen.findByRole("option", { name: "Fully manual, funds added and removed by hand" }),
+    );
+    expect(apiMock.calls("PATCH /api/v1/me/preferences")[0]?.body).toEqual({
+      default_refill_mode: "fully_manual",
+    });
+  });
+
   it("sets what new Keep funds buckets do when overspent", async () => {
     apiMock.on("PATCH /api/v1/me/preferences", patchPreferences({}));
     renderRoute("/settings");
