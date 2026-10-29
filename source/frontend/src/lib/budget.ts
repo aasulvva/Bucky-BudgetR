@@ -101,7 +101,7 @@ export function capacityAfter(bucket: Bucket, ra: string): { capacity: string; r
   if (bucket.cap_mode === "multiplier") {
     return { capacity: multiplyAmount(ra, bucket.cap_multiplier ?? "1"), raised: false };
   }
-  const fixed = bucket.cap_amount ?? bucket.capacity;
+  const fixed = bucket.cap_amount ?? bucket.capacity ?? "0";
   return compareAmounts(ra, fixed) > 0
     ? { capacity: canonicalAmount(ra), raised: true }
     : { capacity: canonicalAmount(fixed), raised: false };

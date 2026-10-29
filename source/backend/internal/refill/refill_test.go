@@ -621,3 +621,41 @@ func TestFinishedCycleRefillStays(t *testing.T) {
 	check(t, "TF", e.get(t, b).TargetFunds.StringFixed(2), "100.00")
 	check(t, "refilled in November", e.get(t, b).Refilled, false)
 }
+
+// TestFullyManual: a Fully manual bucket (#76) is never refilled, nor
+// emptied at cycle end, and doesn't count as refilled when created.
+func TestFullyManual(t *testing.T) {
+	e := setup(t)
+	svc := buckets.NewService(e.pool, e.ledger, buckets.Options{
+		Now: func() time.Time { return *e.now }, OnCreate: e.refills.OnCreate,
+	})
+	account := e.account(t, "1000")
+	b, err := svc.Create(t.Context(), e.user, buckets.New{
+		Name: "Gifts", SourceAccountID: account, RefillMode: sqlc.RefillModeFullyManual, OpeningFunds: dec("40"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	check(t, "refilled after create", b.Refilled, false)
+	if _, err := svc.Create(t.Context(), e.user, buckets.New{
+		Name: "Refilled", SourceAccountID: account, RefillMode: sqlc.RefillModeFullyManual, Refill: true,
+	}); !errors.Is(err, buckets.ErrInvalid) {
+		t.Errorf("create with a refill: %v", err)
+	}
+	if err := e.refills.Manual(t.Context(), e.user, b.ID); !errors.Is(err, refill.ErrWrongMode) {
+		t.Errorf("manual refill: %v", err)
+	}
+	if _, err := e.income(t, account, "Employer", "500", ptr(true)); err != nil {
+		t.Fatal(err)
+	}
+
+	*e.now = at("2026-11-02T12:00:00Z")
+	if _, err := e.cycles.End(t.Context(), e.user, e.oct.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	got := e.get(t, b.ID)
+	check(t, "TF", got.TargetFunds.StringFixed(2), "40.00")
+	check(t, "refilled", got.Refilled, false)
+	check(t, "REF", e.lines(t, b.ID, sqlc.TransactionTypeREF), []string(nil))
+	check(t, "OVF", e.lines(t, b.ID, sqlc.TransactionTypeOVF), []string(nil))
+}

@@ -111,7 +111,8 @@
     "refillModes": {
       "auto": "Automatisk, ved starten av kvar periode",
       "manual": "Manuelt",
-      "on_income": "Ved inntekt"
+      "on_income": "Ved inntekt",
+      "fully_manual": "Heilt manuelt, midlar vert lagde til og fjerna for hand"
     },
     "negativeTf": "Overforbrukte bøtter med Behald midlar",
     "negativeTfHint": "Kva nye bøtter med Behald midlar gjer ved påfyllinga etter eit overforbruk.",
@@ -301,7 +302,8 @@
     "modes": {
       "auto": "Automatisk",
       "manual": "Manuelt",
-      "on_income": "Ved inntekt"
+      "on_income": "Ved inntekt",
+      "fully_manual": "Heilt manuelt"
     },
     "layout": "Vising",
     "listView": "Listevising",
@@ -395,7 +397,10 @@
       "overRefill": "Påfyllingsbeløpet til {{name}} er berre {{amount}}.",
       "enterAmount": "Skriv inn eit beløp over 0.",
       "noTargets": "Det finst inga anna bøtte i {{currency}} å flytte midlar til.",
-      "pickBucket": "Vel ei bøtte."
+      "pickBucket": "Vel ei bøtte.",
+      "currentManual": "Har {{tf}} · heilt manuelt",
+      "overCapacity": "{{name}} kan romme høgst {{amount}}.",
+      "fullyManualMove": "Ei heilt manuell bøtte har ikkje noko påfyllingsbeløp, så berre det som er att, vert flytt."
     },
     "history": {
       "button": "Transaksjonar",
@@ -419,6 +424,24 @@
       "tfAfter": "Att {{amount}}",
       "to": "Til {{name}}",
       "from": "Frå {{name}}"
+    },
+    "funds": {
+      "add": "Legg til midlar",
+      "remove": "Fjern midlar",
+      "addName": "Legg til midlar i {{name}}",
+      "removeName": "Fjern midlar frå {{name}}",
+      "addTitle": "Legg til midlar: {{name}}",
+      "removeTitle": "Fjern midlar: {{name}}",
+      "addHint": "Vert tekne frå dei ufordelte pengane på {{account}} ({{amount}}).",
+      "removeHint": "Går tilbake til dei ufordelte pengane på {{account}}.",
+      "amount": "Beløp",
+      "preview": "{{name}}: {{from}} → {{to}}, ei bøttejustering på {{amount}}",
+      "short": "{{account}} har ikkje så mykje ufordelt: saldoen vert {{amount}} for lite til det som er att i bøttene.",
+      "overCapacity": "Kapasiteten er {{capacity}}, så du kan leggje til høgst {{amount}}.",
+      "full": "{{name}} er full, med ein kapasitet på {{amount}}.",
+      "overFunds": "{{name}} har berre {{amount}}.",
+      "added": "La til {{amount}} i {{name}}.",
+      "removed": "Fjerna {{amount}} frå {{name}}."
     }
   },
   "bucketSetup": {
@@ -481,7 +504,19 @@
     "deleteSettles": "Ho er overforbrukt med {{amount}}, som vert teke frå dei ufordelte pengane på {{account}}.",
     "deleteNeedsCycle": "Å frigjere det som er att, krev ein aktiv periode. Start eller forleng ein først.",
     "deleteBucket": "Slett bøtta",
-    "deleted": "{{name}} er sletta."
+    "deleted": "{{name}} er sletta.",
+    "refillModeHints": {
+      "auto": "Vert fylt på ved starten av kvar periode.",
+      "manual": "Vert fylt på med ein knapp under Bøtter, éin gong per periode.",
+      "on_income": "Vert fylt på når ei inntekt utløyser det, éin gong per periode.",
+      "fully_manual": "Vert aldri fylt på: legg til og fjern midlar for hand under Bøtter. Ho beheld midlane frå periode til periode."
+    },
+    "noCap": "Inga grense",
+    "noCapHint": "Bøtta kan romme kva beløp som helst.",
+    "capacityHintManual": "Det meste bøtta kan romme: du kan ikkje leggje til midlar over dette.",
+    "startZeroHintManual": "Legg til midlar under Bøtter når du treng dei.",
+    "openingHintManual": "Det bøtta allereie har. Vert registrert som startmidlar.",
+    "overCapacity": "Kapasiteten er {{amount}}."
   },
   "budgetSetup": {
     "intro": "Planlegg påfylla i kvar periode mot inntekta du ventar på kvar konto.",
@@ -518,7 +553,9 @@
       "short": "Kontoen manglar {{amount}} etterpå.",
       "covered": "Kontoen dekkjer framleis bøttene sine.",
       "apply": "Lagre og endre denne perioden"
-    }
+    },
+    "fullyManualSkipped_one": "{{count}} heilt manuell bøtte er ikkje med her: ho har ikkje noko påfyllingsbeløp.",
+    "fullyManualSkipped_other": "{{count}} heilt manuelle bøtter er ikkje med her: dei har ikkje noko påfyllingsbeløp."
   },
   "newTransaction": {
     "type": "Type",

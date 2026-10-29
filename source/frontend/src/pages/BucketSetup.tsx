@@ -55,8 +55,14 @@ type CapMode = components["schemas"]["CapMode"];
 type NegativeTf = components["schemas"]["NegativeTf"];
 type OverflowDestination = components["schemas"]["OverflowDestination"];
 
-const REFILL_MODES: RefillMode[] = ["auto", "manual", "on_income"];
+const REFILL_MODES: RefillMode[] = ["auto", "manual", "on_income", "fully_manual"];
 const NEGATIVE_TFS: NegativeTf[] = ["debt", "clear"];
+const CAP_MODES: CapMode[] = ["multiplier", "fixed", "none"];
+const CAP_MODE_LABELS = {
+  multiplier: "bucketSetup.multiplier",
+  fixed: "bucketSetup.fixed",
+  none: "bucketSetup.noCap",
+} as const;
 
 /** The selected bucket in the URL: a bucket ID (`?edit=<id>`), "new" (`?new`), or null. */
 type Selection = string | null;
@@ -244,7 +250,9 @@ function BucketList({
                     aria-current={b.id === selected ? "true" : undefined}
                     rightSection={
                       <Text size="sm" c="dimmed" style={{ whiteSpace: "nowrap" }}>
-                        {formatMoney(b.refill_amount, b.currency)}
+                        {b.refill_mode === "fully_manual"
+                          ? refillModeLabel(b.refill_mode)
+                          : formatMoney(b.refill_amount, b.currency)}
                       </Text>
                     }
                     onClick={() => {
@@ -277,6 +285,7 @@ function parseMultiplier(text: string): string | null {
 /** Whether the capacity mode, or its multiplier or amount (`value`), differs from the bucket's. */
 function capacityChanged(bucket: Bucket, mode: CapMode, value: string | null): boolean {
   if (mode !== bucket.cap_mode) return true;
+  if (mode === "none") return false;
   const was = mode === "multiplier" ? bucket.cap_multiplier : bucket.cap_amount;
   return value !== null && (was === null || compareAmounts(value, was) !== 0);
 }
@@ -293,6 +302,7 @@ interface FormErrors {
 /**
  * How a bucket created in a running cycle starts: refilled now, with opening
  * funds, or at 0. The first two count as its refill in the cycle (spec §6).
+ * A Fully manual bucket is never refilled, so it has the last two only.
  */
 type Start = "refill" | "amount" | "zero";
 const STARTS: Start[] = ["refill", "amount", "zero"];
@@ -301,6 +311,10 @@ const STARTS: Start[] = ["refill", "amount", "zero"];
  * Creates a bucket, or edits one and sends only what changed. How it starts
  * (a refill or opening funds) is for a new bucket only; later changes to
  * its money are adjustments.
+ *
+ * A Fully manual bucket (#76) has no refill amount and always keeps its
+ * funds, so those fields are hidden; its capacity is a fixed amount or none.
+ * This mirrors settings.apply in internal/buckets.
  */
 function BucketForm({
   bucket,
@@ -339,7 +353,7 @@ function BucketForm({
   const [overflow, setOverflow] = useState<OverflowDestination>(
     bucket?.overflow_destination ?? "unallocated",
   );
-  const [start, setStart] = useState<Start>("refill");
+  const [chosenStart, setStart] = useState<Start>("refill");
   const [opening, setOpening] = useState<string | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
 
@@ -349,7 +363,10 @@ function BucketForm({
     .filter((a) => !bucket || a.currency === bucket.currency)
     .map((a) => ({ value: a.id, label: a.name }));
 
-  const ra = refillAmount ?? "0.00";
+  const manual = refillMode === "fully_manual";
+  const start = manual && chosenStart === "refill" ? "zero" : chosenStart;
+  const ra = manual ? "0.00" : (refillAmount ?? "0.00");
+  const keeps = manual || keepFunds;
   const mult = parseMultiplier(multiplier);
   const fixed = capMode === "fixed" ? capAmount : null;
   const capacity =
@@ -358,12 +375,21 @@ function BucketForm({
       : fixed && (compareAmounts(fixed, ra) < 0 ? ra : fixed);
   const raised = fixed !== null && compareAmounts(fixed, ra) < 0;
 
+  const chooseMode = (mode: RefillMode) => {
+    setRefillMode(mode);
+    // A Fully manual bucket has no multiplier, and no other one goes without a cap.
+    if (mode === "fully_manual" && capMode === "multiplier") setCapMode("none");
+    if (mode !== "fully_manual" && capMode === "none") setCapMode("multiplier");
+  };
+
   const capChanged =
     !bucket || capacityChanged(bucket, capMode, capMode === "multiplier" ? mult : fixed);
   const capFields =
     capMode === "multiplier"
       ? { cap_mode: capMode, cap_multiplier: mult ?? "" }
-      : { cap_mode: capMode, cap_amount: fixed ?? "" };
+      : capMode === "fixed"
+        ? { cap_mode: capMode, cap_amount: fixed ?? "" }
+        : { cap_mode: capMode };
 
   const changes: BucketUpdate = bucket
     ? {
@@ -374,7 +400,7 @@ function BucketForm({
         ...(compareAmounts(ra, bucket.refill_amount) !== 0 ? { refill_amount: ra } : {}),
         ...(capChanged ? capFields : {}),
         ...(refillMode !== bucket.refill_mode ? { refill_mode: refillMode } : {}),
-        ...(keepFunds !== bucket.keep_funds ? { keep_funds: keepFunds } : {}),
+        ...(keeps !== bucket.keep_funds ? { keep_funds: keeps } : {}),
         ...(negativeTf !== bucket.negative_tf ? { negative_tf: negativeTf } : {}),
         ...(overflow !== bucket.overflow_destination ? { overflow_destination: overflow } : {}),
       }
@@ -399,7 +425,7 @@ function BucketForm({
         refill_amount: ra,
         ...capFields,
         refill_mode: refillMode,
-        keep_funds: keepFunds,
+        keep_funds: keeps,
         negative_tf: negativeTf,
         overflow_destination: overflow,
         ...(usable && start === "refill" ? { refill: true } : {}),
@@ -424,8 +450,9 @@ function BucketForm({
   const validate = (): FormErrors => ({
     name: checkName(name),
     source: source ? undefined : t("common.chooseAccount"),
-    refillAmount:
-      refillAmount === null
+    refillAmount: manual
+      ? undefined
+      : refillAmount === null
         ? t("common.invalidAmount")
         : compareAmounts(refillAmount, "0") < 0
           ? t("common.notNegative")
@@ -440,12 +467,13 @@ function BucketForm({
             ? t("common.notNegative")
             : undefined,
     opening:
-      !bucket &&
-      usable &&
-      start === "amount" &&
-      (opening === null || compareAmounts(opening, "0") <= 0)
-        ? t("bucketSetup.enterStartingFunds")
-        : undefined,
+      bucket || !usable || start !== "amount"
+        ? undefined
+        : opening === null || compareAmounts(opening, "0") <= 0
+          ? t("bucketSetup.enterStartingFunds")
+          : manual && capacity && compareAmounts(opening, capacity) > 0
+            ? t("bucketSetup.overCapacity", { amount: formatMoney(capacity, currency) })
+            : undefined,
   });
 
   if (bucket && deleting) {
@@ -539,14 +567,35 @@ function BucketForm({
           <Title order={3} size="h5">
             {t("bucketSetup.refill")}
           </Title>
-          <AmountInput
-            label={t("bucketSetup.refillAmount")}
-            currency={currency}
-            value={refillAmount}
-            onChange={setRefillAmount}
-            error={errors.refillAmount}
-            required
-          />
+          <Radio.Group
+            label={t("bucketSetup.refillMode")}
+            value={refillMode}
+            onChange={(v) => {
+              const mode = REFILL_MODES.find((m) => m === v);
+              if (mode) chooseMode(mode);
+            }}
+          >
+            <Stack gap="sm" mt="xs">
+              {REFILL_MODES.map((m) => (
+                <Radio
+                  key={m}
+                  value={m}
+                  label={refillModeLabel(m)}
+                  description={t(`bucketSetup.refillModeHints.${m}`)}
+                />
+              ))}
+            </Stack>
+          </Radio.Group>
+          {!manual && (
+            <AmountInput
+              label={t("bucketSetup.refillAmount")}
+              currency={currency}
+              value={refillAmount}
+              onChange={setRefillAmount}
+              error={errors.refillAmount}
+              required
+            />
+          )}
           <Stack gap={6}>
             <Text size="sm" fw={500}>
               {t("bucketSetup.capacity")}
@@ -555,14 +604,15 @@ function BucketForm({
               aria-label={t("bucketSetup.capacity")}
               value={capMode}
               onChange={(v) => {
-                setCapMode(v === "fixed" ? "fixed" : "multiplier");
+                const mode = CAP_MODES.find((m) => m === v);
+                if (mode) setCapMode(mode);
               }}
-              data={[
-                { value: "multiplier", label: t("bucketSetup.multiplier") },
-                { value: "fixed", label: t("bucketSetup.fixed") },
-              ]}
+              data={(manual
+                ? (["none", "fixed"] as const)
+                : (["multiplier", "fixed"] as const)
+              ).map((m) => ({ value: m, label: t(CAP_MODE_LABELS[m]) }))}
             />
-            {capMode === "multiplier" ? (
+            {capMode === "multiplier" && (
               <TextInput
                 label={t("bucketSetup.multiplier")}
                 inputMode="decimal"
@@ -578,7 +628,8 @@ function BucketForm({
                   </Text>
                 }
               />
-            ) : (
+            )}
+            {capMode === "fixed" && (
               <AmountInput
                 label={t("bucketSetup.capacityAmount")}
                 currency={currency}
@@ -596,33 +647,28 @@ function BucketForm({
                   {" · "}
                 </>
               )}
-              {raised ? t("bucketSetup.capacityRaised") : t("bucketSetup.capacityHint")}
+              {capMode === "none"
+                ? t("bucketSetup.noCapHint")
+                : manual
+                  ? t("bucketSetup.capacityHintManual")
+                  : raised
+                    ? t("bucketSetup.capacityRaised")
+                    : t("bucketSetup.capacityHint")}
             </Text>
           </Stack>
-          <Stack gap={6}>
-            <Text size="sm" fw={500}>
-              {t("bucketSetup.refillMode")}
-            </Text>
-            <SegmentedControl
-              aria-label={t("bucketSetup.refillMode")}
-              value={refillMode}
-              onChange={(v) => {
-                const mode = REFILL_MODES.find((m) => m === v);
-                if (mode) setRefillMode(mode);
+          {/* A Fully manual bucket always keeps its funds and never overflows. */}
+          {!manual && (
+            <Checkbox
+              label={t("bucketSetup.keepFunds")}
+              description={t("bucketSetup.keepFundsHint")}
+              checked={keepFunds}
+              onChange={(e) => {
+                setKeepFunds(e.currentTarget.checked);
               }}
-              data={REFILL_MODES.map((m) => ({ value: m, label: refillModeLabel(m) }))}
             />
-          </Stack>
-          <Checkbox
-            label={t("bucketSetup.keepFunds")}
-            description={t("bucketSetup.keepFundsHint")}
-            checked={keepFunds}
-            onChange={(e) => {
-              setKeepFunds(e.currentTarget.checked);
-            }}
-          />
+          )}
           {/* Without Keep funds a refill always clears an overspend (#62). */}
-          {keepFunds && (
+          {!manual && keepFunds && (
             <Radio.Group
               label={t("bucketSetup.negativeTf.label")}
               value={negativeTf}
@@ -644,23 +690,25 @@ function BucketForm({
               </Stack>
             </Radio.Group>
           )}
-          <Select
-            label={t("bucketSetup.overflow")}
-            data={[
-              { value: "unallocated", label: t("bucketSetup.overflowUnallocated") },
-              {
-                value: "savings_distribution",
-                label: t("bucketSetup.overflowDistribution"),
-                disabled: true,
-              },
-              { value: "savings_target", label: t("bucketSetup.overflowTarget"), disabled: true },
-            ]}
-            value={overflow}
-            allowDeselect={false}
-            onChange={(v) => {
-              if (v === "unallocated") setOverflow(v);
-            }}
-          />
+          {!manual && (
+            <Select
+              label={t("bucketSetup.overflow")}
+              data={[
+                { value: "unallocated", label: t("bucketSetup.overflowUnallocated") },
+                {
+                  value: "savings_distribution",
+                  label: t("bucketSetup.overflowDistribution"),
+                  disabled: true,
+                },
+                { value: "savings_target", label: t("bucketSetup.overflowTarget"), disabled: true },
+              ]}
+              value={overflow}
+              allowDeselect={false}
+              onChange={(v) => {
+                if (v === "unallocated") setOverflow(v);
+              }}
+            />
+          )}
           {!bucket &&
             (usable ? (
               <Radio.Group
@@ -672,16 +720,20 @@ function BucketForm({
                 }}
               >
                 <Stack gap="sm" mt="xs">
-                  <Radio
-                    value="refill"
-                    label={t("bucketSetup.startRefill", { amount: formatMoney(ra, currency) })}
-                    description={t("bucketSetup.startRefillHint")}
-                  />
+                  {!manual && (
+                    <Radio
+                      value="refill"
+                      label={t("bucketSetup.startRefill", { amount: formatMoney(ra, currency) })}
+                      description={t("bucketSetup.startRefillHint")}
+                    />
+                  )}
                   <Radio value="amount" label={t("bucketSetup.startAmount")} />
                   {start === "amount" && (
                     <AmountInput
                       label={t("bucketSetup.openingFunds")}
-                      description={t("bucketSetup.openingHint")}
+                      description={t(
+                        manual ? "bucketSetup.openingHintManual" : "bucketSetup.openingHint",
+                      )}
                       currency={currency}
                       value={opening}
                       onChange={setOpening}
@@ -692,7 +744,9 @@ function BucketForm({
                   <Radio
                     value="zero"
                     label={t("bucketSetup.startZero")}
-                    description={t("bucketSetup.startZeroHint")}
+                    description={t(
+                      manual ? "bucketSetup.startZeroHintManual" : "bucketSetup.startZeroHint",
+                    )}
                   />
                 </Stack>
               </Radio.Group>

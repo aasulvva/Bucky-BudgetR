@@ -75,6 +75,7 @@ type BucketCapMode string
 const (
 	BucketCapModeMultiplier BucketCapMode = "multiplier"
 	BucketCapModeFixed      BucketCapMode = "fixed"
+	BucketCapModeNone       BucketCapMode = "none"
 )
 
 func (e *BucketCapMode) Scan(src interface{}) error {
@@ -115,7 +116,8 @@ func (ns NullBucketCapMode) Value() (driver.Value, error) {
 func (e BucketCapMode) Valid() bool {
 	switch e {
 	case BucketCapModeMultiplier,
-		BucketCapModeFixed:
+		BucketCapModeFixed,
+		BucketCapModeNone:
 		return true
 	}
 	return false
@@ -334,9 +336,10 @@ func (e OverflowDestination) Valid() bool {
 type RefillMode string
 
 const (
-	RefillModeAuto     RefillMode = "auto"
-	RefillModeManual   RefillMode = "manual"
-	RefillModeOnIncome RefillMode = "on_income"
+	RefillModeAuto        RefillMode = "auto"
+	RefillModeManual      RefillMode = "manual"
+	RefillModeOnIncome    RefillMode = "on_income"
+	RefillModeFullyManual RefillMode = "fully_manual"
 )
 
 func (e *RefillMode) Scan(src interface{}) error {
@@ -378,7 +381,8 @@ func (e RefillMode) Valid() bool {
 	switch e {
 	case RefillModeAuto,
 		RefillModeManual,
-		RefillModeOnIncome:
+		RefillModeOnIncome,
+		RefillModeFullyManual:
 		return true
 	}
 	return false

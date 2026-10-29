@@ -9,6 +9,7 @@ import {
   SimpleGrid,
   Stack,
   Text,
+  Title,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { IconAdjustmentsHorizontal } from "@tabler/icons-react";
@@ -39,6 +40,7 @@ import {
   type AdjustMode,
   type MovePreview,
 } from "@/lib/bucketAdjust";
+import { isFullyManual } from "@/lib/buckets";
 import { isOverdue } from "@/lib/cycles";
 import { compareAmounts, formatMoney, subtractAmounts } from "@/lib/money";
 import { autofocusField } from "@/lib/device";
@@ -53,7 +55,9 @@ function signed(amount: string, currency: string): string {
 /**
  * Adjust funds (spec §9): a bucket's button on the Buckets screen, opening a
  * dialog that changes what's left this cycle (BUA), the refill amount, or
- * both by the same amount, or moves funds to another bucket (BAT).
+ * both by the same amount, or moves funds to another bucket (BAT). A Fully
+ * manual bucket (#76) has Add and Remove funds for the first, and no refill
+ * amount, so it only moves funds.
  */
 export function AdjustButton({ bucket, size }: { bucket: Bucket; size: number }) {
   const { t } = useTranslation();
@@ -95,28 +99,40 @@ function AdjustDialog({ bucket, onDone }: { bucket: Bucket; onDone: () => void }
   const active = useCurrentCycles().data?.active ?? null;
   // An active cycle that isn't overdue, so this cycle can change.
   const usable = active !== null && !isOverdue(active);
-  const [tab, setTab] = useState<Tab>("adjust");
+  const manual = isFullyManual(bucket);
+  const [chosen, setTab] = useState<Tab>("adjust");
+  const tab = manual ? "move" : chosen;
 
   return (
     <Stack gap="md">
       <Text size="sm" c="dimmed">
-        {t("buckets.adjust.current", {
-          tf: formatMoney(bucket.target_funds, bucket.currency),
-          ra: formatMoney(bucket.refill_amount, bucket.currency),
-        })}
+        {manual
+          ? t("buckets.adjust.currentManual", {
+              tf: formatMoney(bucket.target_funds, bucket.currency),
+            })
+          : t("buckets.adjust.current", {
+              tf: formatMoney(bucket.target_funds, bucket.currency),
+              ra: formatMoney(bucket.refill_amount, bucket.currency),
+            })}
       </Text>
-      <SegmentedControl
-        fullWidth
-        aria-label={t("buckets.adjust.title")}
-        value={tab}
-        onChange={(v) => {
-          setTab(v === "move" ? "move" : "adjust");
-        }}
-        data={[
-          { value: "adjust", label: t("buckets.adjust.tabs.adjust") },
-          { value: "move", label: t("buckets.adjust.tabs.move") },
-        ]}
-      />
+      {manual ? (
+        <Title order={3} size="h5">
+          {t("buckets.adjust.tabs.move")}
+        </Title>
+      ) : (
+        <SegmentedControl
+          fullWidth
+          aria-label={t("buckets.adjust.title")}
+          value={tab}
+          onChange={(v) => {
+            setTab(v === "move" ? "move" : "adjust");
+          }}
+          data={[
+            { value: "adjust", label: t("buckets.adjust.tabs.adjust") },
+            { value: "move", label: t("buckets.adjust.tabs.move") },
+          ]}
+        />
+      )}
       {tab === "adjust" ? (
         <AdjustForm bucket={bucket} usable={usable} onDone={onDone} />
       ) : (
@@ -322,7 +338,7 @@ function MoveFunds({
   const { t } = useTranslation();
   const refresh = useRefreshMoney();
   const [to, setTo] = useState<string | null>(null);
-  const [mode, setMode] = useState<AdjustMode>("temporary");
+  const [chosen, setMode] = useState<AdjustMode>("temporary");
   const [amount, setAmount] = useState<string | null>(null);
   const money = (a: string) => formatMoney(a, bucket.currency);
 
@@ -336,9 +352,12 @@ function MoveFunds({
     }))
     .filter((g) => g.items.length > 0);
   const target = targets.find((b) => b.id === to);
+  // A Fully manual bucket has no refill amount to move (#76).
+  const onlyTemporary = isFullyManual(bucket) || (target !== undefined && isFullyManual(target));
+  const mode = onlyTemporary ? "temporary" : chosen;
 
   const blocked = changesThisCycle(mode) && !usable;
-  const problem = moveProblem(bucket, mode, amount);
+  const problem = moveProblem(bucket, mode, amount, target);
   const preview =
     target && amount !== null && problem === null && movePreview(bucket, target, mode, amount);
 
@@ -388,15 +407,21 @@ function MoveFunds({
         onChange={setTo}
         searchable
       />
-      <ModeCards
-        label={t("buckets.adjust.mode")}
-        value={mode}
-        hints="moveHints"
-        onChange={(m) => {
-          setMode(m);
-          move.reset();
-        }}
-      />
+      {onlyTemporary ? (
+        <Text size="sm" c="dimmed">
+          {t("buckets.adjust.fullyManualMove")}
+        </Text>
+      ) : (
+        <ModeCards
+          label={t("buckets.adjust.mode")}
+          value={mode}
+          hints="moveHints"
+          onChange={(m) => {
+            setMode(m);
+            move.reset();
+          }}
+        />
+      )}
       <AmountInput
         label={t("buckets.adjust.amount")}
         currency={bucket.currency}
@@ -410,7 +435,12 @@ function MoveFunds({
                   name: bucket.name,
                   amount: money(bucket.refill_amount),
                 })
-              : undefined
+              : problem === "overCapacity" && target
+                ? t("buckets.adjust.overCapacity", {
+                    name: target.name,
+                    amount: money(target.capacity ?? "0"),
+                  })
+                : undefined
         }
         maw={260}
       />

@@ -1,11 +1,12 @@
 // Bucket setup's adjustments (spec §9), kept apart from the page: what an
-// adjustment or a move of funds would do, as the API does it
-// (internal/buckets Adjust and Transfer).
+// adjustment, a move of funds, or adding or removing a Fully manual bucket's
+// funds would do, as the API does it (internal/buckets Adjust and Transfer).
 
-import type { Bucket } from "@/api/accounts";
+import type { Account, Bucket } from "@/api/accounts";
 import type { components } from "@/api/schema";
 
 import { capacityAfter } from "./budget";
+import { accountSummary, isFullyManual } from "./buckets";
 import { addAmounts, canonicalAmount, compareAmounts, subtractAmounts } from "./money";
 
 export type AdjustMode = components["schemas"]["AdjustmentMode"];
@@ -98,9 +99,82 @@ export function moveProblem(
   from: Bucket,
   mode: AdjustMode,
   amount: string | null,
-): "empty" | "notPositive" | "overRefill" | null {
+  to?: Bucket,
+): "empty" | "notPositive" | "overRefill" | "overCapacity" | null {
   if (amount === null) return "empty";
   if (compareAmounts(amount, "0") <= 0) return "notPositive";
   if (mode !== "temporary" && compareAmounts(amount, from.refill_amount) > 0) return "overRefill";
+  if (to && overCapacity(to, addAmounts(to.target_funds, amount))) return "overCapacity";
   return null;
+}
+
+/**
+ * Whether tf is above a Fully manual bucket's capacity; the API refuses it
+ * (internal/buckets checkCapacity).
+ */
+function overCapacity(bucket: Bucket, tf: string): boolean {
+  return (
+    isFullyManual(bucket) && bucket.capacity !== null && compareAmounts(tf, bucket.capacity) > 0
+  );
+}
+
+/** Adding to, or removing from, a Fully manual bucket's funds (#76). */
+export type FundsKind = "add" | "remove";
+
+export interface FundsPreview {
+  tf: Change;
+  /** The Budget Adjustment (BUA) it records, signed. */
+  bua: string;
+  /**
+   * How much more the account's balance lacks afterwards (accountSummary's
+   * short), or 0. Adding more than the account has unallocated is allowed.
+   */
+  short: string;
+}
+
+/**
+ * What adding or removing amount would do: a temporary adjustment to
+ * TF ± amount. buckets are all the user's, for the account's shortage.
+ */
+export function fundsPreview(
+  bucket: Bucket,
+  account: Account | undefined,
+  buckets: Bucket[],
+  kind: FundsKind,
+  amount: string,
+): FundsPreview {
+  const tf = canonicalAmount(bucket.target_funds);
+  const bua = kind === "add" ? canonicalAmount(amount) : subtractAmounts("0", amount);
+  const to = addAmounts(tf, bua);
+  let short = "0.00";
+  if (account) {
+    const after = buckets.map((b) => (b.id === bucket.id ? { ...b, target_funds: to } : b));
+    const more = subtractAmounts(
+      accountSummary(account, after).short,
+      accountSummary(account, buckets).short,
+    );
+    if (compareAmounts(more, "0") > 0) short = more;
+  }
+  return { tf: { from: tf, to }, bua, short };
+}
+
+/** What can still be added before the capacity, or null with no capacity. */
+export function fundsRoom(bucket: Bucket): string | null {
+  if (bucket.capacity === null) return null;
+  const room = subtractAmounts(bucket.capacity, bucket.target_funds);
+  return compareAmounts(room, "0") > 0 ? room : "0.00";
+}
+
+/** Why the funds can't be added or removed, if they can't. */
+export function fundsProblem(
+  bucket: Bucket,
+  kind: FundsKind,
+  amount: string | null,
+): "empty" | "notPositive" | "overCapacity" | "overFunds" | null {
+  if (amount === null) return "empty";
+  if (compareAmounts(amount, "0") <= 0) return "notPositive";
+  if (kind === "add") {
+    return overCapacity(bucket, addAmounts(bucket.target_funds, amount)) ? "overCapacity" : null;
+  }
+  return compareAmounts(amount, bucket.target_funds) > 0 ? "overFunds" : null;
 }

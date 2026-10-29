@@ -43,6 +43,7 @@ import { useCurrentCycles, type Cycle } from "@/api/cycles";
 import { unwrap } from "@/api/errors";
 import { AdjustButton } from "@/components/buckets/AdjustFunds";
 import { BucketHistory } from "@/components/buckets/BucketHistory";
+import { FundsButtons } from "@/components/buckets/FundsButtons";
 import {
   BucketName,
   LeftFunds,
@@ -52,7 +53,7 @@ import {
 import { QueryState } from "@/components/QueryState";
 import i18n from "@/i18n";
 import type { HistoryKind } from "@/lib/bucketHistory";
-import { accountSummary, coverage, refillOf, toneStyle } from "@/lib/buckets";
+import { accountSummary, coverage, isFullyManual, refillOf, toneStyle } from "@/lib/buckets";
 import { cycleRange, daysLeftLabel, isOverdue } from "@/lib/cycles";
 import { compareAmounts, formatMoney } from "@/lib/money";
 
@@ -343,6 +344,7 @@ function BucketTable({
                         {modeText(b, active)}
                       </Text>
                       <RefillButton bucket={b} active={active} />
+                      <FundsButtons bucket={b} active={active} />
                     </Group>
                   </Table.Td>
                   <Table.Td>
@@ -408,19 +410,23 @@ function BucketCard({
             {modeText(bucket, active)}
           </Text>
           {!mobile && <RefillButton bucket={bucket} active={active} />}
+          {!mobile && <FundsButtons bucket={bucket} active={active} />}
         </Group>
         {mobile && <RefillButton bucket={bucket} active={active} full />}
+        {mobile && <FundsButtons bucket={bucket} active={active} full />}
       </Stack>
     </Card>
   );
 }
 
-/** "Manual · not refilled · keeps funds". */
+/** "Manual · not refilled · keeps funds"; a Fully manual bucket is never refilled. */
 function modeText(bucket: Bucket, active: Cycle | null): string {
   const { t } = i18n;
   return [
     refillModeLabel(bucket.refill_mode),
-    active && (bucket.refilled ? t("buckets.refilled") : t("buckets.notRefilled")),
+    active &&
+      !isFullyManual(bucket) &&
+      (bucket.refilled ? t("buckets.refilled") : t("buckets.notRefilled")),
     bucket.keep_funds && t("buckets.keepsFunds"),
   ]
     .filter(Boolean)

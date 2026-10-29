@@ -7,6 +7,8 @@
 //   - Manual: when the user asks (Manual).
 //   - On income: when an income triggers it (OnIncome, called by the
 //     transactions service). Reversing the income undoes it (UndoIncome).
+//   - Fully manual (#76): never. Its funds only change through adjustments,
+//     and it always keeps them.
 //
 // A bucket created in the active cycle with a refill or opening funds counts
 // as refilled in it, whatever its mode (OnCreate, a buckets hook).
@@ -328,7 +330,8 @@ func (s *Service) refill(ctx context.Context, tx pgx.Tx, b sqlc.Bucket, tf decim
 		}
 		r.RefID = pgtype.Text{String: id, Valid: true}
 	}
-	if excess := tf.Add(ref).Sub(buckets.Capacity(b)); b.KeepFunds && excess.IsPositive() {
+	// Only a Fully manual bucket, which is never refilled, has no capacity.
+	if excess := tf.Add(ref).Sub(buckets.Capacity(b).Decimal); b.KeepFunds && excess.IsPositive() {
 		id, err := s.record(ctx, tx, b.UserID, sqlc.TransactionTypeOVF, b.ID, excess.Neg(), at)
 		if err != nil {
 			return fmt.Errorf("overflow of bucket %s: %w", b.ID, err)

@@ -162,6 +162,28 @@ describe("Budget setup", () => {
     expect(screen.getByText(/has run past its end/)).toBeInTheDocument();
   });
 
+  it("leaves out Fully manual buckets, which have no refill amount", async () => {
+    const gifts = bucket({
+      id: "1000000004",
+      name: "Gifts",
+      source_account_id: main.id,
+      refill_mode: "fully_manual",
+      cap_mode: "none",
+      cap_multiplier: null,
+      capacity: null,
+      keep_funds: true,
+      target_funds: "500.00",
+    });
+    apiMock.on("GET /api/v1/buckets", { body: [fun, food, gifts, rent] });
+    renderRoute("/budget");
+    const mainSection = await section("Main account");
+    expect(mainSection.queryByText("Gifts")).not.toBeInTheDocument();
+    expect(
+      mainSection.getByText("1 fully manual bucket isn't budgeted here: it has no refill amount."),
+    ).toBeInTheDocument();
+    expect(mainSection.getByText(`${m("18000.00")} (56.2%)`)).toBeInTheDocument();
+  });
+
   it("discards the changes", async () => {
     renderRoute("/budget");
     await section("Main account");

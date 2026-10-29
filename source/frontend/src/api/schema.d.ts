@@ -642,7 +642,8 @@ export interface paths {
          *     (409 `no_active_cycle`) that hasn't run past its end (409).
          *
          *     A bucket may appear once (400 `invalid_request`); an unknown or
-         *     deleted bucket is 404.
+         *     deleted bucket is 404. A `fully_manual` bucket has no refill amount
+         *     (400 `invalid_request`).
          */
         post: operations["setRefillAmounts"];
         delete?: never;
@@ -686,6 +687,12 @@ export interface paths {
          *     Switching `cap_mode` without the new mode's value uses multiplier 1,
          *     or a fixed amount equal to the refill amount. A fixed capacity below
          *     the refill amount is raised to it.
+         *
+         *     Switching to `fully_manual` (#76) sets the refill amount to 0, turns
+         *     `keep_funds` on and makes a multiplier capacity `none`; TF stays.
+         *     Asking for a refill amount above 0, `keep_funds: false` or the
+         *     multiplier capacity in the same request is 400. Switching away from
+         *     it with no capacity uses multiplier 1.
          */
         patch: operations["updateBucket"];
         trace?: never;
@@ -745,6 +752,10 @@ export interface paths {
          *     A BUA needs an active cycle (409 `no_active_cycle` or
          *     `cycle_overdue`). An adjustment that changes nothing is 400
          *     `no_change`.
+         *
+         *     A `fully_manual` bucket (#76) has no refill amount, so it only takes
+         *     `temporary`: its Add funds and Remove funds. With a fixed capacity,
+         *     `target_funds` can't be above it (400 `invalid_request`).
          */
         post: operations["adjustBucket"];
         delete?: never;
@@ -778,6 +789,10 @@ export interface paths {
          *
          *     Between buckets on the same account, the covered part (CAF) moves
          *     along with TF (spec §7).
+         *
+         *     With a `fully_manual` bucket (#76) on either side, only `temporary`
+         *     is allowed, and the receiving one's TF can't go above a fixed
+         *     capacity (400 `invalid_request`).
          */
         post: operations["transferBucketFunds"];
         delete?: never;
@@ -1365,20 +1380,24 @@ export interface components {
         BucketName: string;
         /**
          * @description How the Bucket Capacity (BC) is set: the refill amount times
-         *     `cap_multiplier`, or the fixed `cap_amount`.
+         *     `cap_multiplier`, or the fixed `cap_amount`. `none` (no capacity) is
+         *     for `fully_manual` buckets only, which can't use `multiplier`.
          * @enum {string}
          */
-        CapMode: "multiplier" | "fixed";
+        CapMode: "multiplier" | "fixed" | "none";
         /**
          * @description 1.00 or more, with at most 2 decimals, as a string.
          * @example 1.50
          */
         CapMultiplier: string;
         /**
-         * @description `auto` refills at cycle start, `manual` with a button once per cycle, `on_income` when income arrives.
+         * @description `auto` refills at cycle start, `manual` with a button once per cycle,
+         *     `on_income` when income arrives. A `fully_manual` bucket (#76) is
+         *     never refilled: its refill amount is 0, it always keeps its funds,
+         *     and they only change through adjustments.
          * @enum {string}
          */
-        RefillMode: "auto" | "manual" | "on_income";
+        RefillMode: "auto" | "manual" | "on_income" | "fully_manual";
         /**
          * @description What a refill does with a negative TF (an overspent bucket, spec §6).
          *     Only used with `keep_funds`; without it the refill always sets TF to
@@ -1403,8 +1422,8 @@ export interface components {
             cap_multiplier: (string & components["schemas"]["CapMultiplier"]) | null;
             /** @description Set in the fixed mode, otherwise null. */
             cap_amount: (string & components["schemas"]["Amount"]) | null;
-            /** @description The Bucket Capacity (BC), never below the refill amount. */
-            capacity: components["schemas"]["Amount"];
+            /** @description The Bucket Capacity (BC), never below the refill amount. Null with the `none` capacity mode. */
+            capacity: (string & components["schemas"]["Amount"]) | null;
             /** @description Target Funds (TF), the sum of the bucket's transactions. */
             target_funds: components["schemas"]["Amount"];
             /**
@@ -1475,7 +1494,7 @@ export interface components {
             importance: number;
             /** @description Recorded now as an Opening Funds (OPF) transaction when not 0. Needs an active cycle, and counts as the bucket's refill in it (spec §6), so no refill later in the cycle changes the amount. */
             opening_funds?: components["schemas"]["Amount"];
-            /** @description Refill the bucket now in the active cycle (spec §6), whatever its refill mode. It counts as the bucket's refill in that cycle. Needs an active cycle; can't be combined with `opening_funds`. */
+            /** @description Refill the bucket now in the active cycle (spec §6), whatever its refill mode except `fully_manual`, which is never refilled. It counts as the bucket's refill in that cycle. Needs an active cycle; can't be combined with `opening_funds`. */
             refill?: boolean;
         };
         /**

@@ -111,7 +111,8 @@
     "refillModes": {
       "auto": "Automatisk, ved starten av hver periode",
       "manual": "Manuelt",
-      "on_income": "Ved inntekt"
+      "on_income": "Ved inntekt",
+      "fully_manual": "Helt manuelt, midler legges til og fjernes for hånd"
     },
     "negativeTf": "Overforbrukte bøtter med Behold midler",
     "negativeTfHint": "Hva nye bøtter med Behold midler gjør ved påfyllingen etter et overforbruk.",
@@ -301,7 +302,8 @@
     "modes": {
       "auto": "Automatisk",
       "manual": "Manuelt",
-      "on_income": "Ved inntekt"
+      "on_income": "Ved inntekt",
+      "fully_manual": "Helt manuelt"
     },
     "layout": "Visning",
     "listView": "Listevisning",
@@ -395,7 +397,10 @@
       "overRefill": "Påfyllingsbeløpet til {{name}} er bare {{amount}}.",
       "enterAmount": "Skriv inn et beløp over 0.",
       "noTargets": "Det finnes ingen annen bøtte i {{currency}} å flytte midler til.",
-      "pickBucket": "Velg en bøtte."
+      "pickBucket": "Velg en bøtte.",
+      "currentManual": "Har {{tf}} · helt manuelt",
+      "overCapacity": "{{name}} kan romme høyst {{amount}}.",
+      "fullyManualMove": "En helt manuell bøtte har ikke noe påfyllingsbeløp, så bare det som er igjen, flyttes."
     },
     "history": {
       "button": "Transaksjoner",
@@ -419,6 +424,24 @@
       "tfAfter": "Igjen {{amount}}",
       "to": "Til {{name}}",
       "from": "Fra {{name}}"
+    },
+    "funds": {
+      "add": "Legg til midler",
+      "remove": "Fjern midler",
+      "addName": "Legg til midler i {{name}}",
+      "removeName": "Fjern midler fra {{name}}",
+      "addTitle": "Legg til midler: {{name}}",
+      "removeTitle": "Fjern midler: {{name}}",
+      "addHint": "Tas fra de ufordelte pengene på {{account}} ({{amount}}).",
+      "removeHint": "Går tilbake til de ufordelte pengene på {{account}}.",
+      "amount": "Beløp",
+      "preview": "{{name}}: {{from}} → {{to}}, en bøttejustering på {{amount}}",
+      "short": "{{account}} har ikke så mye ufordelt: saldoen blir {{amount}} for lite til det som er igjen i bøttene.",
+      "overCapacity": "Kapasiteten er {{capacity}}, så du kan legge til høyst {{amount}}.",
+      "full": "{{name}} er full, med en kapasitet på {{amount}}.",
+      "overFunds": "{{name}} har bare {{amount}}.",
+      "added": "La til {{amount}} i {{name}}.",
+      "removed": "Fjernet {{amount}} fra {{name}}."
     }
   },
   "bucketSetup": {
@@ -481,7 +504,19 @@
     "deleteSettles": "Den er overforbrukt med {{amount}}, som tas fra de ufordelte pengene på {{account}}.",
     "deleteNeedsCycle": "Å frigjøre det som er igjen, krever en aktiv periode. Start eller forleng en først.",
     "deleteBucket": "Slett bøtta",
-    "deleted": "{{name}} er slettet."
+    "deleted": "{{name}} er slettet.",
+    "refillModeHints": {
+      "auto": "Fylles på ved starten av hver periode.",
+      "manual": "Fylles på med en knapp under Bøtter, én gang per periode.",
+      "on_income": "Fylles på når en inntekt utløser det, én gang per periode.",
+      "fully_manual": "Fylles aldri på: legg til og fjern midler for hånd under Bøtter. Den beholder midlene fra periode til periode."
+    },
+    "noCap": "Ingen grense",
+    "noCapHint": "Bøtta kan romme et hvilket som helst beløp.",
+    "capacityHintManual": "Det meste bøtta kan romme: du kan ikke legge til midler over dette.",
+    "startZeroHintManual": "Legg til midler under Bøtter når du trenger dem.",
+    "openingHintManual": "Det bøtta allerede har. Registreres som startmidler.",
+    "overCapacity": "Kapasiteten er {{amount}}."
   },
   "budgetSetup": {
     "intro": "Planlegg påfyllene i hver periode mot inntekten du forventer på hver konto.",
@@ -518,7 +553,9 @@
       "short": "Kontoen mangler {{amount}} etterpå.",
       "covered": "Kontoen dekker fortsatt bøttene sine.",
       "apply": "Lagre og endre denne perioden"
-    }
+    },
+    "fullyManualSkipped_one": "{{count}} helt manuell bøtte er ikke med her: den har ikke noe påfyllingsbeløp.",
+    "fullyManualSkipped_other": "{{count}} helt manuelle bøtter er ikke med her: de har ikke noe påfyllingsbeløp."
   },
   "newTransaction": {
     "type": "Type",

@@ -347,7 +347,7 @@ func toAPIBucket(b buckets.Bucket) api.Bucket {
 		CapMode:               api.CapMode(b.CapMode),
 		CapMultiplier:         nullable.NewNullNullable[string](),
 		CapAmount:             nullable.NewNullNullable[string](),
-		Capacity:              b.Capacity.StringFixed(money.Places),
+		Capacity:              nullable.NewNullNullable[string](),
 		TargetFunds:           b.TargetFunds.StringFixed(money.Places),
 		CurrentAvailableFunds: b.Caf.StringFixed(money.Places),
 		KeepFunds:             b.KeepFunds,
@@ -364,6 +364,9 @@ func toAPIBucket(b buckets.Bucket) api.Bucket {
 	}
 	if b.CapAmount.Valid {
 		out.CapAmount.Set(b.CapAmount.Decimal.StringFixed(money.Places))
+	}
+	if b.Capacity.Valid {
+		out.Capacity.Set(b.Capacity.Decimal.StringFixed(money.Places))
 	}
 	return out
 }

@@ -289,3 +289,106 @@ describe("Bucket setup", () => {
     expect(screen.getByRole("button", { name: "New bucket" })).toBeDisabled();
   });
 });
+
+describe("Bucket setup, Fully manual", () => {
+  it("creates one without a refill amount, with a fixed capacity or none", async () => {
+    apiMock.on("POST /api/v1/buckets", (req) => ({
+      status: 201,
+      body: bucket({
+        id: "1000000003",
+        name: "Gifts",
+        source_account_id: main.id,
+        ...(req.body as object),
+      }),
+    }));
+    renderRoute("/buckets/setup?new");
+    const form = within(await screen.findByRole("form", { name: "New bucket" }));
+    await userEvent.type(form.getByRole("textbox", { name: /Name/ }), "Gifts");
+    await pick(/Source account/, "Main account");
+    await userEvent.click(form.getByRole("radio", { name: "Fully manual" }));
+
+    // No refill, so no refill amount, Keep funds, overspend or overflow setting.
+    expect(form.queryByRole("textbox", { name: /Refill amount/ })).not.toBeInTheDocument();
+    expect(form.queryByRole("checkbox", { name: /Keep funds/ })).not.toBeInTheDocument();
+    expect(form.queryByRole("combobox", { name: /Overflow goes to/ })).not.toBeInTheDocument();
+    expect(form.queryByRole("radio", { name: /Refill now/ })).not.toBeInTheDocument();
+    expect(form.getByRole("radio", { name: "Start at 0" })).toBeChecked();
+    expect(form.getByRole("radio", { name: "No cap" })).toBeChecked();
+    expect(form.queryByRole("radio", { name: "Multiplier" })).not.toBeInTheDocument();
+    expect(form.getByText("The bucket can hold any amount.")).toBeInTheDocument();
+
+    await userEvent.click(form.getByRole("radio", { name: "Fixed amount" }));
+    await userEvent.type(form.getByRole("textbox", { name: "Capacity amount" }), "1000");
+    await userEvent.click(form.getByRole("radio", { name: "Set starting funds" }));
+    await userEvent.type(form.getByRole("textbox", { name: "Opening funds" }), "1500");
+    await userEvent.click(form.getByRole("button", { name: "Create bucket" }));
+    expect(form.getByText(`The capacity is ${m("1000.00")}.`)).toBeInTheDocument();
+    await userEvent.clear(form.getByRole("textbox", { name: "Opening funds" }));
+    await userEvent.type(form.getByRole("textbox", { name: "Opening funds" }), "200");
+    await userEvent.click(form.getByRole("button", { name: "Create bucket" }));
+
+    expect(await screen.findByText("Gifts created.")).toBeInTheDocument();
+    expect(apiMock.calls("POST /api/v1/buckets")[0]?.body).toEqual({
+      name: "Gifts",
+      source_account_id: "1234",
+      priority: false,
+      importance: 5,
+      refill_amount: "0.00",
+      cap_mode: "fixed",
+      cap_amount: "1000.00",
+      refill_mode: "fully_manual",
+      keep_funds: true,
+      negative_tf: "debt",
+      overflow_destination: "unallocated",
+      opening_funds: "200.00",
+    });
+  });
+
+  it("switches a bucket to it and back", async () => {
+    apiMock.on("PATCH /api/v1/buckets/1000000001", (req) => ({
+      body: { ...groceries, ...(req.body as object) },
+    }));
+    renderRoute("/buckets/setup?edit=1000000001");
+    const form = within(await screen.findByRole("form", { name: "Groceries" }));
+    await userEvent.click(form.getByRole("radio", { name: "Fully manual" }));
+    expect(form.getByRole("radio", { name: "No cap" })).toBeChecked();
+    // Back again: the refill amount and multiplier are as they were.
+    await userEvent.click(form.getByRole("radio", { name: "Auto" }));
+    expect(form.getByRole("radio", { name: "Multiplier" })).toBeChecked();
+    expect(form.getByRole("textbox", { name: /Refill amount/ })).toHaveValue("4,000.00");
+    expect(form.getByRole("button", { name: "Save" })).toBeDisabled();
+
+    await userEvent.click(form.getByRole("radio", { name: "Fully manual" }));
+    await userEvent.click(form.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("Groceries saved.")).toBeInTheDocument();
+    expect(apiMock.calls("PATCH /api/v1/buckets/1000000001")[0]?.body).toEqual({
+      refill_amount: "0.00",
+      cap_mode: "none",
+      refill_mode: "fully_manual",
+      keep_funds: true,
+    });
+  });
+
+  it("lists it by its mode instead of a refill amount", async () => {
+    apiMock.on("GET /api/v1/buckets", {
+      body: [
+        groceries,
+        bucket({
+          id: "1000000003",
+          name: "Gifts",
+          source_account_id: main.id,
+          refill_mode: "fully_manual",
+          cap_mode: "none",
+          cap_multiplier: null,
+          capacity: null,
+          keep_funds: true,
+        }),
+      ],
+    });
+    renderRoute("/buckets/setup");
+    const list = within(await screen.findByRole("navigation", { name: "Main account" }));
+    expect(list.getByRole("button", { name: /^Gifts \(#1000000003\)/ })).toHaveTextContent(
+      "Fully manual",
+    );
+  });
+});

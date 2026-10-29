@@ -102,8 +102,8 @@ func TestCreate(t *testing.T) {
 		b.Importance != buckets.DefaultImportance || b.KeepFunds || b.Priority {
 		t.Errorf("defaults %+v", b)
 	}
-	if !b.Capacity.Equal(dec("4000")) || !b.TargetFunds.IsZero() || !b.Caf.IsZero() {
-		t.Errorf("BC %s TF %s CAF %s", b.Capacity, b.TargetFunds, b.Caf)
+	if !b.Capacity.Decimal.Equal(dec("4000")) || !b.TargetFunds.IsZero() || !b.Caf.IsZero() {
+		t.Errorf("BC %s TF %s CAF %s", b.Capacity.Decimal, b.TargetFunds, b.Caf)
 	}
 	// No opening funds: nothing recorded, and no cycle needed.
 	if n := e.count(t, sqlc.TransactionTypeOPF); n != 0 {
@@ -111,7 +111,7 @@ func TestCreate(t *testing.T) {
 	}
 
 	got := e.get(t, b.ID)
-	if got.Name != b.Name || !got.Capacity.Equal(b.Capacity) {
+	if got.Name != b.Name || !got.Capacity.Decimal.Equal(b.Capacity.Decimal) {
 		t.Errorf("get %+v", got)
 	}
 
@@ -167,16 +167,16 @@ func TestCreateSource(t *testing.T) {
 func TestCapacity(t *testing.T) {
 	e := setup(t)
 	b := e.create(t, buckets.New{Name: "Fuel", RefillAmount: dec("1000.05"), CapMultiplier: dec("1.5")})
-	if !b.Capacity.Equal(dec("1500.08")) {
-		t.Errorf("BC %s, want 1000.05 × 1.5 rounded = 1500.08", b.Capacity)
+	if !b.Capacity.Decimal.Equal(dec("1500.08")) {
+		t.Errorf("BC %s, want 1000.05 × 1.5 rounded = 1500.08", b.Capacity.Decimal)
 	}
 	b = e.create(t, buckets.New{Name: "Rent", RefillAmount: dec("9000"), CapMode: sqlc.BucketCapModeFixed, CapAmount: dec("8000")})
-	if !b.CapAmount.Decimal.Equal(dec("9000")) || !b.Capacity.Equal(dec("9000")) || b.CapMultiplier.Valid {
-		t.Errorf("fixed BC %v / %s, want raised to RA 9000", b.CapAmount, b.Capacity)
+	if !b.CapAmount.Decimal.Equal(dec("9000")) || !b.Capacity.Decimal.Equal(dec("9000")) || b.CapMultiplier.Valid {
+		t.Errorf("fixed BC %v / %s, want raised to RA 9000", b.CapAmount, b.Capacity.Decimal)
 	}
 	b = e.create(t, buckets.New{Name: "Gifts", RefillAmount: dec("500"), CapMode: sqlc.BucketCapModeFixed, CapAmount: dec("2000")})
-	if !b.Capacity.Equal(dec("2000")) {
-		t.Errorf("fixed BC %s, want 2000", b.Capacity)
+	if !b.Capacity.Decimal.Equal(dec("2000")) {
+		t.Errorf("fixed BC %s, want 2000", b.Capacity.Decimal)
 	}
 }
 
@@ -264,7 +264,7 @@ func TestUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Name != "Car" || !got.Capacity.Equal(dec("2400")) || !got.KeepFunds || got.RefillMode != sqlc.RefillModeManual ||
+	if got.Name != "Car" || !got.Capacity.Decimal.Equal(dec("2400")) || !got.KeepFunds || got.RefillMode != sqlc.RefillModeManual ||
 		!got.Caf.Equal(dec("700")) {
 		t.Errorf("updated %+v", got)
 	}
@@ -283,16 +283,16 @@ func TestUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.CapMultiplier.Valid || !got.Capacity.Equal(dec("1200")) {
-		t.Errorf("switched to fixed: %v / %s, want BC = RA", got.CapMultiplier, got.Capacity)
+	if got.CapMultiplier.Valid || !got.Capacity.Decimal.Equal(dec("1200")) {
+		t.Errorf("switched to fixed: %v / %s, want BC = RA", got.CapMultiplier, got.Capacity.Decimal)
 	}
 	// A fixed amount below RA is raised to it.
-	if got, err = e.svc.Update(t.Context(), e.user, b.ID, buckets.Changes{CapAmount: ptr(dec("100"))}); err != nil || !got.Capacity.Equal(dec("1200")) {
-		t.Errorf("fixed below RA: %v, BC %s", err, got.Capacity)
+	if got, err = e.svc.Update(t.Context(), e.user, b.ID, buckets.Changes{CapAmount: ptr(dec("100"))}); err != nil || !got.Capacity.Decimal.Equal(dec("1200")) {
+		t.Errorf("fixed below RA: %v, BC %s", err, got.Capacity.Decimal)
 	}
 	// Raising RA above the fixed amount raises BC.
-	if got, err = e.svc.Update(t.Context(), e.user, b.ID, buckets.Changes{RefillAmount: ptr(dec("1500"))}); err != nil || !got.Capacity.Equal(dec("1500")) {
-		t.Errorf("RA above fixed BC: %v, BC %s", err, got.Capacity)
+	if got, err = e.svc.Update(t.Context(), e.user, b.ID, buckets.Changes{RefillAmount: ptr(dec("1500"))}); err != nil || !got.Capacity.Decimal.Equal(dec("1500")) {
+		t.Errorf("RA above fixed BC: %v, BC %s", err, got.Capacity.Decimal)
 	}
 	if _, err := e.svc.Update(t.Context(), e.user, b.ID, buckets.Changes{CapMultiplier: ptr(dec("2"))}); !errors.Is(err, buckets.ErrInvalid) {
 		t.Errorf("multiplier in fixed mode: %v", err)
@@ -328,11 +328,11 @@ func TestSetRefillAmounts(t *testing.T) {
 		t.Fatalf("returned %+v, want rent then food", got)
 	}
 	// Future mode: RA and BC change, TF doesn't, and nothing is recorded.
-	if !got[0].RefillAmount.Equal(dec("800")) || !got[0].Capacity.Equal(dec("800")) {
-		t.Errorf("rent RA %s BC %s, want 800 with the fixed BC raised", got[0].RefillAmount, got[0].Capacity)
+	if !got[0].RefillAmount.Equal(dec("800")) || !got[0].Capacity.Decimal.Equal(dec("800")) {
+		t.Errorf("rent RA %s BC %s, want 800 with the fixed BC raised", got[0].RefillAmount, got[0].Capacity.Decimal)
 	}
-	if !got[1].RefillAmount.Equal(dec("1200")) || !got[1].Capacity.Equal(dec("2400")) || !got[1].TargetFunds.Equal(dec("400")) {
-		t.Errorf("food RA %s BC %s TF %s, want 1200, 2400, 400", got[1].RefillAmount, got[1].Capacity, got[1].TargetFunds)
+	if !got[1].RefillAmount.Equal(dec("1200")) || !got[1].Capacity.Decimal.Equal(dec("2400")) || !got[1].TargetFunds.Equal(dec("400")) {
+		t.Errorf("food RA %s BC %s TF %s, want 1200, 2400, 400", got[1].RefillAmount, got[1].Capacity.Decimal, got[1].TargetFunds)
 	}
 	if c := e.count(t, sqlc.TransactionTypeBUA); c != txs {
 		t.Errorf("%d BUA, want %d", c, txs)
@@ -444,8 +444,8 @@ func TestAdjust(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !got.RefillAmount.Equal(dec("1500")) || !got.Capacity.Equal(dec("1500")) || e.tf(t, b.ID) != "0.00" || e.count(t, sqlc.TransactionTypeBUA) != 0 {
-		t.Errorf("future: RA %s BC %s TF %s, want 1500, the fixed BC raised, TF 0 and no BUA", got.RefillAmount, got.Capacity, e.tf(t, b.ID))
+	if !got.RefillAmount.Equal(dec("1500")) || !got.Capacity.Decimal.Equal(dec("1500")) || e.tf(t, b.ID) != "0.00" || e.count(t, sqlc.TransactionTypeBUA) != 0 {
+		t.Errorf("future: RA %s BC %s TF %s, want 1500, the fixed BC raised, TF 0 and no BUA", got.RefillAmount, got.Capacity.Decimal, e.tf(t, b.ID))
 	}
 
 	e.startCycle(t)
@@ -516,9 +516,9 @@ func TestTransfer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !from.RefillAmount.Equal(dec("800")) || !to.RefillAmount.Equal(dec("400")) || !to.Capacity.Equal(dec("400")) ||
+	if !from.RefillAmount.Equal(dec("800")) || !to.RefillAmount.Equal(dec("400")) || !to.Capacity.Decimal.Equal(dec("400")) ||
 		e.tf(t, fun.ID) != "150.00" || e.count(t, sqlc.TransactionTypeBAT) != 1 {
-		t.Errorf("future: RA %s and %s (BC %s), want 800 and 400 with the fixed BC raised, TF unchanged", from.RefillAmount, to.RefillAmount, to.Capacity)
+		t.Errorf("future: RA %s and %s (BC %s), want 800 and 400 with the fixed BC raised, TF unchanged", from.RefillAmount, to.RefillAmount, to.Capacity.Decimal)
 	}
 	if from, to, err = move(fun.ID, food.ID, buckets.ModeBoth, "100"); err != nil {
 		t.Fatal(err)
