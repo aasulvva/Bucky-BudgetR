@@ -16,6 +16,32 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.05.00",
+    date: "2026-10-29",
+    title: {
+      en: "Budget setup can change this cycle too",
+      nb: "Budsjettoppsett kan endre denne perioden også",
+      nn: "Budsjettoppsett kan endre denne perioden òg",
+    },
+    changes: {
+      en: [
+        "Turn on Also change this cycle when saving Budget setup, and each bucket already refilled this cycle gets the same change in what's left as in its refill amount.",
+        "Buckets still waiting for their refill get the new amount when they're refilled.",
+        "Before saving, a summary shows each bucket's change and whether the account still covers its buckets.",
+      ],
+      nb: [
+        "Slå på Endre også denne perioden når du lagrer Budsjettoppsett, så får hver bøtte som alt er fylt på denne perioden, samme endring i det som er igjen som i påfyllingsbeløpet.",
+        "Bøtter som venter på påfyll, får det nye beløpet når de fylles på.",
+        "Før du lagrer, viser en oversikt endringen for hver bøtte og om kontoen fortsatt dekker bøttene sine.",
+      ],
+      nn: [
+        "Slå på Endre òg denne perioden når du lagrar Budsjettoppsett, så får kvar bøtte som alt er fylt på denne perioden, same endring i det som er att som i påfyllingsbeløpet.",
+        "Bøtter som ventar på påfyll, får det nye beløpet når dei vert fylte på.",
+        "Før du lagrar, viser ei oversikt endringa for kvar bøtte og om kontoen framleis dekkjer bøttene sine.",
+      ],
+    },
+  },
+  {
     version: "v1.04.00",
     date: "2026-10-29",
     title: {

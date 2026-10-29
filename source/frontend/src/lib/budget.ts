@@ -143,3 +143,64 @@ export function budgetChanges(
   }
   return out;
 }
+
+/** A bucket in the save, when it changes this cycle too (#81). */
+export interface CycleRow {
+  bucket: Bucket;
+  ra: { from: string; to: string };
+  /** The BUA: the change in RA; null when the bucket isn't refilled yet this cycle. */
+  change: string | null;
+  tf: { from: string; to: string };
+}
+
+export interface CycleAccount {
+  account: Account;
+  rows: CycleRow[];
+  /** How much TF the account's balance doesn't cover afterwards, or 0.00. */
+  short: string;
+}
+
+/**
+ * What saving with "Also change this cycle" does, per account: each refilled
+ * bucket's TF moves by its change in RA; one not refilled yet only gets the
+ * RA, which its refill then uses. This mirrors SetRefillAmounts in
+ * internal/buckets; change both together.
+ */
+export function cycleChanges(
+  changes: BudgetChanges,
+  accounts: Account[],
+  buckets: Bucket[],
+): CycleAccount[] {
+  const rows = new Map<string, CycleRow>();
+  for (const { bucket_id, refill_amount } of changes.ras) {
+    const bucket = buckets.find((b) => b.id === bucket_id);
+    if (!bucket) continue;
+    const from = canonicalAmount(bucket.refill_amount);
+    const change = bucket.refilled ? subtractAmounts(refill_amount, from) : null;
+    const tf = canonicalAmount(bucket.target_funds);
+    rows.set(bucket.id, {
+      bucket,
+      ra: { from, to: canonicalAmount(refill_amount) },
+      change,
+      tf: { from: tf, to: change === null ? tf : addAmounts(tf, change) },
+    });
+  }
+  return accounts.flatMap((account) => {
+    const own = buckets.filter((b) => b.source_account_id === account.id);
+    const changed = own.flatMap((b) => rows.get(b.id) ?? []);
+    if (changed.length === 0) return [];
+    // As accountSummary (lib/buckets.ts): positive TFs the balance doesn't cover.
+    const tfs = own.map((b) => rows.get(b.id)?.tf.to ?? b.target_funds);
+    const missing = subtractAmounts(
+      addAmounts(...tfs.filter((tf) => compareAmounts(tf, "0") > 0)),
+      account.balance,
+    );
+    return [
+      {
+        account,
+        rows: changed,
+        short: compareAmounts(missing, "0") > 0 ? missing : "0.00",
+      },
+    ];
+  });
+}

@@ -7,6 +7,7 @@ import {
   accountBudget,
   budgetChanges,
   capacityAfter,
+  cycleChanges,
   draftIncome,
   draftRefill,
   shareOf,
@@ -142,5 +143,68 @@ describe("budgetChanges", () => {
         invalid: true,
       });
     }
+  });
+});
+
+describe("cycleChanges", () => {
+  const account1 = account({ id: "1234", name: "Main", balance: "1000.00" });
+  const refilled = bucket({
+    id: "1000000011",
+    name: "Refilled",
+    source_account_id: account1.id,
+    refill_amount: "500.00",
+    target_funds: "300.00",
+    refilled: true,
+  });
+  const waiting = bucket({
+    id: "1000000012",
+    name: "Waiting",
+    source_account_id: account1.id,
+    refill_amount: "400.00",
+    target_funds: "0.00",
+  });
+  const other = bucket({
+    id: "1000000013",
+    name: "Other",
+    source_account_id: account1.id,
+    target_funds: "200.00",
+  });
+  const all = [refilled, waiting, other];
+  const save = (...ras: [string, string][]) =>
+    cycleChanges(
+      budgetChanges({ incomes: {}, ras: Object.fromEntries(ras) }, [account1], all),
+      [account1],
+      all,
+    );
+
+  it("moves a refilled bucket's TF by the change, and leaves a waiting one", () => {
+    const [main] = save([refilled.id, "900"], [waiting.id, "100"]);
+    expect(main?.rows).toEqual([
+      {
+        bucket: refilled,
+        ra: { from: "500.00", to: "900.00" },
+        change: "400.00",
+        tf: { from: "300.00", to: "700.00" },
+      },
+      {
+        bucket: waiting,
+        ra: { from: "400.00", to: "100.00" },
+        change: null,
+        tf: { from: "0.00", to: "0.00" },
+      },
+    ]);
+    // 700 + 200 of TF against a balance of 1 000.
+    expect(main?.short).toBe("0.00");
+  });
+
+  it("says what the balance doesn't cover, ignoring overspent buckets", () => {
+    expect(save([refilled.id, "1400"])[0]?.short).toBe("400.00");
+    // TF below 0 counts as nothing, as on Buckets.
+    expect(save([refilled.id, "100"])[0]?.rows[0]?.tf.to).toBe("-100.00");
+    expect(save([refilled.id, "100"])[0]?.short).toBe("0.00");
+  });
+
+  it("leaves out accounts without changes", () => {
+    expect(save()).toEqual([]);
   });
 });

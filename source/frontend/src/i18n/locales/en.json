@@ -505,7 +505,20 @@
     "saved": "Budget saved.",
     "leaveQuestion": "You have changes that aren't saved. Leave without saving?",
     "leave": "Leave without saving",
-    "stay": "Stay"
+    "stay": "Stay",
+    "thisCycleNote": "Saved refill amounts apply from the next refill, and what's left in the refilled buckets this cycle moves by the same amount.",
+    "thisCycle": "Also change this cycle",
+    "thisCycleHint": "Each bucket already refilled this cycle gets the same change in what's left. Buckets still waiting for their refill get the new amount then.",
+    "thisCycleOverdue": "The active cycle has run past its end. End or extend it on Cycles first.",
+    "confirm": {
+      "title": "Change this cycle too?",
+      "intro": "The new refill amounts are saved, and what's left this cycle changes like this:",
+      "tf": "{{from}} → {{to}} ({{change}})",
+      "waiting": "Not refilled yet; gets the new amount at its refill",
+      "short": "The account is short by {{amount}} afterwards.",
+      "covered": "The account still covers its buckets.",
+      "apply": "Save and change this cycle"
+    }
   },
   "newTransaction": {
     "type": "Type",

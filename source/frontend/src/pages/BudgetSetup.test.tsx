@@ -1,9 +1,10 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import { addDays, endAtFor, today } from "@/lib/cycles";
 import { formatMoney } from "@/lib/money";
 import { apiMock, problem, testUser } from "@/test/api";
-import { account, bucket } from "@/test/fixtures";
+import { account, bucket, cycle } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
 
@@ -95,9 +96,70 @@ describe("Budget setup", () => {
       { expected_income: "500.00" },
     ]);
     expect(apiMock.calls("POST /api/v1/buckets/refill-amounts").map((c) => c.body)).toEqual([
-      { items: [{ bucket_id: rent.id, refill_amount: "11000.00" }] },
+      { items: [{ bucket_id: rent.id, refill_amount: "11000.00" }], this_cycle: false },
     ]);
     expect(saveBar()).not.toBeInTheDocument();
+  });
+
+  it("also changes this cycle, after showing what it does", async () => {
+    apiMock.on("GET /api/v1/accounts", { body: [{ ...main, balance: "2800.00" }] });
+    apiMock.on("GET /api/v1/buckets", { body: [{ ...food, refilled: true }, rent] });
+    apiMock.on("POST /api/v1/buckets/refill-amounts", { body: { items: [] } });
+    renderRoute("/budget");
+    await section("Main account");
+    await userEvent.clear(refill("Groceries"));
+    await userEvent.type(refill("Groceries"), "6500");
+    await userEvent.clear(refill("Rent"));
+    await userEvent.type(refill("Rent"), "11000");
+    const bar = within(saveBar() ?? document.body);
+    expect(bar.getByText(/doesn't change/)).toBeInTheDocument();
+    await userEvent.click(bar.getByRole("switch", { name: /Also change this cycle/ }));
+    expect(bar.getByText(/moves by the same amount/)).toBeInTheDocument();
+
+    await userEvent.click(bar.getByRole("button", { name: "Save" }));
+    const dialog = within(await screen.findByRole("dialog", { name: "Change this cycle too?" }));
+    const listed = within(dialog.getByRole("region", { name: "Main account" }));
+    // Groceries was refilled: TF moves by +500. Rent waits for its refill.
+    expect(
+      listed.getByText(`${m("2500.00")} → ${m("3000.00")} (+${m("500.00")})`),
+    ).toBeInTheDocument();
+    expect(listed.getByText(/Not refilled yet/)).toBeInTheDocument();
+    expect(
+      listed.getByText(`The account is short by ${m("200.00")} afterwards.`),
+    ).toBeInTheDocument();
+    expect(apiMock.calls("POST /api/v1/buckets/refill-amounts")).toHaveLength(0);
+
+    await userEvent.click(dialog.getByRole("button", { name: "Save and change this cycle" }));
+    expect(await screen.findByText("Budget saved.")).toBeInTheDocument();
+    expect(apiMock.calls("POST /api/v1/buckets/refill-amounts").map((c) => c.body)).toEqual([
+      {
+        items: [
+          { bucket_id: food.id, refill_amount: "6500.00" },
+          { bucket_id: rent.id, refill_amount: "11000.00" },
+        ],
+        this_cycle: true,
+      },
+    ]);
+  });
+
+  it("offers this cycle only while one is running", async () => {
+    apiMock.on("GET /api/v1/cycles/active", { body: { active: null, next: null } });
+    const { unmount } = renderRoute("/budget");
+    await section("Main account");
+    await userEvent.clear(refill("Rent"));
+    await userEvent.type(refill("Rent"), "11000");
+    expect(screen.queryByRole("switch")).not.toBeInTheDocument();
+    unmount();
+
+    apiMock.on("GET /api/v1/cycles/active", {
+      body: { active: cycle({ end_at: endAtFor(addDays(today(), -2)) }), next: null },
+    });
+    renderRoute("/budget");
+    await section("Main account");
+    await userEvent.clear(refill("Rent"));
+    await userEvent.type(refill("Rent"), "11000");
+    expect(await screen.findByRole("switch", { name: /Also change this cycle/ })).toBeDisabled();
+    expect(screen.getByText(/has run past its end/)).toBeInTheDocument();
   });
 
   it("discards the changes", async () => {

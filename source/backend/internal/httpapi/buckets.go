@@ -237,7 +237,8 @@ func (s *server) SetRefillAmounts(ctx context.Context, req api.SetRefillAmountsR
 			return nil, err
 		}
 	}
-	list, err := svc.SetRefillAmounts(ctx, sessionFrom(ctx).User.ID, items)
+	thisCycle := req.Body.ThisCycle != nil && *req.Body.ThisCycle
+	list, err := svc.SetRefillAmounts(ctx, sessionFrom(ctx).User.ID, items, thisCycle)
 	if err != nil {
 		return nil, bucketError(err)
 	}

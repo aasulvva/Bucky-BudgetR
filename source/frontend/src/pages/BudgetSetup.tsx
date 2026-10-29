@@ -7,6 +7,7 @@ import {
   Modal,
   Progress,
   Stack,
+  Switch,
   Table,
   Text,
   Title,
@@ -27,15 +28,19 @@ import {
   type Bucket,
 } from "@/api/accounts";
 import { api } from "@/api/client";
+import { useCurrentCycles } from "@/api/cycles";
 import { unwrap } from "@/api/errors";
 import { AmountInput } from "@/components/AmountInput";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { QueryState } from "@/components/QueryState";
+import { ResponsiveModal } from "@/components/ResponsiveModal";
+import { signedMoney } from "@/components/transactions/lookups";
 import {
   EMPTY_DRAFT,
   accountBudget,
   budgetChanges,
   capacityAfter,
+  cycleChanges,
   draftIncome,
   draftRefill,
   incomeProblem,
@@ -43,15 +48,18 @@ import {
   shareOf,
   type BudgetChanges,
   type BudgetDraft,
+  type CycleAccount,
 } from "@/lib/budget";
+import { isOverdue } from "@/lib/cycles";
 import { getLocale } from "@/lib/locale";
 import { compareAmounts, formatMoney, subtractAmounts } from "@/lib/money";
 
 /**
  * Budget setup (spec §9): every bucket by source account, the income
  * expected on each account per cycle, and the refill amounts against it.
- * Saving sets the refill amounts all at once (the *Future* adjustment: what's
- * left this cycle stays).
+ * Saving sets the refill amounts all at once: the *Future* adjustment, where
+ * what's left this cycle stays, or with "Also change this cycle" (#81) the
+ * refilled buckets' TF moves by the same amount.
  */
 export default function BudgetSetup() {
   const { t } = useTranslation();
@@ -88,9 +96,15 @@ function Budget({ accounts, buckets }: { accounts: Account[]; buckets: Bucket[] 
   const [draft, setDraft] = useState<BudgetDraft>(EMPTY_DRAFT);
   const changes = budgetChanges(draft, accounts, buckets);
   const dirty = changes.count > 0;
+  const active = useCurrentCycles().data?.active ?? null;
+  const [thisCycleOn, setThisCycle] = useState(false);
+  // Only with RA changes in a cycle that's still running.
+  const canChangeCycle = active !== null && !isOverdue(active);
+  const thisCycle = thisCycleOn && canChangeCycle && changes.ras.length > 0;
+  const [confirming, setConfirming] = useState(false);
 
   const save = useMutation({
-    mutationFn: async (c: BudgetChanges) => {
+    mutationFn: async ({ c, thisCycle }: { c: BudgetChanges; thisCycle: boolean }) => {
       for (const income of c.incomes) {
         await unwrap(
           api.PATCH("/api/v1/accounts/{accountId}", {
@@ -100,13 +114,19 @@ function Budget({ accounts, buckets }: { accounts: Account[]; buckets: Bucket[] 
         );
       }
       if (c.ras.length > 0) {
-        await unwrap(api.POST("/api/v1/buckets/refill-amounts", { body: { items: c.ras } }));
+        await unwrap(
+          api.POST("/api/v1/buckets/refill-amounts", {
+            body: { items: c.ras, this_cycle: thisCycle },
+          }),
+        );
       }
     },
     meta: { silentError: true },
     onSuccess: async () => {
       await refresh();
       setDraft(EMPTY_DRAFT);
+      setThisCycle(false);
+      setConfirming(false);
       notifications.show({ color: "green", message: t("budgetSetup.saved") });
     },
     // Some incomes may have been saved before the error.
@@ -176,7 +196,7 @@ function Budget({ accounts, buckets }: { accounts: Account[]; buckets: Bucket[] 
               <div style={{ minWidth: 0, flex: "1 1 240px" }}>
                 <Text fw={600}>{t("budgetSetup.changes", { count: changes.count })}</Text>
                 <Text size="xs" c="dimmed">
-                  {t("budgetSetup.futureNote")}
+                  {t(thisCycle ? "budgetSetup.thisCycleNote" : "budgetSetup.futureNote")}
                 </Text>
               </div>
               <Group gap="xs">
@@ -185,26 +205,77 @@ function Budget({ accounts, buckets }: { accounts: Account[]; buckets: Bucket[] 
                   disabled={save.isPending}
                   onClick={() => {
                     setDraft(EMPTY_DRAFT);
+                    setThisCycle(false);
                     save.reset();
                   }}
                 >
                   {t("budgetSetup.discard")}
                 </Button>
                 <Button
-                  loading={save.isPending}
+                  loading={save.isPending && !confirming}
                   disabled={changes.invalid}
                   onClick={() => {
-                    save.mutate(changes);
+                    if (thisCycle) setConfirming(true);
+                    else save.mutate({ c: changes, thisCycle: false });
                   }}
                 >
                   {t("common.save")}
                 </Button>
               </Group>
             </Group>
-            {save.error && <ErrorAlert error={save.error} />}
+            {active && changes.ras.length > 0 && (
+              <Switch
+                label={t("budgetSetup.thisCycle")}
+                description={t(
+                  canChangeCycle ? "budgetSetup.thisCycleHint" : "budgetSetup.thisCycleOverdue",
+                )}
+                checked={thisCycle}
+                disabled={!canChangeCycle || save.isPending}
+                onChange={(e) => {
+                  setThisCycle(e.currentTarget.checked);
+                }}
+              />
+            )}
+            {save.error && !confirming && <ErrorAlert error={save.error} />}
           </Stack>
         </Card>
       )}
+
+      <ResponsiveModal
+        opened={confirming}
+        onClose={() => {
+          if (!save.isPending) setConfirming(false);
+        }}
+        title={t("budgetSetup.confirm.title")}
+        size="lg"
+      >
+        <Stack gap="md">
+          <Text size="sm">{t("budgetSetup.confirm.intro")}</Text>
+          {cycleChanges(changes, accounts, buckets).map((a) => (
+            <ConfirmAccount key={a.account.id} change={a} />
+          ))}
+          {save.error && <ErrorAlert error={save.error} />}
+          <Group justify="flex-end" gap="xs">
+            <Button
+              variant="default"
+              disabled={save.isPending}
+              onClick={() => {
+                setConfirming(false);
+              }}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button
+              loading={save.isPending}
+              onClick={() => {
+                save.mutate({ c: changes, thisCycle: true });
+              }}
+            >
+              {t("budgetSetup.confirm.apply")}
+            </Button>
+          </Group>
+        </Stack>
+      </ResponsiveModal>
 
       <Modal
         opened={blocker.state === "blocked"}
@@ -225,6 +296,41 @@ function Budget({ accounts, buckets }: { accounts: Account[]; buckets: Bucket[] 
         </Stack>
       </Modal>
     </>
+  );
+}
+
+/** One account in the confirmation: each bucket's TF change, and what's short. */
+function ConfirmAccount({ change }: { change: CycleAccount }) {
+  const { t } = useTranslation();
+  const { account, rows, short } = change;
+  const money = (amount: string) => formatMoney(amount, account.currency);
+  return (
+    <Stack gap="xs" component="section" aria-label={account.name}>
+      <Text fw={600}>{account.name}</Text>
+      <Stack gap={6} component="ul" m={0} p={0} style={{ listStyle: "none" }}>
+        {rows.map((row) => (
+          <Group key={row.bucket.id} component="li" justify="space-between" gap="sm" wrap="nowrap">
+            <Text size="sm" truncate>
+              {row.bucket.name}
+            </Text>
+            <Text size="sm" ta="right" c={row.change === null ? "dimmed" : undefined}>
+              {row.change === null
+                ? t("budgetSetup.confirm.waiting")
+                : t("budgetSetup.confirm.tf", {
+                    from: money(row.tf.from),
+                    to: money(row.tf.to),
+                    change: signedMoney({ amount: row.change, signed: true }, account.currency),
+                  })}
+            </Text>
+          </Group>
+        ))}
+      </Stack>
+      <Text size="sm" c={compareAmounts(short, "0") > 0 ? "red" : "dimmed"}>
+        {compareAmounts(short, "0") > 0
+          ? t("budgetSetup.confirm.short", { amount: money(short) })
+          : t("budgetSetup.confirm.covered")}
+      </Text>
+    </Stack>
   );
 }
 

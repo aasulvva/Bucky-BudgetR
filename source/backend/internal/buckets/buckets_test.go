@@ -320,7 +320,7 @@ func TestSetRefillAmounts(t *testing.T) {
 	got, err := e.svc.SetRefillAmounts(t.Context(), e.user, []buckets.RefillAmount{
 		{BucketID: rent.ID, Amount: dec("800")},
 		{BucketID: food.ID, Amount: dec("1200")},
-	})
+	}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -342,7 +342,7 @@ func TestSetRefillAmounts(t *testing.T) {
 	if _, err := e.svc.SetRefillAmounts(t.Context(), e.user, []buckets.RefillAmount{
 		{BucketID: food.ID, Amount: dec("10")},
 		{BucketID: rent.ID, Amount: dec("-1")},
-	}); !errors.Is(err, buckets.ErrInvalid) {
+	}, false); !errors.Is(err, buckets.ErrInvalid) {
 		t.Errorf("negative RA: %v", err)
 	}
 	if ra := e.get(t, food.ID).RefillAmount; !ra.Equal(dec("1200")) {
@@ -351,12 +351,71 @@ func TestSetRefillAmounts(t *testing.T) {
 	if _, err := e.svc.SetRefillAmounts(t.Context(), e.user, []buckets.RefillAmount{
 		{BucketID: food.ID, Amount: dec("10")},
 		{BucketID: food.ID, Amount: dec("20")},
-	}); !errors.Is(err, buckets.ErrInvalid) {
+	}, false); !errors.Is(err, buckets.ErrInvalid) {
 		t.Errorf("listed twice: %v", err)
 	}
 	bob := authtest.NewUser(t, e.pool, "bob").ID
-	if _, err := e.svc.SetRefillAmounts(t.Context(), bob, []buckets.RefillAmount{{BucketID: food.ID, Amount: dec("10")}}); !errors.Is(err, buckets.ErrNotFound) {
+	if _, err := e.svc.SetRefillAmounts(t.Context(), bob, []buckets.RefillAmount{{BucketID: food.ID, Amount: dec("10")}}, false); !errors.Is(err, buckets.ErrNotFound) {
 		t.Errorf("bob sets alice's bucket: %v", err)
+	}
+}
+
+func TestSetRefillAmountsThisCycle(t *testing.T) {
+	e := setup(t)
+	set := func(thisCycle bool, items ...buckets.RefillAmount) ([]buckets.Bucket, error) {
+		t.Helper()
+		return e.svc.SetRefillAmounts(t.Context(), e.user, items, thisCycle)
+	}
+	food := e.create(t, buckets.New{Name: "Food", RefillAmount: dec("1000")})
+	if _, err := set(true, buckets.RefillAmount{BucketID: food.ID, Amount: dec("1200")}); !errors.Is(err, ledger.ErrNoActiveCycle) {
+		t.Errorf("no active cycle: %v", err)
+	}
+	if ra := e.get(t, food.ID).RefillAmount; !ra.Equal(dec("1000")) {
+		t.Errorf("RA %s after a refused save, want 1000", ra)
+	}
+
+	cycle := ledgertest.Cycle(t, e.pool, e.user, now.Add(-day), now.Add(29*day), "active")
+	// Marked refilled by hand: these tests have no refill hook.
+	refilled := func(n buckets.New) buckets.Bucket {
+		t.Helper()
+		b := e.create(t, n)
+		if _, err := e.pool.Exec(t.Context(),
+			"INSERT INTO refills (bucket_id, cycle_id, user_id, trigger) VALUES ($1, $2, $3, 'manual')", b.ID, cycle, e.user); err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+	rent := refilled(buckets.New{Name: "Rent", RefillAmount: dec("500"), OpeningFunds: dec("500")})
+	fun := refilled(buckets.New{Name: "Fun", RefillAmount: dec("300"), OpeningFunds: dec("100")})
+	same := refilled(buckets.New{Name: "Same", RefillAmount: dec("200"), OpeningFunds: dec("200")})
+	waiting := e.create(t, buckets.New{Name: "Waiting", RefillAmount: dec("400"), RefillMode: sqlc.RefillModeOnIncome})
+	bua := e.count(t, sqlc.TransactionTypeBUA)
+
+	got, err := set(true,
+		buckets.RefillAmount{BucketID: rent.ID, Amount: dec("800")},
+		buckets.RefillAmount{BucketID: fun.ID, Amount: dec("100")},
+		buckets.RefillAmount{BucketID: same.ID, Amount: dec("200")},
+		buckets.RefillAmount{BucketID: waiting.ID, Amount: dec("600")},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// TF moves by the change in RA, below 0 too; the waiting bucket only gets the RA.
+	for i, want := range []struct{ ra, tf string }{{"800", "800.00"}, {"100", "-100.00"}, {"200", "200.00"}, {"600", "0.00"}} {
+		if !got[i].RefillAmount.Equal(dec(want.ra)) || got[i].TargetFunds.StringFixed(2) != want.tf {
+			t.Errorf("%s: RA %s TF %s, want %s and %s", got[i].Name, got[i].RefillAmount, got[i].TargetFunds.StringFixed(2), want.ra, want.tf)
+		}
+	}
+	if c := e.count(t, sqlc.TransactionTypeBUA); c != bua+2 {
+		t.Errorf("%d BUA, want %d (rent and fun)", c, bua+2)
+	}
+
+	// Without this_cycle, only RA changes.
+	if _, err := set(false, buckets.RefillAmount{BucketID: rent.ID, Amount: dec("900")}); err != nil {
+		t.Fatal(err)
+	}
+	if tf := e.tf(t, rent.ID); tf != "800.00" {
+		t.Errorf("rent TF %s after a future-only save, want 800.00", tf)
 	}
 }
 

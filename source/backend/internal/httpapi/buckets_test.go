@@ -106,6 +106,9 @@ func TestBucketsAPI(t *testing.T) {
 	}, alice), http.StatusBadRequest, "invalid_request")
 	expect(t, "no refill amounts", do(http.MethodPost, "/api/v1/buckets/refill-amounts",
 		map[string]any{"items": []map[string]any{}}, alice), http.StatusBadRequest, "invalid_request")
+	expect(t, "refill amounts this cycle, without one", do(http.MethodPost, "/api/v1/buckets/refill-amounts", map[string]any{
+		"items": []map[string]any{{"bucket_id": b.Id, "refill_amount": "1"}}, "this_cycle": true,
+	}, alice), http.StatusConflict, "no_active_cycle")
 	expect(t, "bob's refill amounts", do(http.MethodPost, "/api/v1/buckets/refill-amounts", map[string]any{
 		"items": []map[string]any{{"bucket_id": b.Id, "refill_amount": "1"}},
 	}, bob), http.StatusNotFound, "not_found")
@@ -192,6 +195,17 @@ func TestBucketsAPI(t *testing.T) {
 	}
 	expect(t, "move funds to itself", do(http.MethodPost, "/api/v1/buckets/"+fun.Id+"/transfer",
 		map[string]any{"to_bucket_id": fun.Id, "mode": "temporary", "amount": "1"}, alice), http.StatusBadRequest, "invalid_request")
+
+	// Budget setup, this cycle too: Fun (refilled) moves TF by its change in
+	// RA; Groceries (not refilled this cycle) only gets the RA.
+	w = do(http.MethodPost, "/api/v1/buckets/refill-amounts", map[string]any{
+		"items":      []map[string]any{{"bucket_id": fun.Id, "refill_amount": "100"}, {"bucket_id": b.Id, "refill_amount": "5000"}},
+		"this_cycle": true,
+	}, alice)
+	expect(t, "refill amounts this cycle", w, http.StatusOK, "")
+	if u := decode[struct{ Items []api.Bucket }](t, w).Items; len(u) != 2 || u[0].TargetFunds != "300.00" || u[1].TargetFunds != "50.00" || u[1].RefillAmount != "5000.00" {
+		t.Errorf("this cycle: %+v, want Fun TF 300.00 and Groceries TF 50.00 with RA 5000.00", u)
+	}
 
 	expect(t, "bob deletes alice's", do(http.MethodDelete, "/api/v1/buckets/"+fun.Id, nil, bob), http.StatusNotFound, "not_found")
 	expect(t, "delete", do(http.MethodDelete, "/api/v1/buckets/"+fun.Id, nil, alice), http.StatusNoContent, "")
