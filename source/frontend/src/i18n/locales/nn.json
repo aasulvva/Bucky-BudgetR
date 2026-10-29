@@ -505,7 +505,20 @@
     "saved": "Budsjettet er lagra.",
     "leaveQuestion": "Du har endringar som ikkje er lagra. Vil du gå utan å lagre?",
     "leave": "Gå utan å lagre",
-    "stay": "Bli her"
+    "stay": "Bli her",
+    "thisCycleNote": "Lagra påfyllingsbeløp gjeld frå neste påfyll, og det som er att i dei påfylte bøttene denne perioden, vert endra like mykje.",
+    "thisCycle": "Endre òg denne perioden",
+    "thisCycleHint": "Kvar bøtte som alt er fylt på denne perioden, får same endring i det som er att. Bøtter som ventar på påfyll, får det nye beløpet då.",
+    "thisCycleOverdue": "Den aktive perioden har gått over tida. Avslutt eller forleng han under Periodar først.",
+    "confirm": {
+      "title": "Endre òg denne perioden?",
+      "intro": "Dei nye påfyllingsbeløpa vert lagra, og det som er att denne perioden, vert endra slik:",
+      "tf": "{{from}} → {{to}} ({{change}})",
+      "waiting": "Ikkje fylt på enno; får det nye beløpet ved påfyll",
+      "short": "Kontoen manglar {{amount}} etterpå.",
+      "covered": "Kontoen dekkjer framleis bøttene sine.",
+      "apply": "Lagre og endre denne perioden"
+    }
   },
   "newTransaction": {
     "type": "Type",

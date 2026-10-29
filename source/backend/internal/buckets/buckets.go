@@ -337,9 +337,12 @@ type RefillAmount struct {
 
 // SetRefillAmounts sets several buckets' refill amounts, all or nothing
 // (Budget setup, spec §9). Like Update, a fixed capacity below the new
-// amount is raised to it; TF is unchanged. It returns the buckets in the
-// order given.
-func (s *Service) SetRefillAmounts(ctx context.Context, userID string, items []RefillAmount) ([]Bucket, error) {
+// amount is raised to it. TF is unchanged, unless thisCycle (#81): then each
+// bucket refilled in the active cycle also gets a BUA of the change in RA,
+// as Adjust's ModeBoth; one not refilled yet gets the new RA at its refill.
+// The frontend previews this with cycleChanges (lib/budget.ts); change both
+// together. It returns the buckets in the order given.
+func (s *Service) SetRefillAmounts(ctx context.Context, userID string, items []RefillAmount, thisCycle bool) ([]Bucket, error) {
 	seen := make(map[string]bool, len(items))
 	for _, it := range items {
 		if seen[it.BucketID] {
@@ -352,9 +355,33 @@ func (s *Service) SetRefillAmounts(ctx context.Context, userID string, items []R
 		if err := ledger.LockUser(ctx, tx, userID); err != nil {
 			return err
 		}
+		if thisCycle {
+			// Also when no bucket was refilled, so the choice can't pass unnoticed.
+			if _, err := sqlc.New(tx).GetActiveCycle(ctx, userID); err != nil {
+				if errors.Is(err, pgx.ErrNoRows) {
+					return ledger.ErrNoActiveCycle
+				}
+				return err
+			}
+		}
+		changes := make(map[string]decimal.Decimal, len(items))
 		for _, it := range items {
+			before, err := s.get(ctx, tx, userID, it.BucketID)
+			if err != nil {
+				return err
+			}
+			if thisCycle && before.Refilled {
+				changes[it.BucketID] = it.Amount.Sub(before.RefillAmount)
+			}
 			if err := update(ctx, tx, userID, it.BucketID, Changes{RefillAmount: &it.Amount}); err != nil {
 				return err
+			}
+		}
+		for _, it := range items {
+			if change := changes[it.BucketID]; !change.IsZero() {
+				if err := s.recordBUA(ctx, tx, userID, it.BucketID, change); err != nil {
+					return err
+				}
 			}
 		}
 		for i, it := range items {
@@ -491,10 +518,7 @@ func (s *Service) Adjust(ctx context.Context, userID, id string, a Adjustment) (
 			return fmt.Errorf("%w: adjustment mode %q", ErrInvalid, a.Mode)
 		}
 		if !change.IsZero() {
-			if _, err := s.ledger.Record(ctx, tx, ledger.Entry{
-				UserID: userID, CreatedBy: userID, Type: sqlc.TransactionTypeBUA, At: s.now(),
-				BucketLines: []ledger.BucketLine{{BucketID: id, Amount: change}},
-			}); err != nil {
+			if err := s.recordBUA(ctx, tx, userID, id, change); err != nil {
 				return err
 			}
 		}
@@ -505,6 +529,15 @@ func (s *Service) Adjust(ctx context.Context, userID, id string, a Adjustment) (
 		return Bucket{}, err
 	}
 	return out, nil
+}
+
+// recordBUA records a bucket adjustment of change on the bucket, now.
+func (s *Service) recordBUA(ctx context.Context, tx pgx.Tx, userID, id string, change decimal.Decimal) error {
+	_, err := s.ledger.Record(ctx, tx, ledger.Entry{
+		UserID: userID, CreatedBy: userID, Type: sqlc.TransactionTypeBUA, At: s.now(),
+		BucketLines: []ledger.BucketLine{{BucketID: id, Amount: change}},
+	})
+	return err
 }
 
 // Transfer moves funds from one bucket to another.

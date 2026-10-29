@@ -631,9 +631,15 @@ export interface paths {
         /**
          * Set several buckets' refill amounts at once
          * @description Budget setup's save (spec §9): sets each bucket's refill amount, all
-         *     or nothing. It is the *Future* adjustment: TF is unchanged and no
-         *     transaction is recorded. As with `PATCH /buckets/{bucketId}`, a fixed
-         *     capacity below the new refill amount is raised to it.
+         *     or nothing. By default it is the *Future* adjustment: TF is unchanged
+         *     and no transaction is recorded. As with `PATCH /buckets/{bucketId}`, a
+         *     fixed capacity below the new refill amount is raised to it.
+         *
+         *     With `this_cycle` (#81) it is also *Both* for each bucket refilled in
+         *     the active cycle: a BUA of the change in RA, so TF moves by the same
+         *     amount (it may go below 0). A bucket not refilled yet this cycle only
+         *     gets the new RA, which its refill then uses. Needs an active cycle
+         *     (409 `no_active_cycle`) that hasn't run past its end (409).
          *
          *     A bucket may appear once (400 `invalid_request`); an unknown or
          *     deleted bucket is 404.
@@ -1495,6 +1501,11 @@ export interface components {
                 bucket_id: components["schemas"]["BucketId"];
                 refill_amount: components["schemas"]["Amount"];
             }[];
+            /**
+             * @description Also move TF in the active cycle by each refilled bucket's change in RA (BUA).
+             * @default false
+             */
+            this_cycle: boolean;
         };
         BucketUpdate: {
             name?: components["schemas"]["BucketName"];
@@ -2611,6 +2622,7 @@ export interface operations {
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };
