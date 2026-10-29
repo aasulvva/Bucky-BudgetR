@@ -157,4 +157,12 @@ describe("refillOf", () => {
     expect(refillOf(keep)).toEqual({ amount: "1000.00", overflow: "0.00" });
     expect(refillOf(keep, "800.00")).toEqual({ amount: "1000.00", overflow: "300.00" });
   });
+
+  it("pays back a negative TF with keep funds, unless the bucket clears it", () => {
+    const keep = { ...hobby, keep_funds: true };
+    expect(refillOf(keep, "-200.00")).toEqual({ amount: "1000.00", overflow: "0.00" });
+    const clear = { ...keep, negative_tf: "clear" as const };
+    expect(refillOf(clear, "-200.00")).toEqual({ amount: "1200.00", overflow: "0.00" });
+    expect(refillOf(clear, "800.00")).toEqual({ amount: "1000.00", overflow: "300.00" });
+  });
 });

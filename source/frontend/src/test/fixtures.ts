@@ -30,6 +30,7 @@ export function bucket(
     target_funds: "0.00",
     current_available_funds: "0.00",
     keep_funds: false,
+    negative_tf: "debt",
     refill_mode: "auto",
     overflow_destination: "unallocated",
     priority: false,

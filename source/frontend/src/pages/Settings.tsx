@@ -32,6 +32,7 @@ import { LOCALE_OPTIONS } from "@/lib/locale";
 import { parseAmount } from "@/lib/money";
 
 type RefillMode = components["schemas"]["RefillMode"];
+type NegativeTf = components["schemas"]["NegativeTf"];
 
 /** The API's limit on income rules. */
 const MAX_RULES = 20;
@@ -66,6 +67,7 @@ const BROWSER = "browser";
 const FOLLOW = "follow";
 
 const REFILL_MODES: RefillMode[] = ["auto", "manual", "on_income"];
+const NEGATIVE_TFS: NegativeTf[] = ["debt", "clear"];
 
 /** The time zones to pick from, with the user's own even if it isn't listed. */
 function timeZones(current: string): string[] {
@@ -128,6 +130,18 @@ function PreferencesCard({ preferences }: { preferences: Preferences }) {
           disabled={update.isPending}
           onChange={(value) => {
             update.mutate({ default_refill_mode: value === "auto" ? null : value });
+          }}
+        />
+        <Select
+          label={t("settings.negativeTf")}
+          description={t("settings.negativeTfHint")}
+          data={NEGATIVE_TFS.map((n) => ({ value: n, label: t(`settings.negativeTfs.${n}`) }))}
+          value={preferences.default_negative_tf ?? "debt"}
+          allowDeselect={false}
+          disabled={update.isPending}
+          onChange={(value) => {
+            const next = NEGATIVE_TFS.find((n) => n === value);
+            if (next) update.mutate({ default_negative_tf: next === "debt" ? null : next });
           }}
         />
       </Stack>

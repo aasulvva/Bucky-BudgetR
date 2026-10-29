@@ -14,10 +14,10 @@ import (
 const createBucket = `-- name: CreateBucket :one
 INSERT INTO buckets (
     id, user_id, name, source_account_id, refill_amount, cap_mode, cap_multiplier, cap_amount,
-    keep_funds, refill_mode, overflow_destination, priority, importance
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+    keep_funds, refill_mode, overflow_destination, priority, importance, negative_tf
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 ON CONFLICT (id) DO NOTHING
-RETURNING id, user_id, name, source_account_id, deleted, created_at, modified_at, refill_amount, cap_mode, cap_multiplier, cap_amount, caf, keep_funds, refill_mode, overflow_destination, priority, importance
+RETURNING id, user_id, name, source_account_id, deleted, created_at, modified_at, refill_amount, cap_mode, cap_multiplier, cap_amount, caf, keep_funds, refill_mode, overflow_destination, priority, importance, negative_tf
 `
 
 type CreateBucketParams struct {
@@ -34,6 +34,7 @@ type CreateBucketParams struct {
 	OverflowDestination OverflowDestination
 	Priority            bool
 	Importance          int16
+	NegativeTf          NegativeTf
 }
 
 // Use with ids.Insert: a taken ID returns no row.
@@ -52,6 +53,7 @@ func (q *Queries) CreateBucket(ctx context.Context, arg CreateBucketParams) (Buc
 		arg.OverflowDestination,
 		arg.Priority,
 		arg.Importance,
+		arg.NegativeTf,
 	)
 	var i Bucket
 	err := row.Scan(
@@ -72,6 +74,7 @@ func (q *Queries) CreateBucket(ctx context.Context, arg CreateBucketParams) (Buc
 		&i.OverflowDestination,
 		&i.Priority,
 		&i.Importance,
+		&i.NegativeTf,
 	)
 	return i, err
 }
@@ -92,7 +95,7 @@ func (q *Queries) DeleteBucket(ctx context.Context, arg DeleteBucketParams) erro
 }
 
 const getBucket = `-- name: GetBucket :one
-SELECT b.id, b.user_id, b.name, b.source_account_id, b.deleted, b.created_at, b.modified_at, b.refill_amount, b.cap_mode, b.cap_multiplier, b.cap_amount, b.caf, b.keep_funds, b.refill_mode, b.overflow_destination, b.priority, b.importance, a.currency,
+SELECT b.id, b.user_id, b.name, b.source_account_id, b.deleted, b.created_at, b.modified_at, b.refill_amount, b.cap_mode, b.cap_multiplier, b.cap_amount, b.caf, b.keep_funds, b.refill_mode, b.overflow_destination, b.priority, b.importance, b.negative_tf, a.currency,
     -- Whether the bucket has been refilled in the active cycle.
     EXISTS (
         SELECT 1 FROM refills r JOIN cycles c ON c.id = r.cycle_id
@@ -135,6 +138,7 @@ func (q *Queries) GetBucket(ctx context.Context, arg GetBucketParams) (GetBucket
 		&i.Bucket.OverflowDestination,
 		&i.Bucket.Priority,
 		&i.Bucket.Importance,
+		&i.Bucket.NegativeTf,
 		&i.Currency,
 		&i.Refilled,
 	)
@@ -142,7 +146,7 @@ func (q *Queries) GetBucket(ctx context.Context, arg GetBucketParams) (GetBucket
 }
 
 const getBucketForUpdate = `-- name: GetBucketForUpdate :one
-SELECT id, user_id, name, source_account_id, deleted, created_at, modified_at, refill_amount, cap_mode, cap_multiplier, cap_amount, caf, keep_funds, refill_mode, overflow_destination, priority, importance FROM buckets WHERE id = $1 AND user_id = $2 AND NOT deleted FOR UPDATE
+SELECT id, user_id, name, source_account_id, deleted, created_at, modified_at, refill_amount, cap_mode, cap_multiplier, cap_amount, caf, keep_funds, refill_mode, overflow_destination, priority, importance, negative_tf FROM buckets WHERE id = $1 AND user_id = $2 AND NOT deleted FOR UPDATE
 `
 
 type GetBucketForUpdateParams struct {
@@ -172,8 +176,21 @@ func (q *Queries) GetBucketForUpdate(ctx context.Context, arg GetBucketForUpdate
 		&i.OverflowDestination,
 		&i.Priority,
 		&i.Importance,
+		&i.NegativeTf,
 	)
 	return i, err
+}
+
+const getDefaultNegativeTF = `-- name: GetDefaultNegativeTF :one
+SELECT COALESCE(preferences ->> 'default_negative_tf', '')::text FROM users WHERE id = $1
+`
+
+// What new buckets do with a negative TF, or ” if unset.
+func (q *Queries) GetDefaultNegativeTF(ctx context.Context, id string) (string, error) {
+	row := q.db.QueryRow(ctx, getDefaultNegativeTF, id)
+	var column_1 string
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const getDefaultRefillMode = `-- name: GetDefaultRefillMode :one
@@ -189,7 +206,7 @@ func (q *Queries) GetDefaultRefillMode(ctx context.Context, id string) (string, 
 }
 
 const listBuckets = `-- name: ListBuckets :many
-SELECT b.id, b.user_id, b.name, b.source_account_id, b.deleted, b.created_at, b.modified_at, b.refill_amount, b.cap_mode, b.cap_multiplier, b.cap_amount, b.caf, b.keep_funds, b.refill_mode, b.overflow_destination, b.priority, b.importance, a.currency,
+SELECT b.id, b.user_id, b.name, b.source_account_id, b.deleted, b.created_at, b.modified_at, b.refill_amount, b.cap_mode, b.cap_multiplier, b.cap_amount, b.caf, b.keep_funds, b.refill_mode, b.overflow_destination, b.priority, b.importance, b.negative_tf, a.currency,
     -- Whether the bucket has been refilled in the active cycle.
     EXISTS (
         SELECT 1 FROM refills r JOIN cycles c ON c.id = r.cycle_id
@@ -234,6 +251,7 @@ func (q *Queries) ListBuckets(ctx context.Context, userID string) ([]ListBuckets
 			&i.Bucket.OverflowDestination,
 			&i.Bucket.Priority,
 			&i.Bucket.Importance,
+			&i.Bucket.NegativeTf,
 			&i.Currency,
 			&i.Refilled,
 		); err != nil {
@@ -251,7 +269,7 @@ const updateBucket = `-- name: UpdateBucket :exec
 UPDATE buckets SET
     name = $3, source_account_id = $4, refill_amount = $5, cap_mode = $6, cap_multiplier = $7,
     cap_amount = $8, caf = $9, keep_funds = $10, refill_mode = $11, overflow_destination = $12,
-    priority = $13, importance = $14, modified_at = now()
+    priority = $13, importance = $14, negative_tf = $15, modified_at = now()
 WHERE id = $1 AND user_id = $2 AND NOT deleted
 `
 
@@ -270,6 +288,7 @@ type UpdateBucketParams struct {
 	OverflowDestination OverflowDestination
 	Priority            bool
 	Importance          int16
+	NegativeTf          NegativeTf
 }
 
 func (q *Queries) UpdateBucket(ctx context.Context, arg UpdateBucketParams) error {
@@ -288,6 +307,7 @@ func (q *Queries) UpdateBucket(ctx context.Context, arg UpdateBucketParams) erro
 		arg.OverflowDestination,
 		arg.Priority,
 		arg.Importance,
+		arg.NegativeTf,
 	)
 	return err
 }

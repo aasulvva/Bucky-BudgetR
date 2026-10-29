@@ -228,6 +228,83 @@ func TestRefill(t *testing.T) {
 	}
 }
 
+// TestNegativeTF covers what a Keep funds refill does with a negative TF
+// (#62): debt is paid back from REF, clear sets TF to RA. A TF of 0 or more
+// is refilled the same either way. RA is 100 and BC 150.
+func TestNegativeTF(t *testing.T) {
+	e := setup(t)
+	for _, neg := range []sqlc.NegativeTf{sqlc.NegativeTfDebt, sqlc.NegativeTfClear} {
+		for _, tc := range []struct {
+			opening, expense string
+			ref, ovf, tf     string
+		}{
+			{opening: "30", expense: "50", ref: "100.00", tf: "80.00"},
+			{opening: "30", ref: "100.00", tf: "130.00"},
+			{opening: "130", ref: "100.00", ovf: "-80.00", tf: "150.00"},
+		} {
+			ref := tc.ref
+			tf := tc.tf
+			if neg == sqlc.NegativeTfClear && tc.expense != "" {
+				ref, tf = "120.00", "100.00"
+			}
+			name := fmt.Sprintf("%s, TF %s-%s", neg, tc.opening, tc.expense)
+			account := e.account(t, "1000")
+			b, err := e.buckets.Create(t.Context(), e.user, buckets.New{
+				Name: fmt.Sprintf("B%d", time.Now().UnixNano()), SourceAccountID: account, RefillAmount: dec("100"),
+				CapMultiplier: dec("1.5"), KeepFunds: true, NegativeTF: neg, RefillMode: sqlc.RefillModeManual,
+				OpeningFunds: dec(tc.opening),
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.expense != "" {
+				if _, err := e.tx.Create(t.Context(), e.user, transactions.New{
+					Type: sqlc.TransactionTypeEXP, AccountID: account, Amount: dec(tc.expense),
+					Buckets: []transactions.BucketAmount{{BucketID: b.ID, Amount: dec(tc.expense)}},
+				}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := e.refills.Manual(t.Context(), e.user, b.ID); err != nil {
+				t.Fatalf("%s: %v", name, err)
+			}
+			var wantOVF []string
+			if tc.ovf != "" {
+				wantOVF = []string{tc.ovf}
+			}
+			check(t, name+": REF", e.lines(t, b.ID, sqlc.TransactionTypeREF), []string{ref})
+			check(t, name+": OVF", e.lines(t, b.ID, sqlc.TransactionTypeOVF), wantOVF)
+			check(t, name+": TF", e.get(t, b.ID).TargetFunds.StringFixed(2), tf)
+		}
+	}
+
+	t.Run("undoing an income refill brings the debt back", func(t *testing.T) {
+		account := e.account(t, "1000")
+		b, err := e.buckets.Create(t.Context(), e.user, buckets.New{
+			Name: "Cleared", SourceAccountID: account, RefillAmount: dec("100"), KeepFunds: true,
+			NegativeTF: sqlc.NegativeTfClear, RefillMode: sqlc.RefillModeOnIncome,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := e.tx.Create(t.Context(), e.user, transactions.New{
+			Type: sqlc.TransactionTypeEXP, AccountID: account, Amount: dec("40"),
+			Buckets: []transactions.BucketAmount{{BucketID: b.ID, Amount: dec("40")}},
+		}); err != nil {
+			t.Fatal(err)
+		}
+		inc, err := e.income(t, account, "", "500", ptr(true))
+		if err != nil {
+			t.Fatal(err)
+		}
+		check(t, "TF after the refill", e.get(t, b.ID).TargetFunds.StringFixed(2), "100.00")
+		if _, err := e.tx.Correct(t.Context(), e.user, inc.ID, transactions.Changes{TriggersRefill: ptr(false)}); err != nil {
+			t.Fatal(err)
+		}
+		check(t, "TF after the undo", e.get(t, b.ID).TargetFunds.StringFixed(2), "-40.00")
+	})
+}
+
 func TestManualErrors(t *testing.T) {
 	e := setup(t)
 	account := e.account(t, "1000")

@@ -75,6 +75,9 @@ type New struct {
 	// CapAmount is for the fixed mode. It is raised to RefillAmount if lower.
 	CapAmount decimal.Decimal
 	KeepFunds bool
+	// NegativeTF defaults to the user's default_negative_tf preference, or
+	// debt.
+	NegativeTF sqlc.NegativeTf
 	// RefillMode defaults to the user's default_refill_mode preference, or
 	// auto.
 	RefillMode sqlc.RefillMode
@@ -105,6 +108,7 @@ type Changes struct {
 	CapMultiplier       *decimal.Decimal
 	CapAmount           *decimal.Decimal
 	KeepFunds           *bool
+	NegativeTF          *sqlc.NegativeTf
 	RefillMode          *sqlc.RefillMode
 	OverflowDestination *sqlc.OverflowDestination
 	Priority            *bool
@@ -241,8 +245,18 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Bucket, err
 				n.RefillMode = sqlc.RefillModeAuto
 			}
 		}
+		if n.NegativeTF == "" {
+			pref, err := q.GetDefaultNegativeTF(ctx, userID)
+			if err != nil {
+				return err
+			}
+			n.NegativeTF = sqlc.NegativeTf(pref)
+			if !n.NegativeTF.Valid() {
+				n.NegativeTF = sqlc.NegativeTfDebt
+			}
+		}
 		st := settings{
-			RefillAmount: n.RefillAmount, CapMode: n.CapMode, KeepFunds: n.KeepFunds,
+			RefillAmount: n.RefillAmount, CapMode: n.CapMode, KeepFunds: n.KeepFunds, NegativeTF: n.NegativeTF,
 			RefillMode: n.RefillMode, OverflowDestination: n.OverflowDestination,
 			Priority: n.Priority, Importance: n.Importance,
 		}
@@ -262,7 +276,7 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Bucket, err
 				ID: id, UserID: userID, Name: name, SourceAccountID: n.SourceAccountID,
 				RefillAmount: st.RefillAmount, CapMode: st.CapMode, CapMultiplier: st.CapMultiplier, CapAmount: st.CapAmount,
 				KeepFunds: st.KeepFunds, RefillMode: st.RefillMode, OverflowDestination: st.OverflowDestination,
-				Priority: st.Priority, Importance: st.dbImportance,
+				Priority: st.Priority, Importance: st.dbImportance, NegativeTf: st.NegativeTF,
 			})
 			return ids.Inserted(err)
 		})
@@ -380,7 +394,7 @@ func update(ctx context.Context, tx pgx.Tx, userID, id string, c Changes) error 
 
 	st := settings{
 		RefillAmount: row.RefillAmount, CapMode: row.CapMode, CapMultiplier: row.CapMultiplier, CapAmount: row.CapAmount,
-		KeepFunds: row.KeepFunds, RefillMode: row.RefillMode, OverflowDestination: row.OverflowDestination,
+		KeepFunds: row.KeepFunds, NegativeTF: row.NegativeTf, RefillMode: row.RefillMode, OverflowDestination: row.OverflowDestination,
 		Priority: row.Priority, Importance: int(row.Importance),
 	}
 	if err := st.apply(c); err != nil {
@@ -390,7 +404,7 @@ func update(ctx context.Context, tx pgx.Tx, userID, id string, c Changes) error 
 		return err
 	}
 	p.RefillAmount, p.CapMode, p.CapMultiplier, p.CapAmount = st.RefillAmount, st.CapMode, st.CapMultiplier, st.CapAmount
-	p.KeepFunds, p.RefillMode, p.OverflowDestination = st.KeepFunds, st.RefillMode, st.OverflowDestination
+	p.KeepFunds, p.NegativeTf, p.RefillMode, p.OverflowDestination = st.KeepFunds, st.NegativeTF, st.RefillMode, st.OverflowDestination
 	p.Priority, p.Importance = st.Priority, st.dbImportance
 	if err := q.UpdateBucket(ctx, p); err != nil {
 		return nameTaken(err)
@@ -642,6 +656,7 @@ type settings struct {
 	CapMultiplier       decimal.NullDecimal
 	CapAmount           decimal.NullDecimal
 	KeepFunds           bool
+	NegativeTF          sqlc.NegativeTf
 	RefillMode          sqlc.RefillMode
 	OverflowDestination sqlc.OverflowDestination
 	Priority            bool
@@ -679,6 +694,9 @@ func (st *settings) apply(c Changes) error {
 	}
 	if c.KeepFunds != nil {
 		st.KeepFunds = *c.KeepFunds
+	}
+	if c.NegativeTF != nil {
+		st.NegativeTF = *c.NegativeTF
 	}
 	if c.RefillMode != nil {
 		st.RefillMode = *c.RefillMode
@@ -721,6 +739,9 @@ func (st *settings) check() error {
 	}
 	if !st.RefillMode.Valid() {
 		return fmt.Errorf("%w: refill mode %q", ErrInvalid, st.RefillMode)
+	}
+	if !st.NegativeTF.Valid() {
+		return fmt.Errorf("%w: negative TF handling %q", ErrInvalid, st.NegativeTF)
 	}
 	if !st.OverflowDestination.Valid() {
 		return fmt.Errorf("%w: overflow destination %q", ErrInvalid, st.OverflowDestination)

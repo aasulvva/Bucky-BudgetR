@@ -111,6 +111,12 @@
       "manual": "Manuelt",
       "on_income": "Ved inntekt"
     },
+    "negativeTf": "Overforbrukte bøtter med Behald midlar",
+    "negativeTfHint": "Kva nye bøtter med Behald midlar gjer ved påfyllinga etter eit overforbruk.",
+    "negativeTfs": {
+      "debt": "Før det som gjeld",
+      "clear": "Nullstill det ved påfylling"
+    },
     "timeZone": "Tidssone",
     "timeZoneHint": "Periodar som vert planlagde frå perioderegelen, startar ved midnatt her.",
     "rules": {
@@ -313,6 +319,8 @@
     "notCovered": "{{amount}} ikkje dekt",
     "fullyCovered": "Fullt dekt",
     "overspentLabel": "Overforbrukt",
+    "debtLabel": "Gjeld · vert betalt tilbake ved neste påfylling",
+    "clearedLabel": "Overforbrukt · vert nullstilt ved neste påfylling",
     "coveredOf": "Dekt {{covered}} av {{target}}",
     "target": "Mål {{amount}}",
     "warnLabel": "Ikkje fullt dekt",
@@ -440,6 +448,13 @@
     "refillMode": "Påfyllingsmåte",
     "keepFunds": "Behald midlar",
     "keepFundsHint": "Ta med det som er att til neste periode, opp til kapasiteten.",
+    "negativeTf": {
+      "label": "Ved overforbruk",
+      "debt": "Før det som gjeld",
+      "debtHint": "Neste påfylling betaler det tilbake først, så bøtta startar perioden med mindre.",
+      "clear": "Nullstill det ved påfylling",
+      "clearHint": "Neste påfylling startar på nytt frå påfyllingsbeløpet; overforbruket vert stroke."
+    },
     "overflow": "Overløp går til",
     "overflowUnallocated": "Ufordelt (vert verande på kontoen)",
     "overflowDistribution": "Sparefordeling (seinare)",

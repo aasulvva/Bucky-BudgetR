@@ -82,7 +82,7 @@ func (q *Queries) IsRefilled(ctx context.Context, arg IsRefilledParams) (bool, e
 }
 
 const listOverflowBuckets = `-- name: ListOverflowBuckets :many
-SELECT id, user_id, name, source_account_id, deleted, created_at, modified_at, refill_amount, cap_mode, cap_multiplier, cap_amount, caf, keep_funds, refill_mode, overflow_destination, priority, importance FROM buckets WHERE user_id = $1 AND NOT deleted AND NOT keep_funds ORDER BY id
+SELECT id, user_id, name, source_account_id, deleted, created_at, modified_at, refill_amount, cap_mode, cap_multiplier, cap_amount, caf, keep_funds, refill_mode, overflow_destination, priority, importance, negative_tf FROM buckets WHERE user_id = $1 AND NOT deleted AND NOT keep_funds ORDER BY id
 `
 
 // The user's live buckets without Keep funds, which are emptied at cycle end.
@@ -113,6 +113,7 @@ func (q *Queries) ListOverflowBuckets(ctx context.Context, userID string) ([]Buc
 			&i.OverflowDestination,
 			&i.Priority,
 			&i.Importance,
+			&i.NegativeTf,
 		); err != nil {
 			return nil, err
 		}
@@ -126,7 +127,7 @@ func (q *Queries) ListOverflowBuckets(ctx context.Context, userID string) ([]Buc
 
 const listRefillBuckets = `-- name: ListRefillBuckets :many
 
-SELECT id, user_id, name, source_account_id, deleted, created_at, modified_at, refill_amount, cap_mode, cap_multiplier, cap_amount, caf, keep_funds, refill_mode, overflow_destination, priority, importance FROM buckets b
+SELECT id, user_id, name, source_account_id, deleted, created_at, modified_at, refill_amount, cap_mode, cap_multiplier, cap_amount, caf, keep_funds, refill_mode, overflow_destination, priority, importance, negative_tf FROM buckets b
 WHERE b.user_id = $1 AND NOT b.deleted AND b.refill_mode = $2
     AND ($3::text IS NULL OR b.source_account_id = $3)
     AND NOT EXISTS (SELECT 1 FROM refills r WHERE r.bucket_id = b.id AND r.cycle_id = $4)
@@ -176,6 +177,7 @@ func (q *Queries) ListRefillBuckets(ctx context.Context, arg ListRefillBucketsPa
 			&i.OverflowDestination,
 			&i.Priority,
 			&i.Importance,
+			&i.NegativeTf,
 		); err != nil {
 			return nil, err
 		}

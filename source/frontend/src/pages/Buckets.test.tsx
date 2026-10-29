@@ -150,8 +150,22 @@ describe("Buckets", () => {
     const row = within((await screen.findByText("Groceries")).closest("tr") as HTMLElement);
     expect(row.getByRole("img", { name: "Overspent" })).toBeInTheDocument();
     expect(row.getByText(m("-150.00"))).toBeInTheDocument();
-    expect(row.getByText("Overspent")).toBeInTheDocument();
+    expect(row.getByText("Overspent · cleared at the next refill")).toBeInTheDocument();
     expect(row.queryByText(/not covered/)).not.toBeInTheDocument();
+  });
+
+  it("calls a Keep funds bucket's overspend debt, unless it's cleared", async () => {
+    const overspent = { ...car, target_funds: "-80.00", current_available_funds: "0.00" };
+    apiMock.on("GET /api/v1/buckets", { body: [overspent] });
+    const { unmount } = renderRoute("/buckets");
+    const row = within((await screen.findByText("Car")).closest("tr") as HTMLElement);
+    expect(row.getByText("Debt · paid back at the next refill")).toBeInTheDocument();
+    unmount();
+
+    apiMock.on("GET /api/v1/buckets", { body: [{ ...overspent, negative_tf: "clear" }] });
+    renderRoute("/buckets");
+    const cleared = within((await screen.findByText("Car")).closest("tr") as HTMLElement);
+    expect(cleared.getByText("Overspent · cleared at the next refill")).toBeInTheDocument();
   });
 
   it("refills a manual bucket", async () => {

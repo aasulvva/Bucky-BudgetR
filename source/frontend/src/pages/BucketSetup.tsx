@@ -52,9 +52,11 @@ import { autofocusField } from "@/lib/device";
 type BucketCreate = components["schemas"]["BucketCreate"];
 type BucketUpdate = components["schemas"]["BucketUpdate"];
 type CapMode = components["schemas"]["CapMode"];
+type NegativeTf = components["schemas"]["NegativeTf"];
 type OverflowDestination = components["schemas"]["OverflowDestination"];
 
 const REFILL_MODES: RefillMode[] = ["auto", "manual", "on_income"];
+const NEGATIVE_TFS: NegativeTf[] = ["debt", "clear"];
 
 /** The selected bucket in the URL: a bucket ID (`?edit=<id>`), "new" (`?new`), or null. */
 type Selection = string | null;
@@ -331,6 +333,9 @@ function BucketForm({
     bucket?.refill_mode ?? preferences?.default_refill_mode ?? "auto",
   );
   const [keepFunds, setKeepFunds] = useState(bucket?.keep_funds ?? false);
+  const [negativeTf, setNegativeTf] = useState<NegativeTf>(
+    bucket?.negative_tf ?? preferences?.default_negative_tf ?? "debt",
+  );
   const [overflow, setOverflow] = useState<OverflowDestination>(
     bucket?.overflow_destination ?? "unallocated",
   );
@@ -370,6 +375,7 @@ function BucketForm({
         ...(capChanged ? capFields : {}),
         ...(refillMode !== bucket.refill_mode ? { refill_mode: refillMode } : {}),
         ...(keepFunds !== bucket.keep_funds ? { keep_funds: keepFunds } : {}),
+        ...(negativeTf !== bucket.negative_tf ? { negative_tf: negativeTf } : {}),
         ...(overflow !== bucket.overflow_destination ? { overflow_destination: overflow } : {}),
       }
     : {};
@@ -394,6 +400,7 @@ function BucketForm({
         ...capFields,
         refill_mode: refillMode,
         keep_funds: keepFunds,
+        negative_tf: negativeTf,
         overflow_destination: overflow,
         ...(usable && start === "refill" ? { refill: true } : {}),
         ...(usable && start === "amount" && opening !== null ? { opening_funds: opening } : {}),
@@ -614,6 +621,29 @@ function BucketForm({
               setKeepFunds(e.currentTarget.checked);
             }}
           />
+          {/* Without Keep funds a refill always clears an overspend (#62). */}
+          {keepFunds && (
+            <Radio.Group
+              label={t("bucketSetup.negativeTf.label")}
+              value={negativeTf}
+              onChange={(v) => {
+                const next = NEGATIVE_TFS.find((n) => n === v);
+                if (next) setNegativeTf(next);
+              }}
+              ml="xl"
+            >
+              <Stack gap="sm" mt="xs">
+                {NEGATIVE_TFS.map((n) => (
+                  <Radio
+                    key={n}
+                    value={n}
+                    label={t(`bucketSetup.negativeTf.${n}`)}
+                    description={t(`bucketSetup.negativeTf.${n}Hint`)}
+                  />
+                ))}
+              </Stack>
+            </Radio.Group>
+          )}
           <Select
             label={t("bucketSetup.overflow")}
             data={[
