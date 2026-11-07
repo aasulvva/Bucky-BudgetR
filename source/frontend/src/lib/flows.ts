@@ -10,7 +10,10 @@ import { now as clockNow } from "./clock";
 import { addDays, firstDay, lastDay, today, type LocalDate } from "./cycles";
 import { CURRENCY, getLocale } from "./locale";
 import { addAmounts, subtractAmounts } from "./money";
+import { weekStart } from "./periods";
 import { ALL_CYCLES } from "./transactionList";
+
+export { weekStart };
 
 export type FlowFigure = "income" | "expenses" | "balance";
 export type FlowPeriod = "days" | "today" | "week" | "cycle" | "month" | "year";
@@ -23,26 +26,6 @@ export interface DateSpan {
   from: LocalDate;
   /** The last day, inclusive. */
   to: LocalDate;
-}
-
-interface WeekInfo {
-  firstDay?: number;
-}
-
-/** The locale's first day of the week, 1 (Monday) to 7 (Sunday); Monday if unknown. */
-export function weekStart(locale = getLocale()): number {
-  try {
-    const l = new Intl.Locale(
-      locale ?? new Intl.DateTimeFormat().resolvedOptions().locale,
-    ) as Intl.Locale & {
-      getWeekInfo?: () => WeekInfo;
-      weekInfo?: WeekInfo;
-    };
-    const info = l.getWeekInfo?.() ?? l.weekInfo;
-    return info?.firstDay ?? 1;
-  } catch {
-    return 1;
-  }
 }
 
 /**

@@ -860,6 +860,66 @@
     "endedStarted": "Perioden er avsluttet. {{range}} har startet.",
     "ended": "Perioden er avsluttet. Det er ingen aktiv periode før du starter en."
   },
+  "stats": {
+    "period": {
+      "label": "Tidsrom",
+      "groups": {
+        "last": "Fram til i dag",
+        "current": "Så langt",
+        "previous": "Avsluttet",
+        "custom": "Egendefinert"
+      },
+      "options": {
+        "last_days": "De siste dagene",
+        "last_weeks": "De siste ukene",
+        "last_months": "De siste månedene",
+        "current_cycle": "Denne perioden",
+        "current_month": "Denne måneden",
+        "current_quarter": "Dette kvartalet",
+        "current_half_year": "Dette halvåret",
+        "current_year": "I år",
+        "previous_cycle": "Forrige periode",
+        "previous_month": "Forrige måned",
+        "previous_quarter": "Forrige kvartal",
+        "previous_half_year": "Forrige halvår",
+        "previous_year": "I fjor",
+        "custom": "Egne datoer"
+      },
+      "count": {
+        "days": "Antall dager",
+        "weeks": "Antall uker",
+        "months": "Antall måneder"
+      },
+      "countHint": {
+        "days": "I dag er tatt med.",
+        "weeks": "Denne uken er tatt med.",
+        "months": "Denne måneden er tatt med."
+      },
+      "last": {
+        "days_one": "I dag",
+        "days_other": "Siste {{count}} dager",
+        "weeks_one": "Denne uken",
+        "weeks_other": "Siste {{count}} uker",
+        "months_one": "Denne måneden",
+        "months_other": "Siste {{count}} måneder"
+      },
+      "dates": "Første og siste dag",
+      "noActiveCycle": "Det er ingen aktiv periode.",
+      "noFinishedCycle": "Ingen periode er avsluttet ennå."
+    },
+    "resolution": {
+      "label": "Vis per",
+      "options": {
+        "hour": "Time",
+        "day": "Dag",
+        "week": "Uke",
+        "month": "Måned",
+        "year": "År",
+        "cycle": "Periode",
+        "total": "Hele tidsrommet"
+      }
+    }
+  },
   "admin": {
     "intro": "Alle som kan logge inn. Brukere slettes aldri: deaktiver dem i stedet, så beholdes dataene deres. Administratorer styrer brukerne, men ser ikke andres penger.",
     "adminsOnly": "Bare for administratorer",
