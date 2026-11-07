@@ -38,19 +38,23 @@ const span = (widget: WidgetInstance): CSSProperties =>
   widget.width === "full" ? { gridColumn: "1 / -1" } : {};
 
 /**
- * The Dashboard's widgets in a grid of one column, or two from md. In edit
- * mode (`onChange` given) they can be dragged by a handle, moved with the
- * arrow buttons, resized and removed; every change goes to `onChange`.
+ * The Dashboard's widgets in a grid of one column, or two from md unless
+ * `narrow` (the mobile layout, #99). In edit mode (`onChange` given) they
+ * can be dragged by a handle, moved with the arrow buttons, resized (not
+ * when narrow) and removed; every change goes to `onChange`.
  */
 export function DashboardGrid({
   layout,
   onSave,
   onChange,
+  narrow = false,
 }: {
   layout: Layout;
   onSave: SaveWidget;
   onChange?: (layout: Layout) => void;
+  narrow?: boolean;
 }) {
+  const cols = narrow ? 1 : { base: 1, md: 2 };
   const { t } = useTranslation();
   const accounts = useAccounts().data ?? [];
   const buckets = useBuckets().data ?? [];
@@ -61,7 +65,7 @@ export function DashboardGrid({
 
   if (!onChange) {
     return (
-      <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
+      <SimpleGrid cols={cols} spacing="lg">
         {layout.map((w) => (
           <Box key={w.id} style={span(w)}>
             <WidgetView widget={w} onSave={onSave} />
@@ -88,7 +92,7 @@ export function DashboardGrid({
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
       <SortableContext items={layout.map((w) => w.id)} strategy={rectSortingStrategy}>
-        <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
+        <SimpleGrid cols={cols} spacing="lg">
           {layout.map((w, i) => (
             <SortableCell key={w.id} widget={w}>
               {(handle) => (
@@ -97,6 +101,7 @@ export function DashboardGrid({
                   onSave={onSave}
                   edit={{
                     name: name(w),
+                    narrow,
                     first: i === 0,
                     last: i === layout.length - 1,
                     handle: handle(name(w)),

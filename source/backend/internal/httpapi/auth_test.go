@@ -390,6 +390,11 @@ func TestPreferences(t *testing.T) {
 	if w := patch(layout); w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != layout {
 		t.Errorf("layout: %d %s", w.Code, w.Body)
 	}
+	// And the mobile layout (#99), whose ids may repeat the desktop layout's.
+	both := `{"dashboard":{"mobile_widgets":[{"bucket_status":{"mode":"attention"},"id":"b-2","type":"bucket_status","width":"full"}],"widgets":[{"id":"b-2","type":"health","width":"half"}]}}`
+	if w := patch(both); w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != both {
+		t.Errorf("both layouts: %d %s", w.Code, w.Body)
+	}
 	if w := patch(`{"dashboard":{"widgets":[]}}`); strings.TrimSpace(w.Body.String()) != `{"dashboard":{"widgets":[]}}` {
 		t.Errorf("empty layout: %d %s", w.Code, w.Body)
 	}
@@ -409,6 +414,9 @@ func TestPreferences(t *testing.T) {
 		`{"dashboard":{"accounts":{"mode":"account","account_id":"12"}}}`,
 		`{"dashboard":{"widgets":[{"id":"a","type":"health","width":"half"},{"id":"a","type":"cycle","width":"half"}]}}`,
 		`{"dashboard":{"widgets":[{"id":"a","type":"cycle","width":"half","bucket_status":{"mode":"all"}}]}}`,
+		`{"dashboard":{"mobile_widgets":[{"id":"a","type":"health","width":"half"},{"id":"a","type":"cycle","width":"half"}]}}`,
+		`{"dashboard":{"mobile_widgets":[{"id":"a","type":"cycle","width":"half","bucket_status":{"mode":"all"}}]}}`,
+		`{"dashboard":{"mobile_widgets":[{"id":"a","type":"health","width":"half","title":" "}]}}`,
 		`{"dashboard":{"widgets":[{"id":"a","type":"graph","width":"half"}]}}`,
 		`{"dashboard":{"widgets":[{"id":"a","type":"health","width":"third"}]}}`,
 		`{"dashboard":{"widgets":[{"id":"a b","type":"health","width":"half"}]}}`,

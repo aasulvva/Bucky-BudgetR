@@ -1930,19 +1930,30 @@ components:
       type: object
       additionalProperties: false
       description: |
-        The Dashboard's layout. When `widgets` is set, it is the layout, in
-        order (an empty list is an empty Dashboard). When it's missing or
-        null, the web app shows the default five widgets, using the
-        per-type objects (from before #37) as their settings.
+        The Dashboard's layouts. When `widgets` is set, it is the desktop
+        layout, in order (an empty list is an empty Dashboard). When it's
+        missing or null, the web app shows the default five widgets, using
+        the per-type objects (from before #37) as their settings.
+
+        `mobile_widgets` (#99) is the layout for narrow screens. When it's
+        missing or null, the web app shows a copy of the desktop layout, or
+        its mobile default when nothing else is saved.
       properties:
         widgets:
           type: array
           nullable: true
           maxItems: 30
           description: |
-            The widgets, in order. Each widget's id is unique, and it only
-            carries the settings object for its own `type` (400
-            `invalid_request` otherwise).
+            The desktop layout's widgets, in order. Each widget's id is
+            unique in its list, and it only carries the settings object for
+            its own `type` (400 `invalid_request` otherwise).
+          items:
+            $ref: "#/components/schemas/DashboardWidget"
+        mobile_widgets:
+          type: array
+          nullable: true
+          maxItems: 30
+          description: The mobile layout's widgets, in order, checked like `widgets`.
           items:
             $ref: "#/components/schemas/DashboardWidget"
         cycle:

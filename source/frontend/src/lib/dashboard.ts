@@ -1,6 +1,6 @@
-// The Dashboard's logic (spec §9), kept apart from the page: its layout of
-// widgets (#37) and their settings, the budget's health per account, and
-// which buckets to show.
+// The Dashboard's logic (spec §9), kept apart from the page: its layouts of
+// widgets (#37), one for desktop and one for mobile (#99), and their
+// settings, the budget's health per account, and which buckets to show.
 
 import type { Account, Bucket, BucketFigures } from "@/api/accounts";
 import type { components } from "@/api/schema";
@@ -161,8 +161,40 @@ export function newWidget(type: WidgetType, layout: Layout = []): WidgetInstance
   } as WidgetInstance;
 }
 
-/** The five widgets of #29's fixed Dashboard, in its order, with the given settings. */
-export function defaultLayout(saved?: DashboardPreferences | null): Layout {
+/**
+ * The default layout. Desktop: the five widgets of #29's fixed Dashboard, in
+ * its order. Mobile (#99): Needs attention, the cycle and the latest
+ * transactions. Both use the given per-type settings from before #37.
+ */
+export function defaultLayout(
+  kind: LayoutKind = "desktop",
+  saved?: DashboardPreferences | null,
+): Layout {
+  if (kind === "mobile") {
+    return [
+      {
+        id: "bucket_status",
+        type: "bucket_status",
+        width: "full",
+        title: null,
+        settings: fromApi.bucketStatus(saved?.bucket_status),
+      },
+      {
+        id: "cycle",
+        type: "cycle",
+        width: "full",
+        title: null,
+        settings: fromApi.cycle(saved?.cycle),
+      },
+      {
+        id: "recent_transactions",
+        type: "recent_transactions",
+        width: "full",
+        title: null,
+        settings: fromApi.recent(saved?.recent_transactions),
+      },
+    ];
+  }
   return [
     {
       id: "cycle",
@@ -218,9 +250,36 @@ function widgetFromApi(w: ApiWidget): WidgetInstance {
  * The saved layout. Without one (before #37, or never edited) it's the
  * default layout, using the per-type settings saved by #29.
  */
+/** The desktop layout: the saved one, else the default with the per-type settings. */
 export function dashboardLayout(preferences: Preferences): Layout {
   const saved = preferences.dashboard;
-  return saved?.widgets ? saved.widgets.map(widgetFromApi) : defaultLayout(saved);
+  return saved?.widgets ? saved.widgets.map(widgetFromApi) : defaultLayout("desktop", saved);
+}
+
+/** The two layouts (#99): one for wide screens, one for phones. */
+export type LayoutKind = "desktop" | "mobile";
+export const LAYOUT_KINDS: LayoutKind[] = ["desktop", "mobile"];
+export type Layouts = Record<LayoutKind, Layout>;
+
+/**
+ * Both layouts. Until the mobile layout is saved it's a copy of the desktop
+ * one, so nothing changes for whoever had a Dashboard before #99; with
+ * nothing saved at all it's the mobile default.
+ */
+export function dashboardLayouts(preferences: Preferences): Layouts {
+  const saved = preferences.dashboard;
+  const desktop = dashboardLayout(preferences);
+  const mobile = saved?.mobile_widgets
+    ? saved.mobile_widgets.map(widgetFromApi)
+    : saved
+      ? copyLayout(desktop)
+      : defaultLayout("mobile");
+  return { desktop, mobile };
+}
+
+/** A copy that shares nothing with the layout, for the other layout to start from. */
+export function copyLayout(layout: Layout): Layout {
+  return structuredClone(layout);
 }
 
 function widgetToApi(w: WidgetInstance): ApiWidget {
@@ -271,9 +330,20 @@ function widgetToApi(w: WidgetInstance): ApiWidget {
   }
 }
 
-/** What saving the layout sends; the API replaces `dashboard` as a whole. */
+/** One layout as the API stores it. */
 export function layoutToPreferences(layout: Layout): DashboardPreferences {
   return { widgets: layout.map(widgetToApi) };
+}
+
+/**
+ * What saving sends: both layouts, since the API replaces `dashboard` as a
+ * whole and the one not being changed has to stay as it is.
+ */
+export function layoutsToPreferences(layouts: Layouts): DashboardPreferences {
+  return {
+    widgets: layouts.desktop.map(widgetToApi),
+    mobile_widgets: layouts.mobile.map(widgetToApi),
+  };
 }
 
 /** Moves a widget one place up (-1) or down (+1). */
