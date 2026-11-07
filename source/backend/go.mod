@@ -3,7 +3,7 @@ module github.com/aasulvva/Bucky-BudgetR/source/backend
 go 1.26.0
 
 require (
-	github.com/getkin/kin-openapi v0.142.0
+	github.com/getkin/kin-openapi v0.152.0
 	github.com/jackc/pgx-shopspring-decimal v0.0.0-20220624020537-1d36b5a1853e
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/oapi-codegen/nullable v1.2.0
