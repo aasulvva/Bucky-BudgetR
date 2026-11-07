@@ -193,12 +193,15 @@ func remapPreferences(raw json.RawMessage, m map[kind]map[string]string) (json.R
 		return nil, fmt.Errorf("%w: preferences: %w", ErrInvalid, err)
 	}
 	dashboard, _ := prefs["dashboard"].(map[string]any)
-	// The per-type settings from before #37, and each widget in the layout.
+	// The per-type settings from before #37, and each widget in the desktop
+	// and mobile (#99) layouts.
 	holders := []map[string]any{dashboard}
-	widgets, _ := dashboard["widgets"].([]any)
-	for _, w := range widgets {
-		if w, ok := w.(map[string]any); ok {
-			holders = append(holders, w)
+	for _, list := range []string{"widgets", "mobile_widgets"} {
+		widgets, _ := dashboard[list].([]any)
+		for _, w := range widgets {
+			if w, ok := w.(map[string]any); ok {
+				holders = append(holders, w)
+			}
 		}
 	}
 	for _, h := range holders {

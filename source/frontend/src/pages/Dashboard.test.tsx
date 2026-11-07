@@ -57,6 +57,7 @@ const withPreferences = (preferences: Preferences) => {
 };
 
 beforeEach(() => {
+  viewport.width = 1280;
   apiMock.on("GET /api/v1/accounts", { body: [main, buffer] });
   apiMock.on("GET /api/v1/buckets", { body: [groceries, rent, hobby, fun] });
   apiMock.on("GET /api/v1/cycles/100001000001/bucket-figures", {
@@ -86,33 +87,57 @@ beforeEach(() => {
   }));
 });
 
-/** The default layout as Done or a settings save sends it, with some settings changed. */
-const savedLayout = (settings: Partial<Record<string, object>> = {}) => ({
-  dashboard: {
-    widgets: [
-      { id: "cycle", type: "cycle", width: "half", cycle: settings.cycle ?? { show_next: true } },
-      { id: "health", type: "health", width: "half" },
-      {
-        id: "bucket_status",
-        type: "bucket_status",
-        width: "half",
-        bucket_status: settings.bucket_status ?? { mode: "attention" },
-      },
-      {
-        id: "accounts",
-        type: "accounts",
-        width: "half",
-        accounts: settings.accounts ?? { mode: "all" },
-      },
-      {
-        id: "recent_transactions",
-        type: "recent_transactions",
-        width: "full",
-        recent_transactions: settings.recent_transactions ?? { count: 5 },
-      },
-    ],
+type WidgetSettingsByType = Partial<Record<string, object>>;
+
+/** The mobile default layout (#99) as the API stores it, with some settings changed. */
+const mobileWidgets = (settings: WidgetSettingsByType = {}) => [
+  {
+    id: "bucket_status",
+    type: "bucket_status",
+    width: "full",
+    bucket_status: settings.bucket_status ?? { mode: "attention" },
   },
+  { id: "cycle", type: "cycle", width: "full", cycle: settings.cycle ?? { show_next: true } },
+  {
+    id: "recent_transactions",
+    type: "recent_transactions",
+    width: "full",
+    recent_transactions: settings.recent_transactions ?? { count: 5 },
+  },
+];
+
+/**
+ * The default desktop layout as Done or a settings save sends it, with some
+ * settings changed, and the mobile layout sent with it: the mobile default,
+ * unless given (e.g. the copy of the desktop layout as it was loaded).
+ */
+const savedLayout = (settings: WidgetSettingsByType = {}, mobile: object[] = mobileWidgets()) => ({
+  dashboard: { widgets: desktopWidgets(settings), mobile_widgets: mobile },
 });
+
+/** The default desktop layout as the API stores it, with some settings changed. */
+const desktopWidgets = (settings: WidgetSettingsByType = {}) => [
+  { id: "cycle", type: "cycle", width: "half", cycle: settings.cycle ?? { show_next: true } },
+  { id: "health", type: "health", width: "half" },
+  {
+    id: "bucket_status",
+    type: "bucket_status",
+    width: "half",
+    bucket_status: settings.bucket_status ?? { mode: "attention" },
+  },
+  {
+    id: "accounts",
+    type: "accounts",
+    width: "half",
+    accounts: settings.accounts ?? { mode: "all" },
+  },
+  {
+    id: "recent_transactions",
+    type: "recent_transactions",
+    width: "full",
+    recent_transactions: settings.recent_transactions ?? { count: 5 },
+  },
+];
 
 /** Matches a paragraph by its whole text, spans and all, with plain spaces. */
 const paragraph = (text: string) => (_: string, el: Element | null) =>
@@ -305,7 +330,10 @@ describe("Dashboard", () => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
     expect(apiMock.calls("PATCH /api/v1/me/preferences").map((c) => c.body)).toEqual([
-      savedLayout({ bucket_status: { mode: "account", account_id: main.id } }),
+      savedLayout(
+        { bucket_status: { mode: "account", account_id: main.id } },
+        desktopWidgets({ bucket_status: { mode: "account", account_id: "9999" } }),
+      ),
     ]);
     expect(await (await widget("Main account")).findByText("Groceries")).toBeInTheDocument();
   });
@@ -344,7 +372,10 @@ describe("Dashboard", () => {
       expect(apiMock.calls("GET /api/v1/transactions").at(-1)?.query.get("limit")).toBe("10");
     });
     expect(apiMock.calls("PATCH /api/v1/me/preferences").map((c) => c.body)).toEqual([
-      savedLayout({ bucket_status: { mode: "all" }, recent_transactions: { count: 10 } }),
+      savedLayout(
+        { bucket_status: { mode: "all" }, recent_transactions: { count: 10 } },
+        desktopWidgets({ bucket_status: { mode: "all" } }),
+      ),
     ]);
   });
 
@@ -417,9 +448,6 @@ describe("Dashboard", () => {
 });
 
 describe("Dashboard layout", () => {
-  beforeEach(() => {
-    viewport.width = 1280;
-  });
   const patches = () => apiMock.calls("PATCH /api/v1/me/preferences").map((c) => c.body);
   /** The widgets' names, in the order shown. */
   const shown = () =>
@@ -653,7 +681,7 @@ describe("Dashboard layout", () => {
     const bar = await editMode();
     expect(shown()).toEqual(["Budget health"]);
     await userEvent.click(bar.getByRole("button", { name: "Reset to default" }));
-    const confirm = await screen.findByRole("dialog", { name: "Reset the dashboard?" });
+    const confirm = await screen.findByRole("dialog", { name: "Reset this layout?" });
     await userEvent.click(within(confirm).getByRole("button", { name: "Reset to default" }));
     await waitFor(() => {
       expect(shown()).toEqual([
@@ -665,8 +693,156 @@ describe("Dashboard layout", () => {
       ]);
     });
     await userEvent.click(bar.getByRole("button", { name: "Done" }));
+    // Only the desktop layout is reset; the mobile one is still the copy.
     await waitFor(() => {
-      expect(patches()).toEqual([savedLayout()]);
+      expect(patches()).toEqual([savedLayout({}, [{ id: "x", type: "health", width: "full" }])]);
+    });
+  });
+
+  describe("desktop and mobile layouts (#99)", () => {
+    const health = { id: "h", type: "health", width: "half" } as const;
+    const cycleWidget = {
+      id: "c",
+      type: "cycle",
+      width: "full",
+      cycle: { show_next: true },
+    } as const;
+    const both = () => {
+      withPreferences({ dashboard: { widgets: [health], mobile_widgets: [cycleWidget] } });
+    };
+
+    it("shows the mobile layout on a phone, and the desktop one on wider screens", async () => {
+      both();
+      viewport.width = 390;
+      const { unmount } = renderRoute("/");
+      expect(await screen.findByRole("region", { name: "Cycle" })).toBeInTheDocument();
+      expect(shown()).toEqual(["Cycle"]);
+      unmount();
+
+      viewport.width = 1280;
+      renderRoute("/");
+      expect(await screen.findByRole("region", { name: "Budget health" })).toBeInTheDocument();
+      expect(shown()).toEqual(["Budget health"]);
+    });
+
+    it("edits the mobile layout on a phone, keeping the desktop one", async () => {
+      both();
+      viewport.width = 390;
+      const bar = await editMode();
+      expect(bar.getByText(/^You're editing the mobile layout/)).toBeInTheDocument();
+      expect(bar.getByRole("radio", { name: "Mobile" })).toBeChecked();
+      await userEvent.click(screen.getByRole("button", { name: "Remove Cycle" }));
+      await userEvent.click(bar.getByRole("button", { name: "Done" }));
+      await waitFor(() => {
+        expect(patches()).toEqual([{ dashboard: { widgets: [health], mobile_widgets: [] } }]);
+      });
+    });
+
+    it("edits both layouts from a wide screen, saving them together", async () => {
+      both();
+      const bar = await editMode();
+      expect(bar.getByText(/^You're editing the desktop layout/)).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "Remove Budget health" }));
+      expect(shown()).toEqual([]);
+
+      await userEvent.click(bar.getByRole("radio", { name: "Mobile" }));
+      expect(bar.getByText(/^You're editing the mobile layout/)).toBeInTheDocument();
+      expect(shown()).toEqual(["Cycle"]);
+      // One column, as on a phone: no widths to choose.
+      expect(
+        screen.queryByRole("button", { name: "Make Cycle half width" }),
+      ).not.toBeInTheDocument();
+      await userEvent.click(bar.getByRole("button", { name: "Add widget" }));
+      const picker = await screen.findByRole("dialog", { name: "Add widget" });
+      await userEvent.click(within(picker).getByRole("button", { name: /^Budget health/ }));
+      await waitFor(() => {
+        expect(shown()).toEqual(["Cycle", "Budget health"]);
+      });
+
+      // Switching back keeps both drafts.
+      await userEvent.click(bar.getByRole("radio", { name: "Desktop" }));
+      expect(shown()).toEqual([]);
+      await userEvent.click(bar.getByRole("button", { name: "Done" }));
+      await waitFor(() => {
+        expect(patches()).toHaveLength(1);
+      });
+      const [saved] = patches() as { dashboard: { widgets: object[]; mobile_widgets: object[] } }[];
+      expect(saved?.dashboard.widgets).toEqual([]);
+      expect(saved?.dashboard.mobile_widgets).toEqual([
+        cycleWidget,
+        expect.objectContaining({ type: "health", width: "half" }),
+      ]);
+    });
+
+    it("throws away the changes to both layouts with Cancel", async () => {
+      both();
+      const bar = await editMode();
+      await userEvent.click(screen.getByRole("button", { name: "Remove Budget health" }));
+      await userEvent.click(bar.getByRole("radio", { name: "Mobile" }));
+      await userEvent.click(screen.getByRole("button", { name: "Remove Cycle" }));
+      await userEvent.click(bar.getByRole("button", { name: "Cancel" }));
+      expect(await screen.findByRole("region", { name: "Budget health" })).toBeInTheDocument();
+      expect(patches()).toEqual([]);
+    });
+
+    it("copies the desktop layout into the mobile one after asking", async () => {
+      both();
+      const bar = await editMode();
+      await userEvent.click(bar.getByRole("radio", { name: "Mobile" }));
+      await userEvent.click(bar.getByRole("button", { name: "Copy from desktop" }));
+      const confirm = await screen.findByRole("dialog", { name: "Replace this layout?" });
+      expect(
+        within(confirm).getByText(/replaces the mobile layout's widgets with a copy/),
+      ).toBeInTheDocument();
+      await userEvent.click(within(confirm).getByRole("button", { name: "Copy from desktop" }));
+      await waitFor(() => {
+        expect(shown()).toEqual(["Budget health"]);
+      });
+      await userEvent.click(bar.getByRole("button", { name: "Done" }));
+      await waitFor(() => {
+        expect(patches()).toEqual([{ dashboard: { widgets: [health], mobile_widgets: [health] } }]);
+      });
+    });
+
+    it("resets only the mobile layout, to its own default", async () => {
+      both();
+      viewport.width = 390;
+      const bar = await editMode();
+      await userEvent.click(bar.getByRole("button", { name: "Reset to default" }));
+      const confirm = await screen.findByRole("dialog", { name: "Reset this layout?" });
+      await userEvent.click(within(confirm).getByRole("button", { name: "Reset to default" }));
+      await waitFor(() => {
+        expect(shown()).toEqual(["Bucket status", "Cycle", "Recent transactions"]);
+      });
+      await userEvent.click(bar.getByRole("button", { name: "Done" }));
+      await waitFor(() => {
+        expect(patches()).toEqual([
+          { dashboard: { widgets: [health], mobile_widgets: mobileWidgets() } },
+        ]);
+      });
+    });
+
+    it("saves a widget's settings on a phone to the mobile layout only", async () => {
+      withPreferences({
+        dashboard: { widgets: [{ ...cycleWidget, width: "half" }], mobile_widgets: [cycleWidget] },
+      });
+      viewport.width = 390;
+      renderRoute("/");
+      const cycleCard = await widget("Cycle");
+      await userEvent.click(cycleCard.getByRole("button", { name: "Settings for Cycle" }));
+      const dialog = within(await screen.findByRole("dialog", { name: "Cycle settings" }));
+      await userEvent.click(dialog.getByRole("checkbox", { name: "Show the next planned cycle" }));
+      await userEvent.click(dialog.getByRole("button", { name: "Save" }));
+      await waitFor(() => {
+        expect(patches()).toEqual([
+          {
+            dashboard: {
+              widgets: [{ ...cycleWidget, width: "half" }],
+              mobile_widgets: [{ ...cycleWidget, cycle: { show_next: false } }],
+            },
+          },
+        ]);
+      });
     });
   });
 
@@ -849,6 +1025,15 @@ describe("In/out widget", () => {
                 days: 14,
                 account_id: buffer.id,
               },
+            },
+          ],
+          // The mobile layout is the copy of the saved layout as it was.
+          mobile_widgets: [
+            {
+              id: "io",
+              type: "in_out",
+              width: "half",
+              in_out: { figures: ["income", "expenses", "balance"], period: "month" },
             },
           ],
         },

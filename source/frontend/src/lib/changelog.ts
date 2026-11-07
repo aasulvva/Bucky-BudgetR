@@ -16,6 +16,32 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.10.00",
+    date: "2026-11-07",
+    title: {
+      en: "Separate dashboards for phone and desktop",
+      nb: "Egne oversikter for mobil og skrivebord",
+      nn: "Eigne oversikter for mobil og skrivebord",
+    },
+    changes: {
+      en: [
+        "The dashboard has one layout for phones and one for wider screens, each with its own widgets, order and settings. Your current layout is now both, until you change one of them.",
+        "Edit dashboard has a Desktop | Mobile switch, so you can arrange either layout from any screen, and Done saves both.",
+        "Copy from desktop or Copy from mobile starts a layout from the other one, and Reset to default resets only the layout you're editing. The mobile default is Bucket status, Cycle and Recent transactions.",
+      ],
+      nb: [
+        "Oversikten har én visning for telefoner og én for bredere skjermer, hver med egne moduler, rekkefølge og innstillinger. Den nåværende visningen din brukes nå til begge, til du endrer en av dem.",
+        "Rediger oversikten har en Skrivebord | Mobil-bryter, så du kan ordne begge visningene fra hvilken som helst skjerm, og Ferdig lagrer begge.",
+        "Kopier fra skrivebord eller Kopier fra mobil starter en visning fra den andre, og Tilbakestill tilbakestiller bare visningen du redigerer. Standard på mobil er Bøttestatus, Periode og Siste transaksjoner.",
+      ],
+      nn: [
+        "Oversikta har éi vising for telefonar og éi for breiare skjermar, kvar med eigne modular, rekkjefølgje og innstillingar. Den noverande visinga di vert no brukt til begge, til du endrar ei av dei.",
+        "Rediger oversikta har ein Skrivebord | Mobil-brytar, så du kan ordne begge visingane frå kva skjerm som helst, og Ferdig lagrar begge.",
+        "Kopier frå skrivebord eller Kopier frå mobil startar ei vising frå den andre, og Tilbakestill tilbakestiller berre visinga du redigerer. Standard på mobil er Bøttestatus, Periode og Siste transaksjonar.",
+      ],
+    },
+  },
+  {
     version: "v1.09.00",
     date: "2026-11-07",
     title: {

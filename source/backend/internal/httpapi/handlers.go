@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/oapi-codegen/nullable"
+
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/accounts"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/api"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/auth"
@@ -184,18 +186,29 @@ func checkCycleRule(current, patch api.Preferences) error {
 	return nil
 }
 
-// checkDashboard checks a preferences patch's Dashboard layout (#37): widget
-// ids are unique, a custom title isn't blank, and a widget only carries its
-// own type's settings.
+// checkDashboard checks a preferences patch's Dashboard layouts (#37, #99):
+// in each, widget ids are unique, a custom title isn't blank, and a widget
+// only carries its own type's settings.
 func checkDashboard(patch api.Preferences) error {
 	dashboard, err := patch.Dashboard.Get()
 	if err != nil {
 		return nil // Not given, or null.
 	}
-	widgets, err := dashboard.Widgets.Get()
-	if err != nil {
-		return nil
+	for _, list := range []nullable.Nullable[[]api.DashboardWidget]{dashboard.Widgets, dashboard.MobileWidgets} {
+		widgets, err := list.Get()
+		if err != nil {
+			continue // Not given, or null.
+		}
+		if err := checkWidgets(widgets); err != nil {
+			return err
+		}
 	}
+	return nil
+}
+
+// checkWidgets checks one layout's widgets: unique ids, no blank titles,
+// and only the settings of each widget's own type.
+func checkWidgets(widgets []api.DashboardWidget) error {
 	invalid := func(detail string) error {
 		return &Error{Status: http.StatusBadRequest, Code: "invalid_request", Detail: detail}
 	}

@@ -26,6 +26,8 @@ import { WidgetSettingsDialog } from "./WidgetSettings";
 export interface WidgetEdit {
   /** The widget's name in the edit bar's labels, told apart from its copies. */
   name: string;
+  /** One column (the mobile layout), so widths don't apply. */
+  narrow: boolean;
   first: boolean;
   last: boolean;
   /** The drag handle, made by the sortable grid cell. */
@@ -95,8 +97,9 @@ function EditBar({
 }) {
   const { t } = useTranslation();
   const theme = useMantineTheme();
-  // The grid has two columns from md; below that every widget is full width.
-  const wide = useMediaQuery(`(min-width: ${theme.breakpoints.md})`, true);
+  // The grid has two columns from md, unless narrow; otherwise every widget
+  // is full width.
+  const wide = useMediaQuery(`(min-width: ${theme.breakpoints.md})`, true) && !edit.narrow;
   const name = { widget: edit.name };
   const full = widget.width === "full";
   return (

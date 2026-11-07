@@ -1173,18 +1173,24 @@ export interface components {
             whats_new_popup?: boolean | null;
         };
         /**
-         * @description The Dashboard's layout. When `widgets` is set, it is the layout, in
-         *     order (an empty list is an empty Dashboard). When it's missing or
-         *     null, the web app shows the default five widgets, using the
-         *     per-type objects (from before #37) as their settings.
+         * @description The Dashboard's layouts. When `widgets` is set, it is the desktop
+         *     layout, in order (an empty list is an empty Dashboard). When it's
+         *     missing or null, the web app shows the default five widgets, using
+         *     the per-type objects (from before #37) as their settings.
+         *
+         *     `mobile_widgets` (#99) is the layout for narrow screens. When it's
+         *     missing or null, the web app shows a copy of the desktop layout, or
+         *     its mobile default when nothing else is saved.
          */
         DashboardSettings: {
             /**
-             * @description The widgets, in order. Each widget's id is unique, and it only
-             *     carries the settings object for its own `type` (400
-             *     `invalid_request` otherwise).
+             * @description The desktop layout's widgets, in order. Each widget's id is
+             *     unique in its list, and it only carries the settings object for
+             *     its own `type` (400 `invalid_request` otherwise).
              */
             widgets?: components["schemas"]["DashboardWidget"][] | null;
+            /** @description The mobile layout's widgets, in order, checked like `widgets`. */
+            mobile_widgets?: components["schemas"]["DashboardWidget"][] | null;
             cycle?: components["schemas"]["CycleWidgetSettings"];
             accounts?: components["schemas"]["AccountsWidgetSettings"];
             bucket_status?: components["schemas"]["BucketStatusWidgetSettings"];

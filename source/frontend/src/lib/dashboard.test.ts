@@ -3,10 +3,13 @@ import { account, bucket, bucketFigures } from "@/test/fixtures";
 import {
   accountHealth,
   autoTitle,
+  copyLayout,
   customTitle,
   dashboardLayout,
+  dashboardLayouts,
   defaultLayout,
   layoutToPreferences,
+  layoutsToPreferences,
   mostUsed,
   moveWidget,
   moveWidgetTo,
@@ -206,6 +209,60 @@ describe("dashboardLayout", () => {
       ...layout[2],
       settings: { mode: "account", accountId: "1234", bucketId: null, showMode: true },
     });
+  });
+});
+
+describe("the desktop and mobile layouts (#99)", () => {
+  const health = { id: "h", type: "health" as const, width: "half" as const };
+  const cycleApi = { id: "c", type: "cycle" as const, width: "full" as const };
+
+  it("are both saved ones", () => {
+    const layouts = dashboardLayouts({
+      dashboard: { widgets: [health], mobile_widgets: [cycleApi] },
+    });
+    expect(layouts.desktop.map((w) => w.type)).toEqual(["health"]);
+    expect(layouts.mobile).toEqual([
+      { id: "c", type: "cycle", width: "full", title: null, settings: { showNext: true } },
+    ]);
+  });
+
+  it("copies the desktop layout into a mobile one that isn't saved", () => {
+    const saved = dashboardLayouts({ dashboard: { widgets: [health] } });
+    expect(saved.mobile).toEqual(saved.desktop);
+    expect(saved.mobile).not.toBe(saved.desktop);
+    // Only the settings from before #37: the copy has them too.
+    const old = dashboardLayouts({ dashboard: { bucket_status: { mode: "all" } } });
+    expect(old.mobile).toEqual(old.desktop);
+    expect(old.mobile.find((w) => w.type === "bucket_status")?.settings).toMatchObject({
+      mode: "all",
+    });
+  });
+
+  it("gives the mobile default when nothing is saved", () => {
+    const layouts = dashboardLayouts({});
+    expect(layouts.desktop).toEqual(defaultLayout());
+    expect(layouts.mobile).toEqual(defaultLayout("mobile"));
+    expect(layouts.mobile.map((w) => [w.type, w.width])).toEqual([
+      ["bucket_status", "full"],
+      ["cycle", "full"],
+      ["recent_transactions", "full"],
+    ]);
+    expect(layouts.mobile[0]?.settings).toMatchObject({ mode: "attention" });
+    expect(dashboardLayouts({ dashboard: null }).mobile).toEqual(defaultLayout("mobile"));
+  });
+
+  it("saves both layouts together", () => {
+    const layouts = dashboardLayouts({ dashboard: { widgets: [health], mobile_widgets: [] } });
+    expect(layoutsToPreferences(layouts)).toEqual({ widgets: [health], mobile_widgets: [] });
+  });
+
+  it("copies a layout without sharing anything with it", () => {
+    const [cycle] = defaultLayout();
+    const layout: Layout = cycle ? [cycle] : [];
+    const copy = copyLayout(layout);
+    expect(copy).toEqual(layout);
+    expect(copy[0]).not.toBe(layout[0]);
+    expect(copy[0]?.settings).not.toBe(layout[0]?.settings);
   });
 });
 
