@@ -16,6 +16,24 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.07.01",
+    date: "2026-11-07",
+    title: {
+      en: "Library update",
+      nb: "Oppdatert bibliotek",
+      nn: "Oppdatert bibliotek",
+    },
+    changes: {
+      en: ["The library the server uses to check requests is updated. Nothing changes in the app."],
+      nb: [
+        "Biblioteket serveren bruker til å kontrollere forespørsler, er oppdatert. Ingenting endres i appen.",
+      ],
+      nn: [
+        "Biblioteket tenaren brukar til å kontrollere førespurnader, er oppdatert. Ingenting vert endra i appen.",
+      ],
+    },
+  },
+  {
     version: "v1.07.00",
     date: "2026-11-07",
     title: {

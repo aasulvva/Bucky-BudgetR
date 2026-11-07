@@ -34,7 +34,6 @@ const adminOnly = "x-admin-only"
 //
 // Requests for paths not in the spec pass through untouched.
 func Gate() (func(http.Handler) http.Handler, error) {
-	openapi3.SchemaErrorDetailsDisabled = true // keep error messages short
 	spec, err := api.GetSpec()
 	if err != nil {
 		return nil, fmt.Errorf("load API spec: %w", err)
@@ -46,6 +45,8 @@ func Gate() (func(http.Handler) http.Handler, error) {
 	opts := &openapi3filter.Options{
 		// Sessions are checked below, not by the validator.
 		AuthenticationFunc: openapi3filter.NoopAuthenticationFunc,
+		// Keep error messages short: no schema or value dumps.
+		SchemaValidationOptions: []openapi3.SchemaValidationOption{openapi3.DisableSchemaErrorDetails()},
 	}
 
 	return func(next http.Handler) http.Handler {

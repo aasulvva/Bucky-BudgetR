@@ -2,12 +2,15 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import type { Preferences } from "@/app/session";
-import { APP_VERSION, CHANGELOG, entryTitle } from "@/lib/changelog";
+import { APP_VERSION, CHANGELOG, entryTitle, isFeatureUpdate } from "@/lib/changelog";
 import { apiMock, testUser } from "@/test/api";
 import { renderRoute } from "@/test/render";
 
-const [newest, previous] = CHANGELOG;
-if (!newest || !previous) throw new Error("the tests need two entries");
+const [newest] = CHANGELOG;
+// The newest version of an earlier feature: from it, the app's version pops
+// up, whether that's a feature version or a patch of one.
+const previous = CHANGELOG.find((e) => isFeatureUpdate(e.version, APP_VERSION));
+if (!newest || !previous) throw new Error("the tests need an earlier feature version");
 
 /** Signs in a user with these What's New preferences. */
 function withPreferences(prefs: Preferences) {
