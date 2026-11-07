@@ -39,8 +39,13 @@ export function useWidgetTitle(widget: WidgetInstance): string {
 /**
  * How the Dashboard frames a widget: its title, and in edit mode its header
  * shows the edit bar instead of its link and settings, and its content can't
- * be used.
+ * be used. `openSettings` lets the content open the widget's settings.
  */
-export const WidgetFrame = createContext<{ title?: string; editing: boolean; bar?: ReactNode }>({
+export const WidgetFrame = createContext<{
+  title?: string;
+  editing: boolean;
+  bar?: ReactNode;
+  openSettings?: () => void;
+}>({
   editing: false,
 });

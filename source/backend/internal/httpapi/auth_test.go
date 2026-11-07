@@ -386,7 +386,7 @@ func TestPreferences(t *testing.T) {
 		t.Errorf("dashboard replaced: %d %s", w.Code, w.Body)
 	}
 	// The layout (#37): a list of widgets, each with its own settings.
-	layout := `{"dashboard":{"widgets":[{"cycle":{"show_next":false},"id":"a1","type":"cycle","width":"full"},{"bucket_status":{"bucket_id":"1000000001","mode":"bucket"},"id":"b-2","type":"bucket_status","width":"half"},{"bucket_status":{"mode":"most_used","show_mode":false},"id":"b_3","type":"bucket_status","width":"half"},{"id":"h","title":"Health","type":"health","width":"half"},{"id":"io","in_out":{"account_id":"1234","days":7,"figures":["balance","income"],"period":"days"},"type":"in_out","width":"full"}]}}`
+	layout := `{"dashboard":{"widgets":[{"cycle":{"show_next":false},"id":"a1","type":"cycle","width":"full"},{"bucket_status":{"bucket_id":"1000000001","mode":"bucket"},"id":"b-2","type":"bucket_status","width":"half"},{"bucket_status":{"mode":"most_used","show_mode":false},"id":"b_3","type":"bucket_status","width":"half"},{"bucket_status":{"account_id":"1234","mode":"account"},"id":"b4","type":"bucket_status","width":"half"},{"id":"h","title":"Health","type":"health","width":"half"},{"id":"io","in_out":{"account_id":"1234","days":7,"figures":["balance","income"],"period":"days"},"type":"in_out","width":"full"}]}}`
 	if w := patch(layout); w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != layout {
 		t.Errorf("layout: %d %s", w.Code, w.Body)
 	}
@@ -401,6 +401,7 @@ func TestPreferences(t *testing.T) {
 		`{"theme":"dark"}`, `{"locale":"not a locale!"}`, `{"locale":42}`, `{"language":"de"}`, `[]`,
 		`{"dashboard":{"bucket_status":{"mode":"some"}}}`,
 		`{"dashboard":{"bucket_status":{"mode":"bucket","bucket_id":"42"}}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"bucket_status","width":"half","bucket_status":{"mode":"account","account_id":"12"}}]}}`,
 		`{"dashboard":{"recent_transactions":{"count":0}}}`,
 		`{"dashboard":{"recent_transactions":{"count":21}}}`,
 		`{"dashboard":{"graphs":{}}}`,

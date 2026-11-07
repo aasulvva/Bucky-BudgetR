@@ -69,7 +69,7 @@ describe("dashboardLayout", () => {
         type: "bucket_status",
         width: "half",
         title: null,
-        settings: { mode: "attention", bucketId: null, showMode: true },
+        settings: { mode: "attention", accountId: null, bucketId: null, showMode: true },
       },
       {
         id: "accounts",
@@ -101,7 +101,7 @@ describe("dashboardLayout", () => {
     expect(layout.map((w) => w.settings)).toEqual([
       { showNext: false },
       null,
-      { mode: "bucket", bucketId: "1000000001", showMode: true },
+      { mode: "bucket", accountId: null, bucketId: "1000000001", showMode: true },
       { mode: "account", accountId: "1234" },
       { count: 10 },
     ]);
@@ -181,13 +181,31 @@ describe("dashboardLayout", () => {
         type: "bucket_status",
         width: "half",
         title: null,
-        settings: { mode: "all", bucketId: "2", showMode: true },
+        settings: { mode: "all", accountId: "1234", bucketId: "2", showMode: true },
+      },
+      {
+        id: "c",
+        type: "bucket_status",
+        width: "half",
+        title: null,
+        settings: { mode: "account", accountId: "1234", bucketId: "2", showMode: true },
       },
     ];
-    expect(layoutToPreferences(layout).widgets).toEqual([
+    const saved = layoutToPreferences(layout);
+    expect(saved.widgets).toEqual([
       { id: "a", type: "accounts", width: "half", accounts: { mode: "all" } },
       { id: "b", type: "bucket_status", width: "half", bucket_status: { mode: "all" } },
+      {
+        id: "c",
+        type: "bucket_status",
+        width: "half",
+        bucket_status: { mode: "account", account_id: "1234" },
+      },
     ]);
+    expect(dashboardLayout({ dashboard: saved })[2]).toEqual({
+      ...layout[2],
+      settings: { mode: "account", accountId: "1234", bucketId: null, showMode: true },
+    });
   });
 });
 
@@ -231,7 +249,7 @@ describe("editing the layout", () => {
       type: "bucket_status",
       width: "half",
       title: null,
-      settings: { mode: "attention", bucketId: null, showMode: true },
+      settings: { mode: "attention", accountId: null, bucketId: null, showMode: true },
     });
     expect(added.id).toMatch(/^[A-Za-z0-9_-]{1,40}$/);
     expect(ids(replaceWidget(layout, added)).at(-1)).toBe(added.id);
@@ -244,7 +262,7 @@ describe("editing the layout", () => {
       type: "bucket_status",
       width: "half",
       title: null,
-      settings: { mode: "bucket", bucketId, showMode: true },
+      settings: { mode: "bucket", accountId: null, bucketId, showMode: true },
     });
     expect(settingsComplete(one(null), [main], [fine])).toBe(false);
     expect(settingsComplete(one("9"), [main], [fine])).toBe(false);
@@ -258,6 +276,14 @@ describe("editing the layout", () => {
     };
     expect(settingsComplete(account, [main], [])).toBe(true);
     expect(settingsComplete(account, [], [])).toBe(false);
+    const buckets = one(null);
+    const ofAccount = (accountId: string | null): WidgetInstance =>
+      buckets.type === "bucket_status"
+        ? { ...buckets, settings: { ...buckets.settings, mode: "account", accountId } }
+        : buckets;
+    expect(settingsComplete(ofAccount(main.id), [main], [])).toBe(true);
+    expect(settingsComplete(ofAccount(null), [main], [])).toBe(false);
+    expect(settingsComplete(ofAccount("9"), [main], [])).toBe(false);
     expect(settingsComplete(layout[0] ?? account, [], [])).toBe(true);
   });
 });
@@ -268,7 +294,7 @@ describe("titles and the mode line", () => {
     type: "bucket_status",
     width: "half",
     title: null,
-    settings: { mode: "bucket", bucketId: short.id, showMode: false },
+    settings: { mode: "bucket", accountId: null, bucketId: short.id, showMode: false },
   };
 
   it("names One bucket and One account after what they show, unless given a title", () => {
@@ -287,6 +313,12 @@ describe("titles and the mode line", () => {
       settings: { mode: "account", accountId: main.id },
     };
     expect(autoTitle(account, [main], [])).toBe("Main account");
+    const ofAccount: WidgetInstance = {
+      ...one,
+      settings: { mode: "account", accountId: main.id, bucketId: null, showMode: true },
+    };
+    expect(autoTitle(ofAccount, [main], [])).toBe("Main account");
+    expect(autoTitle(ofAccount, [], [])).toBeNull();
     expect(autoTitle(defaultLayout()[1] ?? account, [main], [])).toBeNull();
   });
 
@@ -372,14 +404,23 @@ describe("shownAccounts", () => {
 });
 
 describe("shownBucketStatus", () => {
-  const settings = { mode: "bucket" as const, bucketId: "2", showMode: true };
+  const settings = { mode: "bucket" as const, accountId: null, bucketId: "2", showMode: true };
 
   it("shows the chosen bucket", () => {
-    expect(shownBucketStatus(settings, [fine, short])).toEqual({ mode: "bucket", bucket: short });
+    expect(shownBucketStatus(settings, [main], [fine, short])).toEqual({
+      mode: "bucket",
+      bucket: short,
+    });
   });
 
   it("falls back to Needs attention when the bucket is gone", () => {
-    expect(shownBucketStatus(settings, [fine])).toEqual({ mode: "attention" });
+    expect(shownBucketStatus(settings, [main], [fine])).toEqual({ mode: "attention" });
+  });
+
+  it("shows the chosen account, or says it's gone", () => {
+    const account = { ...settings, mode: "account" as const, accountId: main.id };
+    expect(shownBucketStatus(account, [main], [fine])).toEqual({ mode: "account", account: main });
+    expect(shownBucketStatus(account, [], [fine])).toEqual({ mode: "account", account: null });
   });
 });
 

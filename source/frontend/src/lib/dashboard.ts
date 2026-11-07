@@ -27,7 +27,13 @@ export const WIDGET_TYPES: WidgetType[] = [
   "in_out",
 ];
 export const ACCOUNTS_MODES: AccountsMode[] = ["all", "account"];
-export const BUCKET_STATUS_MODES: BucketStatusMode[] = ["attention", "all", "most_used", "bucket"];
+export const BUCKET_STATUS_MODES: BucketStatusMode[] = [
+  "attention",
+  "all",
+  "most_used",
+  "account",
+  "bucket",
+];
 export const TRANSACTION_COUNTS = [3, 5, 10, 15, 20];
 /** The most widgets a layout holds (the API's limit). */
 export const MAX_WIDGETS = 30;
@@ -46,6 +52,8 @@ export interface AccountsSettings {
 }
 export interface BucketStatusSettings {
   mode: BucketStatusMode;
+  /** For One account (#89). */
+  accountId: string | null;
   bucketId: string | null;
   /** Show the mode above the buckets. */
   showMode: boolean;
@@ -98,6 +106,7 @@ const fromApi = {
   }),
   bucketStatus: (s?: Schemas["BucketStatusWidgetSettings"]): BucketStatusSettings => ({
     mode: s?.mode ?? "attention",
+    accountId: s?.account_id ?? null,
     bucketId: s?.bucket_id ?? null,
     showMode: s?.show_mode ?? true,
   }),
@@ -227,11 +236,12 @@ function widgetToApi(w: WidgetInstance): ApiWidget {
     case "health":
       return base;
     case "bucket_status": {
-      const { mode, bucketId, showMode } = w.settings;
+      const { mode, accountId, bucketId, showMode } = w.settings;
       return {
         ...base,
         bucket_status: {
           mode,
+          ...(mode === "account" ? { account_id: accountId } : {}),
           ...(mode === "bucket" ? { bucket_id: bucketId } : {}),
           ...(showMode ? {} : { show_mode: false }),
         },
@@ -313,7 +323,10 @@ export function autoTitle(
     const { bucketId } = widget.settings;
     return buckets.find((b) => b.id === bucketId)?.name ?? null;
   }
-  if (widget.type === "accounts" && widget.settings.mode === "account") {
+  if (
+    (widget.type === "bucket_status" || widget.type === "accounts") &&
+    widget.settings.mode === "account"
+  ) {
     const { accountId } = widget.settings;
     return accounts.find((a) => a.id === accountId)?.name ?? null;
   }
@@ -332,7 +345,10 @@ export function settingsComplete(
   if (widget.type === "bucket_status" && widget.settings.mode === "bucket") {
     return buckets.some((b) => b.id === widget.settings.bucketId);
   }
-  if (widget.type === "accounts" && widget.settings.mode === "account") {
+  if (
+    (widget.type === "bucket_status" || widget.type === "accounts") &&
+    widget.settings.mode === "account"
+  ) {
     return accounts.some((a) => a.id === widget.settings.accountId);
   }
   if (widget.type === "in_out") {
@@ -347,14 +363,22 @@ export function settingsComplete(
 }
 
 /**
- * The bucket One bucket shows. Without it (none chosen, or it was deleted)
- * the widget falls back to Needs attention.
+ * What Bucket status shows. One bucket without its bucket (none chosen, or
+ * it was deleted) falls back to Needs attention; One account without its
+ * account has `account: null`, for the widget to say it's gone (#89).
  */
 export function shownBucketStatus(
   settings: BucketStatusSettings,
+  accounts: Account[],
   buckets: Bucket[],
-): { mode: Exclude<BucketStatusMode, "bucket"> } | { mode: "bucket"; bucket: Bucket } {
-  const { mode, bucketId } = settings;
+):
+  | { mode: Exclude<BucketStatusMode, "bucket" | "account"> }
+  | { mode: "account"; account: Account | null }
+  | { mode: "bucket"; bucket: Bucket } {
+  const { mode, accountId, bucketId } = settings;
+  if (mode === "account") {
+    return { mode, account: accounts.find((a) => a.id === accountId) ?? null };
+  }
   if (mode !== "bucket") return { mode };
   const bucket = buckets.find((b) => b.id === bucketId);
   return bucket ? { mode, bucket } : { mode: "attention" };

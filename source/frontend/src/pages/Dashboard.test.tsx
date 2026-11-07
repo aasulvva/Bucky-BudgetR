@@ -114,6 +114,10 @@ const savedLayout = (settings: Partial<Record<string, object>> = {}) => ({
   },
 });
 
+/** Matches a paragraph by its whole text, spans and all, with plain spaces. */
+const paragraph = (text: string) => (_: string, el: Element | null) =>
+  el?.tagName === "P" && plain(el.textContent) === text;
+
 const widget = async (name: string) => within(await screen.findByRole("region", { name }));
 
 /** Picks an option in a Mantine select. */
@@ -249,6 +253,79 @@ describe("Dashboard", () => {
       savedLayout({ bucket_status: { mode: "bucket", bucket_id: fun.id } }),
     ]);
     expect(await status.findByText("One bucket")).toBeInTheDocument();
+  });
+
+  it("shows one account's buckets under its name, with what they have left", async () => {
+    const savings = bucket({ id: "1000000005", name: "Savings", source_account_id: buffer.id });
+    apiMock.on("GET /api/v1/buckets", { body: [groceries, rent, hobby, fun, savings] });
+    withPreferences({ dashboard: { bucket_status: { mode: "account", account_id: main.id } } });
+    const { unmount } = renderRoute("/");
+    const status = await widget("Main account");
+    expect(await status.findByText("One account")).toBeInTheDocument();
+    expect(status.getByText("Groceries")).toBeInTheDocument();
+    expect(status.getByText("Fun")).toBeInTheDocument();
+    expect(status.queryByText("Savings")).not.toBeInTheDocument();
+    // Σ TF without the overspent one is 1900, 400 more than the balance.
+    expect(status.getByText(paragraph(`Short ${m("400.00")}`))).toBeInTheDocument();
+    expect(status.getByText(paragraph(`Left in buckets ${m("1850.00")}`))).toBeInTheDocument();
+    // The title names the account; the list doesn't again.
+    expect(status.getAllByText("Main account")).toHaveLength(1);
+    unmount();
+
+    apiMock.on("GET /api/v1/buckets", { body: [groceries, rent, hobby, fun] });
+    withPreferences({ dashboard: { bucket_status: { mode: "account", account_id: buffer.id } } });
+    renderRoute("/");
+    const empty = await widget("Buffer account");
+    expect(
+      await empty.findByText(
+        paragraph("Buffer account has no buckets yet. Create one in Bucket setup."),
+      ),
+    ).toBeInTheDocument();
+    expect(empty.getByRole("link", { name: "Create one in Bucket setup" })).toHaveAttribute(
+      "href",
+      "/buckets/setup",
+    );
+  });
+
+  it("says when One account's account is gone, offering to choose another", async () => {
+    withPreferences({ dashboard: { bucket_status: { mode: "account", account_id: "9999" } } });
+    renderRoute("/");
+    const status = await widget("Bucket status");
+    expect(
+      await status.findByText("The account this widget showed has been deleted."),
+    ).toBeInTheDocument();
+    await userEvent.click(status.getByRole("button", { name: "Choose another account" }));
+    const box = await screen.findByRole("dialog", { name: "Bucket status settings" });
+    const dialog = within(box);
+    expect(dialog.getByRole("button", { name: "Save" })).toBeDisabled();
+    await choose(box, "Account", "Main account");
+    await userEvent.click(dialog.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+    expect(apiMock.calls("PATCH /api/v1/me/preferences").map((c) => c.body)).toEqual([
+      savedLayout({ bucket_status: { mode: "account", account_id: main.id } }),
+    ]);
+    expect(await (await widget("Main account")).findByText("Groceries")).toBeInTheDocument();
+  });
+
+  it("chooses One account in the settings", async () => {
+    renderRoute("/");
+    const status = await widget("Bucket status");
+    await userEvent.click(
+      await status.findByRole("button", { name: "Settings for Bucket status" }),
+    );
+    const box = await screen.findByRole("dialog", { name: "Bucket status settings" });
+    await choose(box, "Show", "One account");
+    expect(within(box).getByRole("button", { name: "Save" })).toBeDisabled();
+    await choose(box, "Account", "Buffer account");
+    await userEvent.click(within(box).getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(apiMock.calls("PATCH /api/v1/me/preferences").map((c) => c.body)).toEqual([
+        savedLayout({ bucket_status: { mode: "account", account_id: buffer.id } }),
+      ]);
+    });
   });
 
   it("saves how many transactions to show", async () => {
