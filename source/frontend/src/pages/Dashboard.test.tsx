@@ -680,6 +680,46 @@ describe("In/out widget", () => {
     expect(query?.get("to")).toBe(endAtFor(month?.to ?? ""));
   });
 
+  it("makes the amounts smaller, or puts them in rows, when they don't fit", async () => {
+    // jsdom has no layout: each amount is 150px wide at 20px, the widget's
+    // content `width` px wide, and there are three columns 16px apart.
+    let width = 450;
+    const style = window.getComputedStyle.bind(window);
+    const spies = [
+      vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+        this: HTMLElement,
+      ) {
+        return { width: this.hasAttribute("data-amount") ? 150 : 0 } as DOMRect;
+      }),
+      vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(() => width),
+      vi.spyOn(window, "getComputedStyle").mockImplementation((el, pseudo) => {
+        const s = style(el, pseudo);
+        return el instanceof HTMLElement && el.hasAttribute("data-amount")
+          ? Object.defineProperty(s, "fontSize", { value: "20px" })
+          : s;
+      }),
+    ];
+    try {
+      inOut();
+      const first = renderRoute("/");
+      const io = await widget("Money in and out");
+      await io.findByRole("link", { name: figure("Income", "20100.00") });
+      // 139px columns: 120px at 16px fits.
+      expect(
+        io.getByRole("link", { name: figure("Income", "20100.00") }).parentElement,
+      ).toHaveAttribute("data-layout", "small");
+      first.unmount();
+
+      width = 300;
+      renderRoute("/");
+      const narrow = await widget("Money in and out");
+      const income = await narrow.findByRole("link", { name: figure("Income", "20100.00") });
+      expect(income.parentElement).toHaveAttribute("data-layout", "rows");
+    } finally {
+      for (const spy of spies) spy.mockRestore();
+    }
+  });
+
   it("counts transfers on one account, over the last days", async () => {
     inOut({ figures: ["income", "balance"], period: "days", days: 7, account_id: main.id });
     renderRoute("/");

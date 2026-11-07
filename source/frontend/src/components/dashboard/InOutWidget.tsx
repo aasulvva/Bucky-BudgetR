@@ -1,5 +1,5 @@
-import { Anchor, SimpleGrid, Stack, Text } from "@mantine/core";
-import type { ReactNode } from "react";
+import { Anchor, Box, Group, Stack, Text } from "@mantine/core";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
@@ -61,6 +61,48 @@ export function InOutWidget({
   );
 }
 
+/** Side by side in large or small type, or one figure per row. */
+type Layout = "large" | "small" | "rows";
+const FONT_SIZE: Record<Layout, number> = { large: 20, small: 16, rows: 18 };
+const GAP = 16;
+
+/**
+ * The layout the figures fit in: side by side while the widest amount fits
+ * its column, at the large size or else the small one, and in rows when
+ * neither fits. An amount's width scales with its font size, so measuring
+ * it in any layout tells all three apart.
+ */
+function useFiguresLayout(count: number, amounts: string) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [layout, setLayout] = useState<Layout>("large");
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const check = () => {
+      // Width per pixel of font size, for the widest amount.
+      const perPx = Math.max(
+        0,
+        ...[...el.querySelectorAll<HTMLElement>("[data-amount]")].map(
+          (a) =>
+            a.getBoundingClientRect().width /
+            (Number.parseFloat(getComputedStyle(a).fontSize) || 1),
+        ),
+      );
+      const column = (el.clientWidth - GAP * (count - 1)) / count;
+      // Nothing measured (e.g. hidden): keep the large layout.
+      const fits = (l: Layout) => perPx === 0 || perPx * FONT_SIZE[l] <= column;
+      setLayout(fits("large") ? "large" : fits("small") ? "small" : "rows");
+    };
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+    };
+  }, [count, amounts]);
+  return { ref, layout };
+}
+
 function Figures({
   widget,
   accounts,
@@ -96,6 +138,9 @@ function Figures({
         : undefined;
   };
 
+  const { ref, layout } = useFiguresLayout(figures.length, figures.map(amountOf).join("|"));
+  const stacked = layout === "rows";
+
   return (
     <Stack gap="sm">
       <Text size="xs" c="dimmed">
@@ -105,10 +150,33 @@ function Figures({
           accounts: account?.name ?? t("dashboard.accounts.modes.all"),
         })}
       </Text>
-      <SimpleGrid cols={{ base: 1, xs: figures.length }} spacing="sm">
+      <Box
+        ref={ref}
+        data-layout={layout}
+        style={
+          stacked
+            ? { display: "flex", flexDirection: "column", gap: 4 }
+            : {
+                display: "grid",
+                gridTemplateColumns: `repeat(${String(figures.length)}, minmax(0, 1fr))`,
+                gap: GAP,
+              }
+        }
+      >
         {figures.map((figure) => {
           const label = t(`dashboard.inOut.figures.${figure}`);
           const amount = amountOf(figure);
+          const value = (
+            <Text
+              data-amount
+              fz={FONT_SIZE[layout]}
+              fw={700}
+              c={color(figure)}
+              style={{ whiteSpace: "nowrap", width: "max-content" }}
+            >
+              {amount}
+            </Text>
+          );
           return (
             <Anchor
               key={figure}
@@ -118,16 +186,25 @@ function Figures({
               c="var(--mantine-color-text)"
               aria-label={t("dashboard.inOut.open", { figure: label, amount })}
             >
-              <Text size="xs" c="dimmed">
-                {label}
-              </Text>
-              <Text fz={20} fw={700} c={color(figure)} style={{ whiteSpace: "nowrap" }}>
-                {amount}
-              </Text>
+              {stacked ? (
+                <Group justify="space-between" gap="xs" wrap="nowrap">
+                  <Text size="sm" c="dimmed">
+                    {label}
+                  </Text>
+                  {value}
+                </Group>
+              ) : (
+                <>
+                  <Text size="xs" c="dimmed">
+                    {label}
+                  </Text>
+                  {value}
+                </>
+              )}
             </Anchor>
           );
         })}
-      </SimpleGrid>
+      </Box>
       {totals.leftOut > 0 && (
         <Text size="xs" c="dimmed">
           {t("dashboard.inOut.leftOut", { count: totals.leftOut })}
