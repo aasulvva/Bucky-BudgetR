@@ -1229,11 +1229,13 @@ export interface components {
         BucketStatusWidgetSettings: {
             /**
              * @description Which buckets the widget shows: the ones that need attention
-             *     (the default), all of them, the most used ones, or the one in
-             *     `bucket_id`.
+             *     (the default), all of them, the most used ones, those of the
+             *     account in `account_id` (#89), or the one in `bucket_id`.
              * @enum {string}
              */
-            mode: "attention" | "all" | "most_used" | "bucket";
+            mode: "attention" | "all" | "most_used" | "account" | "bucket";
+            /** @description The account whose buckets `account` mode shows. */
+            account_id?: (string & components["schemas"]["AccountId"]) | null;
             /** @description The bucket shown in `bucket` mode. */
             bucket_id?: (string & components["schemas"]["BucketId"]) | null;
             /** @description Show the mode above the buckets (e.g. *Needs attention*). True by default. */

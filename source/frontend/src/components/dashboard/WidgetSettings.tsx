@@ -213,6 +213,17 @@ function BucketStatusForm({
           if (mode) onChange({ ...value, mode });
         }}
       />
+      {value.mode === "account" && (
+        <Select
+          label={t("dashboard.accounts.account")}
+          placeholder={t("dashboard.accounts.pickAccount")}
+          data={accounts.map((a) => ({ value: a.id, label: a.name }))}
+          value={accounts.some((a) => a.id === value.accountId) ? value.accountId : null}
+          onChange={(accountId) => {
+            onChange({ ...value, accountId });
+          }}
+        />
+      )}
       {value.mode === "bucket" && (
         <Select
           label={t("dashboard.bucketStatus.bucket")}

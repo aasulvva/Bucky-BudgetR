@@ -6,6 +6,8 @@ import { Link } from "react-router";
 
 import { useAccounts, useBuckets, type Account, type Bucket } from "@/api/accounts";
 import { QueryState } from "@/components/QueryState";
+import { accountSummary, toneText } from "@/lib/buckets";
+import { compareAmounts, formatMoney } from "@/lib/money";
 
 import { WidgetFrame } from "./frame";
 
@@ -88,6 +90,33 @@ export function MoneyState({
         <QueryState query={buckets}>{(bucketList) => children(accountList, bucketList)}</QueryState>
       )}
     </QueryState>
+  );
+}
+
+/**
+ * What an account's buckets have left, and what its balance lacks (Short,
+ * in the shortage's tone) or has to spare (Unallocated).
+ */
+export function BucketsSummary({ account, buckets }: { account: Account; buckets: Bucket[] }) {
+  const { t } = useTranslation();
+  const money = (amount: string) => formatMoney(amount, account.currency);
+  const summary = accountSummary(account, buckets);
+  const isShort = compareAmounts(summary.short, "0") > 0;
+  return (
+    <Group gap="lg" wrap="wrap">
+      <Text size="sm" c="dimmed">
+        {t("buckets.leftInBuckets")}{" "}
+        <Text span fw={700} c="var(--mantine-color-text)">
+          {money(summary.left)}
+        </Text>
+      </Text>
+      <Text size="sm" c={isShort ? toneText(summary.tone) : "dimmed"}>
+        {isShort ? t("buckets.short") : t("buckets.unallocated")}{" "}
+        <Text span fw={700} c={isShort ? undefined : "var(--mantine-color-text)"}>
+          {money(isShort ? summary.short : summary.unallocated)}
+        </Text>
+      </Text>
+    </Group>
   );
 }
 

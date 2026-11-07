@@ -51,14 +51,10 @@ export function WidgetView({
   const { t } = useTranslation();
   const [settings, setSettings] = useState(false);
   const title = useWidgetTitle(widget);
-  const cog = (
-    <SettingsButton
-      widget={edit?.name ?? title}
-      onClick={() => {
-        setSettings(true);
-      }}
-    />
-  );
+  const openSettings = () => {
+    setSettings(true);
+  };
+  const cog = <SettingsButton widget={edit?.name ?? title} onClick={openSettings} />;
 
   return (
     <WidgetFrame.Provider
@@ -66,6 +62,7 @@ export function WidgetView({
         title,
         editing: !!edit,
         bar: edit && <EditBar edit={edit} cog={cog} widget={widget} />,
+        openSettings,
       }}
     >
       {widget.type === "cycle" && <CycleWidget widget={widget} action={cog} />}

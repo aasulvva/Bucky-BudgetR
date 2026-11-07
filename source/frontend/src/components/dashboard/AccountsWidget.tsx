@@ -4,12 +4,11 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
 import { accountTypeLabel, type Account, type Bucket } from "@/api/accounts";
-import { accountSummary, toneText } from "@/lib/buckets";
 import { shownAccounts, type WidgetInstance } from "@/lib/dashboard";
-import { addAmounts, compareAmounts, formatMoney } from "@/lib/money";
+import { addAmounts, formatMoney } from "@/lib/money";
 
 import { WidgetFrame } from "./frame";
-import { MoneyState, NoBuckets, WidgetCard } from "./Widget";
+import { BucketsSummary, MoneyState, NoBuckets, WidgetCard } from "./Widget";
 
 /** The account balances: all of them with a total, or one account. */
 export function AccountsWidget({
@@ -107,8 +106,6 @@ function OneAccount({ account, buckets }: { account: Account; buckets: Bucket[] 
   const { t } = useTranslation();
   const money = (amount: string) => formatMoney(amount, account.currency);
   const own = buckets.filter((b) => b.source_account_id === account.id);
-  const summary = accountSummary(account, buckets);
-  const isShort = compareAmounts(summary.short, "0") > 0;
   // No need to name the account again under a title that does.
   const titled = useContext(WidgetFrame).title === account.name;
   return (
@@ -127,22 +124,7 @@ function OneAccount({ account, buckets }: { account: Account; buckets: Bucket[] 
           {money(account.balance)}
         </Text>
       </div>
-      {own.length > 0 && (
-        <Group gap="lg" wrap="wrap">
-          <Text size="sm" c="dimmed">
-            {t("buckets.leftInBuckets")}{" "}
-            <Text span fw={700} c="var(--mantine-color-text)">
-              {money(summary.left)}
-            </Text>
-          </Text>
-          <Text size="sm" c={isShort ? toneText(summary.tone) : "dimmed"}>
-            {isShort ? t("buckets.short") : t("buckets.unallocated")}{" "}
-            <Text span fw={700} c={isShort ? undefined : "var(--mantine-color-text)"}>
-              {money(isShort ? summary.short : summary.unallocated)}
-            </Text>
-          </Text>
-        </Group>
-      )}
+      {own.length > 0 && <BucketsSummary account={account} buckets={buckets} />}
     </Stack>
   );
 }

@@ -1,6 +1,7 @@
-import { Group, Progress, Stack, Text } from "@mantine/core";
+import { Anchor, Button, Group, Progress, Stack, Text } from "@mantine/core";
 import { useContext, type ReactNode } from "react";
-import { useTranslation } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
+import { Link } from "react-router";
 
 import { useBucketFigures, type Account, type Bucket, type BucketFigures } from "@/api/accounts";
 import { useCurrentCycles, type Cycle } from "@/api/cycles";
@@ -16,9 +17,12 @@ import {
 import { compareAmounts, formatMoney, subtractAmounts } from "@/lib/money";
 
 import { WidgetFrame } from "./frame";
-import { MoneyState, NoBuckets, WidgetCard } from "./Widget";
+import { BucketsSummary, MoneyState, NoBuckets, WidgetCard } from "./Widget";
 
-/** The buckets that need attention, all of them, the most used, or one. */
+/**
+ * The buckets that need attention, all of them, the most used, those of one
+ * account, or one bucket.
+ */
 export function BucketStatusWidget({
   widget,
   action,
@@ -38,8 +42,9 @@ export function BucketStatusWidget({
     >
       <MoneyState>
         {(accounts, buckets) => {
+          const shown = shownBucketStatus(widget.settings, accounts, buckets);
+          if (shown.mode === "account" && !shown.account) return <AccountGone />;
           if (buckets.length === 0) return <NoBuckets accounts={accounts} />;
-          const shown = shownBucketStatus(widget.settings, buckets);
           return (
             <>
               {widget.settings.showMode && (
@@ -50,6 +55,9 @@ export function BucketStatusWidget({
               {shown.mode === "attention" && <Attention buckets={buckets} figures={byId} />}
               {shown.mode === "all" && (
                 <AllBuckets accounts={accounts} buckets={buckets} figures={byId} />
+              )}
+              {shown.mode === "account" && shown.account && (
+                <OneAccount account={shown.account} buckets={buckets} figures={byId} />
               )}
               {shown.mode === "most_used" && (
                 <MostUsed buckets={buckets} figures={byId} active={active} />
@@ -145,22 +153,77 @@ function AllBuckets({ accounts, buckets, figures }: FiguresProps & { accounts: A
       {accounts
         .filter((a) => buckets.some((b) => b.source_account_id === a.id))
         .map((a) => (
-          <Stack key={a.id} gap="xs" component="article" aria-label={a.name}>
-            <Text size="xs" fw={600} c="dimmed" tt="uppercase">
-              {a.name}
-            </Text>
-            {buckets
-              .filter((b) => b.source_account_id === a.id)
-              .map((b) => (
-                <CompactBucket
-                  key={b.id}
-                  bucket={b}
-                  pct={usedPct(figures.get(b.id))}
-                  right={<LeftAmount bucket={b} />}
-                />
-              ))}
-          </Stack>
+          <AccountBuckets key={a.id} account={a} buckets={buckets} figures={figures} named />
         ))}
+    </Stack>
+  );
+}
+
+/** An account's buckets, in the Buckets screen's order, under its name if `named`. */
+function AccountBuckets({
+  account,
+  buckets,
+  figures,
+  named,
+}: FiguresProps & { account: Account; named: boolean }) {
+  return (
+    <Stack gap="xs" component="article" aria-label={account.name}>
+      {named && (
+        <Text size="xs" fw={600} c="dimmed" tt="uppercase">
+          {account.name}
+        </Text>
+      )}
+      {buckets
+        .filter((b) => b.source_account_id === account.id)
+        .map((b) => (
+          <CompactBucket
+            key={b.id}
+            bucket={b}
+            pct={usedPct(figures.get(b.id))}
+            right={<LeftAmount bucket={b} />}
+          />
+        ))}
+    </Stack>
+  );
+}
+
+/** One account (#89): what its buckets have left, then each of them. */
+function OneAccount({ account, buckets, figures }: FiguresProps & { account: Account }) {
+  // No need to name the account again under a title that does.
+  const titled = useContext(WidgetFrame).title === account.name;
+  if (!buckets.some((b) => b.source_account_id === account.id)) {
+    return (
+      <Text size="sm" c="dimmed">
+        <Trans
+          i18nKey="dashboard.bucketStatus.noAccountBuckets"
+          values={{ name: account.name }}
+          components={{ setup: <Anchor component={Link} to="/buckets/setup" /> }}
+        />
+      </Text>
+    );
+  }
+  return (
+    <Stack gap="sm">
+      <BucketsSummary account={account} buckets={buckets} />
+      <AccountBuckets account={account} buckets={buckets} figures={figures} named={!titled} />
+    </Stack>
+  );
+}
+
+/** One account whose account was deleted: offers to choose another. */
+function AccountGone() {
+  const { t } = useTranslation();
+  const { openSettings, editing } = useContext(WidgetFrame);
+  return (
+    <Stack gap="xs" align="flex-start">
+      <Text size="sm" c="dimmed">
+        {t("dashboard.bucketStatus.accountGone")}
+      </Text>
+      {openSettings && !editing && (
+        <Button variant="light" size="xs" onClick={openSettings}>
+          {t("dashboard.bucketStatus.chooseAccount")}
+        </Button>
+      )}
     </Stack>
   );
 }

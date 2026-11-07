@@ -207,6 +207,7 @@ func remapPreferences(raw json.RawMessage, m map[kind]map[string]string) (json.R
 			kind          kind
 		}{
 			{"accounts", "account_id", kAccount},
+			{"bucket_status", "account_id", kAccount},
 			{"bucket_status", "bucket_id", kBucket},
 			{"in_out", "account_id", kAccount},
 		} {

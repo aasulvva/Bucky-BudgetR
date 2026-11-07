@@ -2023,11 +2023,17 @@ components:
       properties:
         mode:
           type: string
-          enum: [attention, all, most_used, bucket]
+          enum: [attention, all, most_used, account, bucket]
           description: |
             Which buckets the widget shows: the ones that need attention
-            (the default), all of them, the most used ones, or the one in
-            `bucket_id`.
+            (the default), all of them, the most used ones, those of the
+            account in `account_id` (#89), or the one in `bucket_id`.
+        account_id:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/AccountId"
+          nullable: true
+          description: The account whose buckets `account` mode shows.
         bucket_id:
           type: string
           allOf:

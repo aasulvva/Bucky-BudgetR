@@ -158,7 +158,7 @@ func (e env) scenario(t *testing.T, userID string) {
 	must[transactions.Transaction](t)(e.tx.Create(ctx, userID, transactions.New{
 		Type: sqlc.TransactionTypeTRF, AccountID: a.ID, ToAccountID: b.ID, Amount: dec("100"),
 	}))
-	prefs := fmt.Sprintf(`{"locale":"nb-NO","dashboard":{"accounts":{"mode":"account","account_id":%q},"bucket_status":{"mode":"bucket","bucket_id":%q},"widgets":[{"id":"w1","type":"accounts","width":"half","accounts":{"mode":"account","account_id":%q}},{"id":"w2","type":"bucket_status","width":"full","bucket_status":{"mode":"bucket","bucket_id":%q}},{"id":"w3","type":"in_out","width":"half","in_out":{"figures":["income"],"period":"month","account_id":%q}}]}}`, a.ID, food.ID, b.ID, food.ID, a.ID)
+	prefs := fmt.Sprintf(`{"locale":"nb-NO","dashboard":{"accounts":{"mode":"account","account_id":%q},"bucket_status":{"mode":"bucket","bucket_id":%q},"widgets":[{"id":"w1","type":"accounts","width":"half","accounts":{"mode":"account","account_id":%q}},{"id":"w2","type":"bucket_status","width":"full","bucket_status":{"mode":"bucket","bucket_id":%q}},{"id":"w3","type":"in_out","width":"half","in_out":{"figures":["income"],"period":"month","account_id":%q}},{"id":"w4","type":"bucket_status","width":"half","bucket_status":{"mode":"account","account_id":%q}}]}}`, a.ID, food.ID, b.ID, food.ID, a.ID, b.ID)
 	if _, err := e.pool.Exec(ctx, `UPDATE users SET preferences = $2 WHERE id = $1`, userID, prefs); err != nil {
 		t.Fatal(err)
 	}
@@ -300,7 +300,8 @@ func TestClone(t *testing.T) {
 					AccountID string `json:"account_id"`
 				} `json:"accounts"`
 				BucketStatus struct {
-					BucketID string `json:"bucket_id"`
+					AccountID string `json:"account_id"`
+					BucketID  string `json:"bucket_id"`
 				} `json:"bucket_status"`
 				InOut struct {
 					AccountID string `json:"account_id"`
@@ -313,7 +314,8 @@ func TestClone(t *testing.T) {
 	}
 	if !slices.Contains(keys(bobs.Tables["bank_accounts"], "id"), prefs.Dashboard.Accounts.AccountID) ||
 		!slices.Contains(keys(bobs.Tables["buckets"], "id"), prefs.Dashboard.BucketStatus.BucketID) ||
-		len(prefs.Dashboard.Widgets) != 3 ||
+		len(prefs.Dashboard.Widgets) != 4 ||
+		!slices.Contains(keys(bobs.Tables["bank_accounts"], "id"), prefs.Dashboard.Widgets[3].BucketStatus.AccountID) ||
 		!slices.Contains(keys(bobs.Tables["bank_accounts"], "id"), prefs.Dashboard.Widgets[2].InOut.AccountID) ||
 		!slices.Contains(keys(bobs.Tables["bank_accounts"], "id"), prefs.Dashboard.Widgets[0].Accounts.AccountID) ||
 		!slices.Contains(keys(bobs.Tables["buckets"], "id"), prefs.Dashboard.Widgets[1].BucketStatus.BucketID) {

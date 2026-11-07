@@ -16,6 +16,29 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.09.00",
+    date: "2026-11-07",
+    title: {
+      en: "Bucket status for one account",
+      nb: "Bøttestatus for én konto",
+      nn: "Bøttestatus for éin konto",
+    },
+    changes: {
+      en: [
+        "The Bucket status widget can show the buckets of one account: what they have left, whether the account is short or has money unallocated, and each bucket with its usage bar.",
+        "Add one widget per account if you like. Each is titled with its account's name, and if that account is deleted, the widget offers to choose another.",
+      ],
+      nb: [
+        "Bøttestatus-modulen kan vise bøttene til én konto: hva de har igjen, om kontoen mangler penger eller har ufordelte penger, og hver bøtte med forbruket sitt.",
+        "Legg gjerne til én modul per konto. Hver får kontoens navn som tittel, og blir kontoen slettet, tilbyr modulen å velge en annen.",
+      ],
+      nn: [
+        "Bøttestatus-modulen kan vise bøttene til éin konto: kva dei har att, om kontoen manglar pengar eller har ufordelte pengar, og kvar bøtte med forbruket sitt.",
+        "Legg gjerne til éin modul per konto. Kvar får namnet til kontoen som tittel, og vert kontoen sletta, tilbyr modulen å velje ein annan.",
+      ],
+    },
+  },
+  {
     version: "v1.08.00",
     date: "2026-11-07",
     title: {
