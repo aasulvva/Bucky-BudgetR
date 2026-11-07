@@ -184,7 +184,7 @@ func newTagIDs(ctx context.Context, tx pgx.Tx, old []string) (map[string]string,
 	return m, nil
 }
 
-// remapPreferences changes the IDs in the dashboard settings (the only
+// remapPreferences changes the IDs in the dashboard settings and layout (the only
 // preferences that hold IDs) to the new ones. An ID that isn't in the
 // snapshot is left as it is; the dashboard ignores unknown IDs.
 func remapPreferences(raw json.RawMessage, m map[kind]map[string]string) (json.RawMessage, error) {
@@ -193,17 +193,27 @@ func remapPreferences(raw json.RawMessage, m map[kind]map[string]string) (json.R
 		return nil, fmt.Errorf("%w: preferences: %w", ErrInvalid, err)
 	}
 	dashboard, _ := prefs["dashboard"].(map[string]any)
-	for _, p := range []struct {
-		widget, field string
-		kind          kind
-	}{
-		{"accounts", "account_id", kAccount},
-		{"bucket_status", "bucket_id", kBucket},
-	} {
-		w, _ := dashboard[p.widget].(map[string]any)
-		if old, ok := w[p.field].(string); ok {
-			if id, ok := m[p.kind][old]; ok {
-				w[p.field] = id
+	// The per-type settings from before #37, and each widget in the layout.
+	holders := []map[string]any{dashboard}
+	widgets, _ := dashboard["widgets"].([]any)
+	for _, w := range widgets {
+		if w, ok := w.(map[string]any); ok {
+			holders = append(holders, w)
+		}
+	}
+	for _, h := range holders {
+		for _, p := range []struct {
+			widget, field string
+			kind          kind
+		}{
+			{"accounts", "account_id", kAccount},
+			{"bucket_status", "bucket_id", kBucket},
+		} {
+			w, _ := h[p.widget].(map[string]any)
+			if old, ok := w[p.field].(string); ok {
+				if id, ok := m[p.kind][old]; ok {
+					w[p.field] = id
+				}
 			}
 		}
 	}

@@ -1,5 +1,6 @@
-// The Dashboard's logic (spec §9), kept apart from the page: its widgets'
-// settings, the budget's health per account, and which buckets to show.
+// The Dashboard's logic (spec §9), kept apart from the page: its layout of
+// widgets (#37) and their settings, the budget's health per account, and
+// which buckets to show.
 
 import type { Account, Bucket, BucketFigures } from "@/api/accounts";
 import type { components } from "@/api/schema";
@@ -8,54 +9,237 @@ import { accountSummary, coverage, type Tone } from "./buckets";
 import { addAmounts, compareAmounts, percentOf } from "./money";
 
 type Preferences = components["schemas"]["Preferences"];
-export type DashboardPreferences = components["schemas"]["DashboardSettings"];
-export type BucketStatusMode = NonNullable<DashboardPreferences["bucket_status"]>["mode"];
-export type AccountsMode = NonNullable<DashboardPreferences["accounts"]>["mode"];
+type Schemas = components["schemas"];
+export type DashboardPreferences = Schemas["DashboardSettings"];
+type ApiWidget = Schemas["DashboardWidget"];
+export type WidgetType = ApiWidget["type"];
+export type WidgetWidth = ApiWidget["width"];
+export type BucketStatusMode = Schemas["BucketStatusWidgetSettings"]["mode"];
+export type AccountsMode = Schemas["AccountsWidgetSettings"]["mode"];
 
+export const WIDGET_TYPES: WidgetType[] = [
+  "cycle",
+  "health",
+  "bucket_status",
+  "accounts",
+  "recent_transactions",
+];
 export const ACCOUNTS_MODES: AccountsMode[] = ["all", "account"];
 export const BUCKET_STATUS_MODES: BucketStatusMode[] = ["attention", "all", "most_used", "bucket"];
 export const TRANSACTION_COUNTS = [3, 5, 10, 15, 20];
+/** The most widgets a layout holds (the API's limit). */
+export const MAX_WIDGETS = 30;
 
 /** How many buckets Most used shows. */
 export const MOST_USED = 5;
 
-export interface DashboardSettings {
-  cycle: { showNext: boolean };
-  accounts: { mode: AccountsMode; accountId: string | null };
-  bucketStatus: { mode: BucketStatusMode; bucketId: string | null };
-  recentCount: number;
+export interface CycleSettings {
+  showNext: boolean;
+}
+export interface AccountsSettings {
+  mode: AccountsMode;
+  accountId: string | null;
+}
+export interface BucketStatusSettings {
+  mode: BucketStatusMode;
+  bucketId: string | null;
+}
+export interface RecentSettings {
+  count: number;
 }
 
-/** The widgets' settings, with the defaults for what isn't set. */
-export function dashboardSettings(preferences: Preferences): DashboardSettings {
+interface SettingsOf {
+  cycle: CycleSettings;
+  health: null;
+  bucket_status: BucketStatusSettings;
+  accounts: AccountsSettings;
+  recent_transactions: RecentSettings;
+}
+
+/** One widget on the Dashboard, with its own settings. */
+export type WidgetInstance<T extends WidgetType = WidgetType> = {
+  [K in T]: { id: string; type: K; width: WidgetWidth; settings: SettingsOf[K] };
+}[T];
+
+export type Layout = WidgetInstance[];
+
+/** Saves a widget's changed settings; a promise when it goes to the server. */
+export type SaveWidget = (widget: WidgetInstance) => unknown;
+
+const fromApi = {
+  cycle: (s?: Schemas["CycleWidgetSettings"]): CycleSettings => ({
+    showNext: s?.show_next ?? true,
+  }),
+  accounts: (s?: Schemas["AccountsWidgetSettings"]): AccountsSettings => ({
+    mode: s?.mode ?? "all",
+    accountId: s?.account_id ?? null,
+  }),
+  bucketStatus: (s?: Schemas["BucketStatusWidgetSettings"]): BucketStatusSettings => ({
+    mode: s?.mode ?? "attention",
+    bucketId: s?.bucket_id ?? null,
+  }),
+  recent: (s?: Schemas["RecentWidgetSettings"]): RecentSettings => ({ count: s?.count ?? 5 }),
+};
+
+/** A widget type's default settings. */
+export function defaultSettings<T extends WidgetType>(type: T): SettingsOf[T];
+export function defaultSettings(type: WidgetType): SettingsOf[WidgetType] {
+  switch (type) {
+    case "cycle":
+      return fromApi.cycle();
+    case "health":
+      return null;
+    case "bucket_status":
+      return fromApi.bucketStatus();
+    case "accounts":
+      return fromApi.accounts();
+    case "recent_transactions":
+      return fromApi.recent();
+  }
+}
+
+/** The width a new widget of the type gets. */
+export function defaultWidth(type: WidgetType): WidgetWidth {
+  return type === "recent_transactions" ? "full" : "half";
+}
+
+function newId(): string {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/** A new widget with its defaults, and an id the layout doesn't have yet. */
+export function newWidget(type: WidgetType, layout: Layout = []): WidgetInstance {
+  let id = newId();
+  while (layout.some((w) => w.id === id)) id = newId();
+  return { id, type, width: defaultWidth(type), settings: defaultSettings(type) } as WidgetInstance;
+}
+
+/** The five widgets of #29's fixed Dashboard, in its order, with the given settings. */
+export function defaultLayout(saved?: DashboardPreferences | null): Layout {
+  return [
+    { id: "cycle", type: "cycle", width: "half", settings: fromApi.cycle(saved?.cycle) },
+    { id: "health", type: "health", width: "half", settings: null },
+    {
+      id: "bucket_status",
+      type: "bucket_status",
+      width: "half",
+      settings: fromApi.bucketStatus(saved?.bucket_status),
+    },
+    {
+      id: "accounts",
+      type: "accounts",
+      width: "half",
+      settings: fromApi.accounts(saved?.accounts),
+    },
+    {
+      id: "recent_transactions",
+      type: "recent_transactions",
+      width: "full",
+      settings: fromApi.recent(saved?.recent_transactions),
+    },
+  ];
+}
+
+function widgetFromApi(w: ApiWidget): WidgetInstance {
+  const base = { id: w.id, width: w.width };
+  switch (w.type) {
+    case "cycle":
+      return { ...base, type: w.type, settings: fromApi.cycle(w.cycle) };
+    case "health":
+      return { ...base, type: w.type, settings: null };
+    case "bucket_status":
+      return { ...base, type: w.type, settings: fromApi.bucketStatus(w.bucket_status) };
+    case "accounts":
+      return { ...base, type: w.type, settings: fromApi.accounts(w.accounts) };
+    case "recent_transactions":
+      return { ...base, type: w.type, settings: fromApi.recent(w.recent_transactions) };
+  }
+}
+
+/**
+ * The saved layout. Without one (before #37, or never edited) it's the
+ * default layout, using the per-type settings saved by #29.
+ */
+export function dashboardLayout(preferences: Preferences): Layout {
   const saved = preferences.dashboard;
-  return {
-    cycle: { showNext: saved?.cycle?.show_next ?? true },
-    accounts: {
-      mode: saved?.accounts?.mode ?? "all",
-      accountId: saved?.accounts?.account_id ?? null,
-    },
-    bucketStatus: {
-      mode: saved?.bucket_status?.mode ?? "attention",
-      bucketId: saved?.bucket_status?.bucket_id ?? null,
-    },
-    recentCount: saved?.recent_transactions?.count ?? 5,
-  };
+  return saved?.widgets ? saved.widgets.map(widgetFromApi) : defaultLayout(saved);
 }
 
-/** What saving the settings sends; the API replaces `dashboard` as a whole. */
-export function toPreferences(settings: DashboardSettings): DashboardPreferences {
-  const { mode, bucketId } = settings.bucketStatus;
-  const accounts = settings.accounts;
-  return {
-    cycle: { show_next: settings.cycle.showNext },
-    accounts:
-      accounts.mode === "account"
-        ? { mode: accounts.mode, account_id: accounts.accountId }
-        : { mode: accounts.mode },
-    bucket_status: mode === "bucket" ? { mode, bucket_id: bucketId } : { mode },
-    recent_transactions: { count: settings.recentCount },
-  };
+function widgetToApi(w: WidgetInstance): ApiWidget {
+  const base = { id: w.id, type: w.type, width: w.width };
+  switch (w.type) {
+    case "cycle":
+      return { ...base, cycle: { show_next: w.settings.showNext } };
+    case "health":
+      return base;
+    case "bucket_status": {
+      const { mode, bucketId } = w.settings;
+      return {
+        ...base,
+        bucket_status: mode === "bucket" ? { mode, bucket_id: bucketId } : { mode },
+      };
+    }
+    case "accounts": {
+      const { mode, accountId } = w.settings;
+      return {
+        ...base,
+        accounts: mode === "account" ? { mode, account_id: accountId } : { mode },
+      };
+    }
+    case "recent_transactions":
+      return { ...base, recent_transactions: { count: w.settings.count } };
+  }
+}
+
+/** What saving the layout sends; the API replaces `dashboard` as a whole. */
+export function layoutToPreferences(layout: Layout): DashboardPreferences {
+  return { widgets: layout.map(widgetToApi) };
+}
+
+/** Moves a widget one place up (-1) or down (+1). */
+export function moveWidget(layout: Layout, id: string, by: -1 | 1): Layout {
+  const from = layout.findIndex((w) => w.id === id);
+  const to = from + by;
+  if (from < 0 || to < 0 || to >= layout.length) return layout;
+  return moveWidgetTo(layout, from, to);
+}
+
+/** Moves the widget at `from` to `to`, as dragging does. */
+export function moveWidgetTo(layout: Layout, from: number, to: number): Layout {
+  const next = [...layout];
+  const [moved] = next.splice(from, 1);
+  if (moved) next.splice(to, 0, moved);
+  return next;
+}
+
+export function removeWidget(layout: Layout, id: string): Layout {
+  return layout.filter((w) => w.id !== id);
+}
+
+/** The layout with the widget (by its id) replaced, or added at the end. */
+export function replaceWidget(layout: Layout, widget: WidgetInstance): Layout {
+  return layout.some((w) => w.id === widget.id)
+    ? layout.map((w) => (w.id === widget.id ? widget : w))
+    : [...layout, widget];
+}
+
+/**
+ * Whether a widget's settings can be saved: One bucket and One account need
+ * a bucket or account that exists.
+ */
+export function settingsComplete(
+  widget: WidgetInstance,
+  accounts: Account[],
+  buckets: Bucket[],
+): boolean {
+  if (widget.type === "bucket_status" && widget.settings.mode === "bucket") {
+    return buckets.some((b) => b.id === widget.settings.bucketId);
+  }
+  if (widget.type === "accounts" && widget.settings.mode === "account") {
+    return accounts.some((a) => a.id === widget.settings.accountId);
+  }
+  return true;
 }
 
 /**
@@ -63,10 +247,10 @@ export function toPreferences(settings: DashboardSettings): DashboardPreferences
  * the widget falls back to Needs attention.
  */
 export function shownBucketStatus(
-  settings: DashboardSettings,
+  settings: BucketStatusSettings,
   buckets: Bucket[],
 ): { mode: Exclude<BucketStatusMode, "bucket"> } | { mode: "bucket"; bucket: Bucket } {
-  const { mode, bucketId } = settings.bucketStatus;
+  const { mode, bucketId } = settings;
   if (mode !== "bucket") return { mode };
   const bucket = buckets.find((b) => b.id === bucketId);
   return bucket ? { mode, bucket } : { mode: "attention" };
@@ -77,10 +261,10 @@ export function shownBucketStatus(
  * Without it (none chosen, or it was deleted) the widget shows them all.
  */
 export function shownAccounts(
-  settings: DashboardSettings,
+  settings: AccountsSettings,
   accounts: Account[],
 ): { mode: "all" } | { mode: "account"; account: Account } {
-  const { mode, accountId } = settings.accounts;
+  const { mode, accountId } = settings;
   const account = accounts.find((a) => a.id === accountId);
   return mode === "account" && account ? { mode, account } : { mode: "all" };
 }

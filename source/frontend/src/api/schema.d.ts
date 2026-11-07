@@ -1116,7 +1116,7 @@ export interface components {
              *     `triggers_refill` (spec §6). Null means no rules.
              */
             income_refill_rules?: components["schemas"]["IncomeRefillRule"][] | null;
-            /** @description The Dashboard widgets' settings. Replaced as a whole on update. Null means the defaults. */
+            /** @description The Dashboard's layout and widget settings. Replaced as a whole on update. Null means the default layout. */
             dashboard?: components["schemas"]["DashboardSettings"] | null;
             /**
              * @description The user's IANA time zone, e.g. `Europe/Oslo` (400
@@ -1143,36 +1143,67 @@ export interface components {
             /** @description Whether What's New pops up after an update. Null means true. */
             whats_new_popup?: boolean | null;
         };
-        /** @description Settings per Dashboard widget. A missing widget uses its defaults. */
+        /**
+         * @description The Dashboard's layout. When `widgets` is set, it is the layout, in
+         *     order (an empty list is an empty Dashboard). When it's missing or
+         *     null, the web app shows the default five widgets, using the
+         *     per-type objects (from before #37) as their settings.
+         */
         DashboardSettings: {
-            cycle?: {
-                /** @description Also show the next planned cycle. True by default. */
-                show_next: boolean;
-            };
-            accounts?: {
-                /**
-                 * @description All accounts (the default), or only the one in `account_id`.
-                 * @enum {string}
-                 */
-                mode: "all" | "account";
-                /** @description The account shown in `account` mode. */
-                account_id?: (string & components["schemas"]["AccountId"]) | null;
-            };
-            bucket_status?: {
-                /**
-                 * @description Which buckets the widget shows: the ones that need attention
-                 *     (the default), all of them, the most used ones, or the one in
-                 *     `bucket_id`.
-                 * @enum {string}
-                 */
-                mode: "attention" | "all" | "most_used" | "bucket";
-                /** @description The bucket shown in `bucket` mode. */
-                bucket_id?: (string & components["schemas"]["BucketId"]) | null;
-            };
-            recent_transactions?: {
-                /** @description How many transactions it shows. 5 by default. */
-                count: number;
-            };
+            /**
+             * @description The widgets, in order. Each widget's id is unique, and it only
+             *     carries the settings object for its own `type` (400
+             *     `invalid_request` otherwise).
+             */
+            widgets?: components["schemas"]["DashboardWidget"][] | null;
+            cycle?: components["schemas"]["CycleWidgetSettings"];
+            accounts?: components["schemas"]["AccountsWidgetSettings"];
+            bucket_status?: components["schemas"]["BucketStatusWidgetSettings"];
+            recent_transactions?: components["schemas"]["RecentWidgetSettings"];
+        };
+        /** @description One widget on the Dashboard. A missing settings object means its defaults. */
+        DashboardWidget: {
+            /** @description Made by the web app; unique in the layout. */
+            id: string;
+            /** @enum {string} */
+            type: "cycle" | "health" | "bucket_status" | "accounts" | "recent_transactions";
+            /**
+             * @description Half or the full width of the Dashboard on wide screens.
+             * @enum {string}
+             */
+            width: "half" | "full";
+            cycle?: components["schemas"]["CycleWidgetSettings"];
+            accounts?: components["schemas"]["AccountsWidgetSettings"];
+            bucket_status?: components["schemas"]["BucketStatusWidgetSettings"];
+            recent_transactions?: components["schemas"]["RecentWidgetSettings"];
+        };
+        CycleWidgetSettings: {
+            /** @description Also show the next planned cycle. True by default. */
+            show_next: boolean;
+        };
+        AccountsWidgetSettings: {
+            /**
+             * @description All accounts (the default), or only the one in `account_id`.
+             * @enum {string}
+             */
+            mode: "all" | "account";
+            /** @description The account shown in `account` mode. */
+            account_id?: (string & components["schemas"]["AccountId"]) | null;
+        };
+        BucketStatusWidgetSettings: {
+            /**
+             * @description Which buckets the widget shows: the ones that need attention
+             *     (the default), all of them, the most used ones, or the one in
+             *     `bucket_id`.
+             * @enum {string}
+             */
+            mode: "attention" | "all" | "most_used" | "bucket";
+            /** @description The bucket shown in `bucket` mode. */
+            bucket_id?: (string & components["schemas"]["BucketId"]) | null;
+        };
+        RecentWidgetSettings: {
+            /** @description How many transactions it shows. 5 by default. */
+            count: number;
         };
         /**
          * @description A web app language: English, Norwegian bokmål or Norwegian nynorsk.

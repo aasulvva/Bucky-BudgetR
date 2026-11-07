@@ -16,6 +16,32 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.07.00",
+    date: "2026-11-07",
+    title: {
+      en: "Customisable dashboard",
+      nb: "Tilpassbar oversikt",
+      nn: "Tilpassbar oversikt",
+    },
+    changes: {
+      en: [
+        "Choose Edit dashboard to add, remove and rearrange widgets: drag them by their handle, or use the arrows. Done saves the layout, and Cancel throws the changes away.",
+        "Add a widget as many times as you like, each with its own settings, such as two Bucket status widgets in different modes.",
+        "On wide screens, each widget can be half or full width. Reset to default puts back the five widgets you started with.",
+      ],
+      nb: [
+        "Velg Rediger oversikten for å legge til, fjerne og flytte moduler: dra dem etter håndtaket, eller bruk pilene. Ferdig lagrer oppsettet, og Avbryt forkaster endringene.",
+        "Legg til en modul så mange ganger du vil, hver med egne innstillinger, for eksempel to Bøttestatus-moduler som viser ulike ting.",
+        "På brede skjermer kan hver modul ha halv eller full bredde. Tilbakestill setter tilbake de fem modulene du startet med.",
+      ],
+      nn: [
+        "Vel Rediger oversikta for å leggje til, fjerne og flytte modular: dra dei etter handtaket, eller bruk pilene. Ferdig lagrar oppsettet, og Avbryt forkastar endringane.",
+        "Legg til ein modul så mange gonger du vil, kvar med eigne innstillingar, til dømes to Bøttestatus-modular som viser ulike ting.",
+        "På breie skjermar kan kvar modul ha halv eller full breidd. Tilbakestill set tilbake dei fem modulane du starta med.",
+      ],
+    },
+  },
+  {
     version: "v1.06.00",
     date: "2026-10-29",
     title: {

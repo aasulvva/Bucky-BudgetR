@@ -7,6 +7,7 @@ import { formatMoney } from "@/lib/money";
 import { apiMock, testUser } from "@/test/api";
 import { account, bucket, bucketFigures, cycle, transaction } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
+import { viewport } from "@/test/setup";
 
 type Preferences = components["schemas"]["Preferences"];
 
@@ -82,6 +83,34 @@ beforeEach(() => {
   apiMock.on("PATCH /api/v1/me/preferences", (req) => ({
     body: { ...testUser.preferences, ...(req.body as object) },
   }));
+});
+
+/** The default layout as Done or a settings save sends it, with some settings changed. */
+const savedLayout = (settings: Partial<Record<string, object>> = {}) => ({
+  dashboard: {
+    widgets: [
+      { id: "cycle", type: "cycle", width: "half", cycle: settings.cycle ?? { show_next: true } },
+      { id: "health", type: "health", width: "half" },
+      {
+        id: "bucket_status",
+        type: "bucket_status",
+        width: "half",
+        bucket_status: settings.bucket_status ?? { mode: "attention" },
+      },
+      {
+        id: "accounts",
+        type: "accounts",
+        width: "half",
+        accounts: settings.accounts ?? { mode: "all" },
+      },
+      {
+        id: "recent_transactions",
+        type: "recent_transactions",
+        width: "full",
+        recent_transactions: settings.recent_transactions ?? { count: 5 },
+      },
+    ],
+  },
 });
 
 const widget = async (name: string) => within(await screen.findByRole("region", { name }));
@@ -216,14 +245,7 @@ describe("Dashboard", () => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
     expect(apiMock.calls("PATCH /api/v1/me/preferences").map((c) => c.body)).toEqual([
-      {
-        dashboard: {
-          cycle: { show_next: true },
-          accounts: { mode: "all" },
-          bucket_status: { mode: "bucket", bucket_id: fun.id },
-          recent_transactions: { count: 5 },
-        },
-      },
+      savedLayout({ bucket_status: { mode: "bucket", bucket_id: fun.id } }),
     ]);
     expect(await status.findByText("One bucket")).toBeInTheDocument();
   });
@@ -244,14 +266,7 @@ describe("Dashboard", () => {
       expect(apiMock.calls("GET /api/v1/transactions").at(-1)?.query.get("limit")).toBe("10");
     });
     expect(apiMock.calls("PATCH /api/v1/me/preferences").map((c) => c.body)).toEqual([
-      {
-        dashboard: {
-          cycle: { show_next: true },
-          accounts: { mode: "all" },
-          bucket_status: { mode: "all" },
-          recent_transactions: { count: 10 },
-        },
-      },
+      savedLayout({ bucket_status: { mode: "all" }, recent_transactions: { count: 10 } }),
     ]);
   });
 
@@ -276,14 +291,7 @@ describe("Dashboard", () => {
       expect(cycleWidget.queryByText(next)).not.toBeInTheDocument();
     });
     expect(apiMock.calls("PATCH /api/v1/me/preferences").map((c) => c.body)).toEqual([
-      {
-        dashboard: {
-          cycle: { show_next: false },
-          accounts: { mode: "all" },
-          bucket_status: { mode: "attention" },
-          recent_transactions: { count: 5 },
-        },
-      },
+      savedLayout({ cycle: { show_next: false } }),
     ]);
   });
 
@@ -314,14 +322,7 @@ describe("Dashboard", () => {
       expect(accounts.queryByRole("link", { name: "Main account" })).not.toBeInTheDocument();
     });
     expect(apiMock.calls("PATCH /api/v1/me/preferences").map((c) => c.body)).toEqual([
-      {
-        dashboard: {
-          cycle: { show_next: true },
-          accounts: { mode: "account", account_id: buffer.id },
-          bucket_status: { mode: "attention" },
-          recent_transactions: { count: 5 },
-        },
-      },
+      savedLayout({ accounts: { mode: "account", account_id: buffer.id } }),
     ]);
   });
 
@@ -332,5 +333,192 @@ describe("Dashboard", () => {
     const status = await widget("Bøttestatus");
     expect(status.getByText("Treng merksemd")).toBeInTheDocument();
     expect(await widget("Siste transaksjonar")).toBeTruthy();
+  });
+});
+
+describe("Dashboard layout", () => {
+  beforeEach(() => {
+    viewport.width = 1280;
+  });
+  const patches = () => apiMock.calls("PATCH /api/v1/me/preferences").map((c) => c.body);
+  /** The widgets' names, in the order shown. */
+  const shown = () =>
+    screen
+      .queryAllByRole("region")
+      .map((r) => r.getAttribute("aria-label"))
+      .filter((name) => name !== "Edit dashboard");
+  const editMode = async () => {
+    renderRoute("/");
+    await userEvent.click(await screen.findByRole("button", { name: "Edit dashboard" }));
+    return within(await screen.findByRole("region", { name: "Edit dashboard" }));
+  };
+
+  it("shows a saved layout in its order, with copies of a widget", async () => {
+    withPreferences({
+      dashboard: {
+        widgets: [
+          { id: "a", type: "bucket_status", width: "full", bucket_status: { mode: "most_used" } },
+          { id: "b", type: "cycle", width: "half" },
+          {
+            id: "c",
+            type: "bucket_status",
+            width: "half",
+            bucket_status: { mode: "bucket", bucket_id: fun.id },
+          },
+        ],
+      },
+    });
+    renderRoute("/");
+    const [first, second] = await screen.findAllByRole("region", { name: "Bucket status" });
+    expect(shown()).toEqual(["Bucket status", "Cycle", "Bucket status"]);
+    if (!first || !second) throw new Error("two Bucket status widgets");
+    expect(await within(first).findByText("Most used")).toBeInTheDocument();
+    expect(within(second).getByText("One bucket")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Budget health" })).not.toBeInTheDocument();
+  });
+
+  it("moves, resizes and removes widgets, saving them with Done", async () => {
+    const bar = await editMode();
+    expect(screen.queryByRole("button", { name: "Edit dashboard" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Move Cycle up" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Move Budget health down" }));
+    await userEvent.click(screen.getByRole("button", { name: "Make Cycle full width" }));
+    await userEvent.click(screen.getByRole("button", { name: "Remove Account balances" }));
+    expect(shown()).toEqual(["Cycle", "Bucket status", "Budget health", "Recent transactions"]);
+    expect(screen.getByRole("button", { name: "Make Cycle half width" })).toBeInTheDocument();
+    expect(patches()).toEqual([]);
+
+    await userEvent.click(bar.getByRole("button", { name: "Done" }));
+    expect(await screen.findByRole("button", { name: "Edit dashboard" })).toBeInTheDocument();
+    const [widgets] = patches().map((b) => (b as ReturnType<typeof savedLayout>).dashboard.widgets);
+    expect(widgets?.map((w) => [w.id, w.width])).toEqual([
+      ["cycle", "full"],
+      ["bucket_status", "half"],
+      ["health", "half"],
+      ["recent_transactions", "full"],
+    ]);
+    expect(shown()).toEqual(["Cycle", "Bucket status", "Budget health", "Recent transactions"]);
+  });
+
+  it("throws the changes away with Cancel", async () => {
+    const bar = await editMode();
+    await userEvent.click(screen.getByRole("button", { name: "Remove Cycle" }));
+    expect(screen.queryByRole("region", { name: "Cycle" })).not.toBeInTheDocument();
+    await userEvent.click(bar.getByRole("button", { name: "Cancel" }));
+    expect(await screen.findByRole("region", { name: "Cycle" })).toBeInTheDocument();
+    expect(patches()).toEqual([]);
+  });
+
+  it("has no width toggle on a phone", async () => {
+    viewport.width = 390;
+    await editMode();
+    expect(screen.getByRole("button", { name: "Remove Cycle" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Make Cycle full width" })).not.toBeInTheDocument();
+  });
+
+  it("adds a widget, choosing its settings first", async () => {
+    const bar = await editMode();
+    await userEvent.click(bar.getByRole("button", { name: "Add widget" }));
+    const picker = await screen.findByRole("dialog", { name: "Add widget" });
+    await userEvent.click(within(picker).getByRole("button", { name: /^Bucket status/ }));
+    const box = await screen.findByRole("dialog", { name: "Add widget: Bucket status" });
+    await choose(box, "Show", "One bucket");
+    expect(within(box).getByRole("button", { name: "Add" })).toBeDisabled();
+    await choose(box, "Bucket", "Fun");
+    await userEvent.click(within(box).getByRole("button", { name: "Add" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+    expect(shown()).toEqual([
+      "Cycle",
+      "Budget health",
+      "Bucket status",
+      "Account balances",
+      "Recent transactions",
+      "Bucket status",
+    ]);
+    // Copies are told apart in the edit bar.
+    expect(screen.getByRole("button", { name: "Remove Bucket status 2" })).toBeInTheDocument();
+
+    await userEvent.click(bar.getByRole("button", { name: "Done" }));
+    await screen.findByRole("button", { name: "Edit dashboard" });
+    const [body] = patches() as ReturnType<typeof savedLayout>[];
+    expect(body?.dashboard.widgets).toHaveLength(6);
+    expect(body?.dashboard.widgets[5]).toEqual({
+      id: expect.stringMatching(/^[A-Za-z0-9_-]{1,40}$/) as unknown,
+      type: "bucket_status",
+      width: "half",
+      bucket_status: { mode: "bucket", bucket_id: fun.id },
+    });
+  });
+
+  it("adds Budget health at once, as it has no settings", async () => {
+    const bar = await editMode();
+    await userEvent.click(bar.getByRole("button", { name: "Add widget" }));
+    const picker = await screen.findByRole("dialog", { name: "Add widget" });
+    await userEvent.click(within(picker).getByRole("button", { name: /^Budget health/ }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+    expect(screen.getAllByRole("region", { name: "Budget health" })).toHaveLength(2);
+  });
+
+  it("changes a widget's settings in edit mode, saving them with Done", async () => {
+    const bar = await editMode();
+    await userEvent.click(screen.getByRole("button", { name: "Settings for Recent transactions" }));
+    const box = await screen.findByRole("dialog", { name: "Recent transactions settings" });
+    await choose(box, "Number of transactions", "10");
+    await userEvent.click(within(box).getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+    expect(patches()).toEqual([]);
+    await userEvent.click(bar.getByRole("button", { name: "Done" }));
+    await waitFor(() => {
+      expect(patches()).toEqual([savedLayout({ recent_transactions: { count: 10 } })]);
+    });
+  });
+
+  it("resets to the default layout after asking", async () => {
+    withPreferences({ dashboard: { widgets: [{ id: "x", type: "health", width: "full" }] } });
+    const bar = await editMode();
+    expect(shown()).toEqual(["Budget health"]);
+    await userEvent.click(bar.getByRole("button", { name: "Reset to default" }));
+    const confirm = await screen.findByRole("dialog", { name: "Reset the dashboard?" });
+    await userEvent.click(within(confirm).getByRole("button", { name: "Reset to default" }));
+    await waitFor(() => {
+      expect(shown()).toEqual([
+        "Cycle",
+        "Budget health",
+        "Bucket status",
+        "Account balances",
+        "Recent transactions",
+      ]);
+    });
+    await userEvent.click(bar.getByRole("button", { name: "Done" }));
+    await waitFor(() => {
+      expect(patches()).toEqual([savedLayout()]);
+    });
+  });
+
+  it("can be empty, and offers to add a widget", async () => {
+    withPreferences({ dashboard: { widgets: [] } });
+    renderRoute("/");
+    expect(await screen.findByText("Your dashboard has no widgets.")).toBeInTheDocument();
+    expect(shown()).toEqual([]);
+    await userEvent.click(screen.getByRole("button", { name: "Add widget" }));
+    expect(await screen.findByRole("dialog", { name: "Add widget" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Edit dashboard" })).toBeInTheDocument();
+  });
+
+  it("shows what went wrong when Done fails, staying in edit mode", async () => {
+    apiMock.on("PATCH /api/v1/me/preferences", {
+      status: 400,
+      body: { title: "Bad Request", status: 400, code: "invalid_request", detail: "Nope." },
+    });
+    const bar = await editMode();
+    await userEvent.click(bar.getByRole("button", { name: "Done" }));
+    expect(await bar.findByText(/Nope\./)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit dashboard" })).not.toBeInTheDocument();
   });
 });

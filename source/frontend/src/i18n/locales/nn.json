@@ -296,6 +296,32 @@
       "all": "Alle transaksjonar",
       "empty": "Ingen transaksjonar enno.",
       "count": "Tal på transaksjonar"
+    },
+    "edit": {
+      "edit": "Rediger oversikta",
+      "editing": "Du redigerer oversikta. Dra modulane etter handtaket eller bruk pilene, og vel Ferdig for å lagre.",
+      "add": "Legg til modul",
+      "addNamed": "Legg til modul: {{widget}}",
+      "addButton": "Legg til",
+      "reset": "Tilbakestill",
+      "resetTitle": "Tilbakestille oversikta?",
+      "resetText": "Dette set tilbake standardmodulane med standardinnstillingane. Ingenting blir lagra før du vel Ferdig.",
+      "done": "Ferdig",
+      "drag": "Dra {{widget}}",
+      "moveUp": "Flytt {{widget}} opp",
+      "moveDown": "Flytt {{widget}} ned",
+      "remove": "Fjern {{widget}}",
+      "full": "Gjer {{widget}} full breidd",
+      "half": "Gjer {{widget}} halv breidd",
+      "empty": "Oversikta har ingen modular.",
+      "max": "Oversikta kan ha høgst {{count}} modular."
+    },
+    "types": {
+      "cycle": "Den aktive perioden og kor lenge han varer.",
+      "health": "Kor godt kvar konto dekkjer bøttene sine.",
+      "bucket_status": "Bøtter som treng merksemd, alle bøttene, dei mest brukte eller éi bøtte.",
+      "accounts": "Saldoane på kontoane dine, eller éin konto.",
+      "recent_transactions": "Dei siste transaksjonane."
     }
   },
   "buckets": {

@@ -296,6 +296,32 @@
       "all": "All transactions",
       "empty": "No transactions yet.",
       "count": "Number of transactions"
+    },
+    "edit": {
+      "edit": "Edit dashboard",
+      "editing": "You're editing the dashboard. Drag widgets by their handle or use the arrows, then choose Done to save.",
+      "add": "Add widget",
+      "addNamed": "Add widget: {{widget}}",
+      "addButton": "Add",
+      "reset": "Reset to default",
+      "resetTitle": "Reset the dashboard?",
+      "resetText": "This puts back the default widgets with their default settings. Nothing is saved until you choose Done.",
+      "done": "Done",
+      "drag": "Drag {{widget}}",
+      "moveUp": "Move {{widget}} up",
+      "moveDown": "Move {{widget}} down",
+      "remove": "Remove {{widget}}",
+      "full": "Make {{widget}} full width",
+      "half": "Make {{widget}} half width",
+      "empty": "Your dashboard has no widgets.",
+      "max": "A dashboard holds at most {{count}} widgets."
+    },
+    "types": {
+      "cycle": "The active cycle and how long it has left.",
+      "health": "How well each account backs its buckets.",
+      "bucket_status": "Buckets that need attention, all of them, the most used, or one bucket.",
+      "accounts": "Your account balances, or one account.",
+      "recent_transactions": "The latest transactions."
     }
   },
   "buckets": {
