@@ -16,6 +16,26 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.10.01",
+    date: "2026-11-08",
+    title: {
+      en: "Groundwork for graphs",
+      nb: "Grunnlag for grafer",
+      nn: "Grunnlag for grafar",
+    },
+    changes: {
+      en: [
+        "The server can now sum spending, income and balances over time, and the app has a shared picker for the time span and how finely to split it. They're for the Stats screen's graphs, which come next. Nothing changes in the app yet.",
+      ],
+      nb: [
+        "Serveren kan nå summere utgifter, inntekter og saldoer over tid, og appen har en felles velger for tidsrommet og hvor fint det skal deles opp. De er til grafene på Statistikk-skjermen, som kommer snart. Ingenting endres i appen ennå.",
+      ],
+      nn: [
+        "Tenaren kan no summere utgifter, inntekter og saldoar over tid, og appen har ein felles veljar for tidsrommet og kor fint det skal delast opp. Dei er til grafane på Statistikk-skjermen, som kjem snart. Ingenting vert endra i appen enno.",
+      ],
+    },
+  },
+  {
     version: "v1.10.00",
     date: "2026-11-07",
     title: {

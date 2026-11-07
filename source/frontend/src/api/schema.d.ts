@@ -298,6 +298,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/stats/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Spending, income or balances over a period, per interval
+         * @description For graphs, reports and widgets (#121): `from`…`to` cut into
+         *     intervals of `resolution`, with one sum per interval in each series.
+         *
+         *     - **Intervals** are cut in local time (`time_zone`, else the user's
+         *       preference, else UTC), with weeks starting on `week_start`. The
+         *       first and last are cut at `from` and `to`. `cycle` gives one
+         *       interval per cycle that overlaps the period (days outside any
+         *       cycle aren't covered), `total` one for the whole period. At most
+         *       1000 intervals (400 `too_many_intervals`).
+         *     - **Spending** is expenses (EXP) as a positive amount, **income**
+         *       is income (INC), net of corrections: a transaction counts on its
+         *       original's date with its corrections, as the transaction list
+         *       shows it, so a reversed one adds up to 0. With `transfers`,
+         *       transfers (TRF) count too: money in as income, money out as
+         *       spending (for a one-account graph, as #90 does).
+         *     - **Balance** is each account's balance at the end of each interval:
+         *       every line dated before it, of any type.
+         *     - **Grouping:** `none` gives one series per currency, `account` one
+         *       per account, `bucket` one per bucket plus one without a bucket
+         *       (`bucket_id` null) for the part of expenses or income on no
+         *       bucket. Spending and income by bucket, or with `bucket_id`, use
+         *       the bucket lines; otherwise the bank lines. `balance` can't be
+         *       grouped by bucket.
+         *     - **Currencies** are never added up: each series has one currency.
+         *     - **Filters** work as on the transaction list. Several values of a
+         *       filter match any of them.
+         *
+         *     Empty intervals are 0. `from` must be before `to` (400
+         *     `invalid_request`).
+         */
+        get: operations["getStatsSeries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/accounts": {
         parameters: {
             query?: never;
@@ -1556,6 +1604,30 @@ export interface components {
             /** @description Transfers out of the account (TRF), as a positive amount. */
             transfers_out: components["schemas"]["Amount"];
         };
+        /** @description A period cut into intervals, and one value per interval in each series. */
+        StatsSeries: {
+            intervals: components["schemas"]["StatsInterval"][];
+            /** @description Sorted by currency, then account or bucket ID (the series without a bucket last). */
+            series: components["schemas"]["StatsSeriesLine"][];
+        };
+        StatsInterval: {
+            /** Format: date-time */
+            start: string;
+            /**
+             * Format: date-time
+             * @description Exclusive.
+             */
+            end: string;
+        };
+        StatsSeriesLine: {
+            /** @description The account, when grouped by account. */
+            account_id?: components["schemas"]["AccountId"];
+            /** @description The bucket, when grouped by bucket; null for the part on no bucket. */
+            bucket_id?: (string & components["schemas"]["BucketId"]) | null;
+            currency: components["schemas"]["Currency"];
+            /** @description One value per interval, in the same order. */
+            values: components["schemas"]["Amount"][];
+        };
         /**
          * @description A bucket's figures for one cycle. The parts are signed: a reduction
          *     or a transfer out is negative. `budget` = `start` + `refills` +
@@ -2245,6 +2317,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AccountFlow"][];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getStatsSeries: {
+        parameters: {
+            query: {
+                metric: "spending" | "income" | "balance";
+                /** @description The start of the period (inclusive). */
+                from: string;
+                /** @description The end of the period (exclusive). */
+                to: string;
+                resolution: "hour" | "day" | "week" | "month" | "year" | "cycle" | "total";
+                /** @description The IANA time zone the intervals are cut in. Defaults to the user's `time_zone` preference, else UTC. */
+                time_zone?: string;
+                /** @description The first day of the week, 1 (Monday) to 7 (Sunday). Defaults to 1. */
+                week_start?: number;
+                /** @description One series per currency (`none`, the default), per account, or per bucket. */
+                group_by?: "none" | "account" | "bucket";
+                /** @description Only these accounts' lines (or their buckets' lines). Repeat for several. */
+                account_id?: components["schemas"]["AccountId"][];
+                /** @description Only these buckets' lines. Repeat for several. Not for `balance`. */
+                bucket_id?: components["schemas"]["BucketId"][];
+                /** @description Only transactions with any of these tags, ignoring case. Repeat for several. Not for `balance`. */
+                tag?: string[];
+                /** @description Only transactions whose counterparty contains this text, ignoring case. Not for `balance`. */
+                counterparty?: string;
+                /** @description Count transfers as income (in) and spending (out). Not for `balance`. */
+                transfers?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The intervals and the series. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatsSeries"];
                 };
             };
             400: components["responses"]["Error"];

@@ -860,6 +860,66 @@
     "endedStarted": "Cycle ended. {{range}} has started.",
     "ended": "Cycle ended. There's no active cycle until you start one."
   },
+  "stats": {
+    "period": {
+      "label": "Period",
+      "groups": {
+        "last": "Up to today",
+        "current": "So far",
+        "previous": "Finished",
+        "custom": "Custom"
+      },
+      "options": {
+        "last_days": "The last few days",
+        "last_weeks": "The last few weeks",
+        "last_months": "The last few months",
+        "current_cycle": "This cycle",
+        "current_month": "This month",
+        "current_quarter": "This quarter",
+        "current_half_year": "This half-year",
+        "current_year": "This year",
+        "previous_cycle": "Previous cycle",
+        "previous_month": "Previous month",
+        "previous_quarter": "Previous quarter",
+        "previous_half_year": "Previous half-year",
+        "previous_year": "Previous year",
+        "custom": "Custom dates"
+      },
+      "count": {
+        "days": "Number of days",
+        "weeks": "Number of weeks",
+        "months": "Number of months"
+      },
+      "countHint": {
+        "days": "Today included.",
+        "weeks": "This week included.",
+        "months": "This month included."
+      },
+      "last": {
+        "days_one": "Today",
+        "days_other": "Last {{count}} days",
+        "weeks_one": "This week",
+        "weeks_other": "Last {{count}} weeks",
+        "months_one": "This month",
+        "months_other": "Last {{count}} months"
+      },
+      "dates": "First and last day",
+      "noActiveCycle": "There's no active cycle.",
+      "noFinishedCycle": "No cycle has finished yet."
+    },
+    "resolution": {
+      "label": "Show per",
+      "options": {
+        "hour": "Hour",
+        "day": "Day",
+        "week": "Week",
+        "month": "Month",
+        "year": "Year",
+        "cycle": "Cycle",
+        "total": "Whole period"
+      }
+    }
+  },
   "admin": {
     "intro": "Everyone who can log in. Users are never deleted: deactivate them instead, which keeps their data. Admins manage users, but don't see other users' money.",
     "adminsOnly": "Admins only",

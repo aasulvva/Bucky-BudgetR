@@ -53,6 +53,8 @@ tags:
     description: Income, expenses and transfers, and the transaction list.
   - name: admin
     description: User management, for admins only.
+  - name: stats
+    description: Aggregated series for graphs and reports (#119).
 
 paths:
   /healthz:
@@ -465,6 +467,144 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AccountFlow"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/stats/series:
+    get:
+      operationId: getStatsSeries
+      tags: [stats]
+      summary: Spending, income or balances over a period, per interval
+      description: |
+        For graphs, reports and widgets (#121): `from`…`to` cut into
+        intervals of `resolution`, with one sum per interval in each series.
+
+        - **Intervals** are cut in local time (`time_zone`, else the user's
+          preference, else UTC), with weeks starting on `week_start`. The
+          first and last are cut at `from` and `to`. `cycle` gives one
+          interval per cycle that overlaps the period (days outside any
+          cycle aren't covered), `total` one for the whole period. At most
+          1000 intervals (400 `too_many_intervals`).
+        - **Spending** is expenses (EXP) as a positive amount, **income**
+          is income (INC), net of corrections: a transaction counts on its
+          original's date with its corrections, as the transaction list
+          shows it, so a reversed one adds up to 0. With `transfers`,
+          transfers (TRF) count too: money in as income, money out as
+          spending (for a one-account graph, as #90 does).
+        - **Balance** is each account's balance at the end of each interval:
+          every line dated before it, of any type.
+        - **Grouping:** `none` gives one series per currency, `account` one
+          per account, `bucket` one per bucket plus one without a bucket
+          (`bucket_id` null) for the part of expenses or income on no
+          bucket. Spending and income by bucket, or with `bucket_id`, use
+          the bucket lines; otherwise the bank lines. `balance` can't be
+          grouped by bucket.
+        - **Currencies** are never added up: each series has one currency.
+        - **Filters** work as on the transaction list. Several values of a
+          filter match any of them.
+
+        Empty intervals are 0. `from` must be before `to` (400
+        `invalid_request`).
+      parameters:
+        - name: metric
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [spending, income, balance]
+        - name: from
+          in: query
+          required: true
+          description: The start of the period (inclusive).
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: true
+          description: The end of the period (exclusive).
+          schema:
+            type: string
+            format: date-time
+        - name: resolution
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [hour, day, week, month, year, cycle, total]
+        - name: time_zone
+          in: query
+          description: The IANA time zone the intervals are cut in. Defaults to the user's `time_zone` preference, else UTC.
+          schema:
+            type: string
+            maxLength: 64
+            example: Europe/Oslo
+        - name: week_start
+          in: query
+          description: The first day of the week, 1 (Monday) to 7 (Sunday). Defaults to 1.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 7
+        - name: group_by
+          in: query
+          description: One series per currency (`none`, the default), per account, or per bucket.
+          schema:
+            type: string
+            enum: [none, account, bucket]
+        - name: account_id
+          in: query
+          description: Only these accounts' lines (or their buckets' lines). Repeat for several.
+          schema:
+            type: array
+            maxItems: 50
+            items:
+              $ref: "#/components/schemas/AccountId"
+          style: form
+          explode: true
+        - name: bucket_id
+          in: query
+          description: Only these buckets' lines. Repeat for several. Not for `balance`.
+          schema:
+            type: array
+            maxItems: 100
+            items:
+              $ref: "#/components/schemas/BucketId"
+          style: form
+          explode: true
+        - name: tag
+          in: query
+          description: Only transactions with any of these tags, ignoring case. Repeat for several. Not for `balance`.
+          schema:
+            type: array
+            maxItems: 20
+            items:
+              type: string
+              maxLength: 50
+          style: form
+          explode: true
+        - name: counterparty
+          in: query
+          description: Only transactions whose counterparty contains this text, ignoring case. Not for `balance`.
+          schema:
+            type: string
+            maxLength: 200
+        - name: transfers
+          in: query
+          description: Count transfers as income (in) and spending (out). Not for `balance`.
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: The intervals and the series.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatsSeries"
         "400":
           $ref: "#/components/responses/Error"
         "401":
@@ -2599,6 +2739,58 @@ components:
           allOf:
             - $ref: "#/components/schemas/Amount"
           description: Transfers out of the account (TRF), as a positive amount.
+
+    StatsSeries:
+      type: object
+      additionalProperties: false
+      description: A period cut into intervals, and one value per interval in each series.
+      required: [intervals, series]
+      properties:
+        intervals:
+          type: array
+          items:
+            $ref: "#/components/schemas/StatsInterval"
+        series:
+          type: array
+          description: Sorted by currency, then account or bucket ID (the series without a bucket last).
+          items:
+            $ref: "#/components/schemas/StatsSeriesLine"
+
+    StatsInterval:
+      type: object
+      additionalProperties: false
+      required: [start, end]
+      properties:
+        start:
+          type: string
+          format: date-time
+        end:
+          type: string
+          format: date-time
+          description: Exclusive.
+
+    StatsSeriesLine:
+      type: object
+      additionalProperties: false
+      required: [currency, values]
+      properties:
+        account_id:
+          description: The account, when grouped by account.
+          allOf:
+            - $ref: "#/components/schemas/AccountId"
+        bucket_id:
+          type: string
+          nullable: true
+          description: The bucket, when grouped by bucket; null for the part on no bucket.
+          allOf:
+            - $ref: "#/components/schemas/BucketId"
+        currency:
+          $ref: "#/components/schemas/Currency"
+        values:
+          type: array
+          description: One value per interval, in the same order.
+          items:
+            $ref: "#/components/schemas/Amount"
 
     BucketFigures:
       type: object

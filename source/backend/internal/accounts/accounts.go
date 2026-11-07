@@ -27,6 +27,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ids"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/money"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/stats"
 )
 
 // Errors returned by the service. They wrap a message that says what is wrong.
@@ -164,6 +165,12 @@ func (s *Service) Flows(ctx context.Context, userID string, from, to time.Time) 
 		return nil, fmt.Errorf("%w: the period must end after it starts", ErrInvalid)
 	}
 	return balance.Flows(ctx, s.pool, userID, from, to)
+}
+
+// Stats sums the user's spending, income or balances over a period cut into
+// intervals (#121).
+func (s *Service) Stats(ctx context.Context, userID string, q stats.Query) (stats.Result, error) {
+	return stats.Series(ctx, s.pool, userID, q)
 }
 
 func (s *Service) List(ctx context.Context, userID string) ([]Account, error) {
