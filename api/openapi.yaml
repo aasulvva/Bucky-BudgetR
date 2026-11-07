@@ -1924,6 +1924,15 @@ components:
           type: string
           enum: [half, full]
           description: Half or the full width of the Dashboard on wide screens.
+        title:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 40
+          description: |
+            A custom title (not blank). Null or missing means the automatic
+            one: the bucket's or account's name for One bucket and One
+            account, otherwise the widget's name.
         cycle:
           $ref: "#/components/schemas/CycleWidgetSettings"
         accounts:
@@ -1976,6 +1985,9 @@ components:
             - $ref: "#/components/schemas/BucketId"
           nullable: true
           description: The bucket shown in `bucket` mode.
+        show_mode:
+          type: boolean
+          description: Show the mode above the buckets (e.g. *Needs attention*). True by default.
 
     RecentWidgetSettings:
       type: object

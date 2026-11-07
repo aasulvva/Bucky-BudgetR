@@ -19,6 +19,7 @@ import { IconGripVertical } from "@tabler/icons-react";
 import type { CSSProperties, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
+import { useAccounts, useBuckets } from "@/api/accounts";
 import {
   moveWidget,
   moveWidgetTo,
@@ -29,7 +30,7 @@ import {
   type SaveWidget,
 } from "@/lib/dashboard";
 
-import { widgetTitle } from "./frame";
+import { titleFor } from "./frame";
 import { WidgetView } from "./WidgetView";
 
 /** A full-width widget spans both columns. */
@@ -51,6 +52,8 @@ export function DashboardGrid({
   onChange?: (layout: Layout) => void;
 }) {
   const { t } = useTranslation();
+  const accounts = useAccounts().data ?? [];
+  const buckets = useBuckets().data ?? [];
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -68,11 +71,12 @@ export function DashboardGrid({
     );
   }
 
-  /** "Bucket status", or "Bucket status 2" for the second copy. */
+  /** Its title, or "Bucket status 2" for the second widget with the same title. */
+  const titles = new Map(layout.map((w) => [w.id, titleFor(t, w, accounts, buckets)]));
   const name = (w: WidgetInstance) => {
-    const title = widgetTitle(t, w.type);
-    const copies = layout.filter((o) => o.type === w.type);
-    return copies.length > 1 ? `${title} ${copies.indexOf(w) + 1}` : title;
+    const title = titles.get(w.id) ?? "";
+    const same = layout.filter((o) => titles.get(o.id) === title);
+    return same.length > 1 ? `${title} ${same.indexOf(w) + 1}` : title;
   };
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;

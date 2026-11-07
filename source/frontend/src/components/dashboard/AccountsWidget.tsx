@@ -1,5 +1,5 @@
 import { Anchor, Box, Group, Stack, Text } from "@mantine/core";
-import type { ReactNode } from "react";
+import { useContext, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
@@ -8,6 +8,7 @@ import { accountSummary, toneText } from "@/lib/buckets";
 import { shownAccounts, type WidgetInstance } from "@/lib/dashboard";
 import { addAmounts, compareAmounts, formatMoney } from "@/lib/money";
 
+import { WidgetFrame } from "./frame";
 import { MoneyState, NoBuckets, WidgetCard } from "./Widget";
 
 /** The account balances: all of them with a total, or one account. */
@@ -108,10 +109,12 @@ function OneAccount({ account, buckets }: { account: Account; buckets: Bucket[] 
   const own = buckets.filter((b) => b.source_account_id === account.id);
   const summary = accountSummary(account, buckets);
   const isShort = compareAmounts(summary.short, "0") > 0;
+  // No need to name the account again under a title that does.
+  const titled = useContext(WidgetFrame).title === account.name;
   return (
     <Stack gap="xs">
       <Group gap="xs" wrap="wrap">
-        <AccountLink account={account} />
+        {!titled && <AccountLink account={account} />}
         <Text size="sm" c="dimmed">
           {accountTypeLabel(account.type)}
         </Text>

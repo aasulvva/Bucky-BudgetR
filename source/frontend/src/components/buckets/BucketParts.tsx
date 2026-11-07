@@ -26,9 +26,11 @@ export interface BucketProps {
   active: Cycle | null;
 }
 
-export function BucketName({ bucket }: { bucket: Bucket }) {
+export function BucketName({ bucket, hideName }: { bucket: Bucket; hideName?: boolean }) {
   const { t } = useTranslation();
   const { overspent, tone } = coverage(bucket);
+  // Shown elsewhere, e.g. as a widget's title: only the warning and Priority.
+  if (hideName && tone === "ok" && !bucket.priority) return null;
   const label = overspent
     ? t("buckets.overspentLabel")
     : t(tone === "alert" ? "buckets.alertLabel" : "buckets.warnLabel");
@@ -37,14 +39,16 @@ export function BucketName({ bucket }: { bucket: Bucket }) {
       {tone !== "ok" && (
         <IconAlertTriangle size={18} role="img" aria-label={label} color={toneText(tone)} />
       )}
-      <Anchor
-        component={Link}
-        to={`/transactions?bucket_id=${bucket.id}`}
-        fw={600}
-        c="var(--mantine-color-text)"
-      >
-        {bucket.name}
-      </Anchor>
+      {!hideName && (
+        <Anchor
+          component={Link}
+          to={`/transactions?bucket_id=${bucket.id}`}
+          fw={600}
+          c="var(--mantine-color-text)"
+        >
+          {bucket.name}
+        </Anchor>
+      )}
       {bucket.priority && (
         <Badge size="sm" variant="light" radius="sm">
           {t("buckets.priority")}

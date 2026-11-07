@@ -248,6 +248,8 @@
     "settings": "Innstillinger",
     "settingsFor": "Innstillinger for {{widget}}",
     "settingsTitle": "Innstillinger for {{widget}}",
+    "title": "Tittel",
+    "titleHint": "La feltet stå tomt for automatisk tittel.",
     "cycle": {
       "title": "Periode",
       "manage": "Perioder",
@@ -279,7 +281,8 @@
       "overspentBy": "Overforbrukt med {{amount}}",
       "used": "{{pct}} % brukt",
       "usedOf": "{{name}}: {{pct}} % brukt",
-      "noneUsed": "Ingen bøtte har budsjett i denne perioden ennå."
+      "noneUsed": "Ingen bøtte har budsjett i denne perioden ennå.",
+      "showMode": "Vis modusen (f.eks. {{example}})"
     },
     "accounts": {
       "title": "Kontosaldoer",

@@ -29,6 +29,8 @@ export const BUCKET_STATUS_MODES: BucketStatusMode[] = ["attention", "all", "mos
 export const TRANSACTION_COUNTS = [3, 5, 10, 15, 20];
 /** The most widgets a layout holds (the API's limit). */
 export const MAX_WIDGETS = 30;
+/** The longest custom title. */
+export const MAX_TITLE = 40;
 
 /** How many buckets Most used shows. */
 export const MOST_USED = 5;
@@ -43,6 +45,8 @@ export interface AccountsSettings {
 export interface BucketStatusSettings {
   mode: BucketStatusMode;
   bucketId: string | null;
+  /** Show the mode above the buckets. */
+  showMode: boolean;
 }
 export interface RecentSettings {
   count: number;
@@ -58,7 +62,14 @@ interface SettingsOf {
 
 /** One widget on the Dashboard, with its own settings. */
 export type WidgetInstance<T extends WidgetType = WidgetType> = {
-  [K in T]: { id: string; type: K; width: WidgetWidth; settings: SettingsOf[K] };
+  [K in T]: {
+    id: string;
+    type: K;
+    width: WidgetWidth;
+    /** A custom title; null for the automatic one (`autoTitle`). */
+    title: string | null;
+    settings: SettingsOf[K];
+  };
 }[T];
 
 export type Layout = WidgetInstance[];
@@ -77,6 +88,7 @@ const fromApi = {
   bucketStatus: (s?: Schemas["BucketStatusWidgetSettings"]): BucketStatusSettings => ({
     mode: s?.mode ?? "attention",
     bucketId: s?.bucket_id ?? null,
+    showMode: s?.show_mode ?? true,
   }),
   recent: (s?: Schemas["RecentWidgetSettings"]): RecentSettings => ({ count: s?.count ?? 5 }),
 };
@@ -112,37 +124,52 @@ function newId(): string {
 export function newWidget(type: WidgetType, layout: Layout = []): WidgetInstance {
   let id = newId();
   while (layout.some((w) => w.id === id)) id = newId();
-  return { id, type, width: defaultWidth(type), settings: defaultSettings(type) } as WidgetInstance;
+  return {
+    id,
+    type,
+    width: defaultWidth(type),
+    title: null,
+    settings: defaultSettings(type),
+  } as WidgetInstance;
 }
 
 /** The five widgets of #29's fixed Dashboard, in its order, with the given settings. */
 export function defaultLayout(saved?: DashboardPreferences | null): Layout {
   return [
-    { id: "cycle", type: "cycle", width: "half", settings: fromApi.cycle(saved?.cycle) },
-    { id: "health", type: "health", width: "half", settings: null },
+    {
+      id: "cycle",
+      type: "cycle",
+      width: "half",
+      title: null,
+      settings: fromApi.cycle(saved?.cycle),
+    },
+    { id: "health", type: "health", width: "half", title: null, settings: null },
     {
       id: "bucket_status",
       type: "bucket_status",
       width: "half",
+      title: null,
       settings: fromApi.bucketStatus(saved?.bucket_status),
     },
     {
       id: "accounts",
       type: "accounts",
       width: "half",
+      title: null,
       settings: fromApi.accounts(saved?.accounts),
     },
     {
       id: "recent_transactions",
       type: "recent_transactions",
       width: "full",
+      title: null,
       settings: fromApi.recent(saved?.recent_transactions),
     },
   ];
 }
 
 function widgetFromApi(w: ApiWidget): WidgetInstance {
-  const base = { id: w.id, width: w.width };
+  const base = { id: w.id, width: w.width, title: w.title ?? null };
   switch (w.type) {
     case "cycle":
       return { ...base, type: w.type, settings: fromApi.cycle(w.cycle) };
@@ -167,17 +194,26 @@ export function dashboardLayout(preferences: Preferences): Layout {
 }
 
 function widgetToApi(w: WidgetInstance): ApiWidget {
-  const base = { id: w.id, type: w.type, width: w.width };
+  const base = {
+    id: w.id,
+    type: w.type,
+    width: w.width,
+    ...(w.title === null ? {} : { title: w.title }),
+  };
   switch (w.type) {
     case "cycle":
       return { ...base, cycle: { show_next: w.settings.showNext } };
     case "health":
       return base;
     case "bucket_status": {
-      const { mode, bucketId } = w.settings;
+      const { mode, bucketId, showMode } = w.settings;
       return {
         ...base,
-        bucket_status: mode === "bucket" ? { mode, bucket_id: bucketId } : { mode },
+        bucket_status: {
+          mode,
+          ...(mode === "bucket" ? { bucket_id: bucketId } : {}),
+          ...(showMode ? {} : { show_mode: false }),
+        },
       };
     }
     case "accounts": {
@@ -222,6 +258,33 @@ export function replaceWidget(layout: Layout, widget: WidgetInstance): Layout {
   return layout.some((w) => w.id === widget.id)
     ? layout.map((w) => (w.id === widget.id ? widget : w))
     : [...layout, widget];
+}
+
+/** A custom title as saved: trimmed, and null when it's empty. */
+export function customTitle(title: string): string | null {
+  const trimmed = title.trim().slice(0, MAX_TITLE);
+  return trimmed === "" ? null : trimmed;
+}
+
+/**
+ * A widget's title, unless it's the widget's name: its custom title, or the
+ * name of the bucket or account it shows (One bucket, One account).
+ */
+export function autoTitle(
+  widget: WidgetInstance,
+  accounts: Account[],
+  buckets: Bucket[],
+): string | null {
+  if (widget.title !== null) return widget.title;
+  if (widget.type === "bucket_status" && widget.settings.mode === "bucket") {
+    const { bucketId } = widget.settings;
+    return buckets.find((b) => b.id === bucketId)?.name ?? null;
+  }
+  if (widget.type === "accounts" && widget.settings.mode === "account") {
+    const { accountId } = widget.settings;
+    return accounts.find((a) => a.id === accountId)?.name ?? null;
+  }
+  return null;
 }
 
 /**

@@ -248,6 +248,8 @@
     "settings": "Settings",
     "settingsFor": "Settings for {{widget}}",
     "settingsTitle": "{{widget}} settings",
+    "title": "Title",
+    "titleHint": "Leave it empty for the automatic title.",
     "cycle": {
       "title": "Cycle",
       "manage": "Cycles",
@@ -279,7 +281,8 @@
       "overspentBy": "Overspent by {{amount}}",
       "used": "{{pct}}% used",
       "usedOf": "{{name}}: {{pct}}% used",
-      "noneUsed": "No bucket has a budget this cycle yet."
+      "noneUsed": "No bucket has a budget this cycle yet.",
+      "showMode": "Show the mode (e.g. {{example}})"
     },
     "accounts": {
       "title": "Account balances",

@@ -17,7 +17,7 @@ import { BucketStatusWidget } from "./BucketStatusWidget";
 import { CycleWidget } from "./CycleWidget";
 import { HealthWidget } from "./HealthWidget";
 import { RecentWidget } from "./RecentWidget";
-import { WidgetFrame, widgetTitle } from "./frame";
+import { WidgetFrame, useWidgetTitle } from "./frame";
 import { SettingsButton } from "./Widget";
 import { WidgetSettingsDialog } from "./WidgetSettings";
 
@@ -49,35 +49,38 @@ export function WidgetView({
 }) {
   const { t } = useTranslation();
   const [settings, setSettings] = useState(false);
-  const title = widgetTitle(t, widget.type);
-  const open = () => {
-    setSettings(true);
-  };
-  const cog =
-    widget.type === "health" ? undefined : (
-      <SettingsButton widget={edit?.name ?? title} onClick={open} />
-    );
+  const title = useWidgetTitle(widget);
+  const cog = (
+    <SettingsButton
+      widget={edit?.name ?? title}
+      onClick={() => {
+        setSettings(true);
+      }}
+    />
+  );
 
   return (
     <WidgetFrame.Provider
-      value={{ editing: !!edit, bar: edit && <EditBar edit={edit} cog={cog} widget={widget} /> }}
+      value={{
+        title,
+        editing: !!edit,
+        bar: edit && <EditBar edit={edit} cog={cog} widget={widget} />,
+      }}
     >
       {widget.type === "cycle" && <CycleWidget widget={widget} action={cog} />}
-      {widget.type === "health" && <HealthWidget />}
+      {widget.type === "health" && <HealthWidget action={cog} />}
       {widget.type === "bucket_status" && <BucketStatusWidget widget={widget} action={cog} />}
       {widget.type === "accounts" && <AccountsWidget widget={widget} action={cog} />}
       {widget.type === "recent_transactions" && <RecentWidget widget={widget} action={cog} />}
-      {cog && (
-        <WidgetSettingsDialog
-          widget={widget}
-          opened={settings}
-          title={t("dashboard.settingsTitle", { widget: title })}
-          onClose={() => {
-            setSettings(false);
-          }}
-          onSave={onSave}
-        />
-      )}
+      <WidgetSettingsDialog
+        widget={widget}
+        opened={settings}
+        title={t("dashboard.settingsTitle", { widget: title })}
+        onClose={() => {
+          setSettings(false);
+        }}
+        onSave={onSave}
+      />
     </WidgetFrame.Provider>
   );
 }

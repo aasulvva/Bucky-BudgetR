@@ -1172,6 +1172,12 @@ export interface components {
              * @enum {string}
              */
             width: "half" | "full";
+            /**
+             * @description A custom title (not blank). Null or missing means the automatic
+             *     one: the bucket's or account's name for One bucket and One
+             *     account, otherwise the widget's name.
+             */
+            title?: string | null;
             cycle?: components["schemas"]["CycleWidgetSettings"];
             accounts?: components["schemas"]["AccountsWidgetSettings"];
             bucket_status?: components["schemas"]["BucketStatusWidgetSettings"];
@@ -1200,6 +1206,8 @@ export interface components {
             mode: "attention" | "all" | "most_used" | "bucket";
             /** @description The bucket shown in `bucket` mode. */
             bucket_id?: (string & components["schemas"]["BucketId"]) | null;
+            /** @description Show the mode above the buckets (e.g. *Needs attention*). True by default. */
+            show_mode?: boolean;
         };
         RecentWidgetSettings: {
             /** @description How many transactions it shows. 5 by default. */

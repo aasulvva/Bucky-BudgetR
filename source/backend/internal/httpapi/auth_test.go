@@ -386,7 +386,7 @@ func TestPreferences(t *testing.T) {
 		t.Errorf("dashboard replaced: %d %s", w.Code, w.Body)
 	}
 	// The layout (#37): a list of widgets, each with its own settings.
-	layout := `{"dashboard":{"widgets":[{"cycle":{"show_next":false},"id":"a1","type":"cycle","width":"full"},{"bucket_status":{"bucket_id":"1000000001","mode":"bucket"},"id":"b-2","type":"bucket_status","width":"half"},{"bucket_status":{"mode":"most_used"},"id":"b_3","type":"bucket_status","width":"half"},{"id":"h","type":"health","width":"half"}]}}`
+	layout := `{"dashboard":{"widgets":[{"cycle":{"show_next":false},"id":"a1","type":"cycle","width":"full"},{"bucket_status":{"bucket_id":"1000000001","mode":"bucket"},"id":"b-2","type":"bucket_status","width":"half"},{"bucket_status":{"mode":"most_used","show_mode":false},"id":"b_3","type":"bucket_status","width":"half"},{"id":"h","title":"Health","type":"health","width":"half"}]}}`
 	if w := patch(layout); w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != layout {
 		t.Errorf("layout: %d %s", w.Code, w.Body)
 	}
@@ -412,6 +412,9 @@ func TestPreferences(t *testing.T) {
 		`{"dashboard":{"widgets":[{"id":"a","type":"health","width":"third"}]}}`,
 		`{"dashboard":{"widgets":[{"id":"a b","type":"health","width":"half"}]}}`,
 		`{"dashboard":{"widgets":[{"type":"health","width":"half"}]}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"health","width":"half","title":"   "}]}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"health","width":"half","title":""}]}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"health","width":"half","title":"` + strings.Repeat("x", 41) + `"}]}}`,
 	} {
 		w := patch(body)
 		if w.Code != http.StatusBadRequest || deref(decodeProblem(t, w).Code) != "invalid_request" {

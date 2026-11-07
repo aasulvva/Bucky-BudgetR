@@ -298,8 +298,10 @@ describe("Dashboard", () => {
   it("shows one account", async () => {
     withPreferences({ dashboard: { accounts: { mode: "account", account_id: main.id } } });
     renderRoute("/");
-    const accounts = await widget("Account balances");
-    expect(await accounts.findByRole("link", { name: "Main account" })).toBeInTheDocument();
+    // Titled after the account, which isn't named again inside.
+    const accounts = await widget("Main account");
+    expect(await accounts.findByText(m("1850.00"))).toBeInTheDocument();
+    expect(accounts.queryByRole("link", { name: "Main account" })).not.toBeInTheDocument();
     expect(accounts.queryByRole("link", { name: "Buffer account" })).not.toBeInTheDocument();
     expect(accounts.getByText(m("1500.00"))).toBeInTheDocument();
     expect(accounts.getByText(m("1850.00"))).toBeInTheDocument();
@@ -435,10 +437,10 @@ describe("Dashboard layout", () => {
       "Bucket status",
       "Account balances",
       "Recent transactions",
-      "Bucket status",
+      // One bucket is titled after its bucket.
+      "Fun",
     ]);
-    // Copies are told apart in the edit bar.
-    expect(screen.getByRole("button", { name: "Remove Bucket status 2" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove Fun" })).toBeInTheDocument();
 
     await userEvent.click(bar.getByRole("button", { name: "Done" }));
     await screen.findByRole("button", { name: "Edit dashboard" });
@@ -452,7 +454,96 @@ describe("Dashboard layout", () => {
     });
   });
 
-  it("adds Budget health at once, as it has no settings", async () => {
+  it("names a widget after its bucket or a custom title, and can hide the mode", async () => {
+    withPreferences({
+      dashboard: {
+        widgets: [
+          {
+            id: "a",
+            type: "bucket_status",
+            width: "half",
+            bucket_status: { mode: "bucket", bucket_id: fun.id, show_mode: false },
+          },
+          {
+            id: "b",
+            type: "bucket_status",
+            width: "half",
+            title: "Everything",
+            bucket_status: { mode: "all" },
+          },
+          { id: "c", type: "bucket_status", width: "half" },
+          { id: "d", type: "bucket_status", width: "half" },
+          {
+            id: "e",
+            type: "bucket_status",
+            width: "half",
+            title: "Spending",
+            bucket_status: { mode: "bucket", bucket_id: fun.id },
+          },
+        ],
+      },
+    });
+    renderRoute("/");
+    const one = await widget("Fun");
+    expect(await one.findByText("Left this cycle")).toBeInTheDocument();
+    expect(one.queryByText("One bucket")).not.toBeInTheDocument();
+    // The title names the bucket, so it isn't named again, unlike under another title.
+    expect(one.queryByRole("link", { name: "Fun" })).not.toBeInTheDocument();
+    expect((await widget("Spending")).getByRole("link", { name: "Fun" })).toBeInTheDocument();
+    expect(await (await widget("Everything")).findByText("All buckets")).toBeInTheDocument();
+    expect(shown()).toEqual(["Fun", "Everything", "Bucket status", "Bucket status", "Spending"]);
+
+    // Widgets with the same title are told apart in the edit bar.
+    await userEvent.click(screen.getByRole("button", { name: "Edit dashboard" }));
+    expect(screen.getByRole("button", { name: "Remove Bucket status 2" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove Fun" })).toBeInTheDocument();
+  });
+
+  it("saves a custom title, and clears it back to the automatic one", async () => {
+    renderRoute("/");
+    const health = await widget("Budget health");
+    await userEvent.click(health.getByRole("button", { name: "Settings for Budget health" }));
+    let box = within(await screen.findByRole("dialog", { name: "Budget health settings" }));
+    const field = box.getByRole("textbox", { name: "Title" });
+    expect(field).toHaveAttribute("placeholder", "Budget health");
+    await userEvent.type(field, "  Are we OK?  ");
+    await userEvent.click(box.getByRole("button", { name: "Save" }));
+    const renamed = await widget("Are we OK?");
+    const [first] = patches() as ReturnType<typeof savedLayout>[];
+    expect(first?.dashboard.widgets[1]).toEqual({
+      id: "health",
+      type: "health",
+      width: "half",
+      title: "Are we OK?",
+    });
+
+    await userEvent.click(renamed.getByRole("button", { name: "Settings for Are we OK?" }));
+    box = within(await screen.findByRole("dialog", { name: "Are we OK? settings" }));
+    await userEvent.clear(box.getByRole("textbox", { name: "Title" }));
+    await userEvent.click(box.getByRole("button", { name: "Save" }));
+    expect(await widget("Budget health")).toBeTruthy();
+    expect(patches().at(-1)).toEqual(savedLayout());
+  });
+
+  it("hides the mode line of Bucket status", async () => {
+    renderRoute("/");
+    const status = await widget("Bucket status");
+    expect(await status.findByText("Needs attention")).toBeInTheDocument();
+    await userEvent.click(status.getByRole("button", { name: "Settings for Bucket status" }));
+    const box = within(await screen.findByRole("dialog", { name: "Bucket status settings" }));
+    await userEvent.click(
+      box.getByRole("checkbox", { name: "Show the mode (e.g. Needs attention)" }),
+    );
+    await userEvent.click(box.getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(status.queryByText("Needs attention")).not.toBeInTheDocument();
+    });
+    expect(patches()).toEqual([
+      savedLayout({ bucket_status: { mode: "attention", show_mode: false } }),
+    ]);
+  });
+
+  it("adds Budget health at once, as its only setting is the title", async () => {
     const bar = await editMode();
     await userEvent.click(bar.getByRole("button", { name: "Add widget" }));
     const picker = await screen.findByRole("dialog", { name: "Add widget" });

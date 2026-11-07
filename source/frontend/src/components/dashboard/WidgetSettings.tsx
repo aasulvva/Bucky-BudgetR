@@ -1,4 +1,4 @@
-import { Button, Checkbox, Group, Select, Stack } from "@mantine/core";
+import { Button, Checkbox, Group, Select, Stack, TextInput } from "@mantine/core";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -9,13 +9,17 @@ import { ResponsiveModal } from "@/components/ResponsiveModal";
 import {
   ACCOUNTS_MODES,
   BUCKET_STATUS_MODES,
+  MAX_TITLE,
   TRANSACTION_COUNTS,
+  customTitle,
   settingsComplete,
   type AccountsSettings,
   type BucketStatusSettings,
   type WidgetInstance,
   type SaveWidget,
 } from "@/lib/dashboard";
+
+import { titleFor } from "./frame";
 
 /**
  * A widget's settings, for its cog and for adding a widget. Saving hands the
@@ -67,6 +71,9 @@ export function WidgetSettingsForm({
   const accounts = useAccounts().data ?? [];
   const buckets = useBuckets().data ?? [];
   const [draft, setDraft] = useState(widget);
+  const [title, setTitle] = useState(widget.title ?? "");
+  // What the title is when the field is left empty.
+  const automatic = titleFor(t, { ...draft, title: null }, accounts, buckets);
   const save = useMutation({
     mutationFn: async (w: WidgetInstance) => {
       await onSave(w);
@@ -77,6 +84,30 @@ export function WidgetSettingsForm({
 
   return (
     <Stack gap="md">
+      <TextInput
+        label={t("dashboard.title")}
+        description={t("dashboard.titleHint")}
+        placeholder={automatic}
+        value={title}
+        maxLength={MAX_TITLE}
+        onChange={(e) => {
+          setTitle(e.currentTarget.value);
+        }}
+      />
+      {draft.type === "bucket_status" && (
+        <Checkbox
+          label={t("dashboard.bucketStatus.showMode", {
+            example: t("dashboard.bucketStatus.modes.attention"),
+          })}
+          checked={draft.settings.showMode}
+          onChange={(e) => {
+            setDraft({
+              ...draft,
+              settings: { ...draft.settings, showMode: e.currentTarget.checked },
+            });
+          }}
+        />
+      )}
       {draft.type === "cycle" && (
         <Checkbox
           label={t("dashboard.cycle.showNext")}
@@ -125,7 +156,7 @@ export function WidgetSettingsForm({
           loading={save.isPending}
           disabled={!settingsComplete(draft, accounts, buckets)}
           onClick={() => {
-            save.mutate(draft);
+            save.mutate({ ...draft, title: customTitle(title) });
           }}
         >
           {saveLabel ?? t("common.save")}

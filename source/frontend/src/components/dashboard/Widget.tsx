@@ -9,7 +9,10 @@ import { QueryState } from "@/components/QueryState";
 
 import { WidgetFrame } from "./frame";
 
-/** A widget's card: its title, a link to its screen, and its settings button. */
+/**
+ * A widget's card: its title (the frame's, else the widget's name), a link
+ * to its screen, and its settings button.
+ */
 export function WidgetCard({
   title,
   link,
@@ -21,13 +24,15 @@ export function WidgetCard({
   action?: ReactNode;
   children: ReactNode;
 }) {
-  const { editing, bar } = useContext(WidgetFrame);
+  const frame = useContext(WidgetFrame);
+  const { editing, bar } = frame;
+  const shownTitle = frame.title ?? title;
   return (
-    <Card withBorder component="section" aria-label={title} h="100%">
+    <Card withBorder component="section" aria-label={shownTitle} h="100%">
       <Stack gap="sm">
         <Group justify="space-between" gap="xs" wrap="nowrap">
           <Title order={3} size="h5">
-            {title}
+            {shownTitle}
           </Title>
           {editing ? (
             bar

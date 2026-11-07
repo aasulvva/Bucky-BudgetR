@@ -185,7 +185,8 @@ func checkCycleRule(current, patch api.Preferences) error {
 }
 
 // checkDashboard checks a preferences patch's Dashboard layout (#37): widget
-// ids are unique, and a widget only carries its own type's settings.
+// ids are unique, a custom title isn't blank, and a widget only carries its
+// own type's settings.
 func checkDashboard(patch api.Preferences) error {
 	dashboard, err := patch.Dashboard.Get()
 	if err != nil {
@@ -204,6 +205,9 @@ func checkDashboard(patch api.Preferences) error {
 			return invalid("Widget id " + strconv.Quote(w.Id) + " is used more than once.")
 		}
 		seen[w.Id] = true
+		if title, err := w.Title.Get(); err == nil && strings.TrimSpace(title) == "" {
+			return invalid("Widget " + strconv.Quote(w.Id) + " has a blank title.")
+		}
 		settings := map[api.DashboardWidgetType]bool{
 			api.DashboardWidgetTypeCycle:              w.Cycle != nil,
 			api.DashboardWidgetTypeAccounts:           w.Accounts != nil,

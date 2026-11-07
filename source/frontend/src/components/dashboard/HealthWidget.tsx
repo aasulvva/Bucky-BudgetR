@@ -1,4 +1,5 @@
 import { Group, Progress, Stack, Text } from "@mantine/core";
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { Account, Bucket } from "@/api/accounts";
@@ -8,13 +9,14 @@ import { compareAmounts, formatMoney } from "@/lib/money";
 
 import { MoneyState, NoBuckets, WidgetCard } from "./Widget";
 
-/** How well each account backs its buckets. It has no settings. */
-export function HealthWidget() {
+/** How well each account backs its buckets. Its only setting is its title. */
+export function HealthWidget({ action }: { action?: ReactNode }) {
   const { t } = useTranslation();
   return (
     <WidgetCard
       title={t("dashboard.health.title")}
       link={{ to: "/buckets", label: t("nav.items.buckets") }}
+      action={action}
     >
       <MoneyState>
         {(accounts, buckets) => {

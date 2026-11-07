@@ -1,5 +1,5 @@
 import { Group, Progress, Stack, Text } from "@mantine/core";
-import type { ReactNode } from "react";
+import { useContext, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useBucketFigures, type Account, type Bucket, type BucketFigures } from "@/api/accounts";
@@ -15,6 +15,7 @@ import {
 } from "@/lib/dashboard";
 import { compareAmounts, formatMoney, subtractAmounts } from "@/lib/money";
 
+import { WidgetFrame } from "./frame";
 import { MoneyState, NoBuckets, WidgetCard } from "./Widget";
 
 /** The buckets that need attention, all of them, the most used, or one. */
@@ -41,9 +42,11 @@ export function BucketStatusWidget({
           const shown = shownBucketStatus(widget.settings, buckets);
           return (
             <>
-              <Text size="xs" c="dimmed">
-                {t(`dashboard.bucketStatus.modes.${shown.mode}`)}
-              </Text>
+              {widget.settings.showMode && (
+                <Text size="xs" c="dimmed">
+                  {t(`dashboard.bucketStatus.modes.${shown.mode}`)}
+                </Text>
+              )}
               {shown.mode === "attention" && <Attention buckets={buckets} figures={byId} />}
               {shown.mode === "all" && (
                 <AllBuckets accounts={accounts} buckets={buckets} figures={byId} />
@@ -216,9 +219,11 @@ function OneBucket({
   active: Cycle | null;
 }) {
   const { t } = useTranslation();
+  // No need to name the bucket again under a title that does.
+  const titled = useContext(WidgetFrame).title === bucket.name;
   return (
     <Stack gap="xs">
-      <BucketName bucket={bucket} />
+      <BucketName bucket={bucket} hideName={titled} />
       <div>
         <Text size="xs" c="dimmed">
           {t("buckets.leftThisCycle")}
