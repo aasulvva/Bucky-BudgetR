@@ -2,13 +2,24 @@ import { account, bucket, bucketFigures } from "@/test/fixtures";
 
 import {
   accountHealth,
-  dashboardSettings,
+  autoTitle,
+  customTitle,
+  dashboardLayout,
+  defaultLayout,
+  layoutToPreferences,
   mostUsed,
+  moveWidget,
+  moveWidgetTo,
   needsAttention,
+  newWidget,
+  removeWidget,
+  replaceWidget,
+  settingsComplete,
   shownAccounts,
   shownBucketStatus,
-  toPreferences,
   usedPct,
+  type Layout,
+  type WidgetInstance,
 } from "./dashboard";
 
 const main = account({ id: "1234", name: "Main account", balance: "1000.00" });
@@ -48,50 +59,260 @@ const figures = new Map(
   ].map((f) => [f.bucket_id, f]),
 );
 
-describe("dashboardSettings", () => {
-  it("uses the defaults", () => {
-    expect(dashboardSettings({})).toEqual({
-      cycle: { showNext: true },
-      accounts: { mode: "all", accountId: null },
-      bucketStatus: { mode: "attention", bucketId: null },
-      recentCount: 5,
+describe("dashboardLayout", () => {
+  it("is #29's five widgets with their defaults when nothing is saved", () => {
+    expect(dashboardLayout({})).toEqual([
+      { id: "cycle", type: "cycle", width: "half", title: null, settings: { showNext: true } },
+      { id: "health", type: "health", width: "half", title: null, settings: null },
+      {
+        id: "bucket_status",
+        type: "bucket_status",
+        width: "half",
+        title: null,
+        settings: { mode: "attention", bucketId: null, showMode: true },
+      },
+      {
+        id: "accounts",
+        type: "accounts",
+        width: "half",
+        title: null,
+        settings: { mode: "all", accountId: null },
+      },
+      {
+        id: "recent_transactions",
+        type: "recent_transactions",
+        width: "full",
+        title: null,
+        settings: { count: 5 },
+      },
+    ]);
+    expect(dashboardLayout({ dashboard: null })).toEqual(defaultLayout());
+  });
+
+  it("migrates #29's per-type settings into the default layout", () => {
+    const layout = dashboardLayout({
+      dashboard: {
+        cycle: { show_next: false },
+        accounts: { mode: "account", account_id: "1234" },
+        bucket_status: { mode: "bucket", bucket_id: "1000000001" },
+        recent_transactions: { count: 10 },
+      },
+    });
+    expect(layout.map((w) => w.settings)).toEqual([
+      { showNext: false },
+      null,
+      { mode: "bucket", bucketId: "1000000001", showMode: true },
+      { mode: "account", accountId: "1234" },
+      { count: 10 },
+    ]);
+    expect(layoutToPreferences(layout)).toEqual({
+      widgets: [
+        { id: "cycle", type: "cycle", width: "half", cycle: { show_next: false } },
+        { id: "health", type: "health", width: "half" },
+        {
+          id: "bucket_status",
+          type: "bucket_status",
+          width: "half",
+          bucket_status: { mode: "bucket", bucket_id: "1000000001" },
+        },
+        {
+          id: "accounts",
+          type: "accounts",
+          width: "half",
+          accounts: { mode: "account", account_id: "1234" },
+        },
+        {
+          id: "recent_transactions",
+          type: "recent_transactions",
+          width: "full",
+          recent_transactions: { count: 10 },
+        },
+      ],
     });
   });
 
-  it("reads what's saved, and saves it back", () => {
+  it("reads a saved layout, and saves it back", () => {
     const dashboard = {
+      widgets: [
+        {
+          id: "a",
+          type: "bucket_status" as const,
+          width: "full" as const,
+          bucket_status: { mode: "most_used" as const },
+        },
+        {
+          id: "b",
+          type: "bucket_status" as const,
+          width: "half" as const,
+          bucket_status: { mode: "bucket" as const, bucket_id: "2" },
+        },
+        { id: "c", type: "health" as const, width: "half" as const },
+      ],
+      // Left over from #29; the layout wins.
       cycle: { show_next: false },
-      accounts: { mode: "account" as const, account_id: "1234" },
-      bucket_status: { mode: "bucket" as const, bucket_id: "1000000001" },
-      recent_transactions: { count: 10 },
     };
-    const settings = dashboardSettings({ dashboard });
-    expect(settings).toEqual({
-      cycle: { showNext: false },
-      accounts: { mode: "account", accountId: "1234" },
-      bucketStatus: { mode: "bucket", bucketId: "1000000001" },
-      recentCount: 10,
-    });
-    expect(toPreferences(settings)).toEqual(dashboard);
+    const layout = dashboardLayout({ dashboard });
+    expect(layout.map((w) => [w.id, w.type, w.width])).toEqual([
+      ["a", "bucket_status", "full"],
+      ["b", "bucket_status", "half"],
+      ["c", "health", "half"],
+    ]);
+    expect(layoutToPreferences(layout)).toEqual({ widgets: dashboard.widgets });
+    // A widget without its settings object uses the defaults.
     expect(
-      toPreferences({
-        ...settings,
-        accounts: { mode: "all", accountId: "1234" },
-        bucketStatus: { mode: "all", bucketId: "1000000001" },
-      }),
-    ).toEqual({
-      cycle: { show_next: false },
-      accounts: { mode: "all" },
-      bucket_status: { mode: "all" },
-      recent_transactions: { count: 10 },
+      dashboardLayout({ dashboard: { widgets: [{ id: "x", type: "cycle", width: "half" }] } }),
+    ).toEqual([
+      { id: "x", type: "cycle", width: "half", title: null, settings: { showNext: true } },
+    ]);
+    expect(dashboardLayout({ dashboard: { widgets: [] } })).toEqual([]);
+  });
+
+  it("only saves the chosen bucket or account in those modes", () => {
+    const layout: Layout = [
+      {
+        id: "a",
+        type: "accounts",
+        width: "half",
+        title: null,
+        settings: { mode: "all", accountId: "1234" },
+      },
+      {
+        id: "b",
+        type: "bucket_status",
+        width: "half",
+        title: null,
+        settings: { mode: "all", bucketId: "2", showMode: true },
+      },
+    ];
+    expect(layoutToPreferences(layout).widgets).toEqual([
+      { id: "a", type: "accounts", width: "half", accounts: { mode: "all" } },
+      { id: "b", type: "bucket_status", width: "half", bucket_status: { mode: "all" } },
+    ]);
+  });
+});
+
+describe("editing the layout", () => {
+  const [cycle, , status, accounts, recent] = defaultLayout();
+  const layout = defaultLayout();
+  const ids = (l: Layout) => l.map((w) => w.id);
+
+  it("moves a widget up or down, but not past the ends", () => {
+    expect(ids(moveWidget(layout, "health", 1))).toEqual([
+      "cycle",
+      "bucket_status",
+      "health",
+      "accounts",
+      "recent_transactions",
+    ]);
+    expect(ids(moveWidget(layout, "health", -1))[0]).toBe("health");
+    expect(moveWidget(layout, "cycle", -1)).toBe(layout);
+    expect(moveWidget(layout, "recent_transactions", 1)).toBe(layout);
+    expect(ids(moveWidgetTo(layout, 4, 0))).toEqual([
+      "recent_transactions",
+      "cycle",
+      "health",
+      "bucket_status",
+      "accounts",
+    ]);
+  });
+
+  it("removes and replaces widgets, adding new ones at the end", () => {
+    expect(removeWidget(layout, "health")).toEqual([cycle, status, accounts, recent]);
+    const wide: WidgetInstance = {
+      id: "health",
+      type: "health",
+      width: "full",
+      title: null,
+      settings: null,
+    };
+    expect(replaceWidget(layout, wide)[1]).toEqual(wide);
+    const added = newWidget("bucket_status", layout);
+    expect(added).toMatchObject({
+      type: "bucket_status",
+      width: "half",
+      title: null,
+      settings: { mode: "attention", bucketId: null, showMode: true },
     });
+    expect(added.id).toMatch(/^[A-Za-z0-9_-]{1,40}$/);
+    expect(ids(replaceWidget(layout, added)).at(-1)).toBe(added.id);
+    expect(newWidget("recent_transactions").width).toBe("full");
+  });
+
+  it("needs a bucket or account that exists for One bucket and One account", () => {
+    const one = (bucketId: string | null): WidgetInstance => ({
+      id: "b",
+      type: "bucket_status",
+      width: "half",
+      title: null,
+      settings: { mode: "bucket", bucketId, showMode: true },
+    });
+    expect(settingsComplete(one(null), [main], [fine])).toBe(false);
+    expect(settingsComplete(one("9"), [main], [fine])).toBe(false);
+    expect(settingsComplete(one(fine.id), [main], [fine])).toBe(true);
+    const account: WidgetInstance = {
+      id: "a",
+      type: "accounts",
+      width: "half",
+      title: null,
+      settings: { mode: "account", accountId: main.id },
+    };
+    expect(settingsComplete(account, [main], [])).toBe(true);
+    expect(settingsComplete(account, [], [])).toBe(false);
+    expect(settingsComplete(layout[0] ?? account, [], [])).toBe(true);
+  });
+});
+
+describe("titles and the mode line", () => {
+  const one: WidgetInstance = {
+    id: "b",
+    type: "bucket_status",
+    width: "half",
+    title: null,
+    settings: { mode: "bucket", bucketId: short.id, showMode: false },
+  };
+
+  it("names One bucket and One account after what they show, unless given a title", () => {
+    expect(autoTitle(one, [main], [fine, short])).toBe("Short");
+    expect(autoTitle({ ...one, title: "Savings" }, [main], [fine, short])).toBe("Savings");
+    // Gone, or another mode: the widget's own name.
+    expect(autoTitle(one, [main], [fine])).toBeNull();
+    expect(
+      autoTitle({ ...one, settings: { ...one.settings, mode: "all" } }, [main], [short]),
+    ).toBeNull();
+    const account: WidgetInstance = {
+      id: "a",
+      type: "accounts",
+      width: "half",
+      title: null,
+      settings: { mode: "account", accountId: main.id },
+    };
+    expect(autoTitle(account, [main], [])).toBe("Main account");
+    expect(autoTitle(defaultLayout()[1] ?? account, [main], [])).toBeNull();
+  });
+
+  it("trims a custom title, and empties it to the automatic one", () => {
+    expect(customTitle("  Food  ")).toBe("Food");
+    expect(customTitle("   ")).toBeNull();
+    expect(customTitle("x".repeat(50))).toHaveLength(40);
+  });
+
+  it("saves a title and a hidden mode line, and reads them back", () => {
+    const saved = layoutToPreferences([{ ...one, title: "Savings" }]);
+    expect(saved.widgets).toEqual([
+      {
+        id: "b",
+        type: "bucket_status",
+        width: "half",
+        title: "Savings",
+        bucket_status: { mode: "bucket", bucket_id: short.id, show_mode: false },
+      },
+    ]);
+    expect(dashboardLayout({ dashboard: saved })).toEqual([{ ...one, title: "Savings" }]);
   });
 });
 
 describe("shownAccounts", () => {
-  const settings = dashboardSettings({
-    dashboard: { accounts: { mode: "account", account_id: main.id } },
-  });
+  const settings = { mode: "account" as const, accountId: main.id };
 
   it("shows the chosen account", () => {
     expect(shownAccounts(settings, [main])).toEqual({ mode: "account", account: main });
@@ -103,9 +324,7 @@ describe("shownAccounts", () => {
 });
 
 describe("shownBucketStatus", () => {
-  const settings = dashboardSettings({
-    dashboard: { bucket_status: { mode: "bucket", bucket_id: "2" } },
-  });
+  const settings = { mode: "bucket" as const, bucketId: "2", showMode: true };
 
   it("shows the chosen bucket", () => {
     expect(shownBucketStatus(settings, [fine, short])).toEqual({ mode: "bucket", bucket: short });

@@ -135,6 +135,9 @@ func (s *server) UpdatePreferences(ctx context.Context, req api.UpdatePreference
 	if err := checkCycleRule(current, *req.Body); err != nil {
 		return nil, err
 	}
+	if err := checkDashboard(*req.Body); err != nil {
+		return nil, err
+	}
 	patch, err := json.Marshal(req.Body)
 	if err != nil {
 		return nil, err
@@ -177,6 +180,45 @@ func checkCycleRule(current, patch api.Preferences) error {
 	}
 	if rule && zone == "" {
 		return invalid("A cycle rule needs a time zone.")
+	}
+	return nil
+}
+
+// checkDashboard checks a preferences patch's Dashboard layout (#37): widget
+// ids are unique, a custom title isn't blank, and a widget only carries its
+// own type's settings.
+func checkDashboard(patch api.Preferences) error {
+	dashboard, err := patch.Dashboard.Get()
+	if err != nil {
+		return nil // Not given, or null.
+	}
+	widgets, err := dashboard.Widgets.Get()
+	if err != nil {
+		return nil
+	}
+	invalid := func(detail string) error {
+		return &Error{Status: http.StatusBadRequest, Code: "invalid_request", Detail: detail}
+	}
+	seen := make(map[string]bool, len(widgets))
+	for _, w := range widgets {
+		if seen[w.Id] {
+			return invalid("Widget id " + strconv.Quote(w.Id) + " is used more than once.")
+		}
+		seen[w.Id] = true
+		if title, err := w.Title.Get(); err == nil && strings.TrimSpace(title) == "" {
+			return invalid("Widget " + strconv.Quote(w.Id) + " has a blank title.")
+		}
+		settings := map[api.DashboardWidgetType]bool{
+			api.DashboardWidgetTypeCycle:              w.Cycle != nil,
+			api.DashboardWidgetTypeAccounts:           w.Accounts != nil,
+			api.DashboardWidgetTypeBucketStatus:       w.BucketStatus != nil,
+			api.DashboardWidgetTypeRecentTransactions: w.RecentTransactions != nil,
+		}
+		for t, given := range settings {
+			if given && t != w.Type {
+				return invalid("Widget " + strconv.Quote(w.Id) + " is a " + string(w.Type) + " widget but has " + string(t) + " settings.")
+			}
+		}
 	}
 	return nil
 }

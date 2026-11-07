@@ -248,6 +248,8 @@
     "settings": "Innstillinger",
     "settingsFor": "Innstillinger for {{widget}}",
     "settingsTitle": "Innstillinger for {{widget}}",
+    "title": "Tittel",
+    "titleHint": "La feltet stå tomt for automatisk tittel.",
     "cycle": {
       "title": "Periode",
       "manage": "Perioder",
@@ -279,7 +281,8 @@
       "overspentBy": "Overforbrukt med {{amount}}",
       "used": "{{pct}} % brukt",
       "usedOf": "{{name}}: {{pct}} % brukt",
-      "noneUsed": "Ingen bøtte har budsjett i denne perioden ennå."
+      "noneUsed": "Ingen bøtte har budsjett i denne perioden ennå.",
+      "showMode": "Vis modusen (f.eks. {{example}})"
     },
     "accounts": {
       "title": "Kontosaldoer",
@@ -296,6 +299,32 @@
       "all": "Alle transaksjoner",
       "empty": "Ingen transaksjoner ennå.",
       "count": "Antall transaksjoner"
+    },
+    "edit": {
+      "edit": "Rediger oversikten",
+      "editing": "Du redigerer oversikten. Dra modulene etter håndtaket eller bruk pilene, og velg Ferdig for å lagre.",
+      "add": "Legg til modul",
+      "addNamed": "Legg til modul: {{widget}}",
+      "addButton": "Legg til",
+      "reset": "Tilbakestill",
+      "resetTitle": "Tilbakestille oversikten?",
+      "resetText": "Dette setter tilbake standardmodulene med standardinnstillingene. Ingenting lagres før du velger Ferdig.",
+      "done": "Ferdig",
+      "drag": "Dra {{widget}}",
+      "moveUp": "Flytt {{widget}} opp",
+      "moveDown": "Flytt {{widget}} ned",
+      "remove": "Fjern {{widget}}",
+      "full": "Gjør {{widget}} full bredde",
+      "half": "Gjør {{widget}} halv bredde",
+      "empty": "Oversikten har ingen moduler.",
+      "max": "Oversikten kan ha høyst {{count}} moduler."
+    },
+    "types": {
+      "cycle": "Den aktive perioden og hvor lenge den varer.",
+      "health": "Hvor godt hver konto dekker bøttene sine.",
+      "bucket_status": "Bøtter som trenger oppmerksomhet, alle bøttene, de mest brukte eller én bøtte.",
+      "accounts": "Saldoene på kontoene dine, eller én konto.",
+      "recent_transactions": "De siste transaksjonene."
     }
   },
   "buckets": {

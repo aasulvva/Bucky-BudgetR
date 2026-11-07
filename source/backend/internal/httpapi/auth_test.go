@@ -385,6 +385,14 @@ func TestPreferences(t *testing.T) {
 	if w := patch(`{"dashboard":{"bucket_status":{"mode":"all","bucket_id":null}}}`); strings.TrimSpace(w.Body.String()) != want {
 		t.Errorf("dashboard replaced: %d %s", w.Code, w.Body)
 	}
+	// The layout (#37): a list of widgets, each with its own settings.
+	layout := `{"dashboard":{"widgets":[{"cycle":{"show_next":false},"id":"a1","type":"cycle","width":"full"},{"bucket_status":{"bucket_id":"1000000001","mode":"bucket"},"id":"b-2","type":"bucket_status","width":"half"},{"bucket_status":{"mode":"most_used","show_mode":false},"id":"b_3","type":"bucket_status","width":"half"},{"id":"h","title":"Health","type":"health","width":"half"}]}}`
+	if w := patch(layout); w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != layout {
+		t.Errorf("layout: %d %s", w.Code, w.Body)
+	}
+	if w := patch(`{"dashboard":{"widgets":[]}}`); strings.TrimSpace(w.Body.String()) != `{"dashboard":{"widgets":[]}}` {
+		t.Errorf("empty layout: %d %s", w.Code, w.Body)
+	}
 	if w := patch(`{"dashboard":null}`); strings.TrimSpace(w.Body.String()) != `{}` {
 		t.Errorf("dashboard reset: %d %s", w.Code, w.Body)
 	}
@@ -398,6 +406,15 @@ func TestPreferences(t *testing.T) {
 		`{"dashboard":{"graphs":{}}}`,
 		`{"dashboard":{"cycle":{}}}`,
 		`{"dashboard":{"accounts":{"mode":"account","account_id":"12"}}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"health","width":"half"},{"id":"a","type":"cycle","width":"half"}]}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"cycle","width":"half","bucket_status":{"mode":"all"}}]}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"graph","width":"half"}]}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"health","width":"third"}]}}`,
+		`{"dashboard":{"widgets":[{"id":"a b","type":"health","width":"half"}]}}`,
+		`{"dashboard":{"widgets":[{"type":"health","width":"half"}]}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"health","width":"half","title":"   "}]}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"health","width":"half","title":""}]}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"health","width":"half","title":"` + strings.Repeat("x", 41) + `"}]}}`,
 	} {
 		w := patch(body)
 		if w.Code != http.StatusBadRequest || deref(decodeProblem(t, w).Code) != "invalid_request" {

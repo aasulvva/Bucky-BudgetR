@@ -1844,7 +1844,7 @@ components:
           allOf:
             - $ref: "#/components/schemas/DashboardSettings"
           nullable: true
-          description: The Dashboard widgets' settings. Replaced as a whole on update. Null means the defaults.
+          description: The Dashboard's layout and widget settings. Replaced as a whole on update. Null means the default layout.
         time_zone:
           type: string
           nullable: true
@@ -1882,59 +1882,123 @@ components:
     DashboardSettings:
       type: object
       additionalProperties: false
-      description: Settings per Dashboard widget. A missing widget uses its defaults.
+      description: |
+        The Dashboard's layout. When `widgets` is set, it is the layout, in
+        order (an empty list is an empty Dashboard). When it's missing or
+        null, the web app shows the default five widgets, using the
+        per-type objects (from before #37) as their settings.
       properties:
+        widgets:
+          type: array
+          nullable: true
+          maxItems: 30
+          description: |
+            The widgets, in order. Each widget's id is unique, and it only
+            carries the settings object for its own `type` (400
+            `invalid_request` otherwise).
+          items:
+            $ref: "#/components/schemas/DashboardWidget"
         cycle:
-          type: object
-          additionalProperties: false
-          required: [show_next]
-          properties:
-            show_next:
-              type: boolean
-              description: Also show the next planned cycle. True by default.
+          $ref: "#/components/schemas/CycleWidgetSettings"
         accounts:
-          type: object
-          additionalProperties: false
-          required: [mode]
-          properties:
-            mode:
-              type: string
-              enum: [all, account]
-              description: All accounts (the default), or only the one in `account_id`.
-            account_id:
-              type: string
-              allOf:
-                - $ref: "#/components/schemas/AccountId"
-              nullable: true
-              description: The account shown in `account` mode.
+          $ref: "#/components/schemas/AccountsWidgetSettings"
         bucket_status:
-          type: object
-          additionalProperties: false
-          required: [mode]
-          properties:
-            mode:
-              type: string
-              enum: [attention, all, most_used, bucket]
-              description: |
-                Which buckets the widget shows: the ones that need attention
-                (the default), all of them, the most used ones, or the one in
-                `bucket_id`.
-            bucket_id:
-              type: string
-              allOf:
-                - $ref: "#/components/schemas/BucketId"
-              nullable: true
-              description: The bucket shown in `bucket` mode.
+          $ref: "#/components/schemas/BucketStatusWidgetSettings"
         recent_transactions:
-          type: object
-          additionalProperties: false
-          required: [count]
-          properties:
-            count:
-              type: integer
-              minimum: 1
-              maximum: 20
-              description: How many transactions it shows. 5 by default.
+          $ref: "#/components/schemas/RecentWidgetSettings"
+
+    DashboardWidget:
+      type: object
+      additionalProperties: false
+      required: [id, type, width]
+      description: One widget on the Dashboard. A missing settings object means its defaults.
+      properties:
+        id:
+          type: string
+          pattern: "^[A-Za-z0-9_-]{1,40}$"
+          description: Made by the web app; unique in the layout.
+        type:
+          type: string
+          enum: [cycle, health, bucket_status, accounts, recent_transactions]
+        width:
+          type: string
+          enum: [half, full]
+          description: Half or the full width of the Dashboard on wide screens.
+        title:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 40
+          description: |
+            A custom title (not blank). Null or missing means the automatic
+            one: the bucket's or account's name for One bucket and One
+            account, otherwise the widget's name.
+        cycle:
+          $ref: "#/components/schemas/CycleWidgetSettings"
+        accounts:
+          $ref: "#/components/schemas/AccountsWidgetSettings"
+        bucket_status:
+          $ref: "#/components/schemas/BucketStatusWidgetSettings"
+        recent_transactions:
+          $ref: "#/components/schemas/RecentWidgetSettings"
+
+    CycleWidgetSettings:
+      type: object
+      additionalProperties: false
+      required: [show_next]
+      properties:
+        show_next:
+          type: boolean
+          description: Also show the next planned cycle. True by default.
+
+    AccountsWidgetSettings:
+      type: object
+      additionalProperties: false
+      required: [mode]
+      properties:
+        mode:
+          type: string
+          enum: [all, account]
+          description: All accounts (the default), or only the one in `account_id`.
+        account_id:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/AccountId"
+          nullable: true
+          description: The account shown in `account` mode.
+
+    BucketStatusWidgetSettings:
+      type: object
+      additionalProperties: false
+      required: [mode]
+      properties:
+        mode:
+          type: string
+          enum: [attention, all, most_used, bucket]
+          description: |
+            Which buckets the widget shows: the ones that need attention
+            (the default), all of them, the most used ones, or the one in
+            `bucket_id`.
+        bucket_id:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/BucketId"
+          nullable: true
+          description: The bucket shown in `bucket` mode.
+        show_mode:
+          type: boolean
+          description: Show the mode above the buckets (e.g. *Needs attention*). True by default.
+
+    RecentWidgetSettings:
+      type: object
+      additionalProperties: false
+      required: [count]
+      properties:
+        count:
+          type: integer
+          minimum: 1
+          maximum: 20
+          description: How many transactions it shows. 5 by default.
 
     Language:
       type: string

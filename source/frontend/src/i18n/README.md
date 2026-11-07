@@ -51,6 +51,8 @@ The words for the app's concepts, so the same thing is called the same everywher
 | debug settings (dev only)   | feilsøkingsinnstillinger                          | feilsøkingsinnstillingar              |
 | simulated time              | simulert tid                                      | simulert tid                          |
 | snapshot                    | øyeblikksbilde (-bildet, -bilder)                 | augneblinksbilete (-biletet)          |
+| dashboard                   | oversikt (oversikten)                             | oversikt (oversikta)                  |
+| widget                      | modul (modulen, moduler)                          | modul (modulen, modular)              |
 | What's New                  | Nytt i appen                                      | Nytt i appen                          |
 | About                       | Om appen                                          | Om appen                              |
 
