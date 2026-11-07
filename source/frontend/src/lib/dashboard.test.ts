@@ -311,6 +311,54 @@ describe("titles and the mode line", () => {
   });
 });
 
+describe("the In/out widget", () => {
+  it("saves its settings, leaving out what its mode doesn't use", () => {
+    const widget = newWidget("in_out");
+    expect(widget.settings).toEqual({
+      figures: ["income", "expenses", "balance"],
+      period: "month",
+      days: 30,
+      accountId: null,
+    });
+    expect(layoutToPreferences([{ ...widget, id: "w" }]).widgets).toEqual([
+      {
+        id: "w",
+        type: "in_out",
+        width: "half",
+        in_out: { figures: ["income", "expenses", "balance"], period: "month" },
+      },
+    ]);
+    const days: WidgetInstance<"in_out"> = {
+      id: "d",
+      type: "in_out",
+      width: "half",
+      title: null,
+      settings: { figures: ["balance"], period: "days", days: 7, accountId: main.id },
+    };
+    const saved = layoutToPreferences([days]);
+    expect(saved.widgets?.[0]?.in_out).toEqual({
+      figures: ["balance"],
+      period: "days",
+      days: 7,
+      account_id: main.id,
+    });
+    expect(dashboardLayout({ dashboard: saved })).toEqual([days]);
+  });
+
+  it("needs a figure, a sensible number of days and an account that exists", () => {
+    const widget = newWidget("in_out");
+    const withSettings = (settings: object) =>
+      ({ ...widget, settings: { ...widget.settings, ...settings } }) as WidgetInstance;
+    expect(settingsComplete(widget, [main], [])).toBe(true);
+    expect(settingsComplete(withSettings({ figures: [] }), [main], [])).toBe(false);
+    expect(settingsComplete(withSettings({ period: "days", days: 0 }), [main], [])).toBe(false);
+    expect(settingsComplete(withSettings({ period: "days", days: 367 }), [main], [])).toBe(false);
+    expect(settingsComplete(withSettings({ period: "days", days: 366 }), [main], [])).toBe(true);
+    expect(settingsComplete(withSettings({ accountId: main.id }), [main], [])).toBe(true);
+    expect(settingsComplete(withSettings({ accountId: "9999" }), [main], [])).toBe(false);
+  });
+});
+
 describe("shownAccounts", () => {
   const settings = { mode: "account" as const, accountId: main.id };
 

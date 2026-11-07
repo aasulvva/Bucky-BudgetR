@@ -177,3 +177,84 @@ func TestBalancesAndCycleFigures(t *testing.T) {
 		t.Errorf("another user's cycle: %v", err)
 	}
 }
+
+func TestFlows(t *testing.T) {
+	pool := testdb.New(t)
+	ctx := t.Context()
+	l := ledger.New(ledger.Options{})
+	user := authtest.NewUser(t, pool, "alice").ID
+	main := ledgertest.Account(t, pool, user, "")
+	savings := ledgertest.Account(t, pool, user, "")
+	quiet := ledgertest.Account(t, pool, user, "")
+
+	record := func(e ledger.Entry) *ledger.Transaction {
+		t.Helper()
+		e.UserID = user
+		tx, err := l.Create(ctx, pool, e)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tx
+	}
+	bank := func(lines ...line) []ledger.BankLine {
+		out := make([]ledger.BankLine, len(lines))
+		for i, b := range lines {
+			out[i] = ledger.BankLine{AccountID: b.id, Amount: dec(b.amount)}
+		}
+		return out
+	}
+
+	// Before November: not counted.
+	record(ledger.Entry{Type: sqlc.TransactionTypeOPB, At: at("2026-10-01T08:00:00Z"), BankLines: bank(line{main, "10000"})})
+	record(ledger.Entry{Type: sqlc.TransactionTypeINC, At: at("2026-10-31T22:59:59Z"), BankLines: bank(line{main, "999"})})
+	// November.
+	record(ledger.Entry{Type: sqlc.TransactionTypeINC, At: novStart, BankLines: bank(line{main, "20000"})})
+	exp := record(ledger.Entry{Type: sqlc.TransactionTypeEXP, At: at("2026-11-02T12:00:00Z"), BankLines: bank(line{main, "-300"})})
+	// 300 corrected to 350, recorded later: it still counts on the original's date.
+	record(ledger.Entry{
+		Type: sqlc.TransactionTypeEXP, At: at("2026-12-05T12:00:00Z"),
+		Correction: sqlc.CorrectionTypeAdjustment, ParentID: exp.Header.ID, BankLines: bank(line{main, "-50"}),
+	})
+	oops := record(ledger.Entry{Type: sqlc.TransactionTypeEXP, At: at("2026-11-03T12:00:00Z"), BankLines: bank(line{main, "-1000"})})
+	record(ledger.Entry{
+		Type: sqlc.TransactionTypeEXP, At: at("2026-11-03T12:00:00Z"),
+		Correction: sqlc.CorrectionTypeReversal, ParentID: oops.Header.ID, BankLines: bank(line{main, "1000"}),
+	})
+	record(ledger.Entry{Type: sqlc.TransactionTypeTRF, At: at("2026-11-10T12:00:00Z"), BankLines: bank(line{main, "-2000"}, line{savings, "2000"})})
+	record(ledger.Entry{Type: sqlc.TransactionTypeTRF, At: at("2026-11-20T12:00:00Z"), BankLines: bank(line{savings, "-500"}, line{main, "500"})})
+	// A balance adjustment isn't income or an expense.
+	record(ledger.Entry{Type: sqlc.TransactionTypeBLA, At: at("2026-11-21T12:00:00Z"), BankLines: bank(line{savings, "12"})})
+	// The end is exclusive.
+	record(ledger.Entry{Type: sqlc.TransactionTypeINC, At: novEnd, BankLines: bank(line{main, "777"})})
+	// Another user's transactions don't count.
+	bob := authtest.NewUser(t, pool, "bob").ID
+	bobs := ledgertest.Account(t, pool, bob, "")
+	if _, err := l.Create(ctx, pool, ledger.Entry{UserID: bob, Type: sqlc.TransactionTypeINC, At: novStart, BankLines: bank(line{bobs, "5"})}); err != nil {
+		t.Fatal(err)
+	}
+
+	flows, err := balance.Flows(ctx, pool, user, novStart, novEnd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	type row struct{ in, out, trfIn, trfOut string }
+	got := map[string]row{}
+	for i, f := range flows {
+		if i > 0 && flows[i-1].AccountID >= f.AccountID {
+			t.Errorf("not sorted by account ID: %v", flows)
+		}
+		got[f.AccountID] = row{f.Income.String(), f.Expenses.String(), f.TransfersIn.String(), f.TransfersOut.String()}
+	}
+	want := map[string]row{
+		main:    {"20000", "350", "500", "2000"},
+		savings: {"0", "0", "2000", "500"},
+	}
+	if len(got) != len(want) {
+		t.Errorf("flows: got %v, want %v (no row for %s)", got, want, quiet)
+	}
+	for id, w := range want {
+		if got[id] != w {
+			t.Errorf("account %s: got %v, want %v", id, got[id], w)
+		}
+	}
+}

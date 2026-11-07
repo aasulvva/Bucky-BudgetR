@@ -1,4 +1,4 @@
-import { Button, Checkbox, Group, Select, Stack, TextInput } from "@mantine/core";
+import { Button, Checkbox, Group, NumberInput, Select, Stack, TextInput } from "@mantine/core";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -15,9 +15,12 @@ import {
   settingsComplete,
   type AccountsSettings,
   type BucketStatusSettings,
+  type InOutSettings,
   type WidgetInstance,
   type SaveWidget,
 } from "@/lib/dashboard";
+
+import { FLOW_FIGURES, FLOW_PERIODS, MAX_DAYS } from "@/lib/flows";
 
 import { titleFor } from "./frame";
 
@@ -147,6 +150,15 @@ export function WidgetSettingsForm({
           }}
         />
       )}
+      {draft.type === "in_out" && (
+        <InOutForm
+          value={draft.settings}
+          onChange={(settings) => {
+            setDraft({ ...draft, settings });
+          }}
+          accounts={accounts}
+        />
+      )}
       {save.error && <ErrorAlert error={save.error} />}
       <Group justify="flex-end" gap="xs">
         <Button variant="default" onClick={onClose}>
@@ -251,6 +263,86 @@ function AccountsForm({
           searchable
         />
       )}
+    </>
+  );
+}
+
+/** All accounts, as the account Select's value. */
+const ALL = "all";
+
+function InOutForm({
+  value,
+  onChange,
+  accounts,
+}: {
+  value: InOutSettings;
+  onChange: (value: InOutSettings) => void;
+  accounts: Account[];
+}) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <Checkbox.Group
+        label={t("dashboard.inOut.show")}
+        value={value.figures}
+        error={value.figures.length === 0 ? t("dashboard.inOut.figuresRequired") : undefined}
+        onChange={(picked) => {
+          // Keep the figures in their usual order.
+          onChange({ ...value, figures: FLOW_FIGURES.filter((f) => picked.includes(f)) });
+        }}
+      >
+        <Group gap="md" mt={4}>
+          {FLOW_FIGURES.map((f) => (
+            <Checkbox key={f} value={f} label={t(`dashboard.inOut.figures.${f}`)} />
+          ))}
+        </Group>
+      </Checkbox.Group>
+      <Select
+        label={t("dashboard.inOut.period")}
+        data={FLOW_PERIODS.map((p) => ({
+          value: p,
+          label: t(`dashboard.inOut.periodOptions.${p}`),
+        }))}
+        value={value.period}
+        allowDeselect={false}
+        onChange={(v) => {
+          const period = FLOW_PERIODS.find((p) => p === v);
+          if (period) onChange({ ...value, period });
+        }}
+      />
+      {value.period === "days" && (
+        <NumberInput
+          label={t("dashboard.inOut.days")}
+          description={t("dashboard.inOut.daysHint")}
+          min={1}
+          max={MAX_DAYS}
+          allowDecimal={false}
+          allowNegative={false}
+          clampBehavior="strict"
+          // 0 stands for an empty field, which can't be saved.
+          value={value.days || ""}
+          onChange={(v) => {
+            const days = typeof v === "number" ? v : Number.parseInt(v, 10);
+            onChange({ ...value, days: Number.isNaN(days) ? 0 : days });
+          }}
+          maw={160}
+        />
+      )}
+      <Select
+        label={t("dashboard.inOut.accounts")}
+        description={t("dashboard.inOut.accountsHint")}
+        data={[
+          { value: ALL, label: t("dashboard.accounts.modes.all") },
+          ...accounts.map((a) => ({ value: a.id, label: a.name })),
+        ]}
+        value={
+          value.accountId && accounts.some((a) => a.id === value.accountId) ? value.accountId : ALL
+        }
+        allowDeselect={false}
+        onChange={(v) => {
+          onChange({ ...value, accountId: v && v !== ALL ? v : null });
+        }}
+      />
     </>
   );
 }

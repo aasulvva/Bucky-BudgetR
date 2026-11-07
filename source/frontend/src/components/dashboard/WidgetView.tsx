@@ -16,6 +16,7 @@ import { AccountsWidget } from "./AccountsWidget";
 import { BucketStatusWidget } from "./BucketStatusWidget";
 import { CycleWidget } from "./CycleWidget";
 import { HealthWidget } from "./HealthWidget";
+import { InOutWidget } from "./InOutWidget";
 import { RecentWidget } from "./RecentWidget";
 import { WidgetFrame, useWidgetTitle } from "./frame";
 import { SettingsButton } from "./Widget";
@@ -72,6 +73,7 @@ export function WidgetView({
       {widget.type === "bucket_status" && <BucketStatusWidget widget={widget} action={cog} />}
       {widget.type === "accounts" && <AccountsWidget widget={widget} action={cog} />}
       {widget.type === "recent_transactions" && <RecentWidget widget={widget} action={cog} />}
+      {widget.type === "in_out" && <InOutWidget widget={widget} action={cog} />}
       <WidgetSettingsDialog
         widget={widget}
         opened={settings}

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/accounts"
@@ -139,4 +140,27 @@ func TestAccountsAPI(t *testing.T) {
 	if a := decode[api.Account](t, w); a.Balance != "1400.00" {
 		t.Errorf("target balance %q, want 1400.00", a.Balance)
 	}
+}
+
+func TestAccountFlowsAPI(t *testing.T) {
+	h, alice, _ := accountsHandler(t)
+	do := func(path string, c *http.Cookie) *httptest.ResponseRecorder {
+		t.Helper()
+		return authtest.Do(t, h, http.MethodGet, path, nil, c)
+	}
+	// An opening balance isn't income.
+	expect(t, "create", authtest.Do(t, h, http.MethodPost, "/api/v1/accounts",
+		map[string]any{"name": "Main", "type": "usage", "opening_balance": "1500"}, alice), http.StatusCreated, "")
+
+	const period = "/api/v1/reports/flows?from=2000-01-01T00:00:00Z&to=2100-01-01T00:00:00Z"
+	expect(t, "no session", do(period, nil), http.StatusUnauthorized, "unauthenticated")
+	w := do(period, alice)
+	expect(t, "flows", w, http.StatusOK, "")
+	if got := strings.TrimSpace(w.Body.String()); got != "[]" {
+		t.Errorf("flows: %s, want []", got)
+	}
+	expect(t, "no to", do("/api/v1/reports/flows?from=2000-01-01T00:00:00Z", alice), http.StatusBadRequest, "invalid_request")
+	expect(t, "not a time", do("/api/v1/reports/flows?from=yesterday&to=2100-01-01T00:00:00Z", alice), http.StatusBadRequest, "invalid_request")
+	expect(t, "backwards", do("/api/v1/reports/flows?from=2100-01-01T00:00:00Z&to=2000-01-01T00:00:00Z", alice), http.StatusBadRequest, "invalid_request")
+	expect(t, "empty", do("/api/v1/reports/flows?from=2000-01-01T00:00:00Z&to=2000-01-01T00:00:00Z", alice), http.StatusBadRequest, "invalid_request")
 }

@@ -120,3 +120,35 @@ func Cycle(ctx context.Context, db sqlc.DBTX, userID, cycleID string) (map[strin
 	}
 	return out, nil
 }
+
+// Flow is the money in and out of an account over a period (#90). Expenses
+// and transfers out are positive amounts.
+type Flow struct {
+	AccountID    string
+	Income       decimal.Decimal
+	Expenses     decimal.Decimal
+	TransfersIn  decimal.Decimal
+	TransfersOut decimal.Decimal
+}
+
+// Flows returns the income, expenses and transfers of each of the user's
+// accounts over [from, to), sorted by account ID. A transaction counts on
+// its original's date, with its corrections (a reversed one adds up to 0);
+// accounts without any are left out.
+func Flows(ctx context.Context, db sqlc.DBTX, userID string, from, to time.Time) ([]Flow, error) {
+	rows, err := sqlc.New(db).AccountFlows(ctx, sqlc.AccountFlowsParams{UserID: userID, FromAt: from, ToAt: to})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Flow, len(rows))
+	for i, r := range rows {
+		out[i] = Flow{
+			AccountID:    r.AccountID,
+			Income:       r.Income,
+			Expenses:     r.Expenses,
+			TransfersIn:  r.TransfersIn,
+			TransfersOut: r.TransfersOut,
+		}
+	}
+	return out, nil
+}

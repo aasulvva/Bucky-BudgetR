@@ -269,6 +269,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/flows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Money in and out of each account over a period
+         * @description For the Dashboard's In/out widget (#90): each account's income
+         *     (INC), expenses (EXP) and transfers in and out (TRF) over [`from`,
+         *     `to`). Expenses and transfers out are positive amounts, in the
+         *     account's currency. A transaction counts on its original's date with
+         *     its corrections, as the transaction list shows it, so a reversed one
+         *     adds up to 0. Balance adjustments, opening balances and bucket-only
+         *     lines don't count.
+         *
+         *     Only accounts with such transactions are listed, sorted by ID.
+         *     `from` must be before `to` (400 `invalid_request`).
+         */
+        get: operations["listAccountFlows"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/accounts": {
         parameters: {
             query?: never;
@@ -1166,7 +1195,7 @@ export interface components {
             /** @description Made by the web app; unique in the layout. */
             id: string;
             /** @enum {string} */
-            type: "cycle" | "health" | "bucket_status" | "accounts" | "recent_transactions";
+            type: "cycle" | "health" | "bucket_status" | "accounts" | "recent_transactions" | "in_out";
             /**
              * @description Half or the full width of the Dashboard on wide screens.
              * @enum {string}
@@ -1182,6 +1211,7 @@ export interface components {
             accounts?: components["schemas"]["AccountsWidgetSettings"];
             bucket_status?: components["schemas"]["BucketStatusWidgetSettings"];
             recent_transactions?: components["schemas"]["RecentWidgetSettings"];
+            in_out?: components["schemas"]["InOutWidgetSettings"];
         };
         CycleWidgetSettings: {
             /** @description Also show the next planned cycle. True by default. */
@@ -1208,6 +1238,27 @@ export interface components {
             bucket_id?: (string & components["schemas"]["BucketId"]) | null;
             /** @description Show the mode above the buckets (e.g. *Needs attention*). True by default. */
             show_mode?: boolean;
+        };
+        /**
+         * @description The In/out widget (#90): income, expenses and their balance over a
+         *     period, on one account or on all accounts in the app's currency.
+         */
+        InOutWidgetSettings: {
+            /** @description The figures to show, in this order. */
+            figures: ("income" | "expenses" | "balance")[];
+            /**
+             * @description The last `days` days (today included), today, this week, the
+             *     active cycle, this month or this year, in the user's time zone.
+             * @enum {string}
+             */
+            period: "days" | "today" | "week" | "cycle" | "month" | "year";
+            /** @description The number of days in `days` mode. 30 by default. */
+            days?: number;
+            /**
+             * @description One account, whose transfers count as income and expenses. Null
+             *     or missing means all accounts, without transfers.
+             */
+            account_id?: (string & components["schemas"]["AccountId"]) | null;
         };
         RecentWidgetSettings: {
             /** @description How many transactions it shows. 5 by default. */
@@ -1484,6 +1535,18 @@ export interface components {
             refilled: boolean;
             /** Format: date-time */
             created_at: string;
+        };
+        /** @description An account's money in and out over a period. All amounts are positive or 0. */
+        AccountFlow: {
+            account_id: components["schemas"]["AccountId"];
+            /** @description Income (INC). */
+            income: components["schemas"]["Amount"];
+            /** @description Expenses (EXP), as a positive amount. */
+            expenses: components["schemas"]["Amount"];
+            /** @description Transfers into the account (TRF). */
+            transfers_in: components["schemas"]["Amount"];
+            /** @description Transfers out of the account (TRF), as a positive amount. */
+            transfers_out: components["schemas"]["Amount"];
         };
         /**
          * @description A bucket's figures for one cycle. The parts are signed: a reduction
@@ -2150,6 +2213,34 @@ export interface operations {
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listAccountFlows: {
+        parameters: {
+            query: {
+                /** @description The start of the period (inclusive). */
+                from: string;
+                /** @description The end of the period (exclusive). */
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The flows, one per account with any. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountFlow"][];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };

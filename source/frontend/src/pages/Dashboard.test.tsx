@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 
 import type { components } from "@/api/schema";
 import { addDays, cycleRange, daysLeftLabel, endAtFor, startAtFor, today } from "@/lib/cycles";
+import { periodSpan } from "@/lib/flows";
 import { formatMoney } from "@/lib/money";
 import { apiMock, testUser } from "@/test/api";
 import { account, bucket, bucketFigures, cycle, transaction } from "@/test/fixtures";
@@ -611,5 +612,170 @@ describe("Dashboard layout", () => {
     await userEvent.click(bar.getByRole("button", { name: "Done" }));
     expect(await bar.findByText(/Nope\./)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Edit dashboard" })).not.toBeInTheDocument();
+  });
+});
+
+describe("In/out widget", () => {
+  const inOut = (settings?: components["schemas"]["InOutWidgetSettings"]) => {
+    withPreferences({
+      dashboard: {
+        widgets: [
+          { id: "io", type: "in_out", width: "half", ...(settings ? { in_out: settings } : {}) },
+        ],
+      },
+    });
+  };
+  const euro = account({ id: "3456", name: "Euro account", currency: "EUR" });
+  /** A figure's link, named with the amount as formatted (labels keep their spaces). */
+  const figure = (name: string, amount: string) =>
+    `${name}: ${formatMoney(amount, "NOK")}. Show the transactions.`;
+
+  beforeEach(() => {
+    apiMock.on("GET /api/v1/reports/flows", {
+      body: [
+        {
+          account_id: main.id,
+          income: "20000.00",
+          expenses: "8000.00",
+          transfers_in: "500.00",
+          transfers_out: "2000.00",
+        },
+        {
+          account_id: buffer.id,
+          income: "100.00",
+          expenses: "0.00",
+          transfers_in: "2000.00",
+          transfers_out: "500.00",
+        },
+        {
+          account_id: euro.id,
+          income: "50.00",
+          expenses: "0.00",
+          transfers_in: "0.00",
+          transfers_out: "0.00",
+        },
+      ],
+    });
+  });
+
+  it("sums this month on all accounts in the app's currency, linking each figure", async () => {
+    apiMock.on("GET /api/v1/accounts", { body: [main, buffer, euro] });
+    inOut();
+    renderRoute("/");
+    const io = await widget("Money in and out");
+    const income = await io.findByRole("link", {
+      name: figure("Income", "20100.00"),
+    });
+    const month = periodSpan("month", 30, null);
+    expect(income).toHaveAttribute(
+      "href",
+      `/transactions?cycle_id=all&from=${month?.from}&to=${month?.to}&type=INC`,
+    );
+    expect(io.getByRole("link", { name: figure("Expenses", "8000.00") })).toBeInTheDocument();
+    expect(io.getByText(`+${m("12100.00")}`)).toBeInTheDocument();
+    expect(io.getByText(/^This month \(.*\) · All accounts$/)).toBeInTheDocument();
+    expect(io.getByText("1 account in another currency isn't included.")).toBeInTheDocument();
+    const [query] = apiMock.calls("GET /api/v1/reports/flows").map((c) => c.query);
+    expect(query?.get("from")).toBe(startAtFor(month?.from ?? ""));
+    expect(query?.get("to")).toBe(endAtFor(month?.to ?? ""));
+  });
+
+  it("makes the amounts smaller, or puts them in rows, when they don't fit", async () => {
+    // jsdom has no layout: each amount is 150px wide at 20px, the widget's
+    // content `width` px wide, and there are three columns 16px apart.
+    let width = 450;
+    const style = window.getComputedStyle.bind(window);
+    const spies = [
+      vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+        this: HTMLElement,
+      ) {
+        return { width: this.hasAttribute("data-amount") ? 150 : 0 } as DOMRect;
+      }),
+      vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(() => width),
+      vi.spyOn(window, "getComputedStyle").mockImplementation((el, pseudo) => {
+        const s = style(el, pseudo);
+        return el instanceof HTMLElement && el.hasAttribute("data-amount")
+          ? Object.defineProperty(s, "fontSize", { value: "20px" })
+          : s;
+      }),
+    ];
+    try {
+      inOut();
+      const first = renderRoute("/");
+      const io = await widget("Money in and out");
+      await io.findByRole("link", { name: figure("Income", "20100.00") });
+      // 139px columns: 120px at 16px fits.
+      expect(
+        io.getByRole("link", { name: figure("Income", "20100.00") }).parentElement,
+      ).toHaveAttribute("data-layout", "small");
+      first.unmount();
+
+      width = 300;
+      renderRoute("/");
+      const narrow = await widget("Money in and out");
+      const income = await narrow.findByRole("link", { name: figure("Income", "20100.00") });
+      expect(income.parentElement).toHaveAttribute("data-layout", "rows");
+    } finally {
+      for (const spy of spies) spy.mockRestore();
+    }
+  });
+
+  it("counts transfers on one account, over the last days", async () => {
+    inOut({ figures: ["income", "balance"], period: "days", days: 7, account_id: main.id });
+    renderRoute("/");
+    const io = await widget("Money in and out");
+    expect(await io.findByRole("link", { name: figure("Income", "20500.00") })).toHaveAttribute(
+      "href",
+      expect.stringContaining("account_id=1234") as unknown,
+    );
+    expect(io.getByText(`+${m("10500.00")}`)).toBeInTheDocument();
+    expect(io.queryByText("Expenses")).not.toBeInTheDocument();
+    expect(io.getByText(/^Last 7 days \(.*\) · Main account$/)).toBeInTheDocument();
+    const [query] = apiMock.calls("GET /api/v1/reports/flows").map((c) => c.query);
+    expect(query?.get("from")).toBe(startAtFor(addDays(today(), -6)));
+  });
+
+  it("saves its settings", async () => {
+    inOut();
+    renderRoute("/");
+    const io = await widget("Money in and out");
+    await userEvent.click(await io.findByRole("button", { name: "Settings for Money in and out" }));
+    const box = await screen.findByRole("dialog", { name: "Money in and out settings" });
+    const dialog = within(box);
+    await userEvent.click(dialog.getByRole("checkbox", { name: "Expenses" }));
+    await userEvent.click(dialog.getByRole("checkbox", { name: "Income" }));
+    await userEvent.click(dialog.getByRole("checkbox", { name: "Balance" }));
+    expect(dialog.getByText("Choose at least one figure.")).toBeInTheDocument();
+    expect(dialog.getByRole("button", { name: "Save" })).toBeDisabled();
+    await userEvent.click(dialog.getByRole("checkbox", { name: "Balance" }));
+    await userEvent.click(dialog.getByRole("checkbox", { name: "Income" }));
+    await choose(box, "Period", "The last few days");
+    const days = dialog.getByRole("textbox", { name: "Number of days" });
+    await userEvent.clear(days);
+    await userEvent.type(days, "14");
+    await choose(box, "Accounts", "Buffer account");
+    await userEvent.click(dialog.getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+    expect(apiMock.calls("PATCH /api/v1/me/preferences").map((c) => c.body)).toEqual([
+      {
+        dashboard: {
+          widgets: [
+            {
+              id: "io",
+              type: "in_out",
+              width: "half",
+              in_out: {
+                figures: ["income", "balance"],
+                period: "days",
+                days: 14,
+                account_id: buffer.id,
+              },
+            },
+          ],
+        },
+      },
+    ]);
   });
 });

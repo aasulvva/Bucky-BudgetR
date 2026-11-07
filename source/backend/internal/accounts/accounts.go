@@ -157,6 +157,15 @@ func NewService(pool *pgxpool.Pool, l *ledger.Ledger, opts Options) *Service {
 }
 
 // List returns the user's accounts, sorted by name.
+// Flows returns the money in and out of the user's accounts over
+// [from, to) (#90); see balance.Flows.
+func (s *Service) Flows(ctx context.Context, userID string, from, to time.Time) ([]balance.Flow, error) {
+	if !from.Before(to) {
+		return nil, fmt.Errorf("%w: the period must end after it starts", ErrInvalid)
+	}
+	return balance.Flows(ctx, s.pool, userID, from, to)
+}
+
 func (s *Service) List(ctx context.Context, userID string) ([]Account, error) {
 	q := sqlc.New(s.pool)
 	rows, err := q.ListAccounts(ctx, userID)

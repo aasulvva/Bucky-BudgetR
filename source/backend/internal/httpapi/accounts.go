@@ -231,3 +231,22 @@ func toAPIAccount(a accounts.Account) api.Account {
 	}
 	return out
 }
+
+func (s *server) ListAccountFlows(ctx context.Context, req api.ListAccountFlowsRequestObject) (api.ListAccountFlowsResponseObject, error) {
+	flows, err := s.accounts.Flows(ctx, sessionFrom(ctx).User.ID, req.Params.From, req.Params.To)
+	if err != nil {
+		return nil, accountError(err)
+	}
+	amount := func(d decimal.Decimal) string { return d.StringFixed(money.Places) }
+	out := make(api.ListAccountFlows200JSONResponse, len(flows))
+	for i, f := range flows {
+		out[i] = api.AccountFlow{
+			AccountId:    f.AccountID,
+			Income:       amount(f.Income),
+			Expenses:     amount(f.Expenses),
+			TransfersIn:  amount(f.TransfersIn),
+			TransfersOut: amount(f.TransfersOut),
+		}
+	}
+	return out, nil
+}

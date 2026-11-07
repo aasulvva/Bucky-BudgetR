@@ -386,7 +386,7 @@ func TestPreferences(t *testing.T) {
 		t.Errorf("dashboard replaced: %d %s", w.Code, w.Body)
 	}
 	// The layout (#37): a list of widgets, each with its own settings.
-	layout := `{"dashboard":{"widgets":[{"cycle":{"show_next":false},"id":"a1","type":"cycle","width":"full"},{"bucket_status":{"bucket_id":"1000000001","mode":"bucket"},"id":"b-2","type":"bucket_status","width":"half"},{"bucket_status":{"mode":"most_used","show_mode":false},"id":"b_3","type":"bucket_status","width":"half"},{"id":"h","title":"Health","type":"health","width":"half"}]}}`
+	layout := `{"dashboard":{"widgets":[{"cycle":{"show_next":false},"id":"a1","type":"cycle","width":"full"},{"bucket_status":{"bucket_id":"1000000001","mode":"bucket"},"id":"b-2","type":"bucket_status","width":"half"},{"bucket_status":{"mode":"most_used","show_mode":false},"id":"b_3","type":"bucket_status","width":"half"},{"id":"h","title":"Health","type":"health","width":"half"},{"id":"io","in_out":{"account_id":"1234","days":7,"figures":["balance","income"],"period":"days"},"type":"in_out","width":"full"}]}}`
 	if w := patch(layout); w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != layout {
 		t.Errorf("layout: %d %s", w.Code, w.Body)
 	}
@@ -413,6 +413,11 @@ func TestPreferences(t *testing.T) {
 		`{"dashboard":{"widgets":[{"id":"a b","type":"health","width":"half"}]}}`,
 		`{"dashboard":{"widgets":[{"type":"health","width":"half"}]}}`,
 		`{"dashboard":{"widgets":[{"id":"a","type":"health","width":"half","title":"   "}]}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"in_out","width":"half","in_out":{"figures":[],"period":"month"}}]}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"in_out","width":"half","in_out":{"figures":["income","income"],"period":"month"}}]}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"in_out","width":"half","in_out":{"figures":["income"],"period":"days","days":0}}]}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"in_out","width":"half","in_out":{"figures":["income"],"period":"decade"}}]}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"cycle","width":"half","in_out":{"figures":["income"],"period":"month"}}]}}`,
 		`{"dashboard":{"widgets":[{"id":"a","type":"health","width":"half","title":""}]}}`,
 		`{"dashboard":{"widgets":[{"id":"a","type":"health","width":"half","title":"` + strings.Repeat("x", 41) + `"}]}}`,
 	} {

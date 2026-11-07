@@ -425,6 +425,53 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/v1/reports/flows:
+    get:
+      operationId: listAccountFlows
+      tags: [accounts]
+      summary: Money in and out of each account over a period
+      description: |
+        For the Dashboard's In/out widget (#90): each account's income
+        (INC), expenses (EXP) and transfers in and out (TRF) over [`from`,
+        `to`). Expenses and transfers out are positive amounts, in the
+        account's currency. A transaction counts on its original's date with
+        its corrections, as the transaction list shows it, so a reversed one
+        adds up to 0. Balance adjustments, opening balances and bucket-only
+        lines don't count.
+
+        Only accounts with such transactions are listed, sorted by ID.
+        `from` must be before `to` (400 `invalid_request`).
+      parameters:
+        - name: from
+          in: query
+          required: true
+          description: The start of the period (inclusive).
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: true
+          description: The end of the period (exclusive).
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: The flows, one per account with any.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AccountFlow"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
   /api/v1/accounts:
     get:
       operationId: listAccounts
@@ -1919,7 +1966,7 @@ components:
           description: Made by the web app; unique in the layout.
         type:
           type: string
-          enum: [cycle, health, bucket_status, accounts, recent_transactions]
+          enum: [cycle, health, bucket_status, accounts, recent_transactions, in_out]
         width:
           type: string
           enum: [half, full]
@@ -1941,6 +1988,8 @@ components:
           $ref: "#/components/schemas/BucketStatusWidgetSettings"
         recent_transactions:
           $ref: "#/components/schemas/RecentWidgetSettings"
+        in_out:
+          $ref: "#/components/schemas/InOutWidgetSettings"
 
     CycleWidgetSettings:
       type: object
@@ -1988,6 +2037,43 @@ components:
         show_mode:
           type: boolean
           description: Show the mode above the buckets (e.g. *Needs attention*). True by default.
+
+    InOutWidgetSettings:
+      type: object
+      additionalProperties: false
+      required: [figures, period]
+      description: |
+        The In/out widget (#90): income, expenses and their balance over a
+        period, on one account or on all accounts in the app's currency.
+      properties:
+        figures:
+          type: array
+          minItems: 1
+          maxItems: 3
+          uniqueItems: true
+          description: The figures to show, in this order.
+          items:
+            type: string
+            enum: [income, expenses, balance]
+        period:
+          type: string
+          enum: [days, today, week, cycle, month, year]
+          description: |
+            The last `days` days (today included), today, this week, the
+            active cycle, this month or this year, in the user's time zone.
+        days:
+          type: integer
+          minimum: 1
+          maximum: 366
+          description: The number of days in `days` mode. 30 by default.
+        account_id:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/AccountId"
+          nullable: true
+          description: |
+            One account, whose transfers count as income and expenses. Null
+            or missing means all accounts, without transfers.
 
     RecentWidgetSettings:
       type: object
@@ -2471,6 +2557,31 @@ components:
         created_at:
           type: string
           format: date-time
+
+    AccountFlow:
+      type: object
+      additionalProperties: false
+      description: An account's money in and out over a period. All amounts are positive or 0.
+      required: [account_id, income, expenses, transfers_in, transfers_out]
+      properties:
+        account_id:
+          $ref: "#/components/schemas/AccountId"
+        income:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Income (INC).
+        expenses:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Expenses (EXP), as a positive amount.
+        transfers_in:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Transfers into the account (TRF).
+        transfers_out:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Transfers out of the account (TRF), as a positive amount.
 
     BucketFigures:
       type: object

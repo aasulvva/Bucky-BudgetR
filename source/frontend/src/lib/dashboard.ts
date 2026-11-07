@@ -6,6 +6,7 @@ import type { Account, Bucket, BucketFigures } from "@/api/accounts";
 import type { components } from "@/api/schema";
 
 import { accountSummary, coverage, type Tone } from "./buckets";
+import { MAX_DAYS, type FlowFigure, type FlowPeriod } from "./flows";
 import { addAmounts, compareAmounts, percentOf } from "./money";
 
 type Preferences = components["schemas"]["Preferences"];
@@ -23,6 +24,7 @@ export const WIDGET_TYPES: WidgetType[] = [
   "bucket_status",
   "accounts",
   "recent_transactions",
+  "in_out",
 ];
 export const ACCOUNTS_MODES: AccountsMode[] = ["all", "account"];
 export const BUCKET_STATUS_MODES: BucketStatusMode[] = ["attention", "all", "most_used", "bucket"];
@@ -51,6 +53,14 @@ export interface BucketStatusSettings {
 export interface RecentSettings {
   count: number;
 }
+export interface InOutSettings {
+  figures: FlowFigure[];
+  period: FlowPeriod;
+  /** For the last `days` days. */
+  days: number;
+  /** One account, or null for all of them. */
+  accountId: string | null;
+}
 
 interface SettingsOf {
   cycle: CycleSettings;
@@ -58,6 +68,7 @@ interface SettingsOf {
   bucket_status: BucketStatusSettings;
   accounts: AccountsSettings;
   recent_transactions: RecentSettings;
+  in_out: InOutSettings;
 }
 
 /** One widget on the Dashboard, with its own settings. */
@@ -91,6 +102,12 @@ const fromApi = {
     showMode: s?.show_mode ?? true,
   }),
   recent: (s?: Schemas["RecentWidgetSettings"]): RecentSettings => ({ count: s?.count ?? 5 }),
+  inOut: (s?: Schemas["InOutWidgetSettings"]): InOutSettings => ({
+    figures: s?.figures ?? ["income", "expenses", "balance"],
+    period: s?.period ?? "month",
+    days: s?.days ?? 30,
+    accountId: s?.account_id ?? null,
+  }),
 };
 
 /** A widget type's default settings. */
@@ -107,6 +124,8 @@ export function defaultSettings(type: WidgetType): SettingsOf[WidgetType] {
       return fromApi.accounts();
     case "recent_transactions":
       return fromApi.recent();
+    case "in_out":
+      return fromApi.inOut();
   }
 }
 
@@ -181,6 +200,8 @@ function widgetFromApi(w: ApiWidget): WidgetInstance {
       return { ...base, type: w.type, settings: fromApi.accounts(w.accounts) };
     case "recent_transactions":
       return { ...base, type: w.type, settings: fromApi.recent(w.recent_transactions) };
+    case "in_out":
+      return { ...base, type: w.type, settings: fromApi.inOut(w.in_out) };
   }
 }
 
@@ -225,6 +246,18 @@ function widgetToApi(w: WidgetInstance): ApiWidget {
     }
     case "recent_transactions":
       return { ...base, recent_transactions: { count: w.settings.count } };
+    case "in_out": {
+      const { figures, period, days, accountId } = w.settings;
+      return {
+        ...base,
+        in_out: {
+          figures,
+          period,
+          ...(period === "days" ? { days } : {}),
+          ...(accountId === null ? {} : { account_id: accountId }),
+        },
+      };
+    }
   }
 }
 
@@ -301,6 +334,14 @@ export function settingsComplete(
   }
   if (widget.type === "accounts" && widget.settings.mode === "account") {
     return accounts.some((a) => a.id === widget.settings.accountId);
+  }
+  if (widget.type === "in_out") {
+    const { figures, period, days, accountId } = widget.settings;
+    return (
+      figures.length > 0 &&
+      (period !== "days" || (Number.isInteger(days) && days >= 1 && days <= MAX_DAYS)) &&
+      (accountId === null || accounts.some((a) => a.id === accountId))
+    );
   }
   return true;
 }

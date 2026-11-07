@@ -324,7 +324,37 @@
       "health": "Kor godt kvar konto dekkjer bøttene sine.",
       "bucket_status": "Bøtter som treng merksemd, alle bøttene, dei mest brukte eller éi bøtte.",
       "accounts": "Saldoane på kontoane dine, eller éin konto.",
-      "recent_transactions": "Dei siste transaksjonane."
+      "recent_transactions": "Dei siste transaksjonane.",
+      "in_out": "Inntekter, utgifter og netto for eit tidsrom."
+    },
+    "inOut": {
+      "title": "Inn og ut",
+      "figures": {
+        "income": "Inntekter",
+        "expenses": "Utgifter",
+        "balance": "Netto"
+      },
+      "show": "Vis",
+      "figuresRequired": "Vel minst eitt tal.",
+      "period": "Tidsrom",
+      "periodOptions": {
+        "days": "Dei siste dagane",
+        "today": "I dag",
+        "week": "Denne veka",
+        "cycle": "Denne perioden",
+        "month": "Denne månaden",
+        "year": "I år"
+      },
+      "lastDays_one": "I dag",
+      "lastDays_other": "Siste {{count}} dagar",
+      "days": "Tal på dagar",
+      "daysHint": "I dag er teke med.",
+      "accounts": "Kontoar",
+      "accountsHint": "Med éin konto tel overføringar inn og ut som inntekter og utgifter.",
+      "subtitle": "{{period}} ({{range}}) · {{accounts}}",
+      "leftOut_one": "{{count}} konto i ein annan valuta er ikkje teken med.",
+      "leftOut_other": "{{count}} kontoar i andre valutaer er ikkje tekne med.",
+      "open": "{{figure}}: {{amount}}. Vis transaksjonane."
     }
   },
   "buckets": {

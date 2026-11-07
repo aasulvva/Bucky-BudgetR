@@ -208,6 +208,7 @@ func remapPreferences(raw json.RawMessage, m map[kind]map[string]string) (json.R
 		}{
 			{"accounts", "account_id", kAccount},
 			{"bucket_status", "bucket_id", kBucket},
+			{"in_out", "account_id", kAccount},
 		} {
 			w, _ := h[p.widget].(map[string]any)
 			if old, ok := w[p.field].(string); ok {
