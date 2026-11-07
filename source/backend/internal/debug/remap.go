@@ -222,5 +222,21 @@ func remapPreferences(raw json.RawMessage, m map[kind]map[string]string) (json.R
 			}
 		}
 	}
+	// Saved graphs (#122) filter on lists of accounts and buckets.
+	graphs, _ := prefs["saved_graphs"].([]any)
+	for _, g := range graphs {
+		g, _ := g.(map[string]any)
+		settings, _ := g["graph"].(map[string]any)
+		for field, k := range map[string]kind{"account_ids": kAccount, "bucket_ids": kBucket} {
+			ids, _ := settings[field].([]any)
+			for i, old := range ids {
+				if old, ok := old.(string); ok {
+					if id, ok := m[k][old]; ok {
+						ids[i] = id
+					}
+				}
+			}
+		}
+	}
 	return json.Marshal(prefs)
 }

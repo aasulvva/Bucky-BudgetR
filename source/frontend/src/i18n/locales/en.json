@@ -918,6 +918,74 @@
         "cycle": "Cycle",
         "total": "Whole period"
       }
+    },
+    "tabs": {
+      "graphs": "Graphs",
+      "reports": "Reports"
+    },
+    "reports": {
+      "comingIn": "Reports are coming in <issue>#{{issue}}</issue>: modules, comparisons, templates and PDF export."
+    },
+    "graphs": {
+      "settings": "Graph settings",
+      "kind": "Graph",
+      "kinds": {
+        "bar": "Bars",
+        "line": "Line"
+      },
+      "metric": "Show",
+      "metrics": {
+        "spending": "Spending",
+        "income": "Income",
+        "balance": "Balance"
+      },
+      "groupBy": "Split",
+      "groups": {
+        "none": "Overall",
+        "account": "Per account",
+        "bucket": "Per bucket"
+      },
+      "top": "Series shown",
+      "topHint": "The largest get their own colour, up to {{max}}; the rest add up to Other.",
+      "bars": "Bars",
+      "stacked": "Stacked",
+      "sideBySide": "Side by side",
+      "cumulative": "Running total",
+      "cumulativeHint": "Adds up from the start of the period.",
+      "accounts": "Accounts",
+      "allAccounts": "All accounts",
+      "accountsHint": "With one account, transfers in and out count as income and spending.",
+      "buckets": "Buckets",
+      "allBuckets": "All buckets",
+      "tags": "Tags",
+      "anyTag": "Any tag",
+      "counterparty": "Counterparty contains",
+      "total": "Total",
+      "noBucket": "No bucket",
+      "other": "Other",
+      "noPeriod": "This period has no dates yet. Pick another one.",
+      "empty": "Nothing to show for this period.",
+      "chartLabel": "Graph",
+      "coarsened": "Shown per {{resolution}}: the screen is too narrow for the chosen resolution.",
+      "otherNote_one": "Other: {{count}} more series.",
+      "otherNote_other": "Other: {{count}} more series.",
+      "leftOut_one": "{{count}} account in another currency isn't included.",
+      "leftOut_other": "{{count}} accounts in other currencies aren't included."
+    },
+    "saved": {
+      "label": "Saved graphs",
+      "none": "None saved yet",
+      "pick": "Pick a saved graph",
+      "save": "Save graph…",
+      "saveAs": "Save as new…",
+      "more": "More",
+      "rename": "Rename",
+      "unsaved": "Unsaved changes",
+      "saveAsTitle": "Save graph",
+      "renameTitle": "Rename graph",
+      "deleteTitle": "Delete graph",
+      "deleteText": "Delete the saved graph \"{{name}}\"? The graph's settings stay on screen.",
+      "name": "Name"
     }
   },
   "admin": {

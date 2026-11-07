@@ -918,6 +918,74 @@
         "cycle": "Periode",
         "total": "Hele tidsrommet"
       }
+    },
+    "tabs": {
+      "graphs": "Grafer",
+      "reports": "Rapporter"
+    },
+    "reports": {
+      "comingIn": "Rapporter kommer i <issue>#{{issue}}</issue>: moduler, sammenligninger, maler og PDF-eksport."
+    },
+    "graphs": {
+      "settings": "Grafinnstillinger",
+      "kind": "Graf",
+      "kinds": {
+        "bar": "Søyler",
+        "line": "Linje"
+      },
+      "metric": "Vis",
+      "metrics": {
+        "spending": "Utgifter",
+        "income": "Inntekter",
+        "balance": "Saldo"
+      },
+      "groupBy": "Del opp",
+      "groups": {
+        "none": "Samlet",
+        "account": "Per konto",
+        "bucket": "Per bøtte"
+      },
+      "top": "Antall serier",
+      "topHint": "De største får egen farge, opptil {{max}}; resten legges sammen som Annet.",
+      "bars": "Søyler",
+      "stacked": "Stablet",
+      "sideBySide": "Side om side",
+      "cumulative": "Løpende sum",
+      "cumulativeHint": "Summerer fra starten av tidsrommet.",
+      "accounts": "Kontoer",
+      "allAccounts": "Alle kontoer",
+      "accountsHint": "Med én konto teller overføringer inn og ut som inntekter og utgifter.",
+      "buckets": "Bøtter",
+      "allBuckets": "Alle bøtter",
+      "tags": "Tagger",
+      "anyTag": "Alle tagger",
+      "counterparty": "Motpart inneholder",
+      "total": "Totalt",
+      "noBucket": "Ingen bøtte",
+      "other": "Annet",
+      "noPeriod": "Dette tidsrommet har ingen datoer ennå. Velg et annet.",
+      "empty": "Ingenting å vise for dette tidsrommet.",
+      "chartLabel": "Graf",
+      "coarsened": "Vist per {{resolution}}: skjermen er for smal for valgt oppløsning.",
+      "otherNote_one": "Annet: {{count}} serie til.",
+      "otherNote_other": "Annet: {{count}} serier til.",
+      "leftOut_one": "{{count}} konto i en annen valuta er ikke tatt med.",
+      "leftOut_other": "{{count}} kontoer i andre valutaer er ikke tatt med."
+    },
+    "saved": {
+      "label": "Lagrede grafer",
+      "none": "Ingen lagret ennå",
+      "pick": "Velg en lagret graf",
+      "save": "Lagre graf…",
+      "saveAs": "Lagre som ny…",
+      "more": "Mer",
+      "rename": "Gi nytt navn",
+      "unsaved": "Ulagrede endringer",
+      "saveAsTitle": "Lagre graf",
+      "renameTitle": "Gi grafen nytt navn",
+      "deleteTitle": "Slett graf",
+      "deleteText": "Slette den lagrede grafen «{{name}}»? Innstillingene blir stående på skjermen.",
+      "name": "Navn"
     }
   },
   "admin": {

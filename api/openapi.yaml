@@ -2065,6 +2065,17 @@ components:
           type: boolean
           nullable: true
           description: Whether What's New pops up after an update. Null means true.
+        saved_graphs:
+          type: array
+          nullable: true
+          maxItems: 50
+          description: |
+            The graphs saved on Stats & reports (#122), in the order the
+            user sees them. Each id is unique and each name is not blank
+            (400 `invalid_request` otherwise). Replaced as a whole on update.
+            Null means none.
+          items:
+            $ref: "#/components/schemas/SavedGraph"
 
     DashboardSettings:
       type: object
@@ -2739,6 +2750,84 @@ components:
           allOf:
             - $ref: "#/components/schemas/Amount"
           description: Transfers out of the account (TRF), as a positive amount.
+
+    SavedGraph:
+      type: object
+      additionalProperties: false
+      required: [id, name, graph]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 40
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        graph:
+          $ref: "#/components/schemas/GraphSettings"
+
+    GraphSettings:
+      type: object
+      additionalProperties: false
+      required: [kind, metric, period, resolution]
+      description: |
+        A line or bar graph on Stats & reports (#122): what it sums over
+        which period, and how it's drawn. The fields after `resolution`
+        match the Stats API's parameters and are left out when not used.
+      properties:
+        kind:
+          type: string
+          enum: [line, bar]
+        metric:
+          type: string
+          enum: [spending, income, balance]
+        period:
+          type: string
+          maxLength: 40
+          description: |
+            The period, relative to when the graph is shown:
+            `last-<n>-days|weeks|months`, `current-<unit>` or
+            `previous-<unit>` (unit `cycle`, `month`, `quarter`, `half_year`
+            or `year`), or `custom-<first day>-<last day>`.
+          pattern: "^(last-[0-9]{1,3}-(days|weeks|months)|(current|previous)-(cycle|month|quarter|half_year|year)|custom-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{4}-[0-9]{2}-[0-9]{2})$"
+          example: last-30-days
+        resolution:
+          type: string
+          enum: [hour, day, week, month, year, cycle, total]
+        group_by:
+          type: string
+          enum: [none, account, bucket]
+        account_ids:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/AccountId"
+        bucket_ids:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/BucketId"
+        tags:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            maxLength: 50
+        counterparty:
+          type: string
+          maxLength: 200
+        cumulative:
+          type: boolean
+          description: Lines only. Running totals from the start of the period.
+        side_by_side:
+          type: boolean
+          description: Bars only. Series side by side instead of stacked.
+        top:
+          type: integer
+          minimum: 1
+          maximum: 8
+          description: How many series get their own colour (at most 8, the graph palette); the rest add up to Other. 5 by default.
 
     StatsSeries:
       type: object

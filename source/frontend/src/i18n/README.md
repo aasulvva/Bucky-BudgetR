@@ -56,6 +56,11 @@ The words for the app's concepts, so the same thing is called the same everywher
 | balance (net, In/out)       | netto                                             | netto                                   |
 | period (a span of days)     | tidsrom (not periode, which is a cycle)           | tidsrom (not periode)                   |
 | layout (dashboard)          | visning (skrivebordsvisning, mobilvisning)        | vising (skrivebordsvising, mobilvising) |
+| graph                       | graf (grafen, grafer)                             | graf (grafen, grafar)                   |
+| bars / line (graph kind)    | søyler / linje                                    | søyler / linje                          |
+| resolution (per day, week…) | oppløsning (vis per)                              | oppløysing (vis per)                    |
+| running total (cumulative)  | løpende sum                                       | løpande sum                             |
+| Other (grouped series)      | Annet                                             | Anna                                    |
 | What's New                  | Nytt i appen                                      | Nytt i appen                            |
 | About                       | Om appen                                          | Om appen                                |
 

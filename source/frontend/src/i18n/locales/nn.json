@@ -918,6 +918,74 @@
         "cycle": "Periode",
         "total": "Heile tidsrommet"
       }
+    },
+    "tabs": {
+      "graphs": "Grafar",
+      "reports": "Rapportar"
+    },
+    "reports": {
+      "comingIn": "Rapportar kjem i <issue>#{{issue}}</issue>: modular, samanlikningar, malar og PDF-eksport."
+    },
+    "graphs": {
+      "settings": "Grafinnstillingar",
+      "kind": "Graf",
+      "kinds": {
+        "bar": "Søyler",
+        "line": "Linje"
+      },
+      "metric": "Vis",
+      "metrics": {
+        "spending": "Utgifter",
+        "income": "Inntekter",
+        "balance": "Saldo"
+      },
+      "groupBy": "Del opp",
+      "groups": {
+        "none": "Samla",
+        "account": "Per konto",
+        "bucket": "Per bøtte"
+      },
+      "top": "Tal på seriar",
+      "topHint": "Dei største får eigen farge, opptil {{max}}; resten vert lagt saman som Anna.",
+      "bars": "Søyler",
+      "stacked": "Stabla",
+      "sideBySide": "Side om side",
+      "cumulative": "Løpande sum",
+      "cumulativeHint": "Summerer frå starten av tidsrommet.",
+      "accounts": "Kontoar",
+      "allAccounts": "Alle kontoar",
+      "accountsHint": "Med éin konto tel overføringar inn og ut som inntekter og utgifter.",
+      "buckets": "Bøtter",
+      "allBuckets": "Alle bøtter",
+      "tags": "Taggar",
+      "anyTag": "Alle taggar",
+      "counterparty": "Motpart inneheld",
+      "total": "Totalt",
+      "noBucket": "Inga bøtte",
+      "other": "Anna",
+      "noPeriod": "Dette tidsrommet har ingen datoar enno. Vel eit anna.",
+      "empty": "Ingenting å vise for dette tidsrommet.",
+      "chartLabel": "Graf",
+      "coarsened": "Vist per {{resolution}}: skjermen er for smal for vald oppløysing.",
+      "otherNote_one": "Anna: {{count}} serie til.",
+      "otherNote_other": "Anna: {{count}} seriar til.",
+      "leftOut_one": "{{count}} konto i ein annan valuta er ikkje teken med.",
+      "leftOut_other": "{{count}} kontoar i andre valutaer er ikkje tekne med."
+    },
+    "saved": {
+      "label": "Lagra grafar",
+      "none": "Ingen lagra enno",
+      "pick": "Vel ein lagra graf",
+      "save": "Lagre graf…",
+      "saveAs": "Lagre som ny…",
+      "more": "Meir",
+      "rename": "Gje nytt namn",
+      "unsaved": "Ulagra endringar",
+      "saveAsTitle": "Lagre graf",
+      "renameTitle": "Gje grafen nytt namn",
+      "deleteTitle": "Slett graf",
+      "deleteText": "Slette den lagra grafen «{{name}}»? Innstillingane vert ståande på skjermen.",
+      "name": "Namn"
     }
   },
   "admin": {

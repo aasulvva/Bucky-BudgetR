@@ -140,6 +140,9 @@ func (s *server) UpdatePreferences(ctx context.Context, req api.UpdatePreference
 	if err := checkDashboard(*req.Body); err != nil {
 		return nil, err
 	}
+	if err := checkSavedGraphs(*req.Body); err != nil {
+		return nil, err
+	}
 	patch, err := json.Marshal(req.Body)
 	if err != nil {
 		return nil, err
@@ -232,6 +235,26 @@ func checkWidgets(widgets []api.DashboardWidget) error {
 			if given && t != w.Type {
 				return invalid("Widget " + strconv.Quote(w.Id) + " is a " + string(w.Type) + " widget but has " + string(t) + " settings.")
 			}
+		}
+	}
+	return nil
+}
+
+// checkSavedGraphs checks a preferences patch's saved graphs (#122): ids
+// are unique and names aren't blank.
+func checkSavedGraphs(patch api.Preferences) error {
+	graphs, err := patch.SavedGraphs.Get()
+	if err != nil {
+		return nil // Not given, or null.
+	}
+	seen := make(map[string]bool, len(graphs))
+	for _, g := range graphs {
+		if seen[g.Id] {
+			return &Error{Status: http.StatusBadRequest, Code: "invalid_request", Detail: "Saved graph id " + strconv.Quote(g.Id) + " is used more than once."}
+		}
+		seen[g.Id] = true
+		if strings.TrimSpace(g.Name) == "" {
+			return &Error{Status: http.StatusBadRequest, Code: "invalid_request", Detail: "Saved graph " + strconv.Quote(g.Id) + " has a blank name."}
 		}
 	}
 	return nil
