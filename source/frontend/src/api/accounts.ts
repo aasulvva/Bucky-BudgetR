@@ -10,6 +10,7 @@ import { unwrap } from "./errors";
 import type { components } from "./schema";
 
 export type Account = components["schemas"]["Account"];
+export type AccountFlow = components["schemas"]["AccountFlow"];
 export type AccountType = components["schemas"]["AccountType"];
 export type Bucket = components["schemas"]["Bucket"];
 export type BucketFigures = components["schemas"]["BucketFigures"];
@@ -59,6 +60,23 @@ export function useBucketFigures(cycleId: string | undefined) {
         }),
       ),
     enabled: cycleId !== undefined,
+  });
+}
+
+/**
+ * Each account's income, expenses and transfers over [from, to) (#90); off
+ * without a period. Under the transactions key, so money changes refresh it.
+ */
+export function useAccountFlows(span: { from: string; to: string } | null) {
+  return useQuery({
+    queryKey: ["transactions", "flows", span?.from, span?.to],
+    queryFn: () =>
+      unwrap(
+        api.GET("/api/v1/reports/flows", {
+          params: { query: { from: span?.from ?? "", to: span?.to ?? "" } },
+        }),
+      ),
+    enabled: span !== null,
   });
 }
 

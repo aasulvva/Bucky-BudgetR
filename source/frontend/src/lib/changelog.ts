@@ -16,6 +16,32 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.08.00",
+    date: "2026-11-07",
+    title: {
+      en: "Money in and out on the dashboard",
+      nb: "Inn og ut på oversikten",
+      nn: "Inn og ut på oversikta",
+    },
+    changes: {
+      en: [
+        "A new dashboard widget, Money in and out, shows your income, expenses and their balance for the last few days, today, this week, this cycle, this month or this year.",
+        "Show all accounts, or one account, where transfers in and out count as income and expenses too. With all accounts, only accounts in NOK are summed for now.",
+        "Each figure opens its transactions on the Transactions screen.",
+      ],
+      nb: [
+        "En ny modul på oversikten, Inn og ut, viser inntekter, utgifter og netto for de siste dagene, i dag, denne uken, denne perioden, denne måneden eller i år.",
+        "Vis alle kontoer, eller én konto, der også overføringer inn og ut teller som inntekter og utgifter. Med alle kontoer summeres foreløpig bare kontoer i NOK.",
+        "Hvert tall åpner transaksjonene sine under Transaksjoner.",
+      ],
+      nn: [
+        "Ein ny modul på oversikta, Inn og ut, viser inntekter, utgifter og netto for dei siste dagane, i dag, denne veka, denne perioden, denne månaden eller i år.",
+        "Vis alle kontoar, eller éin konto, der òg overføringar inn og ut tel som inntekter og utgifter. Med alle kontoar vert førebels berre kontoar i NOK summerte.",
+        "Kvart tal opnar transaksjonane sine under Transaksjonar.",
+      ],
+    },
+  },
+  {
     version: "v1.07.01",
     date: "2026-11-07",
     title: {

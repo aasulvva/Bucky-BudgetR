@@ -324,7 +324,37 @@
       "health": "How well each account backs its buckets.",
       "bucket_status": "Buckets that need attention, all of them, the most used, or one bucket.",
       "accounts": "Your account balances, or one account.",
-      "recent_transactions": "The latest transactions."
+      "recent_transactions": "The latest transactions.",
+      "in_out": "Income, expenses and their balance for a period."
+    },
+    "inOut": {
+      "title": "Money in and out",
+      "figures": {
+        "income": "Income",
+        "expenses": "Expenses",
+        "balance": "Balance"
+      },
+      "show": "Show",
+      "figuresRequired": "Choose at least one figure.",
+      "period": "Period",
+      "periodOptions": {
+        "days": "The last few days",
+        "today": "Today",
+        "week": "This week",
+        "cycle": "This cycle",
+        "month": "This month",
+        "year": "This year"
+      },
+      "lastDays_one": "Today",
+      "lastDays_other": "Last {{count}} days",
+      "days": "Number of days",
+      "daysHint": "Today included.",
+      "accounts": "Accounts",
+      "accountsHint": "With one account, transfers in and out count as income and expenses.",
+      "subtitle": "{{period}} ({{range}}) · {{accounts}}",
+      "leftOut_one": "{{count}} account in another currency isn't included.",
+      "leftOut_other": "{{count}} accounts in other currencies aren't included.",
+      "open": "{{figure}}: {{amount}}. Show the transactions."
     }
   },
   "buckets": {

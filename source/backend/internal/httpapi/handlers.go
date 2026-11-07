@@ -213,6 +213,7 @@ func checkDashboard(patch api.Preferences) error {
 			api.DashboardWidgetTypeAccounts:           w.Accounts != nil,
 			api.DashboardWidgetTypeBucketStatus:       w.BucketStatus != nil,
 			api.DashboardWidgetTypeRecentTransactions: w.RecentTransactions != nil,
+			api.DashboardWidgetTypeInOut:              w.InOut != nil,
 		}
 		for t, given := range settings {
 			if given && t != w.Type {

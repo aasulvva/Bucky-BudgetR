@@ -11,6 +11,7 @@ const TITLE_KEYS = {
   bucket_status: "dashboard.bucketStatus.title",
   accounts: "dashboard.accounts.title",
   recent_transactions: "dashboard.recent.title",
+  in_out: "dashboard.inOut.title",
 } as const satisfies Record<WidgetType, string>;
 
 /** A widget type's name, and its title when it has no other. */
