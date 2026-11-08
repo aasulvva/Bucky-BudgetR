@@ -216,6 +216,32 @@ describe("Cycles screen", () => {
       end_at: endAtFor(addDays(lastDay(active), 7)),
     });
   });
+
+  it("says which planned cycles extending removes (#158)", async () => {
+    const short = cycle({
+      id: "100001000010",
+      state: "future",
+      start_at: active.end_at,
+      end_at: endAtFor(addDays(lastDay(active), 2)),
+    });
+    const after = cycle({
+      id: "100001000011",
+      state: "future",
+      start_at: short.end_at,
+      end_at: endAtFor(addDays(lastDay(active), 30)),
+    });
+    given({ active, next: short }, [active, short, after]);
+    renderRoute("/cycles");
+    await userEvent.click(await screen.findByRole("button", { name: "Extend" }));
+    const dialog = within(await screen.findByRole("dialog", { name: "Extend the cycle" }));
+    const removed = await dialog.findByText(
+      /^The planned cycle .+ is removed, as the extended cycle covers it\.$/,
+    );
+    expect(plain(removed.textContent)).toContain(plain(cycleRange(short)));
+    expect(plain(dialog.getByText(/then starts on/).textContent)).toContain(
+      plain(cycleRange(after)),
+    );
+  });
 });
 
 describe("with a cycle rule", () => {

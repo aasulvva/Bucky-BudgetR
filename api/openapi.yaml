@@ -937,10 +937,11 @@ paths:
       description: |
         A future cycle can change its start and end. The active cycle can only
         change its end, to a moment in the future and after its last bucket
-        transaction: this is how an overdue cycle is extended. If the next
-        planned cycle starts before the new end, its start moves to the new
-        end (409 `cycle_overlap` if it would have no time left). Finished
-        cycles can't change (409 `cycle_finished`).
+        transaction: this is how an overdue cycle is extended. Planned
+        cycles that would have no time left are deleted, and if the next one
+        starts before the new end, its start moves to the new end; with a
+        cycle rule, more are then planned. Finished cycles can't change (409
+        `cycle_finished`).
       requestBody:
         required: true
         content:

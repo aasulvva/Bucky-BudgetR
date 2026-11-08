@@ -323,9 +323,28 @@ func TestExtend(t *testing.T) {
 	past := at("2026-11-01T00:00:00Z")
 	_, err = e.svc.Update(ctx, e.user, o.ID, cycles.Changes{EndAt: &past})
 	want(t, "end in the past", err, cycles.ErrInvalid)
+
+	// Past the end of November's (#158): it's removed, and the next one is
+	// pushed along.
+	d := e.create(t, [2]time.Time{nov[1], at("2027-01-01T00:00:00Z")})
 	beyond := at("2026-12-05T00:00:00Z")
-	_, err = e.svc.Update(ctx, e.user, o.ID, cycles.Changes{EndAt: &beyond})
-	want(t, "swallow the next cycle", err, cycles.ErrOverlap)
+	if _, err := e.svc.Update(ctx, e.user, o.ID, cycles.Changes{EndAt: &beyond}); err != nil {
+		t.Fatalf("over the next cycle: %v", err)
+	}
+	if _, err := sqlc.New(e.pool).GetCycle(ctx, sqlc.GetCycleParams{ID: n.ID, UserID: e.user}); !errors.Is(err, pgx.ErrNoRows) {
+		t.Errorf("November's is still there: %v", err)
+	}
+	if next := e.get(t, d.ID); !next.StartAt.Equal(beyond) || !next.EndAt.Equal(at("2027-01-01T00:00:00Z")) {
+		t.Errorf("December's %+v", next)
+	}
+	// Past every planned cycle: they all go.
+	far := at("2027-02-01T00:00:00Z")
+	if _, err := e.svc.Update(ctx, e.user, o.ID, cycles.Changes{EndAt: &far}); err != nil {
+		t.Fatalf("over every cycle: %v", err)
+	}
+	if _, err := sqlc.New(e.pool).GetCycle(ctx, sqlc.GetCycleParams{ID: d.ID, UserID: e.user}); !errors.Is(err, pgx.ErrNoRows) {
+		t.Errorf("December's is still there: %v", err)
+	}
 }
 
 func TestHookErrorRollsBack(t *testing.T) {

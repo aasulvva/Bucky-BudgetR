@@ -149,8 +149,9 @@ func (s *Service) Create(ctx context.Context, userID string, start, end time.Tim
 
 // Update moves a cycle's start or end. A future cycle may change both. The
 // active cycle may only change its end, to after now and after its last
-// bucket line; extending it pushes the next planned cycle's start along if
-// they would overlap. Finished cycles can't change.
+// bucket line; extending it removes the planned cycles it covers and pushes
+// the next one's start along if they would overlap (#158), then plans more
+// from the cycle rule. Finished cycles can't change.
 func (s *Service) Update(ctx context.Context, userID, id string, ch Changes) (sqlc.Cycle, error) {
 	var out sqlc.Cycle
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -195,13 +196,20 @@ func (s *Service) Update(ctx context.Context, userID, id string, ch Changes) (sq
 		if !end.After(last) {
 			return fmt.Errorf("%w: the cycle has bucket transactions after the new end", ErrInvalid)
 		}
+		removed := false
 		if end.After(c.EndAt) {
-			if err := pushNext(ctx, q, userID, end); err != nil {
+			if removed, err = pushNext(ctx, q, userID, end); err != nil {
 				return err
 			}
 		}
 		out, err = q.SetCycleTimes(ctx, sqlc.SetCycleTimesParams{ID: id, StartAt: start, EndAt: end})
-		return constraint(err)
+		if err != nil {
+			return constraint(err)
+		}
+		if removed {
+			return s.topUp(ctx, tx, userID)
+		}
+		return nil
 	})
 	if err != nil {
 		return sqlc.Cycle{}, err
@@ -209,24 +217,33 @@ func (s *Service) Update(ctx context.Context, userID, id string, ch Changes) (sq
 	return out, nil
 }
 
-// pushNext moves the next planned cycle's start to end if it starts earlier,
-// so the active cycle can be extended to end.
-func pushNext(ctx context.Context, q *sqlc.Queries, userID string, end time.Time) error {
-	next, err := q.NextFutureCycle(ctx, userID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil
+// pushNext makes room for the active cycle to be extended to end: it deletes
+// the planned cycles that would have no time left (they haven't started, so
+// nothing is lost) and moves the next one's start to end if it starts
+// earlier. It reports whether it deleted any.
+func pushNext(ctx context.Context, q *sqlc.Queries, userID string, end time.Time) (bool, error) {
+	removed := false
+	for {
+		next, err := q.NextFutureCycle(ctx, userID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return removed, nil
+		}
+		if err != nil {
+			return removed, err
+		}
+		if !next.StartAt.Before(end) {
+			return removed, nil
+		}
+		if !end.Before(next.EndAt) {
+			if err := q.DeleteCycle(ctx, sqlc.DeleteCycleParams{ID: next.ID, UserID: userID}); err != nil {
+				return removed, err
+			}
+			removed = true
+			continue
+		}
+		_, err = q.SetCycleTimes(ctx, sqlc.SetCycleTimesParams{ID: next.ID, StartAt: end, EndAt: next.EndAt})
+		return removed, constraint(err)
 	}
-	if err != nil {
-		return err
-	}
-	if !next.StartAt.Before(end) {
-		return nil
-	}
-	if !end.Before(next.EndAt) {
-		return fmt.Errorf("%w: the next cycle would have no time left", ErrOverlap)
-	}
-	_, err = q.SetCycleTimes(ctx, sqlc.SetCycleTimesParams{ID: next.ID, StartAt: end, EndAt: next.EndAt})
-	return constraint(err)
 }
 
 // Delete deletes a future cycle.

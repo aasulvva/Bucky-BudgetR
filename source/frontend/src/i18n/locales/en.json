@@ -878,6 +878,8 @@
     "newLastDay": "New last day",
     "afterCurrent": "Pick a day after the current last day.",
     "pushesNext": "The next planned cycle ({{range}}) then starts on {{date}} instead.",
+    "removesPlanned_one": "The planned cycle {{ranges}} is removed, as the extended cycle covers it.",
+    "removesPlanned_other": "The planned cycles {{ranges}} are removed, as the extended cycle covers them.",
     "extended": "The cycle now runs {{range}}.",
     "endNowTitle": "End this cycle now?",
     "endTitle": "End this cycle?",

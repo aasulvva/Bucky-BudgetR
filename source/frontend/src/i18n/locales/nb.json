@@ -878,6 +878,8 @@
     "newLastDay": "Ny siste dag",
     "afterCurrent": "Velg en dag etter den nåværende siste dagen.",
     "pushesNext": "Den neste planlagte perioden ({{range}}) starter da {{date}} i stedet.",
+    "removesPlanned_one": "Den planlagte perioden {{ranges}} fjernes, siden den forlengede perioden dekker den.",
+    "removesPlanned_other": "De planlagte periodene {{ranges}} fjernes, siden den forlengede perioden dekker dem.",
     "extended": "Perioden varer nå {{range}}.",
     "endNowTitle": "Avslutte perioden nå?",
     "endTitle": "Avslutte perioden?",

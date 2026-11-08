@@ -16,6 +16,26 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.15.01",
+    date: "2026-11-08",
+    title: {
+      en: "Extending over a planned cycle",
+      nb: "Forlenge over en planlagt periode",
+      nn: "Forlengje over ein planlagd periode",
+    },
+    changes: {
+      en: [
+        "Extending the active cycle past the end of a planned cycle no longer fails. The planned cycles it covers are removed, the dialog says which first, and the next one starts when the extended cycle ends. With a cycle rule, new ones are planned to keep enough ahead.",
+      ],
+      nb: [
+        "Å forlenge den aktive perioden forbi slutten av en planlagt periode feiler ikke lenger. De planlagte periodene den dekker, fjernes, og dialogen sier hvilke først. Den neste starter når den forlengede perioden slutter. Med en perioderegel planlegges nye, så det er nok planlagt fremover.",
+      ],
+      nn: [
+        "Å forlengje den aktive perioden forbi slutten av ein planlagd periode feilar ikkje lenger. Dei planlagde periodane han dekkjer, vert fjerna, og dialogen seier kva for nokre først. Den neste startar når den forlengde perioden sluttar. Med ein perioderegel vert nye planlagde, så det er nok planlagt framover.",
+      ],
+    },
+  },
+  {
     version: "v1.15.00",
     date: "2026-11-08",
     title: {

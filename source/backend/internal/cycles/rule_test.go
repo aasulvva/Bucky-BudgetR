@@ -188,3 +188,25 @@ func TestPeriods(t *testing.T) {
 		t.Errorf("periods %v", got)
 	}
 }
+
+// Extending the active cycle over planned ones removes them, and the rule
+// plans more to keep enough ahead (#158).
+func TestExtendOverPlanned(t *testing.T) {
+	e := setup(t)
+	c := e.create(t, [2]time.Time{at(aug25), at(sep25)})
+	if _, err := e.svc.Start(t.Context(), e.user, c.ID); err != nil {
+		t.Fatal(err)
+	}
+	e.setPreferences(t, payday)
+	if err := e.svc.TopUp(t.Context(), e.user); err != nil {
+		t.Fatal(err)
+	}
+	checkPlanned(t, e.planned(t), sep25+" "+oct23+" *", oct23+" "+nov25+" *", nov25+" "+dec23+" *")
+
+	end := at("2026-11-01T00:00:00Z")
+	if _, err := e.svc.Update(t.Context(), e.user, c.ID, cycles.Changes{EndAt: &end}); err != nil {
+		t.Fatal(err)
+	}
+	checkPlanned(t, e.planned(t),
+		"2026-11-01T00:00:00Z "+nov25, nov25+" "+dec23+" *", dec23+" 2027-01-24T23:00:00Z *")
+}
