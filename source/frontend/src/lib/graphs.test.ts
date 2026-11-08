@@ -431,22 +431,40 @@ describe("fitting the width", () => {
   it("keeps the resolution while it fits, and goes coarser when it doesn't", () => {
     expect(fitResolution(year, "day", "line", 1200, [])).toEqual({
       resolution: "day",
-      coarsened: false,
+      coarsened: null,
     });
     // 366 days × 2 px don't fit in 300 px; 53 weeks do.
     expect(fitResolution(year, "day", "line", 300, [])).toEqual({
       resolution: "week",
-      coarsened: true,
+      coarsened: "width",
     });
     // Bars need more room: 53 weeks × 6 px don't fit in 300 px.
     expect(fitResolution(year, "week", "bar", 300, [])).toEqual({
       resolution: "month",
-      coarsened: true,
+      coarsened: "width",
     });
     // Not measured yet.
     expect(fitResolution(year, "day", "line", 0, [])).toEqual({
       resolution: "day",
-      coarsened: false,
+      coarsened: null,
+    });
+  });
+
+  it("goes coarser when there are more intervals than the graph draws, measured or not", () => {
+    // 8 784 hours are more than 1 000 points.
+    expect(fitResolution(year, "hour", "line", 0, [])).toEqual({
+      resolution: "day",
+      coarsened: "count",
+    });
+    // 366 days are more than 60 bars, however wide.
+    expect(fitResolution(year, "day", "bar", 5000, [])).toEqual({
+      resolution: "week",
+      coarsened: "count",
+    });
+    // Too many first, then too narrow: the first reason counts.
+    expect(fitResolution(year, "hour", "line", 300, [])).toEqual({
+      resolution: "week",
+      coarsened: "count",
     });
   });
 

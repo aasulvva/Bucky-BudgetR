@@ -11,6 +11,7 @@ import {
   CALENDAR_UNITS,
   LAST_DEFAULT,
   LAST_MAX,
+  LAST_UNIT_OF,
   LAST_UNITS,
   resolvePeriod,
   SPECIFIC_UNITS,
@@ -33,19 +34,10 @@ type Specific = Extract<PeriodChoice, { kind: "specific" }>;
 
 const KINDS: Kind[] = ["last", "current", "previous", "specific", "custom"];
 
-/** A last-N unit and the one-period unit it counts. */
-const SINGULAR: Record<LastUnit, SpecificUnit> = {
-  days: "day",
-  weeks: "week",
-  months: "month",
-  cycles: "cycle",
-  years: "year",
-};
-
 /** The choice's unit as one period ("day", "month"); null for custom dates. */
 function unitOf(choice: PeriodChoice): SpecificUnit | null {
   if (choice.kind === "custom") return null;
-  if (choice.kind === "last") return SINGULAR[choice.unit];
+  if (choice.kind === "last") return LAST_UNIT_OF[choice.unit];
   return choice.unit;
 }
 
@@ -67,7 +59,7 @@ export function PeriodPicker({ value, onChange, cycles }: PeriodPickerProps) {
   const choiceFor = (kind: Kind, unit: SpecificUnit | null): PeriodChoice => {
     switch (kind) {
       case "last": {
-        const u = LAST_UNITS.find((x) => SINGULAR[x] === unit) ?? "days";
+        const u = LAST_UNITS.find((x) => LAST_UNIT_OF[x] === unit) ?? "days";
         return { kind, unit: u, count: LAST_DEFAULT[u] };
       }
       case "current":
@@ -126,7 +118,7 @@ export function PeriodPicker({ value, onChange, cycles }: PeriodPickerProps) {
             onChange={(u) => {
               if (!u || u === unitValue) return;
               const singular =
-                value.kind === "last" ? SINGULAR[u as LastUnit] : (u as SpecificUnit);
+                value.kind === "last" ? LAST_UNIT_OF[u as LastUnit] : (u as SpecificUnit);
               onChange(choiceFor(value.kind, singular));
             }}
             allowDeselect={false}

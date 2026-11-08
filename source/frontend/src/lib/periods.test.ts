@@ -1,11 +1,12 @@
+import type { Cycle } from "@/api/cycles";
 import { cycle } from "@/test/fixtures";
 
 import { endAtFor, startAtFor } from "./cycles";
 import {
+  applicableResolutions,
   coarser,
   defaultPeriod,
   defaultResolution,
-  fittingResolutions,
   formatPeriod,
   intervalCount,
   keptResolution,
@@ -18,6 +19,7 @@ import {
   stepSpecific,
   type Period,
   type PeriodChoice,
+  type Resolution,
   type SpecificUnit,
 } from "./periods";
 
@@ -40,8 +42,14 @@ describe("formatPeriod and parsePeriod", () => {
       { kind: "last", unit: "weeks", count: 104 },
       { kind: "last", unit: "months", count: 1 },
       { kind: "last", unit: "cycles", count: 3 },
+      { kind: "last", unit: "quarters", count: 40 },
+      { kind: "last", unit: "half_years", count: 2 },
       { kind: "last", unit: "years", count: 20 },
+      { kind: "current", unit: "day" },
+      { kind: "current", unit: "week" },
       { kind: "current", unit: "cycle" },
+      { kind: "previous", unit: "day" },
+      { kind: "previous", unit: "week" },
       { kind: "current", unit: "half_year" },
       { kind: "previous", unit: "year" },
       { kind: "custom", from: "2026-01-01", to: "2026-03-31" },
@@ -78,8 +86,10 @@ describe("formatPeriod and parsePeriod", () => {
       "last-367-days",
       "last-105-weeks",
       "last-21-years",
+      "last-41-quarters",
+      "last-21-half_years",
       "last-3-decades",
-      "current-week",
+      "current-decade",
       "previous-",
       "custom-2026-02-30-2026-03-01",
       "custom-2026-03-02-2026-03-01",
@@ -143,6 +153,48 @@ describe("resolvePeriod", () => {
     // More than there are: from the first one.
     expect(last(10)?.from).toBe("2026-09-01");
     expect(resolvePeriod({ kind: "last", unit: "cycles", count: 3 }, [], now)).toBeNull();
+  });
+
+  it("counts the last quarters and half-years back from this one", () => {
+    expect(dates(resolved({ kind: "last", unit: "quarters", count: 2 }))).toEqual({
+      from: "2026-07-01",
+      to: "2026-11-11",
+    });
+    expect(dates(resolved({ kind: "last", unit: "half_years", count: 3 }))).toEqual({
+      from: "2025-07-01",
+      to: "2026-11-11",
+    });
+  });
+
+  it("runs today and this week to now, and gives yesterday and the previous week whole", () => {
+    expect(resolved({ kind: "current", unit: "day" })).toEqual({
+      from: "2026-11-11",
+      to: "2026-11-11",
+      fromAt: startAtFor("2026-11-11"),
+      toAt: now.toISOString(),
+    });
+    expect(dates(resolved({ kind: "current", unit: "week" }, now, "nb-NO"))).toEqual({
+      from: "2026-11-09",
+      to: "2026-11-11",
+    });
+    expect(resolved({ kind: "previous", unit: "day" })).toEqual({
+      from: "2026-11-10",
+      to: "2026-11-10",
+      fromAt: startAtFor("2026-11-10"),
+      toAt: endAtFor("2026-11-10"),
+    });
+    expect(dates(resolved({ kind: "previous", unit: "week" }, now, "nb-NO"))).toEqual({
+      from: "2026-11-02",
+      to: "2026-11-08",
+    });
+    expect(dates(resolved({ kind: "previous", unit: "week" }, now, "en-US"))).toEqual({
+      from: "2026-11-01",
+      to: "2026-11-07",
+    });
+    expect(dates(resolved({ kind: "previous", unit: "day" }, new Date(2027, 0, 1, 9)))).toEqual({
+      from: "2026-12-31",
+      to: "2026-12-31",
+    });
   });
 
   it("starts weeks on the locale's first day", () => {
@@ -384,38 +436,62 @@ describe("intervalCount", () => {
 });
 
 describe("resolutions", () => {
-  const year2025 = resolved({ kind: "previous", unit: "year" });
+  const year2025: PeriodChoice = { kind: "previous", unit: "year" };
+  const offered = (choice: PeriodChoice, cycles: Cycle[] = []) =>
+    applicableResolutions(choice, cycles, now, "nb-NO");
 
-  it("offer only those that fit", () => {
-    expect(fittingResolutions(year2025, MAX_BARS, [], "nb-NO")).toEqual([
+  it("offer every one no longer than the period, per hour always", () => {
+    expect(offered(year2025)).toEqual(["hour", "day", "week", "month", "year", "total"]);
+    expect(offered({ kind: "current", unit: "day" })).toEqual(["hour", "day", "total"]);
+    // The whole week counts, not the days of it so far.
+    expect(offered({ kind: "current", unit: "week" })).toEqual(["hour", "day", "week", "total"]);
+    expect(offered({ kind: "last", unit: "weeks", count: 3 })).toEqual([
+      "hour",
+      "day",
       "week",
-      "month",
-      "year",
       "total",
     ]);
-    expect(fittingResolutions(year2025, MAX_POINTS, [cycle()], "nb-NO")).toEqual([
+    expect(offered({ kind: "current", unit: "month" })).toEqual([
+      "hour",
       "day",
       "week",
       "month",
-      "year",
       "total",
     ]);
+    expect(offered({ kind: "custom", from: "2026-01-01", to: "2026-12-30" })).not.toContain("year");
+    expect(offered({ kind: "current", unit: "cycle" })).toEqual([]);
+  });
+
+  it("offer per cycle when one overlaps, counting a cycle as a month at most", () => {
     const thisCycle = [
       cycle({ start_at: startAtFor("2025-12-15"), end_at: endAtFor("2026-01-14") }),
     ];
-    expect(fittingResolutions(year2025, MAX_BARS, thisCycle, "nb-NO")).toContain("cycle");
+    expect(offered(year2025, thisCycle)).toContain("cycle");
+    const active = [cycle({ start_at: startAtFor("2026-11-01"), end_at: endAtFor("2026-11-30") })];
+    expect(offered({ kind: "current", unit: "cycle" }, active)).toEqual([
+      "hour",
+      "day",
+      "week",
+      "month",
+      "cycle",
+      "total",
+    ]);
+    expect(offered({ kind: "current", unit: "month" }, active)).toContain("cycle");
+    expect(offered({ kind: "current", unit: "week" }, active)).not.toContain("cycle");
   });
 
-  it("start from the period's length", () => {
-    expect(defaultResolution(resolved({ kind: "last", unit: "days", count: 2 }))).toBe("hour");
-    expect(defaultResolution(resolved({ kind: "last", unit: "days", count: 30 }))).toBe("day");
-    expect(defaultResolution(resolved({ kind: "previous", unit: "quarter" }))).toBe("week");
-    expect(defaultResolution(year2025)).toBe("month");
-    expect(
-      defaultResolution(resolved({ kind: "custom", from: "2020-01-01", to: "2026-11-11" })),
-    ).toBe("year");
+  it("start from the whole period's length", () => {
+    const start = (choice: PeriodChoice, max?: number) =>
+      defaultResolution(choice, [], max, now, "nb-NO");
+    expect(start({ kind: "last", unit: "days", count: 2 })).toBe("hour");
+    expect(start({ kind: "last", unit: "days", count: 30 })).toBe("day");
+    expect(start({ kind: "current", unit: "week" })).toBe("day");
+    expect(start({ kind: "previous", unit: "quarter" })).toBe("week");
+    expect(start(year2025)).toBe("month");
+    expect(start({ kind: "current", unit: "year" })).toBe("month");
+    expect(start({ kind: "custom", from: "2020-01-01", to: "2026-11-11" })).toBe("year");
     // Today has 16 hours so far: they don't fit in 10 bars.
-    expect(defaultResolution(resolved({ kind: "last", unit: "days", count: 1 }), 10)).toBe("day");
+    expect(start({ kind: "last", unit: "days", count: 1 }, 10)).toBe("day");
   });
 
   it("go coarser one step at a time", () => {
@@ -427,10 +503,14 @@ describe("resolutions", () => {
     expect(coarser("total")).toBeNull();
   });
 
-  it("keep the current one while it fits", () => {
-    const month = resolved({ kind: "last", unit: "days", count: 30 });
-    expect(keptResolution("week", month, MAX_BARS, [])).toBe("week");
-    expect(keptResolution("day", year2025, MAX_BARS, [])).toBe("month");
-    expect(keptResolution("cycle", year2025, MAX_BARS, [])).toBe("month");
+  it("keep the current one while it makes sense for the period", () => {
+    const kept = (r: Resolution, choice: PeriodChoice) =>
+      keptResolution(r, choice, [], MAX_BARS, now, "nb-NO");
+    const month: PeriodChoice = { kind: "last", unit: "days", count: 30 };
+    expect(kept("week", month)).toBe("week");
+    expect(kept("hour", year2025)).toBe("hour");
+    expect(kept("year", month)).toBe("day");
+    expect(kept("cycle", year2025)).toBe("month");
+    expect(kept("month", { kind: "current", unit: "week" })).toBe("day");
   });
 });

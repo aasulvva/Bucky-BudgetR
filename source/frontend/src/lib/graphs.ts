@@ -21,7 +21,6 @@ import {
   MAX_POINTS,
   parsePeriod,
   parseResolution,
-  resolvePeriod,
   type Period,
   type PeriodChoice,
   type Resolution,
@@ -66,12 +65,11 @@ export function maxIntervals(kind: GraphKind): number {
 /** The graph to start with: spending this cycle (or month) as bars. */
 export function defaultGraph(cycles: CycleTimes[], now?: Date): GraphSettings {
   const choice = defaultPeriod(cycles);
-  const period = resolvePeriod(choice, cycles, now);
   return {
     kind: "bar",
     metric: "spending",
     period: formatPeriod(choice),
-    resolution: period ? defaultResolution(period, MAX_BARS, cycles) : "day",
+    resolution: defaultResolution(choice, cycles, MAX_BARS, now),
   };
 }
 
@@ -427,9 +425,13 @@ const MIN_PX: Record<GraphKind, number> = { bar: 6, line: 2 };
 /** Lines show a dot per point while each gets this much room. */
 const DOT_PX = 12;
 
+/** Why a graph is drawn coarser than chosen: more intervals than it draws, or than fit its width. */
+export type Coarsened = "count" | "width" | null;
+
 /**
  * The resolution a graph is drawn at in `width` pixels: the chosen one, or
- * coarser until its intervals fit. Unmeasured (0) keeps the chosen one.
+ * coarser until it gives at most `maxIntervals(kind)` intervals that fit
+ * the width. Unmeasured (0) only checks the count.
  */
 export function fitResolution(
   period: Period,
@@ -438,13 +440,17 @@ export function fitResolution(
   width: number,
   cycles: CycleTimes[],
   locale = getLocale(),
-): { resolution: Resolution; coarsened: boolean } {
-  if (width <= 0) return { resolution, coarsened: false };
+): { resolution: Resolution; coarsened: Coarsened } {
+  const max = maxIntervals(kind);
   let r = resolution;
+  let why: Coarsened = null;
   for (;;) {
-    const n = intervalCount(period, r, cycles, locale);
+    const n = intervalCount(period, r, cycles, locale, max);
+    const problem: Coarsened =
+      n > max ? "count" : width > 0 && n * MIN_PX[kind] > width ? "width" : null;
     const next = coarser(r);
-    if (n * MIN_PX[kind] <= width || !next) return { resolution: r, coarsened: r !== resolution };
+    if (!problem || !next) return { resolution: r, coarsened: r === resolution ? null : why };
+    why ??= problem;
     r = next;
   }
 }

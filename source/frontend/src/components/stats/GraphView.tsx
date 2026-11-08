@@ -13,11 +13,13 @@ import {
   fitResolution,
   graphData,
   intervalLink,
+  maxIntervals,
   shownCurrency,
   showDots,
   statsQuery,
   yDomain,
   type GraphData,
+  type GraphKind,
   type GraphSettings,
 } from "@/lib/graphs";
 import { getLocale } from "@/lib/locale";
@@ -59,7 +61,7 @@ export function GraphView({
   const plot = Math.max(0, width - AXIS_PX);
   const fitted = period
     ? fitResolution(period, s.resolution, s.kind, plot, cycles)
-    : { resolution: s.resolution, coarsened: false };
+    : { resolution: s.resolution, coarsened: null };
   const query = useStatsSeries(period ? statsQuery(s, period, fitted.resolution) : null);
   const { currency, leftOut } = shownCurrency(s, accounts);
 
@@ -85,7 +87,12 @@ export function GraphView({
                   data={data}
                   leftOut={leftOut}
                   coarsened={
-                    fitted.coarsened ? t(`stats.resolution.options.${fitted.resolution}`) : null
+                    fitted.coarsened && {
+                      why: fitted.coarsened,
+                      resolution: t(`stats.resolution.options.${fitted.resolution}`),
+                      max: maxIntervals(s.kind),
+                      kind: s.kind,
+                    }
                   }
                 />
               </Stack>
@@ -180,11 +187,17 @@ function Notes({
 }: {
   data: GraphData;
   leftOut: number;
-  coarsened: string | null;
+  coarsened: { why: "count" | "width"; resolution: string; max: number; kind: GraphKind } | null;
 }) {
   const { t } = useTranslation();
   const notes = [
-    coarsened && t("stats.graphs.coarsened", { resolution: coarsened }),
+    coarsened &&
+      (coarsened.why === "width"
+        ? t("stats.graphs.coarsened", { resolution: coarsened.resolution })
+        : t(coarsened.kind === "bar" ? "stats.graphs.tooManyBars" : "stats.graphs.tooManyPoints", {
+            resolution: coarsened.resolution,
+            max: coarsened.max,
+          })),
     data.other > 0 && t("stats.graphs.otherNote", { count: data.other }),
     leftOut > 0 && t("stats.graphs.leftOut", { count: leftOut }),
   ].filter((n): n is string => typeof n === "string");

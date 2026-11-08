@@ -1628,9 +1628,9 @@ export interface components {
             metric: "spending" | "income" | "balance";
             /**
              * @description The period, relative to when the graph is shown:
-             *     `last-<n>-days|weeks|months|cycles|years`, `current-<unit>` or
-             *     `previous-<unit>` (unit `cycle`, `month`, `quarter`, `half_year`
-             *     or `year`), one specific period (`day-<date>`, `week-<first
+             *     `last-<n>-days|weeks|cycles|months|quarters|half_years|years`,
+             *     `current-<unit>` or `previous-<unit>` (unit `day`, `week`,
+             *     `cycle`, `month`, `quarter`, `half_year` or `year`), one specific period (`day-<date>`, `week-<first
              *     day>`, `month-<yyyy-mm>`, `quarter-<yyyy>-q<1-4>`,
              *     `half_year-<yyyy>-h<1-2>`, `year-<yyyy>` or `cycle-<cycle ID>`),
              *     or `custom-<first day>-<last day>`.

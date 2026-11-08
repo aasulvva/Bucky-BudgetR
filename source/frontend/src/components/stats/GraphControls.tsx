@@ -25,7 +25,7 @@ import {
   topOf,
   type GraphSettings,
 } from "@/lib/graphs";
-import { defaultPeriod, formatPeriod, parsePeriod, type Period } from "@/lib/periods";
+import { defaultPeriod, formatPeriod, parsePeriod } from "@/lib/periods";
 
 import { PeriodPicker } from "./PeriodPicker";
 import { ResolutionPicker } from "./ResolutionPicker";
@@ -33,8 +33,6 @@ import { ResolutionPicker } from "./ResolutionPicker";
 interface GraphControlsProps {
   value: GraphSettings;
   onChange: (value: GraphSettings) => void;
-  /** The value's period, resolved now. */
-  period: Period | null;
   cycles: Cycle[];
   accounts: Account[];
   buckets: Bucket[];
@@ -47,7 +45,6 @@ interface GraphControlsProps {
 export function GraphControls({
   value,
   onChange,
-  period,
   cycles,
   accounts,
   buckets,
@@ -61,6 +58,7 @@ export function GraphControls({
   };
   const balance = s.metric === "balance";
   const group = groupBy(s);
+  const choice = parsePeriod(s.period) ?? defaultPeriod(cycles);
   const [counterparty, setCounterparty] = useState(s.counterparty ?? "");
   // Follow a counterparty set from elsewhere (a saved graph, Back).
   const [shown, setShown] = useState(s.counterparty ?? "");
@@ -110,7 +108,7 @@ export function GraphControls({
         />
       </Stack>
       <PeriodPicker
-        value={parsePeriod(s.period) ?? defaultPeriod(cycles)}
+        value={choice}
         cycles={cycles}
         onChange={(choice) => {
           set({ period: formatPeriod(choice) });
@@ -119,7 +117,7 @@ export function GraphControls({
       <Stack gap="sm">
         <ResolutionPicker
           value={s.resolution}
-          period={period}
+          choice={choice}
           max={maxIntervals(s.kind)}
           cycles={cycles}
           onChange={(resolution) => {

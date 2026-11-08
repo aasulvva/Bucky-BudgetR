@@ -128,6 +128,17 @@ describe("Stats", () => {
     expect(lastQuery()?.get("to")).toBe(new Date(2026, 0, 1).toISOString());
   });
 
+  it("keeps per hour for a year, but draws coarser bars and says so", async () => {
+    renderRoute("/stats?kind=bar&metric=spending&period=previous-year&res=hour");
+    expect(await screen.findByRole("combobox", { name: "Show per" })).toHaveValue("Hour");
+    await waitFor(() => {
+      expect(lastQuery()?.get("resolution")).toBe("week");
+    });
+    expect(
+      await screen.findByText("Shown per Week: a graph shows at most 60 bars."),
+    ).toBeInTheDocument();
+  });
+
   it("offers the last few cycles and years", async () => {
     const { router } = renderRoute("/stats");
     await pick("Period", "Last");

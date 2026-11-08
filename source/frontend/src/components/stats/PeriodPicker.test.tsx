@@ -5,7 +5,7 @@ import { useState } from "react";
 
 import type { Cycle } from "@/api/cycles";
 import { addDays, cycleRange, endAtFor, formatDateRange, startAtFor, today } from "@/lib/cycles";
-import { MAX_BARS, resolvePeriod, type PeriodChoice, type Resolution } from "@/lib/periods";
+import { MAX_BARS, type PeriodChoice, type Resolution } from "@/lib/periods";
 import { cycle } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 
@@ -39,7 +39,7 @@ function Harness({
       />
       <ResolutionPicker
         value={res}
-        period={resolvePeriod(choice, cycles)}
+        choice={choice}
         max={MAX_BARS}
         cycles={cycles}
         onChange={(r) => {
@@ -79,6 +79,30 @@ describe("PeriodPicker", () => {
     expect(screen.getByTestId("period-range").textContent).toBe(
       formatDateRange(`${year}-01-01`, `${year}-12-31`),
     );
+  });
+
+  it("lists the units shortest first", async () => {
+    renderWithProviders(<Harness initial={{ kind: "current", unit: "month" }} />);
+    const units = async () => {
+      await userEvent.click(screen.getByRole("combobox", { name: "Unit" }));
+      const shown = (await screen.findAllByRole("option")).map((o) => o.textContent);
+      await userEvent.keyboard("{Escape}");
+      return shown;
+    };
+    const one = ["Day", "Week", "Cycle", "Month", "Quarter", "Half-year", "Year"];
+    expect(await units()).toEqual(one);
+    await choose("Previous");
+    expect(await units()).toEqual(one);
+    await choose("Last");
+    expect(await units()).toEqual([
+      "Days",
+      "Weeks",
+      "Cycles",
+      "Months",
+      "Quarters",
+      "Half-years",
+      "Years",
+    ]);
   });
 
   it("asks how many for the last days, weeks or months, within limits", async () => {
@@ -205,22 +229,31 @@ describe("PeriodPicker", () => {
 });
 
 describe("ResolutionPicker", () => {
-  it("offers only what fits, and switches when the value no longer does", async () => {
+  it("offers every resolution the period allows, and switches when the value no longer does", async () => {
     const onResolution = vi.fn();
     renderWithProviders(
       <Harness
         initial={{ kind: "last", unit: "days", count: 30 }}
-        resolution="day"
+        resolution="month"
         onResolution={onResolution}
       />,
     );
-    expect(screen.getByRole("combobox", { name: "Show per" })).toHaveValue("Day");
-    await choose("Previous", "Year");
-    // 365 days don't fit in 60 bars: months are the year's default.
-    expect(onResolution).toHaveBeenLastCalledWith("month");
-    expect(screen.getByRole("combobox", { name: "Show per" })).toHaveValue("Month");
-    await userEvent.click(screen.getByRole("combobox", { name: "Show per" }));
-    const options = (await screen.findAllByRole("option")).map((o) => o.textContent);
-    expect(options).toEqual(["Week", "Month", "Year", "Whole period"]);
+    const showPer = () => screen.getByRole("combobox", { name: "Show per" });
+    const options = async () => {
+      await userEvent.click(showPer());
+      const shown = (await screen.findAllByRole("option")).map((o) => o.textContent);
+      await userEvent.keyboard("{Escape}");
+      return shown;
+    };
+    expect(showPer()).toHaveValue("Month");
+    // Today has no months: a day starts per hour.
+    await choose("This");
+    expect(onResolution).toHaveBeenLastCalledWith("hour");
+    expect(showPer()).toHaveValue("Hour");
+    expect(await options()).toEqual(["Hour", "Day", "Whole period"]);
+    // Per hour still makes sense for a week; per week now does too, per month not.
+    await pick("Unit", "Week");
+    expect(showPer()).toHaveValue("Hour");
+    expect(await options()).toEqual(["Hour", "Day", "Week", "Whole period"]);
   });
 });

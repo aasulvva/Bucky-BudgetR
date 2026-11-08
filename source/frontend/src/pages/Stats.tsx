@@ -136,7 +136,6 @@ function Graphs({
     <GraphControls
       value={settings}
       onChange={change}
-      period={period}
       cycles={cycles}
       accounts={accounts}
       buckets={buckets}
