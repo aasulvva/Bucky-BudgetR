@@ -154,15 +154,27 @@ export function WidgetSettingsForm({
         />
       )}
       {draft.type === "recent_transactions" && (
-        <Select
-          label={t("dashboard.recent.count")}
-          data={TRANSACTION_COUNTS.map((n) => ({ value: String(n), label: String(n) }))}
-          value={String(draft.settings.count)}
-          allowDeselect={false}
-          onChange={(v) => {
-            if (v) setDraft({ ...draft, settings: { count: Number(v) } });
-          }}
-        />
+        <>
+          <Select
+            label={t("dashboard.recent.count")}
+            data={TRANSACTION_COUNTS.map((n) => ({ value: String(n), label: String(n) }))}
+            value={String(draft.settings.count)}
+            allowDeselect={false}
+            onChange={(v) => {
+              if (v) setDraft({ ...draft, settings: { ...draft.settings, count: Number(v) } });
+            }}
+          />
+          <Checkbox
+            label={t("transactions.filters.reversed")}
+            checked={draft.settings.showReversed}
+            onChange={(e) => {
+              setDraft({
+                ...draft,
+                settings: { ...draft.settings, showReversed: e.currentTarget.checked },
+              });
+            }}
+          />
+        </>
       )}
       {draft.type === "scheduled" && (
         <>

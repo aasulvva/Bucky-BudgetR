@@ -2756,6 +2756,11 @@ components:
           minimum: 1
           maximum: 20
           description: How many transactions it shows. 5 by default.
+        show_reversed:
+          type: boolean
+          description: |
+            Also list reversed transactions and moved originals (#91).
+            Missing means false.
 
     Language:
       type: string

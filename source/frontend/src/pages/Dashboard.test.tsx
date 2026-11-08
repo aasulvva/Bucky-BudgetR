@@ -197,6 +197,8 @@ describe("Dashboard", () => {
     const [query] = apiMock.calls("GET /api/v1/transactions").map((c) => c.query);
     expect(query?.get("limit")).toBe("5");
     expect(query?.getAll("type")).toEqual(["INC", "EXP", "TRF", "OPB", "BLA"]);
+    // Reversed ones and moved originals are left out unless asked (#91).
+    expect(query?.get("reversed")).toBe("false");
   });
 
   it("offers to start a cycle without one", async () => {
@@ -374,6 +376,32 @@ describe("Dashboard", () => {
     expect(apiMock.calls("PATCH /api/v1/me/preferences").map((c) => c.body)).toEqual([
       savedLayout(
         { bucket_status: { mode: "all" }, recent_transactions: { count: 10 } },
+        desktopWidgets({ bucket_status: { mode: "all" } }),
+      ),
+    ]);
+  });
+
+  it("shows reversed and moved ones when asked (#91)", async () => {
+    withPreferences({ dashboard: { bucket_status: { mode: "all" } } });
+    renderRoute("/");
+    const recent = await widget("Recent transactions");
+    await userEvent.click(
+      await recent.findByRole("button", { name: "Settings for Recent transactions" }),
+    );
+    const box = await screen.findByRole("dialog", { name: "Recent transactions settings" });
+    const dialog = within(box);
+    await userEvent.click(dialog.getByRole("checkbox", { name: "Show reversed & moved" }));
+    await userEvent.click(dialog.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(apiMock.calls("GET /api/v1/transactions").at(-1)?.query.has("reversed")).toBe(false);
+    });
+    expect(apiMock.calls("PATCH /api/v1/me/preferences").map((c) => c.body)).toEqual([
+      savedLayout(
+        {
+          bucket_status: { mode: "all" },
+          recent_transactions: { count: 5, show_reversed: true },
+        },
         desktopWidgets({ bucket_status: { mode: "all" } }),
       ),
     ]);

@@ -1646,6 +1646,11 @@ export interface components {
         RecentWidgetSettings: {
             /** @description How many transactions it shows. 5 by default. */
             count: number;
+            /**
+             * @description Also list reversed transactions and moved originals (#91).
+             *     Missing means false.
+             */
+            show_reversed?: boolean;
         };
         /**
          * @description A web app language: English, Norwegian bokmål or Norwegian nynorsk.
