@@ -7,6 +7,7 @@ import { useNavigate } from "react-router";
 
 import { api } from "@/api/client";
 import { ApiError, unwrap } from "@/api/errors";
+import { NOTIFICATIONS_KEY } from "@/api/notifications";
 import type { components } from "@/api/schema";
 import { browserTimeZone } from "@/lib/cycleRule";
 
@@ -36,6 +37,8 @@ export function useUpdatePreferences() {
     mutationFn: (body: Preferences) => unwrap(api.PATCH("/api/v1/me/preferences", { body })),
     onSuccess: (preferences) => {
       client.setQueryData<User | null>(SESSION_KEY, (user) => user && { ...user, preferences });
+      // The notifications settings decide which show.
+      void client.invalidateQueries({ queryKey: NOTIFICATIONS_KEY });
     },
   });
 }

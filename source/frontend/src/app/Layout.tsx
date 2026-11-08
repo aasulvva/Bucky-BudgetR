@@ -37,19 +37,30 @@ import { CycleBanners } from "@/components/cycles/CycleBanners";
 import { CycleStatus } from "@/components/cycles/CycleStatus";
 import { About } from "@/components/About";
 import { DebugButton, DebugMenuItem, DebugRoot } from "@/components/debug";
+import {
+  NotificationBell,
+  NotificationsNavLink,
+} from "@/components/notifications/NotificationBadge";
 import { QueueBadge, QueueIndicator } from "@/components/schedules/QueueBadge";
 import { WhatsNew, WhatsNewPopup } from "@/components/WhatsNew";
 import { versionLabel } from "@/lib/changelog";
 import { useClockVersion } from "@/lib/clock";
 
 import classes from "./Layout.module.css";
-import { findNav, navTabs, profileItems, type NavItem, type NavTab } from "./nav";
+import {
+  findNav,
+  navTabs,
+  notificationsItem,
+  profileItems,
+  type NavItem,
+  type NavTab,
+} from "./nav";
 import { useSession, useSignOut } from "./session";
 
 /**
- * The app shell (spec §9). Desktop: a side menu with collapsible groups and
- * the profile menu at the bottom. Mobile: a header with the screen's name and
- * the profile menu, and bottom tabs; a tab that holds several screens opens
+ * The app shell (spec §9). Desktop: a side menu with collapsible groups, and
+ * Notifications and the profile menu at the bottom. Mobile: a header with the
+ * screen's name, the notifications bell and the profile menu, and bottom tabs; a tab that holds several screens opens
  * them in a sheet.
  */
 export function Layout() {
@@ -75,6 +86,7 @@ export function Layout() {
             </Title>
             <Group gap={4} wrap="nowrap">
               <CycleStatus placement="header" />
+              <NotificationBell />
               <ProfileMenu placement="header" />
             </Group>
           </Group>
@@ -183,7 +195,8 @@ function SideNav({ current }: { current: Current }) {
         </Stack>
       </AppShell.Section>
       <AppShell.Section pt="sm">
-        <Group gap={4} wrap="nowrap">
+        <NotificationsNavLink active={pathname === notificationsItem.path} />
+        <Group gap={4} wrap="nowrap" mt={4}>
           <Box flex={1} miw={0}>
             <ProfileMenu placement="sidebar" />
           </Box>

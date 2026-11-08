@@ -60,7 +60,7 @@ type Settings struct {
 	// Transaction is what to record; its At is ignored.
 	Transaction transactions.New
 	Mode        sqlc.ScheduleMode
-	// DueDays is how many days after it's queued an approval is due.
+	// DueDays is how many days before its time an approval is queued.
 	DueDays int
 	// Start is the date of the first occurrence (a calendar date, at UTC
 	// midnight), Minute its time of day in minutes after midnight, in

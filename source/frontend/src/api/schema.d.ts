@@ -1303,6 +1303,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The user's open notifications
+         * @description Worked out from the user's data when read, so a notification goes
+         *     away by itself once its task is done (the queue approved, the
+         *     balance adjusted, the bucket covered). Dismissed ones and kinds
+         *     switched off in `preferences.notifications` are left out. Alerts
+         *     come first, then warnings, then the rest, each oldest first.
+         *
+         *     - `approval_queue`: scheduled transactions waiting for approval,
+         *       one for all of them, with `count` and `overdue`.
+         *     - `upcoming_bill`: an expense or transfer a schedule records within
+         *       `upcoming_days`, with `schedule_id`, `at`, `amount` and `currency`.
+         *     - `investment_balance`: an investment or fund account with no
+         *       balance adjustment since the active cycle started, with
+         *       `account_id` and `cycle_id`.
+         *     - `bucket_uncovered`: a priority bucket whose CAF is below its TF,
+         *       with `bucket_id` and the missing `amount` and `currency`.
+         */
+        get: operations["listNotifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss a notification, or mark it done
+         * @description Hides the notification with this key until it happens again: the
+         *     key names what it's about (the newest queued transaction, the
+         *     bill's time, the cycle and account, the bucket). Once a dismissed
+         *     one no longer applies, the dismissal is forgotten, so an uncovered
+         *     bucket shows again the next time it's uncovered.
+         */
+        post: operations["dismissNotification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1467,6 +1525,8 @@ export interface components {
              *     Null means none.
              */
             saved_graphs?: components["schemas"]["SavedGraph"][] | null;
+            /** @description Which notifications show (#57). Null means all, bills 3 days ahead. */
+            notifications?: components["schemas"]["NotificationSettings"] | null;
         };
         /**
          * @description The Dashboard's layouts. When `widgets` is set, it is the desktop
@@ -2412,6 +2472,62 @@ export interface components {
             items: components["schemas"]["ScheduledTransaction"][];
             /** @description Pass as `cursor` for the next page. Null on the last page. */
             next_cursor: string | null;
+        };
+        /** @enum {string} */
+        NotificationKind: "approval_queue" | "upcoming_bill" | "investment_balance" | "bucket_uncovered";
+        /**
+         * @description A reminder or to-do. The client words it from `kind` and the fields
+         *     that kind uses (see `listNotifications`); the others are null.
+         */
+        Notification: {
+            /**
+             * @description What it's about. Pass it to `dismissNotification`.
+             * @example bill:4829135521:1794729600
+             */
+            key: string;
+            kind: components["schemas"]["NotificationKind"];
+            /**
+             * @description `alert` for an overdue approval or an uncovered bucket,
+             *     `warning` for an approval that isn't overdue, else `info`.
+             * @enum {string}
+             */
+            severity: "info" | "warning" | "alert";
+            /**
+             * Format: date-time
+             * @description When it applies: the newest queued transaction's queue time, the
+             *     bill's time, or the cycle's start. Null for an uncovered bucket.
+             */
+            at: string | null;
+            /** @description How many wait for approval. */
+            count: number | null;
+            /** @description How many of them are overdue. */
+            overdue: number | null;
+            schedule_id: string | null;
+            account_id: string | null;
+            bucket_id: string | null;
+            cycle_id: string | null;
+            /** @description The bill's amount, or what the bucket is missing (TF − CAF). */
+            amount: string | null;
+            currency: string | null;
+        };
+        NotificationList: {
+            items: components["schemas"]["Notification"][];
+        };
+        NotificationDismiss: {
+            key: string;
+        };
+        /** @description Missing or null fields use the default. */
+        NotificationSettings: {
+            /** @description Scheduled transactions waiting for approval. Null means true. */
+            approval_queue?: boolean | null;
+            /** @description Expenses and transfers coming up. Null means true. */
+            upcoming_bills?: boolean | null;
+            /** @description How many days ahead a bill shows. Null means 3. */
+            upcoming_days?: number | null;
+            /** @description Investment and fund balances to update when a cycle starts. Null means true. */
+            investment_balance?: boolean | null;
+            /** @description Priority buckets that aren't covered. Null means true. */
+            bucket_uncovered?: boolean | null;
         };
     };
     responses: {
@@ -4103,6 +4219,54 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listNotifications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The open notifications. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationList"];
+                };
+            };
+            401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    dismissNotification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationDismiss"];
+            };
+        };
+        responses: {
+            /** @description Dismissed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };

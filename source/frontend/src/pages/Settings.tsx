@@ -24,6 +24,7 @@ import { useSession, useUpdatePreferences, type Preferences } from "@/app/sessio
 import { AmountInput } from "@/components/AmountInput";
 import { CycleRuleCard } from "@/components/cycles/CycleRuleCard";
 import { ErrorAlert } from "@/components/ErrorAlert";
+import { NotificationsCard } from "@/components/notifications/NotificationsCard";
 import { PasswordForm } from "@/components/PasswordForm";
 import { QueryState } from "@/components/QueryState";
 import i18n from "@/i18n";
@@ -40,7 +41,7 @@ const MAX_RULES = 20;
 
 /**
  * Settings (spec §9, canvas): preferences, the cycle rule, income rules,
- * password, status.
+ * notifications, password, status.
  */
 export default function Settings() {
   const { t } = useTranslation();
@@ -53,6 +54,7 @@ export default function Settings() {
           <PreferencesCard preferences={user.preferences} />
           <CycleRuleCard preferences={user.preferences} />
           <IncomeRulesCard rules={user.preferences.income_refill_rules ?? []} />
+          <NotificationsCard preferences={user.preferences} />
         </>
       )}
       <PasswordCard />

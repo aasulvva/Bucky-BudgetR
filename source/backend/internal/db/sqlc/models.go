@@ -739,6 +739,12 @@ type Cycle struct {
 	Generated  bool
 }
 
+type NotificationDismissal struct {
+	UserID      string
+	Key         string
+	DismissedAt time.Time
+}
+
 type PasswordLink struct {
 	TokenHash []byte
 	UserID    string

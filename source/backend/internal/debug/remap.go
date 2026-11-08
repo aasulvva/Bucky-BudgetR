@@ -28,24 +28,29 @@ const (
 	kBucketLine
 	kSchedule
 	kOccurrence
+	// kKept is kept as it is: a notification dismissal's key (#57). It names
+	// IDs, so a clone's no longer match and are forgotten when its
+	// notifications are next read.
+	kKept
 )
 
 // idColumns lists, per table, every column that holds an ID and its kind.
 // A clone gives each ID a new one. TestIDColumns checks it against the
 // schema's foreign keys.
 var idColumns = map[string]map[string]kind{
-	"bank_accounts":         {"id": kAccount, "user_id": kUser},
-	"cycles":                {"id": kCycle, "user_id": kUser},
-	"buckets":               {"id": kBucket, "user_id": kUser, "source_account_id": kAccount},
-	"tags":                  {"id": kTag, "user_id": kUser},
-	"transaction_headers":   {"id": kTransaction, "user_id": kUser, "parent_id": kTransaction, "replaces_id": kTransaction, "created_by": kUser},
-	"bank_transactions":     {"id": kBankLine, "transaction_id": kTransaction, "account_id": kAccount, "created_by": kUser},
-	"bucket_transactions":   {"id": kBucketLine, "transaction_id": kTransaction, "bucket_id": kBucket, "cycle_id": kCycle, "created_by": kUser},
-	"transaction_tags":      {"transaction_id": kTransaction, "tag_id": kTag, "user_id": kUser},
-	"refills":               {"bucket_id": kBucket, "cycle_id": kCycle, "user_id": kUser, "ref_id": kTransaction, "ovf_id": kTransaction, "income_id": kTransaction},
-	"schedules":             {"id": kSchedule, "user_id": kUser, "account_id": kAccount, "to_account_id": kAccount},
-	"schedule_bucket_lines": {"schedule_id": kSchedule, "bucket_id": kBucket, "user_id": kUser},
-	"schedule_occurrences":  {"id": kOccurrence, "schedule_id": kSchedule, "user_id": kUser, "transaction_id": kTransaction},
+	"bank_accounts":           {"id": kAccount, "user_id": kUser},
+	"cycles":                  {"id": kCycle, "user_id": kUser},
+	"buckets":                 {"id": kBucket, "user_id": kUser, "source_account_id": kAccount},
+	"tags":                    {"id": kTag, "user_id": kUser},
+	"transaction_headers":     {"id": kTransaction, "user_id": kUser, "parent_id": kTransaction, "replaces_id": kTransaction, "created_by": kUser},
+	"bank_transactions":       {"id": kBankLine, "transaction_id": kTransaction, "account_id": kAccount, "created_by": kUser},
+	"bucket_transactions":     {"id": kBucketLine, "transaction_id": kTransaction, "bucket_id": kBucket, "cycle_id": kCycle, "created_by": kUser},
+	"transaction_tags":        {"transaction_id": kTransaction, "tag_id": kTag, "user_id": kUser},
+	"refills":                 {"bucket_id": kBucket, "cycle_id": kCycle, "user_id": kUser, "ref_id": kTransaction, "ovf_id": kTransaction, "income_id": kTransaction},
+	"schedules":               {"id": kSchedule, "user_id": kUser, "account_id": kAccount, "to_account_id": kAccount},
+	"schedule_bucket_lines":   {"schedule_id": kSchedule, "bucket_id": kBucket, "user_id": kUser},
+	"schedule_occurrences":    {"id": kOccurrence, "schedule_id": kSchedule, "user_id": kUser, "transaction_id": kTransaction},
+	"notification_dismissals": {"user_id": kUser, "key": kKept},
 }
 
 // remap returns data with new IDs for userID: new accounts, cycles, buckets,
@@ -104,6 +109,7 @@ func remap(ctx context.Context, tx pgx.Tx, userID string, data Data) (Data, erro
 				}
 				old := fmt.Sprint(v)
 				switch k {
+				case kKept:
 				case kUser:
 					n[col] = userID
 				case kTag:

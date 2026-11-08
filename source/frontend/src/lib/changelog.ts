@@ -16,6 +16,35 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.16.00",
+    date: "2026-11-08",
+    title: {
+      en: "Notifications",
+      nb: "Varsler",
+      nn: "Varsel",
+    },
+    changes: {
+      en: [
+        "Notifications remind you of what the app can't do for you: scheduled transactions waiting for approval, bills and transfers coming up in the next few days, investment and fund balances to update when a cycle starts, and priority buckets that aren't covered.",
+        "Find them under Notifications above your profile in the side menu, or the bell in the header on mobile. The number on them is how many are open.",
+        "Each one opens where it's done, and goes away by itself once it is. Dismiss one (or mark a balance as right) to hide it until it happens again.",
+        "Choose which kinds show, and how many days ahead bills do, in Settings.",
+      ],
+      nb: [
+        "Varsler minner deg om det appen ikke kan gjøre for deg: planlagte transaksjoner som venter på godkjenning, regninger og overføringer de neste dagene, investerings- og fondssaldoer å oppdatere når en periode starter, og prioriterte bøtter som ikke er dekket.",
+        "Du finner dem under Varsler over profilen din i sidemenyen, eller bjella i toppen på mobil. Tallet på dem er hvor mange som er åpne.",
+        "Hvert varsel åpner der det gjøres, og forsvinner av seg selv når det er gjort. Avvis et varsel (eller si at saldoen stemmer) for å skjule det til det skjer igjen.",
+        "Velg hvilke typer som vises, og hvor mange dager fram regninger vises, i Innstillinger.",
+      ],
+      nn: [
+        "Varsel minner deg om det appen ikkje kan gjere for deg: planlagde transaksjonar som ventar på godkjenning, rekningar og overføringar dei neste dagane, investerings- og fondssaldoar å oppdatere når ein periode startar, og prioriterte bøtter som ikkje er dekte.",
+        "Du finn dei under Varsel over profilen din i sidemenyen, eller bjølla i toppen på mobil. Talet på dei er kor mange som er opne.",
+        "Kvart varsel opnar der det blir gjort, og forsvinn av seg sjølv når det er gjort. Avvis eit varsel (eller sei at saldoen stemmer) for å skjule det til det skjer att.",
+        "Vel kva typar som blir viste, og kor mange dagar fram rekningar blir viste, i Innstillingar.",
+      ],
+    },
+  },
+  {
     version: "v1.15.01",
     date: "2026-11-08",
     title: {

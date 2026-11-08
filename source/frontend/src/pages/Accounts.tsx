@@ -22,7 +22,7 @@ import { IconDots, IconSettings } from "@tabler/icons-react";
 import { useMutation } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { Trans, useTranslation } from "react-i18next";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 
 import {
   accountTypeLabel,
@@ -53,6 +53,7 @@ type Panel = { kind: "adjust" | "interest"; accountId: string } | null;
 /**
  * Accounts (spec §9, canvas "Accounts"): the balance of each account, its
  * buckets at a glance, and the balance adjustment and interest actions.
+ * `?adjust=<accountId>` opens that account's balance adjustment.
  */
 export default function Accounts() {
   const { t } = useTranslation();
@@ -60,14 +61,27 @@ export default function Accounts() {
   const isDesktop = useMediaQuery(`(min-width: ${theme.breakpoints.sm})`, true);
   const accounts = useAccounts();
   const buckets = useBuckets();
-  const [panel, setPanel] = useState<Panel>(null);
+  const [chosen, setChosen] = useState<Panel>(null);
+  // A notification opens an account's Adjust balance with ?adjust=<id> (#57).
+  const [params, setParams] = useSearchParams();
+  const adjustId = params.get("adjust");
+  const panel: Panel = chosen ?? (adjustId ? { kind: "adjust", accountId: adjustId } : null);
 
   return (
     <QueryState query={accounts}>
       {(list) => {
         const selected = panel ? list.find((a) => a.id === panel.accountId) : undefined;
         const close = () => {
-          setPanel(null);
+          setChosen(null);
+          if (adjustId !== null) {
+            setParams(
+              (p) => {
+                p.delete("adjust");
+                return p;
+              },
+              { replace: true },
+            );
+          }
         };
         const panelContent =
           panel && selected ? (
@@ -75,10 +89,10 @@ export default function Accounts() {
           ) : null;
         const actions = (a: Account) => ({
           onAdjust: () => {
-            setPanel({ kind: "adjust", accountId: a.id });
+            setChosen({ kind: "adjust", accountId: a.id });
           },
           onInterest: () => {
-            setPanel({ kind: "interest", accountId: a.id });
+            setChosen({ kind: "interest", accountId: a.id });
           },
         });
 
