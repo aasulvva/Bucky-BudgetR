@@ -290,7 +290,7 @@ func fromAPISchedule(b api.ScheduleInput) (schedules.Settings, error) {
 	}
 	t := b.Transaction
 	in.Transaction = transactions.New{
-		Type: sqlc.TransactionType(t.Type), Counterparty: deref(t.Counterparty), AccountID: t.AccountId,
+		Type: sqlc.TransactionType(t.Type), Counterparty: deref(t.Counterparty), Description: deref(t.Description), AccountID: t.AccountId,
 		ToAccountID: deref(t.ToAccountId), TriggersRefill: t.TriggersRefill, Tags: deref(t.Tags),
 	}
 	if in.Transaction.Amount, err = parseAmount(t.Amount); err != nil {
@@ -312,7 +312,7 @@ func toAPISchedule(s schedules.Schedule) api.Schedule {
 	n := s.Transaction
 	t := api.ScheduleTransaction{
 		Type: api.ScheduleTransactionType(n.Type), AccountId: n.AccountID, Amount: n.Amount.StringFixed(money.Places),
-		Counterparty: &n.Counterparty, Tags: &n.Tags, TriggersRefill: n.TriggersRefill,
+		Counterparty: &n.Counterparty, Description: &n.Description, Tags: &n.Tags, TriggersRefill: n.TriggersRefill,
 	}
 	if n.ToAccountID != "" {
 		t.ToAccountId = &n.ToAccountID

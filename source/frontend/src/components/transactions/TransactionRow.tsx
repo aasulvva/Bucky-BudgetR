@@ -5,6 +5,7 @@ import { Link } from "react-router";
 
 import type { Transaction } from "@/api/transactions";
 import { formatMoney } from "@/lib/money";
+import { firstLine } from "@/lib/transactionForm";
 import { rowAmount, type TransactionFilter } from "@/lib/transactionList";
 
 import { signedMoney, transactionSubLine, transactionTitle, type Lookups } from "./lookups";
@@ -89,6 +90,11 @@ export function TransactionRow({
         <Text size="sm" c="dimmed" truncate>
           {transactionSubLine(tx, names)}
         </Text>
+        {tx.description && (
+          <Text size="sm" c="dimmed" fs="italic" truncate>
+            {firstLine(tx.description)}
+          </Text>
+        )}
       </Box>
       <Box ta="right">
         <Text

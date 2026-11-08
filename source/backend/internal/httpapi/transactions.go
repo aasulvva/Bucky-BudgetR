@@ -86,7 +86,7 @@ func (s *server) CorrectTransaction(ctx context.Context, req api.CorrectTransact
 	}
 	b := req.Body
 	c := transactions.Changes{
-		AccountID: b.AccountId, ToAccountID: b.ToAccountId, Counterparty: b.Counterparty, Tags: b.Tags,
+		AccountID: b.AccountId, ToAccountID: b.ToAccountId, Counterparty: b.Counterparty, Description: b.Description, Tags: b.Tags,
 		TriggersRefill: b.TriggersRefill,
 	}
 	if b.Amount != nil {
@@ -205,7 +205,7 @@ func (s *server) ListCounterparties(ctx context.Context, req api.ListCounterpart
 // fromAPITransactionCreate converts a new transaction from the API.
 func fromAPITransactionCreate(b api.TransactionCreate) (transactions.New, error) {
 	n := transactions.New{
-		Type: sqlc.TransactionType(b.Type), Counterparty: deref(b.Counterparty),
+		Type: sqlc.TransactionType(b.Type), Counterparty: deref(b.Counterparty), Description: deref(b.Description),
 		AccountID: b.AccountId, ToAccountID: deref(b.ToAccountId), TriggersRefill: b.TriggersRefill,
 	}
 	if b.At != nil {
@@ -236,6 +236,7 @@ func toAPITransaction(t transactions.Transaction) api.Transaction {
 		Type:           api.TransactionType(t.Type),
 		At:             t.At.UTC(),
 		Counterparty:   t.Counterparty,
+		Description:    t.Description,
 		Tags:           t.Tags,
 		TriggersRefill: t.TriggersRefill,
 		CreatedAt:      t.CreatedAt.UTC(),

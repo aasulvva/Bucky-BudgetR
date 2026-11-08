@@ -430,7 +430,8 @@ func (s *Service) params(ctx context.Context, tx pgx.Tx, userID string, in *Sett
 	p := sqlc.CreateScheduleParams{
 		UserID: userID, Name: in.Name, TransactionType: n.Type, AccountID: n.AccountID,
 		ToAccountID: pgtype.Text{String: n.ToAccountID, Valid: n.ToAccountID != ""}, Amount: n.Amount,
-		Counterparty: n.Counterparty, Tags: n.Tags, Mode: in.Mode, DueDays: int32(in.DueDays),
+		Counterparty: n.Counterparty, Description: ledger.CleanDescription(n.Description), Tags: n.Tags,
+		Mode: in.Mode, DueDays: int32(in.DueDays),
 		StartDate: in.Start, TimeOfDay: pgtype.Time{Microseconds: int64(in.Minute) * 60_000_000, Valid: true},
 		TimeZone: in.TimeZone, Frequency: in.Frequency, Every: int32(in.Every), //nolint:gosec // checkRule keeps it within MaxEvery
 		Paused: in.Paused,
@@ -551,7 +552,7 @@ func fromRow(r sqlc.Schedule, lines []sqlc.ScheduleBucketLine) Schedule {
 			Frequency: r.Frequency, Every: int(r.Every), EndCount: int(r.EndCount.Int32), Paused: r.Paused,
 			Transaction: transactions.New{
 				Type: r.TransactionType, AccountID: r.AccountID, ToAccountID: r.ToAccountID.String,
-				Amount: r.Amount, Counterparty: r.Counterparty, Tags: r.Tags,
+				Amount: r.Amount, Counterparty: r.Counterparty, Description: r.Description, Tags: r.Tags,
 				Buckets: []transactions.BucketAmount{},
 			},
 		},

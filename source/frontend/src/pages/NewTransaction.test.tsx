@@ -210,6 +210,45 @@ describe("Create transaction", () => {
     expect(apiMock.calls("POST /api/v1/transactions")).toHaveLength(2);
   });
 
+  it("sends a description, trimmed, and clears it for the next one (#130)", async () => {
+    localStorage.setItem("bucky.lastAccount", "1234");
+    renderRoute("/transactions/new");
+    await userEvent.type(await screen.findByRole("textbox", { name: "Amount" }), "4000");
+    const description = screen.getByRole("textbox", { name: "Description" });
+    await userEvent.type(description, "  New winter tyres{enter}fitted too ");
+    await userEvent.click(screen.getByRole("button", { name: "Save and add another" }));
+    await waitFor(() => {
+      expect(sent()?.description).toBe("New winter tyres\nfitted too");
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("textbox", { name: "Description" })).toHaveValue("");
+    });
+
+    // Without one, none is sent.
+    await userEvent.type(amount(), "50");
+    await userEvent.click(screen.getByRole("button", { name: "Save and add another" }));
+    await waitFor(() => {
+      expect(apiMock.calls("POST /api/v1/transactions")).toHaveLength(2);
+    });
+    expect(sent()).not.toHaveProperty("description");
+  });
+
+  it("hides the description behind Add description on mobile (#130)", async () => {
+    viewport.width = 390;
+    localStorage.setItem("bucky.lastAccount", "1234");
+    renderRoute("/transactions/new");
+    await userEvent.type(await screen.findByRole("textbox", { name: "Amount" }), "80");
+    expect(screen.queryByRole("textbox", { name: "Description" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Add description" }));
+    const description = screen.getByRole("textbox", { name: "Description" });
+    expect(description).toHaveFocus();
+    await userEvent.type(description, "Split dinner with Kari");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(sent()?.description).toBe("Split dinner with Kari");
+    });
+  });
+
   it("needs an active cycle for bucket lines", async () => {
     localStorage.setItem("bucky.lastAccount", "1234");
     apiMock.on("GET /api/v1/cycles/active", { body: { active: null, next: null } });

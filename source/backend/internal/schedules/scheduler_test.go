@@ -248,13 +248,18 @@ func TestRunAuto(t *testing.T) {
 	s := e.daily("2026-10-10")
 	s.Transaction = transactions.New{
 		Type: sqlc.TransactionTypeINC, AccountID: e.account, Amount: dec("1000"), Counterparty: "Salary", Tags: []string{"pay"},
-		Buckets: []transactions.BucketAmount{{BucketID: onIncome, Amount: dec("50")}}, TriggersRefill: &yes,
+		Description: " Monthly pay\r\nbefore tax \n",
+		Buckets:     []transactions.BucketAmount{{BucketID: onIncome, Amount: dec("50")}}, TriggersRefill: &yes,
 	}
 	s.EndCount = 3
 	// Today's 12:00 is now, so it's the first.
 	sch := e.create(t, s)
 	if sch.NextIndex != 0 {
 		t.Fatalf("next %d", sch.NextIndex)
+	}
+	// The description is stored as the ledger will store it (#130).
+	if sch.Transaction.Description != "Monthly pay\nbefore tax" {
+		t.Errorf("schedule description %q", sch.Transaction.Description)
 	}
 	e.run(t, "2026-10-10T12:00:00Z")
 	e.run(t, "2026-10-10T12:00:30Z") // again: nothing new
@@ -269,7 +274,7 @@ func TestRunAuto(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !tr.At.Equal(at("2026-10-10T12:00:00Z")) || tr.Counterparty != "Salary" || len(tr.Tags) != 1 || !tr.TriggersRefill ||
+	if !tr.At.Equal(at("2026-10-10T12:00:00Z")) || tr.Counterparty != "Salary" || tr.Description != "Monthly pay\nbefore tax" || len(tr.Tags) != 1 || !tr.TriggersRefill ||
 		len(tr.BucketLines) != 1 || tr.BucketLines[0].CycleID != e.cycle.ID || tr.CreatedBy != e.user {
 		t.Errorf("transaction %+v", tr)
 	}

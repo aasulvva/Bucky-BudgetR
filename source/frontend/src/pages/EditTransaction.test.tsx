@@ -65,6 +65,19 @@ describe("Edit transaction", () => {
     });
   });
 
+  it("changes only the description, shown at once on mobile when there is one (#130)", async () => {
+    viewport.width = 390;
+    apiMock.on(`GET ${path}`, { body: { ...rema, description: "Weekly shop", history: [] } });
+    renderRoute(`/transactions/${rema.id}/edit`);
+    const description = await screen.findByRole("textbox", { name: "Description" });
+    expect(description).toHaveValue("Weekly shop");
+    expect(screen.queryByRole("button", { name: "Add description" })).not.toBeInTheDocument();
+    await userEvent.type(description, "{enter}and wine");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("Correction saved.")).toBeInTheDocument();
+    expect(sent()).toEqual({ description: "Weekly shop\nand wine" });
+  });
+
   it("lets a bucket line that took the whole amount follow it", async () => {
     apiMock.on(`GET ${path}`, {
       body: {
@@ -138,10 +151,12 @@ describe("Edit transaction", () => {
     expect(screen.getByRole("combobox", { name: "Account" })).toBeDisabled();
     expect(screen.queryByRole("region", { name: "Buckets" })).not.toBeInTheDocument();
     await userEvent.type(screen.getByRole("textbox", { name: "Counterparty" }), "Fund gains");
+    await userEvent.type(screen.getByRole("textbox", { name: "Description" }), "Counted in March");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     await screen.findByText("Correction saved.");
     expect(apiMock.calls(`POST /api/v1/transactions/${bla.id}/correction`).at(-1)?.body).toEqual({
       counterparty: "Fund gains",
+      description: "Counted in March",
     });
   });
 

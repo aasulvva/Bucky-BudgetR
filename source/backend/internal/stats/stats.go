@@ -79,9 +79,10 @@ type Query struct {
 	WeekStart time.Weekday
 	GroupBy   GroupBy
 
-	AccountIDs   []string
-	BucketIDs    []string
-	Tags         []string
+	AccountIDs []string
+	BucketIDs  []string
+	Tags       []string
+	// Counterparty matches part of the counterparty or the description.
 	Counterparty string
 	// Transfers counts transfers: money in as income, money out as spending.
 	Transfers bool

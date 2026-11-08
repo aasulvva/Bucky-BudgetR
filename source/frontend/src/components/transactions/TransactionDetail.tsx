@@ -96,6 +96,10 @@ function Detail({
         )}
       </Group>
 
+      {tx.description && (
+        <Text style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{tx.description}</Text>
+      )}
+
       <Text
         fz={26}
         fw={600}

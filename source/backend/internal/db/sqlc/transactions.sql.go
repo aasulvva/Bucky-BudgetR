@@ -356,7 +356,7 @@ func (q *Queries) ListTagsFor(ctx context.Context, ids []string) ([]ListTagsForR
 }
 
 const listTransactionFamilies = `-- name: ListTransactionFamilies :many
-SELECT id, user_id, parent_id, correction_type, transaction_type, transaction_at, counterparty, created_at, created_by, replaces_id, triggers_refill FROM transaction_headers
+SELECT id, user_id, parent_id, correction_type, transaction_type, transaction_at, counterparty, created_at, created_by, replaces_id, triggers_refill, description FROM transaction_headers
 WHERE user_id = $1
   AND (id = ANY($2::text[]) OR parent_id = ANY($2::text[]))
 ORDER BY correction_type <> 'none', created_at, id
@@ -390,6 +390,7 @@ func (q *Queries) ListTransactionFamilies(ctx context.Context, arg ListTransacti
 			&i.CreatedBy,
 			&i.ReplacesID,
 			&i.TriggersRefill,
+			&i.Description,
 		); err != nil {
 			return nil, err
 		}
@@ -402,9 +403,9 @@ func (q *Queries) ListTransactionFamilies(ctx context.Context, arg ListTransacti
 }
 
 const listTransactions = `-- name: ListTransactions :many
-SELECT h.id, h.user_id, h.parent_id, h.correction_type, h.transaction_type, h.transaction_at, h.counterparty, h.created_at, h.created_by, h.replaces_id, h.triggers_refill FROM transaction_headers h
+SELECT h.id, h.user_id, h.parent_id, h.correction_type, h.transaction_type, h.transaction_at, h.counterparty, h.created_at, h.created_by, h.replaces_id, h.triggers_refill, h.description FROM transaction_headers h
 JOIN LATERAL (
-    SELECT c.id, c.counterparty FROM transaction_headers c
+    SELECT c.id, c.counterparty, c.description FROM transaction_headers c
     WHERE c.id = h.id OR c.parent_id = h.id
     ORDER BY c.created_at DESC, c.id DESC
     LIMIT 1
@@ -422,8 +423,10 @@ WHERE h.user_id = $1 AND h.correction_type = 'none'
   AND ($7::text IS NULL OR EXISTS (
       SELECT 1 FROM transaction_tags tt JOIN tags t ON t.id = tt.tag_id
       WHERE tt.transaction_id = latest.id AND lower(t.name) = lower($7::text)))
-  -- counterparty is a LIKE pattern, escaped by the caller.
-  AND ($8::text IS NULL OR latest.counterparty ILIKE $8::text)
+  -- counterparty is a LIKE pattern, escaped by the caller, matching the
+  -- counterparty or the description (#130).
+  AND ($8::text IS NULL OR latest.counterparty ILIKE $8::text
+           OR latest.description ILIKE $8::text)
   -- reversed: only reversed ones (moved originals too), or only the others.
   AND ($9::boolean IS NULL OR EXISTS (
       SELECT 1 FROM transaction_headers r WHERE r.parent_id = h.id AND r.correction_type = 'reversal'
@@ -452,7 +455,8 @@ type ListTransactionsParams struct {
 // A page of the user's original transactions (not corrections), newest first.
 // A null filter matches everything. The account and bucket filters also match
 // lines added by corrections; the tag and counterparty filters use the
-// newest header of the family, which holds the effective values.
+// newest header of the family, which holds the effective values. The
+// counterparty filter matches the description too (#130).
 // before_at/before_id is the keyset cursor: the last row of the previous page.
 func (q *Queries) ListTransactions(ctx context.Context, arg ListTransactionsParams) ([]TransactionHeader, error) {
 	rows, err := q.db.Query(ctx, listTransactions,
@@ -488,6 +492,7 @@ func (q *Queries) ListTransactions(ctx context.Context, arg ListTransactionsPara
 			&i.CreatedBy,
 			&i.ReplacesID,
 			&i.TriggersRefill,
+			&i.Description,
 		); err != nil {
 			return nil, err
 		}

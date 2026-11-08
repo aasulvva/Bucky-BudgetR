@@ -3,8 +3,10 @@ import { account, bucket, cycle, transaction } from "@/test/fixtures";
 
 import {
   bucketTotals,
+  cleanDescription,
   correctionBody,
   editState,
+  firstLine,
   followAmount,
   fromLastTime,
   initialAccount,
@@ -205,6 +207,39 @@ describe("editing", () => {
     expect(correctionBody(inc, { ...editState(inc), triggersRefill: true }, false)).toEqual({
       triggers_refill: true,
     });
+  });
+
+  it("sends a changed description, for a balance adjustment too (#130)", () => {
+    const noted = transaction({ ...exp, description: "Weekly shop" });
+    const start = editState(noted);
+    expect(start.description).toBe("Weekly shop");
+    expect(correctionBody(noted, { ...start, description: " Weekly shop\r\n" }, false)).toBeNull();
+    expect(
+      correctionBody(noted, { ...start, description: "Weekly shop\nand wine" }, false),
+    ).toEqual({
+      description: "Weekly shop\nand wine",
+    });
+    expect(correctionBody(noted, { ...start, description: "  " }, false)).toEqual({
+      description: "",
+    });
+    const opb = transaction({
+      id: "t5",
+      type: "OPB",
+      bank_lines: [{ account_id: main.id, amount: "5000.00" }],
+    });
+    expect(
+      correctionBody(opb, { ...editState(opb), description: "From the old bank" }, false),
+    ).toEqual({
+      description: "From the old bank",
+    });
+  });
+});
+
+describe("descriptions", () => {
+  it("cleans them as the server does, and gives the first line", () => {
+    expect(cleanDescription("  a\r\nb \n")).toBe("a\nb");
+    expect(firstLine("New tyres\nfitted")).toBe("New tyres");
+    expect(firstLine("")).toBe("");
   });
 });
 

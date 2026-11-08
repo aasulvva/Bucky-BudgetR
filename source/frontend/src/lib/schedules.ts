@@ -134,6 +134,7 @@ export function valuesFromSchedule(
     accountId: t.account_id,
     toAccountId: t.to_account_id ?? null,
     counterparty: t.counterparty ?? "",
+    description: t.description ?? "",
     tags: t.tags ?? [],
     lines: (t.bucket_lines ?? []).map((l): SplitLine => newLine(l.bucket_id, l.amount)),
     triggersRefill: t.triggers_refill ?? null,

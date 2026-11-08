@@ -56,8 +56,10 @@ type New struct {
 	// At defaults to now. It can't be in the future.
 	At           time.Time
 	Counterparty string
-	Tags         []string
-	AccountID    string
+	// Description is an optional note of what it was (#130).
+	Description string
+	Tags        []string
+	AccountID   string
 	// ToAccountID is the receiving account of a transfer.
 	ToAccountID string
 	Amount      decimal.Decimal
@@ -83,8 +85,10 @@ type Transaction struct {
 	Type         sqlc.TransactionType
 	At           time.Time
 	Counterparty string
-	Tags         []string
-	CreatedAt    time.Time
+	// Description is the effective description, from the newest correction.
+	Description string
+	Tags        []string
+	CreatedAt   time.Time
 	// CreatedBy is the user who entered it, or "" for the system.
 	CreatedBy string
 	// Corrected is set when it has adjustments, Reversed when it has been
@@ -163,7 +167,8 @@ type Filter struct {
 	From, To time.Time
 	// Tag matches a tag name, ignoring case.
 	Tag string
-	// Counterparty matches part of the counterparty, ignoring case.
+	// Counterparty matches part of the counterparty or the description,
+	// ignoring case.
 	Counterparty string
 	// Reversed, if set, lists only reversed transactions (moved originals
 	// too) when true, or only the others when false.
@@ -246,7 +251,7 @@ func Check(ctx context.Context, db sqlc.DBTX, userID string, n New) error {
 	}
 	if err := ledger.Validate(ledger.Entry{
 		UserID: userID, CreatedBy: userID, Type: n.Type, At: at,
-		Counterparty: n.Counterparty, Tags: n.Tags, BankLines: bank, BucketLines: buckets,
+		Counterparty: n.Counterparty, Description: n.Description, Tags: n.Tags, BankLines: bank, BucketLines: buckets,
 	}); err != nil {
 		return err
 	}
@@ -291,7 +296,7 @@ func (s *Service) record(ctx context.Context, tx pgx.Tx, userID string, n New, r
 	}
 	t, err := s.ledger.Record(ctx, tx, ledger.Entry{
 		UserID: userID, CreatedBy: userID, Type: n.Type, At: n.At, ReplacesID: replaces, TriggersRefill: triggers,
-		Counterparty: n.Counterparty, Tags: n.Tags, BankLines: bank, BucketLines: buckets,
+		Counterparty: n.Counterparty, Description: n.Description, Tags: n.Tags, BankLines: bank, BucketLines: buckets,
 	})
 	if err != nil {
 		return nil, err
@@ -714,13 +719,14 @@ func sumLines(fam []sqlc.TransactionHeader, bank []sqlc.BankTransaction, buckets
 
 // merge builds a Transaction from a family: the original header first, then
 // its corrections, with all their lines. tags are the newest header's, which
-// like its counterparty are the effective ones: every correction carries them.
+// like its counterparty and description are the effective ones: every
+// correction carries them.
 func merge(fam []sqlc.TransactionHeader, bank []sqlc.BankTransaction, buckets []sqlc.BucketTransaction, tags []string, history bool) Transaction {
 	orig := fam[0]
 	t := Transaction{
 		ID: orig.ID, Type: orig.TransactionType, At: orig.TransactionAt, Counterparty: fam[len(fam)-1].Counterparty,
-		TriggersRefill: fam[len(fam)-1].TriggersRefill,
-		Tags:           tags, CreatedAt: orig.CreatedAt, CreatedBy: orig.CreatedBy.String, Replaces: orig.ReplacesID.String,
+		Description: fam[len(fam)-1].Description, TriggersRefill: fam[len(fam)-1].TriggersRefill,
+		Tags: tags, CreatedAt: orig.CreatedAt, CreatedBy: orig.CreatedBy.String, Replaces: orig.ReplacesID.String,
 	}
 	if t.Tags == nil {
 		t.Tags = []string{}

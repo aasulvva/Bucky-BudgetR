@@ -110,12 +110,12 @@ const createSchedule = `-- name: CreateSchedule :one
 INSERT INTO schedules (
     id, user_id, name, transaction_type, account_id, to_account_id, amount, counterparty, tags,
     triggers_refill, mode, due_days, start_date, time_of_day, time_zone, frequency, every,
-    end_count, end_date, paused, next_index, next_at
+    end_count, end_date, paused, next_index, next_at, description
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
 )
 ON CONFLICT (id) DO NOTHING
-RETURNING id, user_id, name, transaction_type, account_id, to_account_id, amount, counterparty, tags, triggers_refill, mode, due_days, start_date, time_of_day, time_zone, frequency, every, end_count, end_date, paused, next_index, next_at, created_at, updated_at
+RETURNING id, user_id, name, transaction_type, account_id, to_account_id, amount, counterparty, tags, triggers_refill, mode, due_days, start_date, time_of_day, time_zone, frequency, every, end_count, end_date, paused, next_index, next_at, created_at, updated_at, description
 `
 
 type CreateScheduleParams struct {
@@ -141,6 +141,7 @@ type CreateScheduleParams struct {
 	Paused          bool
 	NextIndex       int32
 	NextAt          pgtype.Timestamptz
+	Description     string
 }
 
 // Use with ids.Insert: a taken ID returns no row.
@@ -168,6 +169,7 @@ func (q *Queries) CreateSchedule(ctx context.Context, arg CreateScheduleParams) 
 		arg.Paused,
 		arg.NextIndex,
 		arg.NextAt,
+		arg.Description,
 	)
 	var i Schedule
 	err := row.Scan(
@@ -195,6 +197,7 @@ func (q *Queries) CreateSchedule(ctx context.Context, arg CreateScheduleParams) 
 		&i.NextAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Description,
 	)
 	return i, err
 }
@@ -232,7 +235,7 @@ func (q *Queries) DeleteScheduleBucketLines(ctx context.Context, arg DeleteSched
 }
 
 const dueSchedulesForUpdate = `-- name: DueSchedulesForUpdate :many
-SELECT id, user_id, name, transaction_type, account_id, to_account_id, amount, counterparty, tags, triggers_refill, mode, due_days, start_date, time_of_day, time_zone, frequency, every, end_count, end_date, paused, next_index, next_at, created_at, updated_at FROM schedules
+SELECT id, user_id, name, transaction_type, account_id, to_account_id, amount, counterparty, tags, triggers_refill, mode, due_days, start_date, time_of_day, time_zone, frequency, every, end_count, end_date, paused, next_index, next_at, created_at, updated_at, description FROM schedules
 WHERE user_id = $1 AND NOT paused AND next_at IS NOT NULL
   AND next_at - make_interval(days => CASE WHEN mode = 'approve' THEN due_days ELSE 0 END) <= $2::timestamptz
 ORDER BY next_at, id
@@ -280,6 +283,7 @@ func (q *Queries) DueSchedulesForUpdate(ctx context.Context, arg DueSchedulesFor
 			&i.NextAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Description,
 		); err != nil {
 			return nil, err
 		}
@@ -350,7 +354,7 @@ func (q *Queries) GetOccurrenceForUpdate(ctx context.Context, arg GetOccurrenceF
 }
 
 const getSchedule = `-- name: GetSchedule :one
-SELECT id, user_id, name, transaction_type, account_id, to_account_id, amount, counterparty, tags, triggers_refill, mode, due_days, start_date, time_of_day, time_zone, frequency, every, end_count, end_date, paused, next_index, next_at, created_at, updated_at FROM schedules WHERE id = $1 AND user_id = $2
+SELECT id, user_id, name, transaction_type, account_id, to_account_id, amount, counterparty, tags, triggers_refill, mode, due_days, start_date, time_of_day, time_zone, frequency, every, end_count, end_date, paused, next_index, next_at, created_at, updated_at, description FROM schedules WHERE id = $1 AND user_id = $2
 `
 
 type GetScheduleParams struct {
@@ -386,12 +390,13 @@ func (q *Queries) GetSchedule(ctx context.Context, arg GetScheduleParams) (Sched
 		&i.NextAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Description,
 	)
 	return i, err
 }
 
 const getScheduleForUpdate = `-- name: GetScheduleForUpdate :one
-SELECT id, user_id, name, transaction_type, account_id, to_account_id, amount, counterparty, tags, triggers_refill, mode, due_days, start_date, time_of_day, time_zone, frequency, every, end_count, end_date, paused, next_index, next_at, created_at, updated_at FROM schedules WHERE id = $1 AND user_id = $2 FOR UPDATE
+SELECT id, user_id, name, transaction_type, account_id, to_account_id, amount, counterparty, tags, triggers_refill, mode, due_days, start_date, time_of_day, time_zone, frequency, every, end_count, end_date, paused, next_index, next_at, created_at, updated_at, description FROM schedules WHERE id = $1 AND user_id = $2 FOR UPDATE
 `
 
 type GetScheduleForUpdateParams struct {
@@ -427,6 +432,7 @@ func (q *Queries) GetScheduleForUpdate(ctx context.Context, arg GetScheduleForUp
 		&i.NextAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Description,
 	)
 	return i, err
 }
@@ -525,7 +531,7 @@ func (q *Queries) ListScheduleBucketLines(ctx context.Context, ids []string) ([]
 }
 
 const listSchedules = `-- name: ListSchedules :many
-SELECT id, user_id, name, transaction_type, account_id, to_account_id, amount, counterparty, tags, triggers_refill, mode, due_days, start_date, time_of_day, time_zone, frequency, every, end_count, end_date, paused, next_index, next_at, created_at, updated_at FROM schedules WHERE user_id = $1
+SELECT id, user_id, name, transaction_type, account_id, to_account_id, amount, counterparty, tags, triggers_refill, mode, due_days, start_date, time_of_day, time_zone, frequency, every, end_count, end_date, paused, next_index, next_at, created_at, updated_at, description FROM schedules WHERE user_id = $1
 ORDER BY next_at NULLS LAST, created_at DESC, id
 `
 
@@ -564,6 +570,7 @@ func (q *Queries) ListSchedules(ctx context.Context, userID string) ([]Schedule,
 			&i.NextAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Description,
 		); err != nil {
 			return nil, err
 		}
@@ -638,9 +645,10 @@ UPDATE schedules SET
     name = $3, transaction_type = $4, account_id = $5, to_account_id = $6, amount = $7,
     counterparty = $8, tags = $9, triggers_refill = $10, mode = $11, due_days = $12,
     start_date = $13, time_of_day = $14, time_zone = $15, frequency = $16, every = $17,
-    end_count = $18, end_date = $19, paused = $20, next_index = $21, next_at = $22, updated_at = now()
+    end_count = $18, end_date = $19, paused = $20, next_index = $21, next_at = $22, description = $23,
+    updated_at = now()
 WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, name, transaction_type, account_id, to_account_id, amount, counterparty, tags, triggers_refill, mode, due_days, start_date, time_of_day, time_zone, frequency, every, end_count, end_date, paused, next_index, next_at, created_at, updated_at
+RETURNING id, user_id, name, transaction_type, account_id, to_account_id, amount, counterparty, tags, triggers_refill, mode, due_days, start_date, time_of_day, time_zone, frequency, every, end_count, end_date, paused, next_index, next_at, created_at, updated_at, description
 `
 
 type UpdateScheduleParams struct {
@@ -666,6 +674,7 @@ type UpdateScheduleParams struct {
 	Paused          bool
 	NextIndex       int32
 	NextAt          pgtype.Timestamptz
+	Description     string
 }
 
 func (q *Queries) UpdateSchedule(ctx context.Context, arg UpdateScheduleParams) (Schedule, error) {
@@ -692,6 +701,7 @@ func (q *Queries) UpdateSchedule(ctx context.Context, arg UpdateScheduleParams) 
 		arg.Paused,
 		arg.NextIndex,
 		arg.NextAt,
+		arg.Description,
 	)
 	var i Schedule
 	err := row.Scan(
@@ -719,6 +729,7 @@ func (q *Queries) UpdateSchedule(ctx context.Context, arg UpdateScheduleParams) 
 		&i.NextAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Description,
 	)
 	return i, err
 }
