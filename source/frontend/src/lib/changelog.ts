@@ -16,6 +16,32 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.13.00",
+    date: "2026-11-08",
+    title: {
+      en: "Graphs on the Dashboard",
+      nb: "Grafer på oversikten",
+      nn: "Grafar på oversikta",
+    },
+    changes: {
+      en: [
+        "The Dashboard has a new Graph widget that shows one of your saved graphs. Add it with Add widget, or from Stats & reports: open a saved graph's menu and choose Add to dashboard, for the desktop layout, the mobile one or both.",
+        "The widget follows the saved graph, so changing the graph on Stats & reports changes the widget too. Click the graph to open it there.",
+        "Deleting a saved graph that's on the Dashboard warns you first, and its widgets then let you pick another one.",
+      ],
+      nb: [
+        "Oversikten har en ny Graf-modul som viser en av de lagrede grafene dine. Legg den til med Legg til modul, eller fra Statistikk og rapporter: åpne menyen til en lagret graf og velg Legg til på oversikten, for skrivebordsvisningen, mobilvisningen eller begge.",
+        "Modulen følger den lagrede grafen, så endrer du grafen under Statistikk og rapporter, endres modulen også. Klikk på grafen for å åpne den der.",
+        "Sletter du en lagret graf som er på oversikten, får du en advarsel først, og modulene lar deg så velge en annen.",
+      ],
+      nn: [
+        "Oversikta har ein ny Graf-modul som viser ein av dei lagra grafane dine. Legg han til med Legg til modul, eller frå Statistikk og rapportar: opne menyen til ein lagra graf og vel Legg til på oversikta, for skrivebordsvisinga, mobilvisinga eller begge.",
+        "Modulen følgjer den lagra grafen, så endrar du grafen under Statistikk og rapportar, vert modulen òg endra. Klikk på grafen for å opne han der.",
+        "Slettar du ein lagra graf som er på oversikta, får du ei åtvaring først, og modulane let deg så velje ein annan.",
+      ],
+    },
+  },
+  {
     version: "v1.12.00",
     date: "2026-11-08",
     title: {

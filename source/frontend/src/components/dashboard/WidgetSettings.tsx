@@ -1,9 +1,21 @@
-import { Button, Checkbox, Group, NumberInput, Select, Stack, TextInput } from "@mantine/core";
+import {
+  Anchor,
+  Button,
+  Checkbox,
+  Group,
+  NumberInput,
+  Select,
+  Stack,
+  Text,
+  TextInput,
+} from "@mantine/core";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
-import { useTranslation } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
+import { Link } from "react-router";
 
 import { useAccounts, useBuckets, type Account, type Bucket } from "@/api/accounts";
+import { useSession } from "@/app/session";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
 import {
@@ -76,7 +88,8 @@ export function WidgetSettingsForm({
   const [draft, setDraft] = useState(widget);
   const [title, setTitle] = useState(widget.title ?? "");
   // What the title is when the field is left empty.
-  const automatic = titleFor(t, { ...draft, title: null }, accounts, buckets);
+  const saved = useSession().data?.preferences.saved_graphs ?? [];
+  const automatic = titleFor(t, { ...draft, title: null }, accounts, buckets, saved);
   const save = useMutation({
     mutationFn: async (w: WidgetInstance) => {
       await onSave(w);
@@ -159,6 +172,33 @@ export function WidgetSettingsForm({
           accounts={accounts}
         />
       )}
+      {draft.type === "graph" &&
+        (saved.length === 0 ? (
+          <Text size="sm" c="dimmed">
+            <Trans
+              i18nKey="dashboard.graph.noneSaved"
+              components={{ stats: <Anchor component={Link} to="/stats" size="sm" /> }}
+            />
+          </Text>
+        ) : (
+          <Select
+            // Inside a full-screen dialog on phones: render the list in place (#122's touch fix).
+            comboboxProps={{ withinPortal: false }}
+            label={t("dashboard.graph.savedGraph")}
+            placeholder={t("dashboard.graph.pick")}
+            data={saved.map((g) => ({ value: g.id, label: g.name }))}
+            value={
+              saved.some((g) => g.id === draft.settings.savedGraphId)
+                ? draft.settings.savedGraphId
+                : null
+            }
+            allowDeselect={false}
+            searchable
+            onChange={(id) => {
+              if (id) setDraft({ ...draft, settings: { savedGraphId: id } });
+            }}
+          />
+        ))}
       {save.error && <ErrorAlert error={save.error} />}
       <Group justify="flex-end" gap="xs">
         <Button variant="default" onClick={onClose}>
@@ -166,7 +206,7 @@ export function WidgetSettingsForm({
         </Button>
         <Button
           loading={save.isPending}
-          disabled={!settingsComplete(draft, accounts, buckets)}
+          disabled={!settingsComplete(draft, accounts, buckets, saved)}
           onClick={() => {
             save.mutate({ ...draft, title: customTitle(title) });
           }}

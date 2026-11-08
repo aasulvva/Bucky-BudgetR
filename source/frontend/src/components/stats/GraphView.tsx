@@ -45,6 +45,8 @@ interface GraphViewProps {
   accounts: Account[];
   buckets: Bucket[];
   height?: number;
+  /** A bar, point or slice opens its transactions; off on the Dashboard (#124), where the whole graph opens Stats. */
+  clickThrough?: boolean;
 }
 
 /**
@@ -60,6 +62,7 @@ export function GraphView({
   accounts,
   buckets,
   height = 320,
+  clickThrough = true,
 }: GraphViewProps) {
   const { t } = useTranslation();
   const { ref, width } = useElementSize();
@@ -100,11 +103,15 @@ export function GraphView({
                       settings={s}
                       currency={currency}
                       width={width}
-                      linkOf={(slice) => {
-                        const interval = result.intervals[slice.index] ?? result.intervals[0];
-                        const series = slice.name.startsWith("i-") ? "total" : slice.name;
-                        return interval ? intervalLink(s, series, interval) : "/transactions";
-                      }}
+                      linkOf={
+                        clickThrough
+                          ? (slice) => {
+                              const interval = result.intervals[slice.index] ?? result.intervals[0];
+                              const series = slice.name.startsWith("i-") ? "total" : slice.name;
+                              return interval ? intervalLink(s, series, interval) : "/transactions";
+                            }
+                          : undefined
+                      }
                     />
                   )}
                   <Notes
@@ -126,6 +133,7 @@ export function GraphView({
                   height={height}
                   dots={showDots(data.rows.length, plot)}
                   intervals={result.intervals}
+                  clickThrough={clickThrough}
                 />
                 <Notes other={data.other} leftOut={leftOut} coarsened={coarsened} />
               </Stack>
@@ -144,9 +152,10 @@ interface ChartProps {
   height: number;
   dots: boolean;
   intervals: { start: string; end: string }[];
+  clickThrough: boolean;
 }
 
-function Chart({ data, settings, currency, height, dots, intervals }: ChartProps) {
+function Chart({ data, settings, currency, height, dots, intervals, clickThrough }: ChartProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const empty =
@@ -184,12 +193,16 @@ function Chart({ data, settings, currency, height, dots, intervals }: ChartProps
         {...common}
         type={settings.side_by_side ? "default" : "stacked"}
         maxBarWidth={48}
-        barProps={(series) => ({
-          onClick: (_: unknown, index: number) => {
-            open(series.name, index);
-          },
-          style: { cursor: "pointer" },
-        })}
+        barProps={
+          clickThrough
+            ? (series) => ({
+                onClick: (_: unknown, index: number) => {
+                  open(series.name, index);
+                },
+                style: { cursor: "pointer" },
+              })
+            : undefined
+        }
       />
     );
   }
@@ -203,12 +216,16 @@ function Chart({ data, settings, currency, height, dots, intervals }: ChartProps
       dotProps={{ r: 4 }}
       activeDotProps={{ r: 5 }}
       connectNulls
-      lineChartProps={{
-        onClick: (state: { activeTooltipIndex?: unknown }) => {
-          open(single, state.activeTooltipIndex);
-        },
-        style: { cursor: "pointer" },
-      }}
+      lineChartProps={
+        clickThrough
+          ? {
+              onClick: (state: { activeTooltipIndex?: unknown }) => {
+                open(single, state.activeTooltipIndex);
+              },
+              style: { cursor: "pointer" },
+            }
+          : undefined
+      }
     />
   );
 }

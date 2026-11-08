@@ -619,6 +619,13 @@ export function intervalLink(
   return `/transactions?${params.toString()}`;
 }
 
+/** A saved graph on Stats & reports, picked, as the graph widget opens it (#124). */
+export function statsLink(saved: SavedGraph): string {
+  const params = graphToSearch(saved.graph);
+  params.set("saved", saved.id);
+  return `/stats?${params.toString()}`;
+}
+
 /** A new id for a saved graph, not used by the others. */
 export function newGraphId(saved: SavedGraph[]): string {
   const used = new Set(saved.map((g) => g.id));

@@ -2128,7 +2128,7 @@ components:
           description: Made by the web app; unique in the layout.
         type:
           type: string
-          enum: [cycle, health, bucket_status, accounts, recent_transactions, in_out]
+          enum: [cycle, health, bucket_status, accounts, recent_transactions, in_out, graph]
         width:
           type: string
           enum: [half, full]
@@ -2152,6 +2152,8 @@ components:
           $ref: "#/components/schemas/RecentWidgetSettings"
         in_out:
           $ref: "#/components/schemas/InOutWidgetSettings"
+        graph:
+          $ref: "#/components/schemas/GraphWidgetSettings"
 
     CycleWidgetSettings:
       type: object
@@ -2205,6 +2207,20 @@ components:
         show_mode:
           type: boolean
           description: Show the mode above the buckets (e.g. *Needs attention*). True by default.
+
+    GraphWidgetSettings:
+      type: object
+      additionalProperties: false
+      required: [saved_graph_id]
+      description: |
+        A graph widget (#124) shows one of the user's saved graphs
+        (`saved_graphs`), so it follows changes to it. An id that isn't
+        among them means the saved graph was deleted; the widget says so.
+      properties:
+        saved_graph_id:
+          type: string
+          minLength: 1
+          maxLength: 40
 
     InOutWidgetSettings:
       type: object

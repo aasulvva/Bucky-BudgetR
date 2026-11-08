@@ -341,7 +341,8 @@
       "bucket_status": "Bøtter som trenger oppmerksomhet, alle bøttene, de mest brukte eller én bøtte.",
       "accounts": "Saldoene på kontoene dine, eller én konto.",
       "recent_transactions": "De siste transaksjonene.",
-      "in_out": "Inntekter, utgifter og netto for et tidsrom."
+      "in_out": "Inntekter, utgifter og netto for et tidsrom.",
+      "graph": "En av de lagrede grafene dine fra Statistikk og rapporter."
     },
     "inOut": {
       "title": "Inn og ut",
@@ -371,6 +372,16 @@
       "leftOut_one": "{{count}} konto i en annen valuta er ikke tatt med.",
       "leftOut_other": "{{count}} kontoer i andre valutaer er ikke tatt med.",
       "open": "{{figure}}: {{amount}}. Vis transaksjonene."
+    },
+    "graph": {
+      "title": "Graf",
+      "savedGraph": "Lagret graf",
+      "pick": "Velg en lagret graf å vise.",
+      "deleted": "Denne lagrede grafen er slettet.",
+      "pickButton": "Velg en graf",
+      "noneSaved": "Du har ingen lagrede grafer ennå. Lag en under <stats>Statistikk og rapporter</stats> og lagre den.",
+      "open": "Åpne i Statistikk",
+      "openGraph": "Åpne {{name}} i Statistikk og rapporter"
     }
   },
   "buckets": {
@@ -1059,7 +1070,21 @@
       "renameTitle": "Gi grafen nytt navn",
       "deleteTitle": "Slett graf",
       "deleteText": "Slette den lagrede grafen «{{name}}»? Innstillingene blir stående på skjermen.",
-      "name": "Navn"
+      "name": "Navn",
+      "addToDashboard": "Legg til på oversikten …",
+      "addTitle": "Legg til på oversikten",
+      "where": "Visning",
+      "whereOptions": {
+        "desktop": "Skrivebord",
+        "mobile": "Mobil",
+        "both": "Begge"
+      },
+      "addHint": "Legger til «{{name}}» som en modul i full bredde nederst. Den følger endringer i den lagrede grafen.",
+      "addButton": "Legg til",
+      "added": "La til «{{name}}» på oversikten.",
+      "unsavedNote": "Modulen viser den lagrede grafen, ikke endringene du ikke har lagret.",
+      "onDashboard_one": "Den er på oversikten i {{count}} modul, som da viser at grafen er slettet.",
+      "onDashboard_other": "Den er på oversikten i {{count}} moduler, som da viser at grafen er slettet."
     }
   },
   "admin": {

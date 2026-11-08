@@ -22,8 +22,8 @@ interface PieViewProps {
   currency: string;
   /** The width it has, from GraphView's measurement. */
   width: number;
-  /** The Transactions link for a slice. */
-  linkOf: (slice: PieSlice) => string;
+  /** The Transactions link for a slice; without it, slices and rows aren't links. */
+  linkOf?: (slice: PieSlice) => string;
 }
 
 /**
@@ -56,7 +56,7 @@ export function PieView({ data, settings, currency, width, linkOf }: PieViewProp
   }).format(Number(data.total));
   const byLabel = new Map(data.slices.map((x) => [x.label, x]));
   const open = (slice: PieSlice | undefined) => {
-    if (slice) void navigate(linkOf(slice));
+    if (slice && linkOf) void navigate(linkOf(slice));
   };
   const short = (name: string) =>
     name.length > LABEL_CHARS ? `${name.slice(0, LABEL_CHARS - 1)}…` : name;
@@ -121,12 +121,16 @@ export function PieView({ data, settings, currency, width, linkOf }: PieViewProp
             }
           : undefined
       }
-      cellProps={(cell) => ({
-        onClick: () => {
-          open(byLabel.get(cell.name));
-        },
-        style: { cursor: "pointer" },
-      })}
+      cellProps={
+        linkOf
+          ? (cell) => ({
+              onClick: () => {
+                open(byLabel.get(cell.name));
+              },
+              style: { cursor: "pointer" },
+            })
+          : undefined
+      }
       aria-label={t("stats.graphs.chartLabel")}
     />
   );
@@ -156,25 +160,35 @@ export function PieView({ data, settings, currency, width, linkOf }: PieViewProp
         {data.slices.map((x) => (
           <Table.Tr
             key={x.name}
-            style={{ cursor: "pointer" }}
-            onClick={() => {
-              open(x);
-            }}
+            style={linkOf ? { cursor: "pointer" } : undefined}
+            onClick={
+              linkOf
+                ? () => {
+                    open(x);
+                  }
+                : undefined
+            }
           >
             <Table.Td>
               <Group gap="xs" wrap="nowrap">
                 <ColorSwatch color={x.color} size={12} withShadow={false} />
-                <Anchor
-                  component={Link}
-                  to={linkOf(x)}
-                  c="inherit"
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                  }}
-                >
-                  {x.label}
-                </Anchor>
+                {linkOf ? (
+                  <Anchor
+                    component={Link}
+                    to={linkOf(x)}
+                    c="inherit"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                    }}
+                  >
+                    {x.label}
+                  </Anchor>
+                ) : (
+                  <Text size="sm" span>
+                    {x.label}
+                  </Text>
+                )}
               </Group>
             </Table.Td>
             <Table.Td ta="right">

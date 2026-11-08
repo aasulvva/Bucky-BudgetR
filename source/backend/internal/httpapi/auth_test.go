@@ -395,6 +395,11 @@ func TestPreferences(t *testing.T) {
 	if w := patch(both); w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != both {
 		t.Errorf("both layouts: %d %s", w.Code, w.Body)
 	}
+	// A graph widget (#124) points to a saved graph, which needn't exist (it says it was deleted).
+	graph := `{"dashboard":{"mobile_widgets":[{"graph":{"saved_graph_id":"g-1"},"id":"c-1","type":"graph","width":"full"}],"widgets":[{"graph":{"saved_graph_id":"g-9"},"id":"c-1","type":"graph","width":"half"}]}}`
+	if w := patch(graph); w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != graph {
+		t.Errorf("graph widgets: %d %s", w.Code, w.Body)
+	}
 	if w := patch(`{"dashboard":{"widgets":[]}}`); strings.TrimSpace(w.Body.String()) != `{"dashboard":{"widgets":[]}}` {
 		t.Errorf("empty layout: %d %s", w.Code, w.Body)
 	}
@@ -425,7 +430,10 @@ func TestPreferences(t *testing.T) {
 		`{"dashboard":{"mobile_widgets":[{"id":"a","type":"health","width":"half"},{"id":"a","type":"cycle","width":"half"}]}}`,
 		`{"dashboard":{"mobile_widgets":[{"id":"a","type":"cycle","width":"half","bucket_status":{"mode":"all"}}]}}`,
 		`{"dashboard":{"mobile_widgets":[{"id":"a","type":"health","width":"half","title":" "}]}}`,
-		`{"dashboard":{"widgets":[{"id":"a","type":"graph","width":"half"}]}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"chart","width":"half"}]}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"cycle","width":"half","graph":{"saved_graph_id":"g-1"}}]}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"graph","width":"half","graph":{"saved_graph_id":""}}]}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"graph","width":"half","graph":{}}]}}`,
 		`{"dashboard":{"widgets":[{"id":"a","type":"health","width":"third"}]}}`,
 		`{"dashboard":{"widgets":[{"id":"a b","type":"health","width":"half"}]}}`,
 		`{"dashboard":{"widgets":[{"type":"health","width":"half"}]}}`,

@@ -3,19 +3,31 @@ import {
   Badge,
   Button,
   Group,
+  Input,
   Menu,
+  SegmentedControl,
   Select,
   Stack,
   Text,
   TextInput,
+  useMantineTheme,
 } from "@mantine/core";
+import { useMediaQuery } from "@mantine/hooks";
+import { notifications } from "@mantine/notifications";
 import { IconDots } from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { useUpdatePreferences } from "@/app/session";
+import { useSession, useUpdatePreferences } from "@/app/session";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
+import {
+  addGraphWidget,
+  dashboardLayouts,
+  graphWidgetsFor,
+  layoutsToPreferences,
+  type GraphWidgetPlace,
+} from "@/lib/dashboard";
 import {
   cleanGraph,
   newGraphId,
@@ -37,15 +49,29 @@ interface SavedGraphsProps {
   onSelect: (graph: SavedGraph | null) => void;
 }
 
-type Dialog = { kind: "saveAs" | "rename"; name: string } | { kind: "delete" } | null;
+type Dialog =
+  | { kind: "saveAs" | "rename"; name: string }
+  | { kind: "delete" }
+  | { kind: "dashboard"; where: GraphWidgetPlace }
+  | null;
 
-/** Saved graphs (#122): pick one, save the current graph, rename or delete. */
+const PLACES: GraphWidgetPlace[] = ["desktop", "mobile", "both"];
+
+/**
+ * Saved graphs (#122): pick one, save the current graph, rename or delete
+ * it, or add it to the Dashboard as a graph widget (#124).
+ */
 export function SavedGraphs({ saved, current, selectedId, onSelect }: SavedGraphsProps) {
   const { t } = useTranslation();
   const update = useUpdatePreferences();
+  const preferences = useSession().data?.preferences;
+  const theme = useMantineTheme();
+  const phone = !useMediaQuery(`(min-width: ${theme.breakpoints.sm})`, true);
   const [dialog, setDialog] = useState<Dialog>(null);
   const selected = saved.find((g) => g.id === selectedId) ?? null;
   const changed = selected !== null && !sameGraph(selected.graph, current);
+  const onDashboard =
+    selected && preferences ? graphWidgetsFor(dashboardLayouts(preferences), selected.id) : 0;
 
   const save = async (list: SavedGraph[]) => {
     await update.mutateAsync({ saved_graphs: list });
@@ -64,7 +90,15 @@ export function SavedGraphs({ saved, current, selectedId, onSelect }: SavedGraph
 
   const confirm = async () => {
     if (!dialog) return;
-    if (dialog.kind === "delete") {
+    if (dialog.kind === "dashboard") {
+      if (!selected || !preferences) return;
+      const layouts = addGraphWidget(dashboardLayouts(preferences), selected.id, dialog.where);
+      await update.mutateAsync({ dashboard: layoutsToPreferences(layouts) });
+      notifications.show({
+        color: "green",
+        message: t("stats.saved.added", { name: selected.name }),
+      });
+    } else if (dialog.kind === "delete") {
       if (!selected) return;
       await save(saved.filter((g) => g.id !== selected.id));
       onSelect(null);
@@ -138,6 +172,15 @@ export function SavedGraphs({ saved, current, selectedId, onSelect }: SavedGraph
                 {t("stats.saved.rename")}
               </Menu.Item>
               <Menu.Item
+                disabled={!preferences}
+                onClick={() => {
+                  update.reset();
+                  setDialog({ kind: "dashboard", where: phone ? "mobile" : "desktop" });
+                }}
+              >
+                {t("stats.saved.addToDashboard")}
+              </Menu.Item>
+              <Menu.Item
                 color="red"
                 onClick={() => {
                   update.reset();
@@ -163,21 +206,52 @@ export function SavedGraphs({ saved, current, selectedId, onSelect }: SavedGraph
         title={
           dialog?.kind === "delete"
             ? t("stats.saved.deleteTitle")
-            : dialog?.kind === "rename"
-              ? t("stats.saved.renameTitle")
-              : t("stats.saved.saveAsTitle")
+            : dialog?.kind === "dashboard"
+              ? t("stats.saved.addTitle")
+              : dialog?.kind === "rename"
+                ? t("stats.saved.renameTitle")
+                : t("stats.saved.saveAsTitle")
         }
       >
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            if (dialog && dialog.kind !== "delete" && nameError(dialog.name)) return;
+            if (dialog && (dialog.kind === "saveAs" || dialog.kind === "rename")) {
+              if (nameError(dialog.name)) return;
+            }
             void confirm().catch(() => undefined);
           }}
         >
           <Stack gap="md">
             {dialog?.kind === "delete" ? (
-              <Text size="sm">{t("stats.saved.deleteText", { name: selected?.name ?? "" })}</Text>
+              <>
+                <Text size="sm">{t("stats.saved.deleteText", { name: selected?.name ?? "" })}</Text>
+                {onDashboard > 0 && (
+                  <Text size="sm">{t("stats.saved.onDashboard", { count: onDashboard })}</Text>
+                )}
+              </>
+            ) : dialog?.kind === "dashboard" ? (
+              <>
+                <Text size="sm">{t("stats.saved.addHint", { name: selected?.name ?? "" })}</Text>
+                <Input.Wrapper label={t("stats.saved.where")}>
+                  <SegmentedControl
+                    fullWidth
+                    data={PLACES.map((p) => ({
+                      value: p,
+                      label: t(`stats.saved.whereOptions.${p}`),
+                    }))}
+                    value={dialog.where}
+                    onChange={(where) => {
+                      setDialog({ kind: "dashboard", where });
+                    }}
+                  />
+                </Input.Wrapper>
+                {changed && (
+                  <Text size="sm" c="dimmed">
+                    {t("stats.saved.unsavedNote")}
+                  </Text>
+                )}
+              </>
             ) : (
               dialog && (
                 <TextInput
@@ -202,11 +276,15 @@ export function SavedGraphs({ saved, current, selectedId, onSelect }: SavedGraph
                 loading={update.isPending}
                 disabled={
                   dialog !== null &&
-                  dialog.kind !== "delete" &&
+                  (dialog.kind === "saveAs" || dialog.kind === "rename") &&
                   nameError(dialog.name) !== undefined
                 }
               >
-                {dialog?.kind === "delete" ? t("common.delete") : t("common.save")}
+                {dialog?.kind === "delete"
+                  ? t("common.delete")
+                  : dialog?.kind === "dashboard"
+                    ? t("stats.saved.addButton")
+                    : t("common.save")}
               </Button>
             </Group>
           </Stack>

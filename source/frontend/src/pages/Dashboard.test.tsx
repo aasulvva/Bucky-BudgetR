@@ -1041,3 +1041,131 @@ describe("In/out widget", () => {
     ]);
   });
 });
+
+describe("Graph widget (#124)", () => {
+  const stats = "GET /api/v1/stats/series";
+  const spending: components["schemas"]["SavedGraph"] = {
+    id: "g-1",
+    name: "Monthly spending",
+    graph: {
+      kind: "bar",
+      metric: "spending",
+      period: "last-6-months",
+      resolution: "month",
+      group_by: "bucket",
+    },
+  };
+  const graphWidget = (savedGraphId: string | null, saved = [spending]) => {
+    withPreferences({
+      saved_graphs: saved,
+      dashboard: {
+        widgets: [
+          {
+            id: "gw",
+            type: "graph",
+            width: "full",
+            ...(savedGraphId ? { graph: { saved_graph_id: savedGraphId } } : {}),
+          },
+        ],
+      },
+    });
+  };
+
+  beforeEach(() => {
+    apiMock.on(stats, (req) => ({
+      body: {
+        intervals: [{ start: req.query.get("from") ?? "", end: req.query.get("to") ?? "" }],
+        series: [
+          { currency: "NOK", account_id: main.id, bucket_id: groceries.id, values: ["120.00"] },
+        ],
+      },
+    }));
+  });
+
+  it("shows its saved graph under its name, and opens it on Stats", async () => {
+    graphWidget("g-1");
+    const { router } = renderRoute("/");
+    const box = await widget("Monthly spending");
+    await waitFor(() => {
+      expect(apiMock.calls(stats)).not.toHaveLength(0);
+    });
+    const q = apiMock.calls(stats).at(-1)?.query;
+    expect(q?.get("metric")).toBe("spending");
+    expect(q?.get("group_by")).toBe("bucket");
+    const open = box.getByRole("link", { name: "Open in Stats" });
+    expect(open).toHaveAttribute(
+      "href",
+      "/stats?kind=bar&metric=spending&period=last-6-months&res=month&group=bucket&saved=g-1",
+    );
+    await userEvent.click(await box.findByTestId("graph-widget"));
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe("/stats");
+    });
+    expect(router.state.location.search).toContain("saved=g-1");
+  });
+
+  it("draws a pie compactly, without links to transactions", async () => {
+    const pie = {
+      ...spending,
+      graph: { ...spending.graph, kind: "pie" as const },
+    };
+    graphWidget("g-1", [pie]);
+    renderRoute("/");
+    const box = await widget("Monthly spending");
+    const list = within(await box.findByTestId("pie-list"));
+    expect(list.getByText("Groceries")).toBeInTheDocument();
+    expect(list.queryAllByRole("link")).toHaveLength(0);
+  });
+
+  it("says when its saved graph was deleted, offering to pick another", async () => {
+    const other = { ...spending, id: "g-2", name: "Income" };
+    graphWidget("g-9", [other]);
+    renderRoute("/");
+    const box = await widget("Graph");
+    expect(box.getByText("This saved graph was deleted.")).toBeInTheDocument();
+    expect(apiMock.calls(stats)).toHaveLength(0);
+    await userEvent.click(box.getByRole("button", { name: "Pick a graph" }));
+    const dialog = await screen.findByRole("dialog", { name: "Graph settings" });
+    expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
+    await choose(dialog, "Saved graph", "Income");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(apiMock.calls("PATCH /api/v1/me/preferences").at(-1)?.body).toMatchObject({
+        dashboard: { widgets: [{ id: "gw", type: "graph", graph: { saved_graph_id: "g-2" } }] },
+      });
+    });
+  });
+
+  it("points to the Stats screen when nothing is saved yet", async () => {
+    graphWidget(null, []);
+    renderRoute("/");
+    const box = await widget("Graph");
+    expect(box.getByRole("link", { name: "Stats & reports" })).toHaveAttribute("href", "/stats");
+  });
+
+  it("is added from Add widget by picking a saved graph", async () => {
+    withPreferences({ saved_graphs: [spending] });
+    renderRoute("/");
+    await userEvent.click(await screen.findByRole("button", { name: "Edit dashboard" }));
+    const bar = within(await screen.findByRole("region", { name: "Edit dashboard" }));
+    await userEvent.click(bar.getByRole("button", { name: "Add widget" }));
+    const picker = await screen.findByRole("dialog", { name: "Add widget" });
+    await userEvent.click(within(picker).getByRole("button", { name: /^Graph/ }));
+    const box = await screen.findByRole("dialog", { name: "Add widget: Graph" });
+    expect(within(box).getByRole("button", { name: "Add" })).toBeDisabled();
+    await choose(box, "Saved graph", "Monthly spending");
+    await userEvent.click(within(box).getByRole("button", { name: "Add" }));
+    await userEvent.click(bar.getByRole("button", { name: "Done" }));
+    await waitFor(() => {
+      const body = apiMock.calls("PATCH /api/v1/me/preferences").at(-1)?.body as {
+        dashboard: { widgets: object[] };
+      };
+      expect(body.dashboard.widgets.at(-1)).toEqual({
+        id: expect.stringMatching(/^[A-Za-z0-9_-]{1,40}$/) as unknown,
+        type: "graph",
+        width: "full",
+        graph: { saved_graph_id: "g-1" },
+      });
+    });
+  });
+});

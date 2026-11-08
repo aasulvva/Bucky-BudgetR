@@ -395,6 +395,44 @@ describe("Stats", () => {
     expect(drawer.getByRole("combobox", { name: "Split" })).toHaveValue("Per interval");
   });
 
+  it("adds a saved graph to the Dashboard, and warns before deleting it there", async () => {
+    const graph: GraphSettings = {
+      kind: "bar",
+      metric: "spending",
+      period: "current-month",
+      resolution: "day",
+    };
+    prefs = { ...prefs, saved_graphs: [{ id: "g-1", name: "Spending", graph }] };
+    renderRoute("/stats?kind=bar&metric=spending&period=current-month&res=day&saved=g-1");
+    await userEvent.click(await screen.findByRole("button", { name: "More" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Add to dashboard…" }));
+    const dialog = within(await screen.findByRole("dialog", { name: "Add to the Dashboard" }));
+    expect(dialog.getByRole("radio", { name: "Desktop" })).toBeChecked();
+    await userEvent.click(dialog.getByRole("radio", { name: "Both" }));
+    await userEvent.click(dialog.getByRole("button", { name: "Add" }));
+    expect(await screen.findByText('Added "Spending" to the Dashboard.')).toBeInTheDocument();
+    const body = apiMock.calls("PATCH /api/v1/me/preferences").at(-1)?.body as Preferences;
+    const widget = {
+      id: expect.stringMatching(/^[A-Za-z0-9_-]{1,40}$/) as unknown,
+      type: "graph",
+      width: "full",
+      graph: { saved_graph_id: "g-1" },
+    };
+    // Nothing was saved: the defaults, with the widget at the end of each.
+    expect(body.dashboard?.widgets?.at(-1)).toEqual(widget);
+    expect(body.dashboard?.widgets).toHaveLength(6);
+    expect(body.dashboard?.mobile_widgets?.at(-1)).toEqual(widget);
+    expect(body.dashboard?.mobile_widgets).toHaveLength(4);
+
+    await userEvent.click(screen.getByRole("button", { name: "More" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Delete" }));
+    expect(
+      await screen.findByText(
+        "It's on the Dashboard in 2 widgets, which will say the graph was deleted.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("has a Reports tab for later", async () => {
     const { router } = renderRoute("/stats");
     await userEvent.click(await screen.findByRole("tab", { name: "Reports" }));

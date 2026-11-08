@@ -341,7 +341,8 @@
       "bucket_status": "Buckets that need attention, all of them, the most used, or one bucket.",
       "accounts": "Your account balances, or one account.",
       "recent_transactions": "The latest transactions.",
-      "in_out": "Income, expenses and their balance for a period."
+      "in_out": "Income, expenses and their balance for a period.",
+      "graph": "One of your saved graphs from Stats & reports."
     },
     "inOut": {
       "title": "Money in and out",
@@ -371,6 +372,16 @@
       "leftOut_one": "{{count}} account in another currency isn't included.",
       "leftOut_other": "{{count}} accounts in other currencies aren't included.",
       "open": "{{figure}}: {{amount}}. Show the transactions."
+    },
+    "graph": {
+      "title": "Graph",
+      "savedGraph": "Saved graph",
+      "pick": "Pick a saved graph to show.",
+      "deleted": "This saved graph was deleted.",
+      "pickButton": "Pick a graph",
+      "noneSaved": "You have no saved graphs yet. Make one on <stats>Stats & reports</stats> and save it.",
+      "open": "Open in Stats",
+      "openGraph": "Open {{name}} in Stats & reports"
     }
   },
   "buckets": {
@@ -1059,7 +1070,21 @@
       "renameTitle": "Rename graph",
       "deleteTitle": "Delete graph",
       "deleteText": "Delete the saved graph \"{{name}}\"? The graph's settings stay on screen.",
-      "name": "Name"
+      "name": "Name",
+      "addToDashboard": "Add to dashboard…",
+      "addTitle": "Add to the Dashboard",
+      "where": "Layout",
+      "whereOptions": {
+        "desktop": "Desktop",
+        "mobile": "Mobile",
+        "both": "Both"
+      },
+      "addHint": "Adds \"{{name}}\" as a full-width widget at the end. It follows changes to the saved graph.",
+      "addButton": "Add",
+      "added": "Added \"{{name}}\" to the Dashboard.",
+      "unsavedNote": "The widget shows the saved graph, not your unsaved changes.",
+      "onDashboard_one": "It's on the Dashboard in {{count}} widget, which will say the graph was deleted.",
+      "onDashboard_other": "It's on the Dashboard in {{count}} widgets, which will say the graph was deleted."
     }
   },
   "admin": {

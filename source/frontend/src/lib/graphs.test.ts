@@ -21,6 +21,7 @@ import {
   sameGraph,
   shownCurrency,
   showDots,
+  statsLink,
   statsQuery,
   yDomain,
   type GraphSettings,
@@ -670,5 +671,13 @@ describe("pies", () => {
       resolution: "week",
       coarsened: null,
     });
+  });
+});
+
+describe("statsLink", () => {
+  it("opens a saved graph on Stats, picked", () => {
+    expect(
+      statsLink({ id: "g-3", name: "Pie", graph: { ...base, kind: "pie", group_by: "account" } }),
+    ).toBe("/stats?kind=pie&metric=spending&period=current-month&res=day&group=account&saved=g-3");
   });
 });

@@ -1,6 +1,7 @@
 // The Dashboard's logic (spec §9), kept apart from the page: its layouts of
 // widgets (#37), one for desktop and one for mobile (#99), and their
-// settings, the budget's health per account, and which buckets to show.
+// settings, the budget's health per account, which buckets to show, and the
+// graph widgets that show saved graphs (#124).
 
 import type { Account, Bucket, BucketFigures } from "@/api/accounts";
 import type { components } from "@/api/schema";
@@ -10,6 +11,7 @@ import { MAX_DAYS, type FlowFigure, type FlowPeriod } from "./flows";
 import { addAmounts, compareAmounts, percentOf } from "./money";
 
 type Preferences = components["schemas"]["Preferences"];
+type SavedGraph = components["schemas"]["SavedGraph"];
 type Schemas = components["schemas"];
 export type DashboardPreferences = Schemas["DashboardSettings"];
 type ApiWidget = Schemas["DashboardWidget"];
@@ -25,6 +27,7 @@ export const WIDGET_TYPES: WidgetType[] = [
   "accounts",
   "recent_transactions",
   "in_out",
+  "graph",
 ];
 export const ACCOUNTS_MODES: AccountsMode[] = ["all", "account"];
 export const BUCKET_STATUS_MODES: BucketStatusMode[] = [
@@ -70,6 +73,11 @@ export interface InOutSettings {
   accountId: string | null;
 }
 
+export interface GraphWidgetSettings {
+  /** The saved graph it shows; null until one is picked. */
+  savedGraphId: string | null;
+}
+
 interface SettingsOf {
   cycle: CycleSettings;
   health: null;
@@ -77,6 +85,7 @@ interface SettingsOf {
   accounts: AccountsSettings;
   recent_transactions: RecentSettings;
   in_out: InOutSettings;
+  graph: GraphWidgetSettings;
 }
 
 /** One widget on the Dashboard, with its own settings. */
@@ -117,6 +126,9 @@ const fromApi = {
     days: s?.days ?? 30,
     accountId: s?.account_id ?? null,
   }),
+  graph: (s?: Schemas["GraphWidgetSettings"]): GraphWidgetSettings => ({
+    savedGraphId: s?.saved_graph_id ?? null,
+  }),
 };
 
 /** A widget type's default settings. */
@@ -135,12 +147,14 @@ export function defaultSettings(type: WidgetType): SettingsOf[WidgetType] {
       return fromApi.recent();
     case "in_out":
       return fromApi.inOut();
+    case "graph":
+      return fromApi.graph();
   }
 }
 
 /** The width a new widget of the type gets. */
 export function defaultWidth(type: WidgetType): WidgetWidth {
-  return type === "recent_transactions" ? "full" : "half";
+  return type === "recent_transactions" || type === "graph" ? "full" : "half";
 }
 
 function newId(): string {
@@ -243,6 +257,8 @@ function widgetFromApi(w: ApiWidget): WidgetInstance {
       return { ...base, type: w.type, settings: fromApi.recent(w.recent_transactions) };
     case "in_out":
       return { ...base, type: w.type, settings: fromApi.inOut(w.in_out) };
+    case "graph":
+      return { ...base, type: w.type, settings: fromApi.graph(w.graph) };
   }
 }
 
@@ -327,6 +343,10 @@ function widgetToApi(w: WidgetInstance): ApiWidget {
         },
       };
     }
+    case "graph": {
+      const { savedGraphId } = w.settings;
+      return savedGraphId === null ? base : { ...base, graph: { saved_graph_id: savedGraphId } };
+    }
   }
 }
 
@@ -344,6 +364,35 @@ export function layoutsToPreferences(layouts: Layouts): DashboardPreferences {
     widgets: layouts.desktop.map(widgetToApi),
     mobile_widgets: layouts.mobile.map(widgetToApi),
   };
+}
+
+/** Where Add to dashboard puts a saved graph (#124). */
+export type GraphWidgetPlace = LayoutKind | "both";
+
+/**
+ * Both layouts with a full-width graph widget showing the saved graph added
+ * at the end of one of them, or of both.
+ */
+export function addGraphWidget(
+  layouts: Layouts,
+  savedGraphId: string,
+  where: GraphWidgetPlace,
+): Layouts {
+  const add = (layout: Layout): Layout => [
+    ...layout,
+    { ...(newWidget("graph", layout) as WidgetInstance<"graph">), settings: { savedGraphId } },
+  ];
+  return {
+    desktop: where === "mobile" ? layouts.desktop : add(layouts.desktop),
+    mobile: where === "desktop" ? layouts.mobile : add(layouts.mobile),
+  };
+}
+
+/** How many widgets, in both layouts, show the saved graph. */
+export function graphWidgetsFor(layouts: Layouts, savedGraphId: string): number {
+  return [...layouts.desktop, ...layouts.mobile].filter(
+    (w) => w.type === "graph" && w.settings.savedGraphId === savedGraphId,
+  ).length;
 }
 
 /** Moves a widget one place up (-1) or down (+1). */
@@ -380,15 +429,20 @@ export function customTitle(title: string): string | null {
 }
 
 /**
- * A widget's title, unless it's the widget's name: its custom title, or the
- * name of the bucket or account it shows (One bucket, One account).
+ * A widget's title, unless it's the widget's name: its custom title, the
+ * name of the bucket or account it shows (One bucket, One account), or of
+ * its saved graph.
  */
 export function autoTitle(
   widget: WidgetInstance,
   accounts: Account[],
   buckets: Bucket[],
+  saved: SavedGraph[] = [],
 ): string | null {
   if (widget.title !== null) return widget.title;
+  if (widget.type === "graph") {
+    return saved.find((g) => g.id === widget.settings.savedGraphId)?.name ?? null;
+  }
   if (widget.type === "bucket_status" && widget.settings.mode === "bucket") {
     const { bucketId } = widget.settings;
     return buckets.find((b) => b.id === bucketId)?.name ?? null;
@@ -405,13 +459,17 @@ export function autoTitle(
 
 /**
  * Whether a widget's settings can be saved: One bucket and One account need
- * a bucket or account that exists.
+ * a bucket or account that exists, and a graph widget a saved graph.
  */
 export function settingsComplete(
   widget: WidgetInstance,
   accounts: Account[],
   buckets: Bucket[],
+  saved: SavedGraph[] = [],
 ): boolean {
+  if (widget.type === "graph") {
+    return saved.some((g) => g.id === widget.settings.savedGraphId);
+  }
   if (widget.type === "bucket_status" && widget.settings.mode === "bucket") {
     return buckets.some((b) => b.id === widget.settings.bucketId);
   }

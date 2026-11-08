@@ -230,6 +230,7 @@ func checkWidgets(widgets []api.DashboardWidget) error {
 			api.DashboardWidgetTypeBucketStatus:       w.BucketStatus != nil,
 			api.DashboardWidgetTypeRecentTransactions: w.RecentTransactions != nil,
 			api.DashboardWidgetTypeInOut:              w.InOut != nil,
+			api.DashboardWidgetTypeGraph:              w.Graph != nil,
 		}
 		for t, given := range settings {
 			if given && t != w.Type {
