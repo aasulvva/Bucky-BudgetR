@@ -1256,7 +1256,7 @@ export interface components {
             /** @description Made by the web app; unique in the layout. */
             id: string;
             /** @enum {string} */
-            type: "cycle" | "health" | "bucket_status" | "accounts" | "recent_transactions" | "in_out";
+            type: "cycle" | "health" | "bucket_status" | "accounts" | "recent_transactions" | "in_out" | "graph";
             /**
              * @description Half or the full width of the Dashboard on wide screens.
              * @enum {string}
@@ -1273,6 +1273,7 @@ export interface components {
             bucket_status?: components["schemas"]["BucketStatusWidgetSettings"];
             recent_transactions?: components["schemas"]["RecentWidgetSettings"];
             in_out?: components["schemas"]["InOutWidgetSettings"];
+            graph?: components["schemas"]["GraphWidgetSettings"];
         };
         CycleWidgetSettings: {
             /** @description Also show the next planned cycle. True by default. */
@@ -1301,6 +1302,14 @@ export interface components {
             bucket_id?: (string & components["schemas"]["BucketId"]) | null;
             /** @description Show the mode above the buckets (e.g. *Needs attention*). True by default. */
             show_mode?: boolean;
+        };
+        /**
+         * @description A graph widget (#124) shows one of the user's saved graphs
+         *     (`saved_graphs`), so it follows changes to it. An id that isn't
+         *     among them means the saved graph was deleted; the widget says so.
+         */
+        GraphWidgetSettings: {
+            saved_graph_id: string;
         };
         /**
          * @description The In/out widget (#90): income, expenses and their balance over a

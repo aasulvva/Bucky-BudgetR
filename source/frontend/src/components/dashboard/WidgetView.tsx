@@ -15,6 +15,7 @@ import type { SaveWidget, WidgetInstance, WidgetWidth } from "@/lib/dashboard";
 import { AccountsWidget } from "./AccountsWidget";
 import { BucketStatusWidget } from "./BucketStatusWidget";
 import { CycleWidget } from "./CycleWidget";
+import { GraphWidget } from "./GraphWidget";
 import { HealthWidget } from "./HealthWidget";
 import { InOutWidget } from "./InOutWidget";
 import { RecentWidget } from "./RecentWidget";
@@ -73,6 +74,7 @@ export function WidgetView({
       {widget.type === "accounts" && <AccountsWidget widget={widget} action={cog} />}
       {widget.type === "recent_transactions" && <RecentWidget widget={widget} action={cog} />}
       {widget.type === "in_out" && <InOutWidget widget={widget} action={cog} />}
+      {widget.type === "graph" && <GraphWidget widget={widget} action={cog} />}
       <WidgetSettingsDialog
         widget={widget}
         opened={settings}
