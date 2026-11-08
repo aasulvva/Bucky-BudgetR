@@ -88,7 +88,7 @@ A budget period. Usually a month, but its start and end dates can be set freely,
   - Once the active cycle's planned end has passed, bucket transactions are refused until the user **extends** the cycle (moves its end later) or **ends** it. Ended late, it keeps its planned end.
   - Ended **early**, it ends now. If the next planned cycle begins later, the user chooses to **start it now** (its start moves to where the ended cycle ended) or to **leave a gap**. In a gap there is no active cycle, so transactions can't have bucket lines; the UI says so.
   - A next planned cycle that begins where the ended one ended starts automatically.
-- Extending the active cycle pushes the next planned cycle's start along if they would overlap. The active cycle's start can't change, and its end can't move before now or before its last bucket transaction.
+- Extending the active cycle pushes the next planned cycle's start along if they would overlap. Planned cycles it covers completely (ending on or before the new end) are deleted, since they haven't started, and the extend dialog lists them first (#158); with a cycle rule, more are then planned. The active cycle's start can't change, and its end can't move before now or before its last bucket transaction.
 - Future cycles can be planned, edited and deleted in advance. Finished cycles are read-only.
 - Ending a cycle runs the **cycle-end routine**, then the **cycle-start routine** of the cycle that starts (see §6).
 

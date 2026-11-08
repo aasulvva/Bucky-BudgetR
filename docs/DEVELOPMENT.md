@@ -162,7 +162,7 @@ curl -b jar localhost:8080/api/v1/me
 
 The cycle rule (#72, spec §3) plans cycles on the server, in the user's `time_zone` preference.
 - `internal/calendar` holds the dates, with no database: `Rule.Start` gives a month's date (clamped to the month, then moved off weekends and holidays), `Rule.Periods` the periods from one date to the next, and `norwegian` the Norwegian bank holidays (Easter from the Gregorian computus).
-- `cycles/rule.go` plans with them. `topUp` adds cycles after the latest one, flagged `generated`, until the rule's `ahead` are planned. It runs inside `Start` and `End`, hourly (`PlanLoop`), and through `Replan` when a preferences PATCH touches `cycle_rule` or `time_zone`. `Replan` first deletes the generated cycles that haven't started. `SetCycleTimes` clears the flag, so a cycle moved by hand (or pushed along) is the user's.
+- `cycles/rule.go` plans with them. `topUp` adds cycles after the latest one, flagged `generated`, until the rule's `ahead` are planned. It runs inside `Start` and `End`, after an extension that deleted planned cycles (`pushNext`, #158), hourly (`PlanLoop`), and through `Replan` when a preferences PATCH touches `cycle_rule` or `time_zone`. `Replan` first deletes the generated cycles that haven't started. `SetCycleTimes` clears the flag, so a cycle moved by hand (or pushed along) is the user's.
 - `POST /api/v1/cycle-rule/periods` previews a rule without saving it; Settings and the cycle dialogs use it, so the holidays live only in Go.
 - The binary embeds `time/tzdata`, so zones work in the distroless image.
 

@@ -6,7 +6,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { api } from "@/api/client";
-import { useRefreshCycles, type Cycle } from "@/api/cycles";
+import { useCycles, useRefreshCycles, type Cycle } from "@/api/cycles";
 import { unwrap } from "@/api/errors";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
@@ -37,6 +37,7 @@ function ExtendForm({
 }: Omit<ExtendCycleDialogProps, "opened" | "onClose"> & { onDone: () => void }) {
   const { t } = useTranslation();
   const refresh = useRefreshCycles();
+  const cycles = useCycles();
   const now = today();
   const current = lastDay(active);
   // A week past the planned end, but never in the past.
@@ -65,7 +66,14 @@ function ExtendForm({
     },
   });
 
-  const pushesNext = next !== null && new Date(endAtFor(end)) > new Date(next.start_at);
+  // What the new end does to the planned cycles: the ones it covers are
+  // removed, and the next one starts at it (#158).
+  const newEnd = new Date(endAtFor(end)).getTime();
+  const planned = (cycles.data?.filter((c) => c.state === "future") ?? (next ? [next] : [])).filter(
+    (c) => new Date(c.start_at).getTime() < newEnd,
+  );
+  const removed = planned.filter((c) => new Date(c.end_at).getTime() <= newEnd);
+  const pushed = planned.find((c) => new Date(c.end_at).getTime() > newEnd);
 
   return (
     <form
@@ -97,10 +105,18 @@ function ExtendForm({
           }}
           error={problem}
         />
-        {pushesNext && (
+        {removed.length > 0 && (
+          <Alert color="orange" variant="light">
+            {t("cycles.removesPlanned", {
+              count: removed.length,
+              ranges: removed.map((c) => cycleRange(c)).join(", "),
+            })}
+          </Alert>
+        )}
+        {pushed && (
           <Alert color="blue" variant="light">
             {t("cycles.pushesNext", {
-              range: cycleRange(next),
+              range: cycleRange(pushed),
               date: formatDate(addDays(end, 1)),
             })}
           </Alert>
