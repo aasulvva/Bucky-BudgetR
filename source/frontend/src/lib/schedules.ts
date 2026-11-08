@@ -335,3 +335,11 @@ export function scheduleTitle(
   }
   return tx.counterparty?.trim() ? tx.counterparty : t(`newTransaction.types.${tx.type}`);
 }
+
+/** Whether a schedule is running, paused, or has ended (no times left). */
+export function scheduleState(
+  s: Pick<Schedule, "paused" | "next_at">,
+): "active" | "paused" | "ended" {
+  if (s.next_at === null) return "ended";
+  return s.paused ? "paused" : "active";
+}

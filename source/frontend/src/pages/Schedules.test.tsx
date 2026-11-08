@@ -89,6 +89,29 @@ describe("Scheduled tab", () => {
     expect(router.state.location.pathname).toBe("/transactions/scheduled");
   });
 
+  it("shows paused ones and hides ended ones, unless switched", async () => {
+    const done = schedule({
+      id: "1234560004",
+      transaction: { type: "EXP", account_id: main.id, amount: "50.00", counterparty: "Dentist" },
+      frequency: "once",
+      next_at: null,
+    });
+    apiMock.on("GET /api/v1/schedules", { body: [rent, gym, done] });
+    renderRoute("/transactions/scheduled");
+    expect(await screen.findByRole("link", { name: /Gym/ }, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Dentist/ })).not.toBeInTheDocument();
+    expect(screen.getByText("1 more is hidden by the filters above.")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "Show ended" }));
+    expect(screen.getByRole("link", { name: /Dentist/ })).toHaveTextContent("Ended");
+    await userEvent.click(screen.getByRole("checkbox", { name: "Show paused" }));
+    expect(screen.queryByRole("link", { name: /Gym/ })).not.toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem("bucky.scheduledShow") ?? "")).toEqual({
+      paused: false,
+      ended: true,
+    });
+  });
+
   it("pauses and resumes a schedule with the whole of it", async () => {
     apiMock.on("PUT /api/v1/schedules/1234560001", { body: { ...rent, paused: true } });
     apiMock.on("PUT /api/v1/schedules/1234560003", { body: { ...gym, paused: false } });

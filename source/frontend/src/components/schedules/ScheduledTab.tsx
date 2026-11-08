@@ -5,6 +5,7 @@ import {
   Box,
   Button,
   Card,
+  Checkbox,
   Group,
   Menu,
   Stack,
@@ -31,19 +32,73 @@ import { QueryState } from "@/components/QueryState";
 import { useLookups, type Lookups } from "@/components/transactions/lookups";
 import { formatDateTime } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
-import { repeatSentence, scheduleTitle, toInput, type Schedule } from "@/lib/schedules";
+import {
+  repeatSentence,
+  scheduleState,
+  scheduleTitle,
+  toInput,
+  type Schedule,
+} from "@/lib/schedules";
+
+/** Which schedules the tab shows, remembered in this browser. */
+const SHOW_KEY = "bucky.scheduledShow";
+
+interface Show {
+  paused: boolean;
+  ended: boolean;
+}
+
+function loadShow(): Show {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SHOW_KEY) ?? "{}") as Partial<Show>;
+    return { paused: saved.paused !== false, ended: saved.ended === true };
+  } catch {
+    return { paused: true, ended: false };
+  }
+}
+
+function saveShow(show: Show) {
+  try {
+    localStorage.setItem(SHOW_KEY, JSON.stringify(show));
+  } catch {
+    // Not remembered; the next visit starts from the defaults.
+  }
+}
 
 /**
  * The Scheduled tab of Transactions (#154): the user's schedules, each in
- * words with its next time, to edit, pause or delete.
+ * words with its next time, to edit, pause or delete. Paused ones show and
+ * ended ones don't, unless switched.
  */
 export function ScheduledTab() {
   const { t } = useTranslation();
   const schedules = useSchedules();
   const names = useLookups();
+  const [show, setShow] = useState(loadShow);
+  const change = (next: Partial<Show>) => {
+    const value = { ...show, ...next };
+    setShow(value);
+    saveShow(value);
+  };
   return (
     <Stack gap="md">
-      <Group justify="flex-end">
+      <Group justify="space-between" gap="sm">
+        <Group gap="md">
+          <Checkbox
+            label={t("schedules.showPaused")}
+            checked={show.paused}
+            onChange={(e) => {
+              change({ paused: e.currentTarget.checked });
+            }}
+          />
+          <Checkbox
+            label={t("schedules.showEnded")}
+            checked={show.ended}
+            onChange={(e) => {
+              change({ ended: e.currentTarget.checked });
+            }}
+          />
+        </Group>
         <Button
           component={Link}
           to="/transactions/scheduled/new"
@@ -53,17 +108,30 @@ export function ScheduledTab() {
         </Button>
       </Group>
       <QueryState query={schedules}>
-        {(list) =>
-          list.length === 0 ? (
-            <Text c="dimmed">{t("schedules.empty")}</Text>
-          ) : (
-            <Card withBorder padding={0}>
-              {list.map((s) => (
-                <ScheduleRow key={s.id} schedule={s} names={names} />
-              ))}
-            </Card>
-          )
-        }
+        {(list) => {
+          if (list.length === 0) return <Text c="dimmed">{t("schedules.empty")}</Text>;
+          const shown = list.filter((s) => {
+            const state = scheduleState(s);
+            return state === "active" || show[state];
+          });
+          const hidden = list.length - shown.length;
+          return (
+            <Stack gap="xs">
+              {shown.length > 0 && (
+                <Card withBorder padding={0}>
+                  {shown.map((s) => (
+                    <ScheduleRow key={s.id} schedule={s} names={names} />
+                  ))}
+                </Card>
+              )}
+              {hidden > 0 && (
+                <Text size="sm" c="dimmed">
+                  {t("schedules.hidden", { count: hidden })}
+                </Text>
+              )}
+            </Stack>
+          );
+        }}
       </QueryState>
     </Stack>
   );
