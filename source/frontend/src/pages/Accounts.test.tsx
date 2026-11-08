@@ -114,6 +114,15 @@ describe("Accounts", () => {
     expect(screen.queryByRole("region", { name: "Adjust balance" })).not.toBeInTheDocument();
   });
 
+  it("opens an account's balance adjustment from a notification's link (#57)", async () => {
+    const { router } = renderRoute("/accounts?adjust=1234");
+    const panel = within(await screen.findByRole("region", { name: "Adjust balance" }));
+    expect(panel.getByRole("textbox", { name: "Actual balance" })).toBeInTheDocument();
+    await userEvent.click(panel.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("region", { name: "Adjust balance" })).not.toBeInTheDocument();
+    expect(router.state.location.search).toBe("");
+  });
+
   it("says when the balance is right already", async () => {
     apiMock.on(
       "POST /api/v1/accounts/1234/balance-adjustment",

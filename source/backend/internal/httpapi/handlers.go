@@ -18,6 +18,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/buckets"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/cycles"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/notifications"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/refill"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/schedules"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/transactions"
@@ -26,14 +27,15 @@ import (
 // server implements the operations in api/openapi.yaml. Gate has already
 // checked sessions and validated requests against the spec.
 type server struct {
-	db           Pinger
-	auth         *auth.Service
-	accounts     *accounts.Service
-	cycles       *cycles.Service
-	buckets      *buckets.Service
-	transactions *transactions.Service
-	refills      *refill.Service
-	schedules    *schedules.Service
+	db            Pinger
+	auth          *auth.Service
+	accounts      *accounts.Service
+	cycles        *cycles.Service
+	buckets       *buckets.Service
+	transactions  *transactions.Service
+	refills       *refill.Service
+	schedules     *schedules.Service
+	notifications *notifications.Service
 }
 
 var _ api.StrictServerInterface = (*server)(nil)

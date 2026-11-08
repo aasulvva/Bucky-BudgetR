@@ -57,6 +57,8 @@ tags:
     description: Aggregated series for graphs and reports (#119).
   - name: schedules
     description: Scheduled and recurring transactions and their approval queue (#31).
+  - name: notifications
+    description: Reminders and to-dos the app can't do for the user (#57).
 
 paths:
   /healthz:
@@ -2115,6 +2117,68 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/v1/notifications:
+    get:
+      operationId: listNotifications
+      tags: [notifications]
+      summary: The user's open notifications
+      description: |
+        Worked out from the user's data when read, so a notification goes
+        away by itself once its task is done (the queue approved, the
+        balance adjusted, the bucket covered). Dismissed ones and kinds
+        switched off in `preferences.notifications` are left out. Alerts
+        come first, then warnings, then the rest, each oldest first.
+
+        - `approval_queue`: scheduled transactions waiting for approval,
+          one for all of them, with `count` and `overdue`.
+        - `upcoming_bill`: an expense or transfer a schedule records within
+          `upcoming_days`, with `schedule_id`, `at`, `amount` and `currency`.
+        - `investment_balance`: an investment or fund account with no
+          balance adjustment since the active cycle started, with
+          `account_id` and `cycle_id`.
+        - `bucket_uncovered`: a priority bucket whose CAF is below its TF,
+          with `bucket_id` and the missing `amount` and `currency`.
+      responses:
+        "200":
+          description: The open notifications.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationList"
+        "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/notifications/dismiss:
+    post:
+      operationId: dismissNotification
+      tags: [notifications]
+      summary: Dismiss a notification, or mark it done
+      description: |
+        Hides the notification with this key until it happens again: the
+        key names what it's about (the newest queued transaction, the
+        bill's time, the cycle and account, the bucket). Once a dismissed
+        one no longer applies, the dismissal is forgotten, so an uncovered
+        bucket shows again the next time it's uncovered.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationDismiss"
+      responses:
+        "204":
+          description: Dismissed.
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
 components:
   securitySchemes:
     cookieAuth:
@@ -2468,6 +2532,12 @@ components:
             Null means none.
           items:
             $ref: "#/components/schemas/SavedGraph"
+        notifications:
+          type: object
+          allOf:
+            - $ref: "#/components/schemas/NotificationSettings"
+          nullable: true
+          description: Which notifications show (#57). Null means all, bills 3 days ahead.
 
     DashboardSettings:
       type: object
@@ -4163,3 +4233,111 @@ components:
           type: string
           nullable: true
           description: Pass as `cursor` for the next page. Null on the last page.
+
+    NotificationKind:
+      type: string
+      enum: [approval_queue, upcoming_bill, investment_balance, bucket_uncovered]
+
+    Notification:
+      type: object
+      additionalProperties: false
+      required: [key, kind, severity, at, count, overdue, schedule_id, account_id, bucket_id, cycle_id, amount, currency]
+      description: |
+        A reminder or to-do. The client words it from `kind` and the fields
+        that kind uses (see `listNotifications`); the others are null.
+      properties:
+        key:
+          type: string
+          maxLength: 200
+          description: What it's about. Pass it to `dismissNotification`.
+          example: "bill:4829135521:1794729600"
+        kind:
+          $ref: "#/components/schemas/NotificationKind"
+        severity:
+          type: string
+          enum: [info, warning, alert]
+          description: |
+            `alert` for an overdue approval or an uncovered bucket,
+            `warning` for an approval that isn't overdue, else `info`.
+        at:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            When it applies: the newest queued transaction's queue time, the
+            bill's time, or the cycle's start. Null for an uncovered bucket.
+        count:
+          type: integer
+          nullable: true
+          description: How many wait for approval.
+        overdue:
+          type: integer
+          nullable: true
+          description: How many of them are overdue.
+        schedule_id:
+          type: string
+          nullable: true
+        account_id:
+          type: string
+          nullable: true
+        bucket_id:
+          type: string
+          nullable: true
+        cycle_id:
+          type: string
+          nullable: true
+        amount:
+          type: string
+          nullable: true
+          description: The bill's amount, or what the bucket is missing (TF − CAF).
+        currency:
+          type: string
+          nullable: true
+
+    NotificationList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Notification"
+
+    NotificationDismiss:
+      type: object
+      additionalProperties: false
+      required: [key]
+      properties:
+        key:
+          type: string
+          minLength: 1
+          maxLength: 200
+
+    NotificationSettings:
+      type: object
+      additionalProperties: false
+      description: Missing or null fields use the default.
+      properties:
+        approval_queue:
+          type: boolean
+          nullable: true
+          description: Scheduled transactions waiting for approval. Null means true.
+        upcoming_bills:
+          type: boolean
+          nullable: true
+          description: Expenses and transfers coming up. Null means true.
+        upcoming_days:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 14
+          description: How many days ahead a bill shows. Null means 3.
+        investment_balance:
+          type: boolean
+          nullable: true
+          description: Investment and fund balances to update when a cycle starts. Null means true.
+        bucket_uncovered:
+          type: boolean
+          nullable: true
+          description: Priority buckets that aren't covered. Null means true.

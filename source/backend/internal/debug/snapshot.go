@@ -50,6 +50,8 @@ var tables = []table{
 	{"schedules", "user_id = $1", "id"},
 	{"schedule_bucket_lines", "user_id = $1", "schedule_id, bucket_id"},
 	{"schedule_occurrences", "user_id = $1", "id"},
+	// The keys aren't remapped (see kKept).
+	{"notification_dismissals", "user_id = $1", "key"},
 }
 
 type row = map[string]any

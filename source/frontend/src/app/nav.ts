@@ -88,7 +88,21 @@ export const profileItems: (NavItem & {
   { path: "/admin", key: "admin", issue: 30, adminOnly: true },
 ];
 
-export const navItems: NavItem[] = [...navTabs.flatMap((t) => t.items), ...profileItems];
+/**
+ * Notifications (#57): above the profile button on desktop, a bell next to
+ * the avatar on mobile.
+ */
+export const notificationsItem: NavItem = {
+  path: "/notifications",
+  key: "notifications",
+  issue: 57,
+};
+
+export const navItems: NavItem[] = [
+  ...navTabs.flatMap((t) => t.items),
+  ...profileItems,
+  notificationsItem,
+];
 
 /**
  * The item a path belongs to, and its tab (none for the profile menu's
@@ -106,5 +120,6 @@ export function findNav(pathname: string): { tab?: NavTab; item: NavItem } | und
     for (const item of tab.items) consider(item, tab);
   }
   for (const item of profileItems) consider(item);
+  consider(notificationsItem);
   return best;
 }

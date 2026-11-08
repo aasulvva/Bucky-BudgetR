@@ -42,7 +42,8 @@
       "budgetSetup": "Budget setup",
       "savingsSetup": "Savings setup",
       "settings": "Settings",
-      "admin": "Admin"
+      "admin": "Admin",
+      "notifications": "Notifications"
     },
     "descriptions": {
       "settings": "Password, preferences, data",
@@ -1447,6 +1448,54 @@
       "outside_cycle": "Its time was outside the active cycle",
       "invalid": "It couldn't be recorded",
       "invalidDetail": "It couldn't be recorded: {{detail}}"
+    }
+  },
+  "notifications": {
+    "count_one": "{{count}} open notification",
+    "count_other": "{{count}} open notifications",
+    "empty": "Nothing to do",
+    "emptyHint": "Reminders and to-dos show up here: scheduled transactions to approve, bills coming up, balances to update and priority buckets that aren't covered.",
+    "settingsLink": "Choose which in Settings.",
+    "dismiss": "Dismiss",
+    "done": "The balance is right",
+    "queue": {
+      "title_one": "{{count}} scheduled transaction waits for approval",
+      "title_other": "{{count}} scheduled transactions wait for approval",
+      "body": "Approve, edit or skip them on the Scheduled tab.",
+      "overdue_one": "{{count}} is overdue.",
+      "overdue_other": "{{count}} are overdue.",
+      "open": "Open the queue"
+    },
+    "bill": {
+      "when": "{{amount}} on {{date}}.",
+      "expenseHint": "Make sure the money's there, or pay it at the bank.",
+      "transferHint": "Remember to make the transfer at the bank.",
+      "open": "See scheduled"
+    },
+    "balance": {
+      "title": "Update the balance of {{name}}",
+      "body": "A new cycle started {{date}}. Adjust the balance so the cycle starts from real numbers.",
+      "open": "Adjust balance"
+    },
+    "bucket": {
+      "title": "{{name}} isn't covered",
+      "body": "This priority bucket is missing {{amount}}. Reallocate, or add money to its account.",
+      "open": "Open Buckets"
+    },
+    "settings": {
+      "title": "Notifications",
+      "hint": "What shows under Notifications. Each one goes away by itself once it's done.",
+      "approval_queue": "Waiting for approval",
+      "approval_queueHint": "Scheduled transactions that ask first, or couldn't be recorded.",
+      "upcoming_bills": "Upcoming bills",
+      "upcoming_billsHint": "Expenses and transfers a schedule records soon, to pay or move at the bank.",
+      "investment_balance": "Investment balances",
+      "investment_balanceHint": "When a cycle starts: investment and fund accounts whose balance hasn't been updated.",
+      "bucket_uncovered": "Uncovered priority buckets",
+      "bucket_uncoveredHint": "Priority buckets that aren't fully covered.",
+      "upcomingDays": "Show bills",
+      "days_one": "{{count}} day ahead",
+      "days_other": "{{count}} days ahead"
     }
   }
 }

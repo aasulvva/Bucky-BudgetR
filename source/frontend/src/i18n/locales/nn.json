@@ -42,7 +42,8 @@
       "budgetSetup": "Budsjettoppsett",
       "savingsSetup": "Spareoppsett",
       "settings": "Innstillingar",
-      "admin": "Administrasjon"
+      "admin": "Administrasjon",
+      "notifications": "Varsel"
     },
     "descriptions": {
       "settings": "Passord, innstillingar, data",
@@ -1447,6 +1448,54 @@
       "outside_cycle": "Tidspunktet var utanfor den aktive syklusen",
       "invalid": "Han kunne ikkje registrerast",
       "invalidDetail": "Han kunne ikkje registrerast: {{detail}}"
+    }
+  },
+  "notifications": {
+    "count_one": "{{count}} ope varsel",
+    "count_other": "{{count}} opne varsel",
+    "empty": "Ingenting å gjere",
+    "emptyHint": "Påminningar og gjeremål blir viste her: planlagde transaksjonar å godkjenne, rekningar som kjem, saldoar å oppdatere og prioriterte bøtter som ikkje er dekte.",
+    "settingsLink": "Vel kva for nokre i Innstillingar.",
+    "dismiss": "Avvis",
+    "done": "Saldoen stemmer",
+    "queue": {
+      "title_one": "{{count}} planlagd transaksjon ventar på godkjenning",
+      "title_other": "{{count}} planlagde transaksjonar ventar på godkjenning",
+      "body": "Godkjenn, endre eller hopp over dei i fana Planlagde.",
+      "overdue_one": "{{count}} er forfallen.",
+      "overdue_other": "{{count}} er forfalne.",
+      "open": "Opne køen"
+    },
+    "bill": {
+      "when": "{{amount}} {{date}}.",
+      "expenseHint": "Sørg for at pengane er der, eller betal i banken.",
+      "transferHint": "Hugs å gjere overføringa i banken.",
+      "open": "Sjå planlagde"
+    },
+    "balance": {
+      "title": "Oppdater saldoen på {{name}}",
+      "body": "Ein ny periode starta {{date}}. Juster saldoen så perioden startar frå verkelege tal.",
+      "open": "Juster saldo"
+    },
+    "bucket": {
+      "title": "{{name}} er ikkje dekt",
+      "body": "Denne prioriterte bøtta manglar {{amount}}. Fordel på nytt, eller set inn pengar på kontoen.",
+      "open": "Opne Bøtter"
+    },
+    "settings": {
+      "title": "Varsel",
+      "hint": "Kva som blir vist under Varsel. Kvart varsel forsvinn av seg sjølv når det er gjort.",
+      "approval_queue": "Ventar på godkjenning",
+      "approval_queueHint": "Planlagde transaksjonar som spør først, eller som ikkje kunne registrerast.",
+      "upcoming_bills": "Komande rekningar",
+      "upcoming_billsHint": "Utgifter og overføringar ein plan registrerer snart, til å betale eller flytte i banken.",
+      "investment_balance": "Investeringssaldoar",
+      "investment_balanceHint": "Når ein periode startar: investerings- og fondskontoar der saldoen ikkje er oppdatert.",
+      "bucket_uncovered": "Udekte prioriterte bøtter",
+      "bucket_uncoveredHint": "Prioriterte bøtter som ikkje er heilt dekte.",
+      "upcomingDays": "Vis rekningar",
+      "days_one": "{{count}} dag fram",
+      "days_other": "{{count}} dagar fram"
     }
   }
 }
