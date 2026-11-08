@@ -822,7 +822,9 @@
     },
     "fromSchedule": "Fra den planlagte transaksjonen <schedule>{{name}}</schedule>",
     "scheduledMark": "Ført av en planlagt transaksjon",
-    "makeRecurring": "Gjør gjentakende"
+    "makeRecurring": "Gjør gjentakende",
+    "balanceAfter": "Saldo {{amount}}",
+    "balanceAfterDetail": "Saldo etter: {{amount}}"
   },
   "cycles": {
     "plan": "Planlegg en periode",

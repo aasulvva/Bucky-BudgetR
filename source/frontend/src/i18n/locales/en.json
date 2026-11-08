@@ -822,7 +822,9 @@
     },
     "fromSchedule": "From the schedule <schedule>{{name}}</schedule>",
     "scheduledMark": "Recorded by a schedule",
-    "makeRecurring": "Make recurring"
+    "makeRecurring": "Make recurring",
+    "balanceAfter": "Balance {{amount}}",
+    "balanceAfterDetail": "Balance after: {{amount}}"
   },
   "cycles": {
     "plan": "Plan a cycle",

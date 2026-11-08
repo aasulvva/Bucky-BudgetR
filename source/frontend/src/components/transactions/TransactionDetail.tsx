@@ -1,4 +1,4 @@
-import { ActionIcon, Alert, Anchor, Button, Group, Stack, Text, Title } from "@mantine/core";
+import { ActionIcon, Alert, Anchor, Box, Button, Group, Stack, Text, Title } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { IconBucket, IconBuildingBank, IconRepeat, IconX, type Icon } from "@tabler/icons-react";
 import { useMutation } from "@tanstack/react-query";
@@ -17,6 +17,7 @@ import { ErrorAlert } from "@/components/ErrorAlert";
 import { QueryState } from "@/components/QueryState";
 import { cycleRange } from "@/lib/cycles";
 import { formatDateTime } from "@/lib/dates";
+import { formatMoney } from "@/lib/money";
 import { isSchedulable, scheduleTitle } from "@/lib/schedules";
 import { bucketLinesLocked, isCorrectable, linesAmount, shownLines } from "@/lib/transactionList";
 
@@ -114,11 +115,27 @@ function Detail({
           title={t("transactions.accountLines", { count: lines.bank_lines.length })}
           icon={IconBuildingBank}
         >
-          {lines.bank_lines.map((l) => (
-            <Row key={l.account_id} label={names.accountName(l.account_id)}>
-              {signedMoney({ amount: l.amount, signed: true }, currency)}
-            </Row>
-          ))}
+          {lines.bank_lines.map((l) => {
+            const balance = tx.balances_after.find((b) => b.account_id === l.account_id)?.balance;
+            return (
+              <Row
+                key={l.account_id}
+                label={names.accountName(l.account_id)}
+                note={
+                  balance === undefined
+                    ? undefined
+                    : t("transactions.balanceAfterDetail", {
+                        amount: formatMoney(
+                          balance,
+                          names.accountCurrency(l.account_id) ?? currency,
+                        ),
+                      })
+                }
+              >
+                {signedMoney({ amount: l.amount, signed: true }, currency)}
+              </Row>
+            );
+          })}
         </Section>
       )}
       {lines.bucket_lines.length > 0 && (
@@ -323,15 +340,22 @@ function Section({
   );
 }
 
-function Row({ label, children }: { label: string; children: ReactNode }) {
+function Row({ label, note, children }: { label: string; note?: string; children: ReactNode }) {
   return (
-    <Group justify="space-between" gap="sm" wrap="nowrap">
+    <Group justify="space-between" gap="sm" wrap="nowrap" align="flex-start">
       <Text size="sm" style={{ minWidth: 0 }}>
         {label}
       </Text>
-      <Text size="sm" style={{ whiteSpace: "nowrap" }}>
-        {children}
-      </Text>
+      <Box ta="right">
+        <Text size="sm" style={{ whiteSpace: "nowrap" }}>
+          {children}
+        </Text>
+        {note && (
+          <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
+            {note}
+          </Text>
+        )}
+      </Box>
     </Group>
   );
 }

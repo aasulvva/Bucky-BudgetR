@@ -106,6 +106,11 @@ type Transaction struct {
 	// BeforeReversal is set on a reversed transaction: its effective lines
 	// just before the reversal, which are what it amounted to.
 	BeforeReversal *Lines
+	// BalancesAfter is each account's balance just after the transaction
+	// (#106), counting effective amounts. Get fills it for every account in
+	// BankLines; List only with an account filter, for that account. A
+	// transaction that comes to 0 in an account has none for it.
+	BalancesAfter []AccountBalance
 	// History is the original and its corrections, oldest first. Only Get
 	// fills it.
 	History []Version
@@ -121,6 +126,12 @@ type Lines struct {
 type BankLine struct {
 	AccountID string
 	Amount    decimal.Decimal
+}
+
+// AccountBalance is an account's balance at some point.
+type AccountBalance struct {
+	AccountID string
+	Balance   decimal.Decimal
 }
 
 // BucketLine is an amount on a bucket, in a cycle.
@@ -365,7 +376,42 @@ func (s *Service) Get(ctx context.Context, userID, id string) (Transaction, erro
 	if err != nil {
 		return Transaction{}, err
 	}
+	accounts := make([]string, len(list[0].BankLines))
+	for i, l := range list[0].BankLines {
+		accounts[i] = l.AccountID
+	}
+	if err := balancesAfter(ctx, q, userID, accounts, list); err != nil {
+		return Transaction{}, err
+	}
 	return list[0], nil
+}
+
+// balancesAfter fills the BalancesAfter of list (originals) for accounts.
+func balancesAfter(ctx context.Context, q *sqlc.Queries, userID string, accounts []string, list []Transaction) error {
+	if len(accounts) == 0 || len(list) == 0 {
+		return nil
+	}
+	ids := make([]string, len(list))
+	since := list[0].At
+	for i, t := range list {
+		ids[i] = t.ID
+		if t.At.Before(since) {
+			since = t.At
+		}
+	}
+	rows, err := q.BalancesAfter(ctx, sqlc.BalancesAfterParams{Ids: ids, AccountIds: accounts, UserID: userID, Since: since})
+	if err != nil {
+		return err
+	}
+	at := make(map[string]int, len(list))
+	for i, t := range list {
+		at[t.ID] = i
+	}
+	for _, r := range rows {
+		t := &list[at[r.TransactionID]]
+		t.BalancesAfter = append(t.BalancesAfter, AccountBalance{AccountID: r.AccountID, Balance: r.Balance})
+	}
+	return nil
 }
 
 // List returns a page of the user's transactions, newest first, each merged
@@ -434,6 +480,11 @@ func (s *Service) List(ctx context.Context, userID string, f Filter) (Page, erro
 	}
 	if page.Items, err = s.load(ctx, q, userID, idList, false); err != nil {
 		return Page{}, err
+	}
+	if f.AccountID != "" {
+		if err := balancesAfter(ctx, q, userID, []string{f.AccountID}, page.Items); err != nil {
+			return Page{}, err
+		}
 	}
 	return page, nil
 }

@@ -96,6 +96,7 @@ export function transaction(
     bank_lines: [{ account_id: "1234", amount: "-100.00" }],
     bucket_lines: [],
     before_reversal: null,
+    balances_after: [],
     ...overrides,
   };
 }

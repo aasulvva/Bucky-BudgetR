@@ -12,6 +12,8 @@ export interface Lookups {
   bucketName: (id: string) => string;
   /** The currency of the transaction's account or bucket. */
   currencyOf: (tx: Transaction) => string | undefined;
+  /** An account's currency, if the app has it. */
+  accountCurrency: (id: string) => string | undefined;
 }
 
 export function useLookups(): Lookups {
@@ -22,6 +24,7 @@ export function useLookups(): Lookups {
       accounts.find((a) => a.id === id)?.name ?? i18n.t("transactions.unknownAccount", { id }),
     bucketName: (id) =>
       buckets.find((b) => b.id === id)?.name ?? i18n.t("transactions.unknownBucket", { id }),
+    accountCurrency: (id) => accounts.find((a) => a.id === id)?.currency,
     currencyOf: (tx) => {
       const lines = shownLines(tx);
       const account = lines.bank_lines[0]?.account_id;

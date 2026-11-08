@@ -248,6 +248,10 @@ func toAPITransaction(t transactions.Transaction) api.Transaction {
 		BankLines:      toAPIBankLines(t.BankLines),
 		BucketLines:    toAPIBucketLines(t.BucketLines),
 		BeforeReversal: nullable.NewNullNullable[api.TransactionLines](),
+		BalancesAfter:  make([]api.TransactionBalance, len(t.BalancesAfter)),
+	}
+	for i, b := range t.BalancesAfter {
+		out.BalancesAfter[i] = api.TransactionBalance{AccountId: b.AccountID, Balance: b.Balance.StringFixed(money.Places)}
 	}
 	if b := t.BeforeReversal; b != nil {
 		out.BeforeReversal = nullable.NewNullableWithValue(api.TransactionLines{
