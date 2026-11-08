@@ -773,6 +773,7 @@
       "allCycles": "All cycles",
       "activeCycle": "{{range}} (active)",
       "system": "Show refills & adjustments",
+      "reversed": "Show reversed & moved",
       "more": "Filter",
       "done": "Show transactions",
       "remove": "Remove filter {{name}}",

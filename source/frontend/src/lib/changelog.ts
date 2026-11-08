@@ -16,6 +16,32 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.16.01",
+    date: "2026-11-08",
+    title: {
+      en: "Hide reversed transactions",
+      nb: "Skjul reverserte transaksjoner",
+      nn: "Skjul reverserte transaksjonar",
+    },
+    changes: {
+      en: [
+        "Transactions no longer lists reversed transactions, or the originals of ones moved to another account. Tick Show reversed & moved to see them; the choice is remembered in this browser.",
+        "After Reverse, the transaction leaves the list, but its detail stays open.",
+        "The Dashboard's Recent transactions leaves them out too, unless Show reversed & moved is ticked in its settings.",
+      ],
+      nb: [
+        "Transaksjoner viser ikke lenger reverserte transaksjoner, eller originalene til dem som er flyttet til en annen konto. Kryss av for Vis reverserte og flyttede for å se dem. Valget huskes i denne nettleseren.",
+        "Etter Reverser forsvinner transaksjonen fra lista, men detaljene blir stående åpne.",
+        "Siste transaksjoner på Oversikt utelater dem også, med mindre Vis reverserte og flyttede er krysset av i innstillingene.",
+      ],
+      nn: [
+        "Transaksjonar viser ikkje lenger reverserte transaksjonar, eller originalane til dei som er flytta til ein annan konto. Kryss av for Vis reverserte og flytta for å sjå dei. Valet vert hugsa i denne nettlesaren.",
+        "Etter Reverser forsvinn transaksjonen frå lista, men detaljane vert ståande opne.",
+        "Siste transaksjonar på Oversikt utelèt dei òg, med mindre Vis reverserte og flytta er kryssa av i innstillingane.",
+      ],
+    },
+  },
+  {
     version: "v1.16.00",
     date: "2026-11-08",
     title: {

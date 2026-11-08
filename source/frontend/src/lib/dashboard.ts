@@ -66,6 +66,8 @@ export interface BucketStatusSettings {
 }
 export interface RecentSettings {
   count: number;
+  /** Also list reversed transactions and moved originals (#91). */
+  showReversed: boolean;
 }
 export interface InOutSettings {
   figures: FlowFigure[];
@@ -130,7 +132,10 @@ const fromApi = {
     bucketId: s?.bucket_id ?? null,
     showMode: s?.show_mode ?? true,
   }),
-  recent: (s?: Schemas["RecentWidgetSettings"]): RecentSettings => ({ count: s?.count ?? 5 }),
+  recent: (s?: Schemas["RecentWidgetSettings"]): RecentSettings => ({
+    count: s?.count ?? 5,
+    showReversed: s?.show_reversed ?? false,
+  }),
   inOut: (s?: Schemas["InOutWidgetSettings"]): InOutSettings => ({
     figures: s?.figures ?? ["income", "expenses", "balance"],
     period: s?.period ?? "month",
@@ -349,7 +354,13 @@ function widgetToApi(w: WidgetInstance): ApiWidget {
       };
     }
     case "recent_transactions":
-      return { ...base, recent_transactions: { count: w.settings.count } };
+      return {
+        ...base,
+        recent_transactions: {
+          count: w.settings.count,
+          ...(w.settings.showReversed ? { show_reversed: true } : {}),
+        },
+      };
     case "in_out": {
       const { figures, period, days, accountId } = w.settings;
       return {

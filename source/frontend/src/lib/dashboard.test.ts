@@ -88,7 +88,7 @@ describe("dashboardLayout", () => {
         type: "recent_transactions",
         width: "full",
         title: null,
-        settings: { count: 5 },
+        settings: { count: 5, showReversed: false },
       },
     ]);
     expect(dashboardLayout({ dashboard: null })).toEqual(defaultLayout());
@@ -108,7 +108,7 @@ describe("dashboardLayout", () => {
       null,
       { mode: "bucket", accountId: null, bucketId: "1000000001", showMode: true },
       { mode: "account", accountId: "1234" },
-      { count: 10 },
+      { count: 10, showReversed: false },
     ]);
     expect(layoutToPreferences(layout)).toEqual({
       widgets: [

@@ -162,7 +162,9 @@ describe("Notifications", () => {
     await userEvent.click(
       await screen.findByRole("button", { name: "Dismiss: Rent isn't covered" }),
     );
-    expect(await screen.findByText(/It doesn.t exist, or it has been deleted\./)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/It doesn.t exist, or it has been deleted\./),
+    ).toBeInTheDocument();
   });
 
   it("says when there's nothing to do", async () => {

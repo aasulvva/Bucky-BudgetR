@@ -24,7 +24,13 @@ export function RecentWidget({
 }) {
   const { t } = useTranslation();
   const names = useLookups();
-  const pages = useTransactionPages({ type: USER_TYPES, limit: widget.settings.count });
+  const { count, showReversed } = widget.settings;
+  // Reversed ones and moved originals only when asked, as on Transactions (#91).
+  const pages = useTransactionPages({
+    type: USER_TYPES,
+    limit: count,
+    ...(showReversed ? {} : { reversed: false }),
+  });
   const items = pages.data?.pages[0]?.items ?? [];
   return (
     <WidgetCard

@@ -84,6 +84,32 @@ describe("Transactions", () => {
     const q = listQueries().at(-1);
     expect(q?.get("cycle_id")).toBe(active.id);
     expect(q?.getAll("type")).toEqual(["INC", "EXP", "TRF", "OPB", "BLA"]);
+    // Reversed and moved ones are hidden by default (#91).
+    expect(q?.get("reversed")).toBe("false");
+  });
+
+  it("shows reversed and moved ones when asked, and remembers it (#91)", async () => {
+    const { router, unmount } = renderRoute("/transactions");
+    await screen.findByRole("link", { name: /Rema 1000/ }, { timeout: 5000 });
+    await userEvent.click(screen.getByRole("checkbox", { name: "Show reversed & moved" }));
+    await waitFor(() => {
+      expect(listQueries().at(-1)?.has("reversed")).toBe(false);
+    });
+    expect(router.state.location.search).toContain("reversed=1");
+    expect(localStorage.getItem("bucky.showReversed")).toBe("1");
+    unmount();
+
+    const again = renderRoute("/transactions");
+    await screen.findByRole("link", { name: /Rema 1000/ });
+    expect(screen.getByRole("checkbox", { name: "Show reversed & moved" })).toBeChecked();
+    expect(listQueries().at(-1)?.has("reversed")).toBe(false);
+
+    // The URL wins over the remembered choice.
+    await again.router.navigate("/transactions?reversed=0");
+    await waitFor(() => {
+      expect(listQueries().at(-1)?.get("reversed")).toBe("false");
+    });
+    expect(screen.getByRole("checkbox", { name: "Show reversed & moved" })).not.toBeChecked();
   });
 
   it("filters through the URL, as drill-ins do", async () => {
@@ -173,6 +199,9 @@ describe("Transactions", () => {
     await userEvent.click(panel.getByRole("button", { name: "Reverse Rema 1000" }));
     expect(await screen.findByText("Transaction reversed.")).toBeInTheDocument();
     expect(apiMock.calls(`POST /api/v1/transactions/${rema.id}/reversal`)).toHaveLength(1);
+    // It leaves the list (#91), but the detail stays open.
+    expect(screen.getByRole("article", { name: "Rema 1000" })).toBeInTheDocument();
+    expect(router.state.location.search).toContain(`open=${rema.id}`);
 
     await userEvent.click(panel.getByRole("button", { name: "Close" }));
     expect(router.state.location.search).not.toContain("open=");
@@ -235,6 +264,21 @@ describe("Transactions", () => {
 
     await userEvent.click(screen.getByRole("link", { name: /Rema 1000/ }));
     expect(await screen.findByRole("dialog", { name: "Transaction" })).toBeInTheDocument();
+  });
+
+  it("shows Show reversed as a chip on mobile (#91)", async () => {
+    viewport.width = 390;
+    localStorage.setItem("bucky.showReversed", "1");
+    renderRoute("/transactions");
+    await screen.findByRole("link", { name: /Rema 1000/ });
+    expect(listQueries().at(-1)?.has("reversed")).toBe(false);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Remove filter Show reversed & moved" }),
+    );
+    await waitFor(() => {
+      expect(listQueries().at(-1)?.get("reversed")).toBe("false");
+    });
+    expect(localStorage.getItem("bucky.showReversed")).toBe("0");
   });
 
   it("explains an error loading the detail", async () => {

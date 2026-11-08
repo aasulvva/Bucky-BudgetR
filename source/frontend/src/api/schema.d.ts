@@ -1646,6 +1646,11 @@ export interface components {
         RecentWidgetSettings: {
             /** @description How many transactions it shows. 5 by default. */
             count: number;
+            /**
+             * @description Also list reversed transactions and moved originals (#91).
+             *     Missing means false.
+             */
+            show_reversed?: boolean;
         };
         /**
          * @description A web app language: English, Norwegian bokmål or Norwegian nynorsk.
@@ -3709,6 +3714,12 @@ export interface operations {
                 tag?: string;
                 /** @description Only transactions whose counterparty contains this text, ignoring case. */
                 counterparty?: string;
+                /**
+                 * @description `true` lists only reversed transactions (moved originals too, as
+                 *     moving reverses the original), `false` only the others. Omitted,
+                 *     both.
+                 */
+                reversed?: boolean;
                 /** @description The page size. */
                 limit?: number;
                 /** @description The previous page's `next_cursor`. */

@@ -80,6 +80,18 @@ func TestCorrectionsAPI(t *testing.T) {
 	}
 	expect(t, "reverse twice", do(http.MethodPost, "/api/v1/transactions/"+moved.Id+"/reversal", nil, alice), http.StatusConflict, "already_reversed")
 
+	// Both are reversed now: the moved original and its replacement (#91).
+	w = do(http.MethodGet, "/api/v1/transactions?type=EXP&reversed=false", nil, alice)
+	expect(t, "not reversed", w, http.StatusOK, "")
+	if got := decode[api.TransactionPage](t, w).Items; len(got) != 0 {
+		t.Errorf("not reversed %+v", got)
+	}
+	w = do(http.MethodGet, "/api/v1/transactions?type=EXP&reversed=true", nil, alice)
+	if got := decode[api.TransactionPage](t, w).Items; len(got) != 2 {
+		t.Errorf("reversed %+v", got)
+	}
+	expect(t, "reversed=maybe", do(http.MethodGet, "/api/v1/transactions?reversed=maybe", nil, alice), http.StatusBadRequest, "invalid_request")
+
 	w = do(http.MethodGet, "/api/v1/accounts/"+main, nil, alice)
 	if a := decode[api.Account](t, w); a.Balance != "1000.00" {
 		t.Errorf("main balance %s, want 1000.00", a.Balance)
