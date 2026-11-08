@@ -55,4 +55,14 @@ window.ResizeObserver = class {
   }
 };
 
+// jsdom has no font loading; Mantine's autosize Textarea listens for it.
+Object.defineProperty(document, "fonts", {
+  configurable: true,
+  value: {
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+    ready: Promise.resolve(),
+  },
+});
+
 window.HTMLElement.prototype.scrollIntoView = () => undefined;

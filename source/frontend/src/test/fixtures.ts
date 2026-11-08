@@ -84,6 +84,7 @@ export function transaction(
     type: "EXP",
     at: new Date().toISOString(),
     counterparty: "",
+    description: "",
     tags: [],
     triggers_refill: false,
     created_at: new Date().toISOString(),

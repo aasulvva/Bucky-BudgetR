@@ -164,6 +164,8 @@ export interface EditValues {
   /** A transfer's receiving account. */
   toAccountId: string | null;
   counterparty: string;
+  /** An optional note (#130), possibly several lines. */
+  description: string;
   tags: string[];
   lines: SplitLine[];
   triggersRefill: boolean;
@@ -184,6 +186,7 @@ export function editState(tx: Transaction): EditValues {
     accountId: (tx.type === "TRF" ? from : first)?.account_id ?? null,
     toAccountId: tx.type === "TRF" ? (to?.account_id ?? null) : null,
     counterparty: tx.counterparty,
+    description: tx.description,
     tags: tx.tags,
     lines: tx.bucket_lines.map((l) => newLine(l.bucket_id, positive(l.amount))),
     triggersRefill: tx.triggers_refill,
@@ -223,6 +226,9 @@ export function correctionBody(
   if (values.counterparty.trim() !== start.counterparty) {
     body.counterparty = values.counterparty.trim();
   }
+  if (cleanDescription(values.description) !== start.description) {
+    body.description = cleanDescription(values.description);
+  }
   if (!sameList(values.tags, start.tags)) body.tags = values.tags;
   if (
     !locked &&
@@ -238,4 +244,14 @@ export function correctionBody(
     body.triggers_refill = values.triggersRefill;
   }
   return Object.keys(body).length > 0 ? body : null;
+}
+
+/** A description as the server stores it: plain line breaks, trimmed. */
+export function cleanDescription(s: string): string {
+  return s.replace(/\r\n/g, "\n").trim();
+}
+
+/** A description's first line, for a list row. */
+export function firstLine(s: string): string {
+  return s.split("\n", 1)[0] ?? "";
 }

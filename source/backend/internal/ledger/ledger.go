@@ -49,6 +49,7 @@ var (
 // Limits on the free-text fields.
 const (
 	MaxCounterparty = 200
+	MaxDescription  = 500
 	MaxTags         = 20
 	MaxTagLength    = 50
 )
@@ -73,9 +74,12 @@ type Entry struct {
 	// microsecond.
 	At           time.Time
 	Counterparty string
-	Tags         []string
-	BankLines    []BankLine
-	BucketLines  []BucketLine
+	// Description is an optional note of what it was, of up to
+	// MaxDescription characters and possibly several lines.
+	Description string
+	Tags        []string
+	BankLines   []BankLine
+	BucketLines []BucketLine
 }
 
 // BankLine is an amount on a bank account, in the account's currency.
@@ -201,6 +205,7 @@ func (l *Ledger) Record(ctx context.Context, tx pgx.Tx, e Entry) (*Transaction, 
 				CreatedBy:       createdBy,
 				ReplacesID:      pgtype.Text{String: e.ReplacesID, Valid: e.ReplacesID != ""},
 				TriggersRefill:  e.TriggersRefill,
+				Description:     e.Description,
 			})
 			return ids.Inserted(err)
 		})
@@ -432,6 +437,10 @@ func normalize(e Entry) (Entry, error) {
 	if utf8.RuneCountInString(e.Counterparty) > MaxCounterparty {
 		return invalid("counterparty is longer than %d characters", MaxCounterparty)
 	}
+	e.Description = CleanDescription(e.Description)
+	if utf8.RuneCountInString(e.Description) > MaxDescription {
+		return invalid("the description is longer than %d characters", MaxDescription)
+	}
 
 	var tags []string
 	for _, tag := range e.Tags {
@@ -543,4 +552,10 @@ func sortTags(tags []string) {
 	slices.SortFunc(tags, func(a, b string) int {
 		return strings.Compare(strings.ToLower(a), strings.ToLower(b))
 	})
+}
+
+// CleanDescription is a description as it's stored: Windows line breaks
+// made plain, and trimmed at both ends.
+func CleanDescription(s string) string {
+	return strings.TrimSpace(strings.ReplaceAll(s, "\r\n", "\n"))
 }

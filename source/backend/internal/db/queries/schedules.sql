@@ -3,9 +3,9 @@
 INSERT INTO schedules (
     id, user_id, name, transaction_type, account_id, to_account_id, amount, counterparty, tags,
     triggers_refill, mode, due_days, start_date, time_of_day, time_zone, frequency, every,
-    end_count, end_date, paused, next_index, next_at
+    end_count, end_date, paused, next_index, next_at, description
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
 )
 ON CONFLICT (id) DO NOTHING
 RETURNING *;
@@ -15,7 +15,8 @@ UPDATE schedules SET
     name = $3, transaction_type = $4, account_id = $5, to_account_id = $6, amount = $7,
     counterparty = $8, tags = $9, triggers_refill = $10, mode = $11, due_days = $12,
     start_date = $13, time_of_day = $14, time_zone = $15, frequency = $16, every = $17,
-    end_count = $18, end_date = $19, paused = $20, next_index = $21, next_at = $22, updated_at = now()
+    end_count = $18, end_date = $19, paused = $20, next_index = $21, next_at = $22, description = $23,
+    updated_at = now()
 WHERE id = $1 AND user_id = $2
 RETURNING *;
 

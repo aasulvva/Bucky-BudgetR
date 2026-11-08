@@ -790,6 +790,7 @@ type Schedule struct {
 	NextAt          pgtype.Timestamptz
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
+	Description     string
 }
 
 type ScheduleBucketLine struct {
@@ -844,6 +845,7 @@ type TransactionHeader struct {
 	CreatedBy       pgtype.Text
 	ReplacesID      pgtype.Text
 	TriggersRefill  bool
+	Description     string
 }
 
 type TransactionTag struct {

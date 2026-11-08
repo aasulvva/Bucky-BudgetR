@@ -46,6 +46,29 @@ func TestCorrectionsAPI(t *testing.T) {
 		t.Errorf("new transaction %+v", exp)
 	}
 	path := "/api/v1/transactions/" + exp.Id
+	if exp.Description != "" {
+		t.Errorf("no description %q", exp.Description)
+	}
+
+	// The description (#130): set on create, changed by a correction. An
+	// income, reversed after, so the EXP checks below don't see it.
+	w = do(http.MethodPost, "/api/v1/transactions", map[string]any{
+		"type": "INC", "account_id": main, "amount": "10", "description": "Tyres\nand fitting",
+	}, alice)
+	expect(t, "create with a description", w, http.StatusCreated, "")
+	tyres := decode[api.Transaction](t, w)
+	if tyres.Description != "Tyres\nand fitting" {
+		t.Errorf("description %q", tyres.Description)
+	}
+	expect(t, "a long description", do(http.MethodPost, "/api/v1/transactions", map[string]any{
+		"type": "EXP", "account_id": main, "amount": "10", "description": strings.Repeat("x", 501),
+	}, alice), http.StatusBadRequest, "invalid_request")
+	w = do(http.MethodPost, "/api/v1/transactions/"+tyres.Id+"/correction", map[string]any{"description": ""}, alice)
+	expect(t, "remove the description", w, http.StatusOK, "")
+	if got := decode[api.Transaction](t, w); got.Description != "" || !got.Corrected {
+		t.Errorf("removed %+v", got)
+	}
+	expect(t, "reverse the tyres", do(http.MethodPost, "/api/v1/transactions/"+tyres.Id+"/reversal", nil, alice), http.StatusOK, "")
 
 	w = do(http.MethodPost, path+"/correction", map[string]any{"amount": "150", "counterparty": "Rema 1000"}, alice)
 	expect(t, "correct", w, http.StatusOK, "")

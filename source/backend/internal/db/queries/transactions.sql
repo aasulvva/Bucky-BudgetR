@@ -2,11 +2,12 @@
 -- A page of the user's original transactions (not corrections), newest first.
 -- A null filter matches everything. The account and bucket filters also match
 -- lines added by corrections; the tag and counterparty filters use the
--- newest header of the family, which holds the effective values.
+-- newest header of the family, which holds the effective values. The
+-- counterparty filter matches the description too (#130).
 -- before_at/before_id is the keyset cursor: the last row of the previous page.
 SELECT h.* FROM transaction_headers h
 JOIN LATERAL (
-    SELECT c.id, c.counterparty FROM transaction_headers c
+    SELECT c.id, c.counterparty, c.description FROM transaction_headers c
     WHERE c.id = h.id OR c.parent_id = h.id
     ORDER BY c.created_at DESC, c.id DESC
     LIMIT 1
@@ -24,8 +25,10 @@ WHERE h.user_id = sqlc.arg(user_id) AND h.correction_type = 'none'
   AND (sqlc.narg(tag)::text IS NULL OR EXISTS (
       SELECT 1 FROM transaction_tags tt JOIN tags t ON t.id = tt.tag_id
       WHERE tt.transaction_id = latest.id AND lower(t.name) = lower(sqlc.narg(tag)::text)))
-  -- counterparty is a LIKE pattern, escaped by the caller.
-  AND (sqlc.narg(counterparty)::text IS NULL OR latest.counterparty ILIKE sqlc.narg(counterparty)::text)
+  -- counterparty is a LIKE pattern, escaped by the caller, matching the
+  -- counterparty or the description (#130).
+  AND (sqlc.narg(counterparty)::text IS NULL OR latest.counterparty ILIKE sqlc.narg(counterparty)::text
+           OR latest.description ILIKE sqlc.narg(counterparty)::text)
   -- reversed: only reversed ones (moved originals too), or only the others.
   AND (sqlc.narg(reversed)::boolean IS NULL OR EXISTS (
       SELECT 1 FROM transaction_headers r WHERE r.parent_id = h.id AND r.correction_type = 'reversal'

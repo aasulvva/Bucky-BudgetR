@@ -172,12 +172,12 @@ func TestSeries(t *testing.T) {
 	})
 	// 2 November: an expense corrected later counts on its own date.
 	exp := e.record(ledger.Entry{
-		Type: sqlc.TransactionTypeEXP, At: at("2026-11-02T12:00:00Z"), Counterparty: "Kino", Tags: []string{"fun"},
+		Type: sqlc.TransactionTypeEXP, At: at("2026-11-02T12:00:00Z"), Counterparty: "Kino", Description: "Popcorn too", Tags: []string{"fun"},
 		BankLines: lines(bank{main, "-300"}), BucketLines: bucketLines(bank{fun, "-300"}),
 	})
 	e.record(ledger.Entry{
 		Type: sqlc.TransactionTypeEXP, At: at("2026-11-05T12:00:00Z"), Correction: sqlc.CorrectionTypeAdjustment, ParentID: exp.Header.ID,
-		Counterparty: "Kino", Tags: []string{"fun"}, // a correction carries the effective values
+		Counterparty: "Kino", Description: "Popcorn too", Tags: []string{"fun"}, // a correction carries the effective values
 		BankLines: lines(bank{main, "-50"}), BucketLines: bucketLines(bank{fun, "-50"}),
 	})
 	// 3 November: reversed, so it counts as nothing.
@@ -270,6 +270,8 @@ func TestSeries(t *testing.T) {
 	check("tags", values(query(stats.Query{Metric: stats.Spending, Tags: []string{"groceries", "FUN"}}), nok), []string{"500.00", "350.00", "0.00", "0.00"})
 	check("one tag", values(query(stats.Query{Metric: stats.Spending, Tags: []string{"fun"}}), nok), []string{"0.00", "350.00", "0.00", "0.00"})
 	check("counterparty", values(query(stats.Query{Metric: stats.Spending, Counterparty: "rema"}), nok), []string{"500.00", "0.00", "0.00", "0.00"})
+	// The counterparty filter matches the description too (#130).
+	check("description", values(query(stats.Query{Metric: stats.Spending, Counterparty: "popcorn"}), nok), []string{"0.00", "350.00", "0.00", "0.00"})
 	check("counterparty with LIKE characters", values(query(stats.Query{Metric: stats.Spending, Counterparty: "%"}), nok), []string{"0.00", "0.00", "0.00", "0.00"})
 
 	// Balances at the end of each day, from the balance before the period.

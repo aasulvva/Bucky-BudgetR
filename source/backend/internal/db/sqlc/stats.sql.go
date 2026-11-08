@@ -126,7 +126,7 @@ WITH families AS (
     SELECT h.id, h.transaction_type, h.transaction_at
     FROM transaction_headers h
     JOIN LATERAL (
-        SELECT c.id, c.counterparty FROM transaction_headers c
+        SELECT c.id, c.counterparty, c.description FROM transaction_headers c
         WHERE c.id = h.id OR c.parent_id = h.id
         ORDER BY c.created_at DESC, c.id DESC
         LIMIT 1
@@ -137,8 +137,10 @@ WITH families AS (
       AND ($6::text[] IS NULL OR EXISTS (
           SELECT 1 FROM transaction_tags tt JOIN tags t ON t.id = tt.tag_id
           WHERE tt.transaction_id = latest.id AND lower(t.name) = ANY($6::text[])))
-      -- counterparty is a LIKE pattern, escaped by the caller.
-      AND ($7::text IS NULL OR latest.counterparty ILIKE $7::text)
+      -- counterparty is a LIKE pattern, escaped by the caller, matching the
+  -- counterparty or the description (#130).
+      AND ($7::text IS NULL OR latest.counterparty ILIKE $7::text
+           OR latest.description ILIKE $7::text)
 )
 SELECT f.id, f.transaction_type, f.transaction_at, b.account_id, a.currency, SUM(b.amount)::numeric AS net
 FROM families f
@@ -173,8 +175,8 @@ type StatsBankNetsRow struct {
 // The Stats API's sums (#121). A transaction family (an original and its
 // corrections) counts on the original's date, as the transaction list and
 // AccountFlows count it, so a reversed one adds up to 0. The filters work as
-// on the transaction list: tags and counterparty from the family's newest
-// header. A null filter matches everything. The queries return each
+// on the transaction list: tags, counterparty and description from the
+// family's newest header. A null filter matches everything. The queries return each
 // family's net per account or bucket; Go puts them into intervals.
 // Each family's net per bank account, for families of the given types in
 // [from_at, to_at).
@@ -218,7 +220,7 @@ WITH families AS (
     SELECT h.id, h.transaction_type, h.transaction_at
     FROM transaction_headers h
     JOIN LATERAL (
-        SELECT c.id, c.counterparty FROM transaction_headers c
+        SELECT c.id, c.counterparty, c.description FROM transaction_headers c
         WHERE c.id = h.id OR c.parent_id = h.id
         ORDER BY c.created_at DESC, c.id DESC
         LIMIT 1
@@ -229,7 +231,8 @@ WITH families AS (
       AND ($7::text[] IS NULL OR EXISTS (
           SELECT 1 FROM transaction_tags tt JOIN tags t ON t.id = tt.tag_id
           WHERE tt.transaction_id = latest.id AND lower(t.name) = ANY($7::text[])))
-      AND ($8::text IS NULL OR latest.counterparty ILIKE $8::text)
+      AND ($8::text IS NULL OR latest.counterparty ILIKE $8::text
+           OR latest.description ILIKE $8::text)
 )
 SELECT f.id, f.transaction_type, f.transaction_at, l.bucket_id, k.source_account_id AS account_id, a.currency,
        SUM(l.amount)::numeric AS net

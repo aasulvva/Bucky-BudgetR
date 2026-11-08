@@ -310,6 +310,7 @@ describe("Schedule pages", () => {
       type: "INC",
       at: "2026-10-23T15:00:00Z",
       counterparty: "Employer AS",
+      description: "Salary, before tax",
       bank_lines: [{ account_id: main.id, amount: "32000.00" }],
     });
     apiMock.on("GET /api/v1/transactions/2026102300000001", { body: tx });
@@ -332,6 +333,8 @@ describe("Schedule pages", () => {
         account_id: main.id,
         amount: "32000.00",
         counterparty: "Employer AS",
+        // The description comes along (#130).
+        description: "Salary, before tax",
       },
       start_date: "2026-10-23",
       time: "08:00",

@@ -129,7 +129,10 @@ describe("Transactions", () => {
       expect(listQueries().at(-1)?.get("cycle_id")).toBeNull();
     });
 
-    await userEvent.type(screen.getByRole("textbox", { name: "Search counterparty" }), "rema");
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Search counterparty or description" }),
+      "rema",
+    );
     await waitFor(() => {
       expect(listQueries().at(-1)?.get("counterparty")).toBe("rema");
     });
@@ -168,6 +171,20 @@ describe("Transactions", () => {
       expect(listQueries().at(-1)?.get("account_id")).toBeNull();
     });
     expect(screen.queryByText(`Balance ${m("29749.60")}`)).not.toBeInTheDocument();
+  });
+
+  it("shows a description's first line in the row, and all of it in the detail (#130)", async () => {
+    const noted = { ...rema, description: "Weekly shop\nand a birthday cake" };
+    apiMock.on("GET /api/v1/transactions", { body: { items: [noted], next_cursor: null } });
+    apiMock.on(`GET /api/v1/transactions/${rema.id}`, { body: { ...noted, history: [] } });
+    renderRoute(`/transactions?open=${rema.id}`);
+    const row = await screen.findByRole("link", { name: /Rema 1000/ });
+    expect(within(row).getByText("Weekly shop")).toBeInTheDocument();
+    expect(within(row).queryByText(/birthday cake/)).not.toBeInTheDocument();
+    const panel = within(await screen.findByRole("article", { name: "Rema 1000" }));
+    expect(
+      panel.getByText((_, el) => el?.textContent === "Weekly shop\nand a birthday cake"),
+    ).toBeInTheDocument();
   });
 
   it("shows each account's balance after a transfer in the detail (#106)", async () => {

@@ -964,7 +964,7 @@ export interface paths {
          *
          *     Amounts are positive, as when creating, except for OPB and BLA: their
          *     `amount` is the signed balance amount, and only `amount`,
-         *     `counterparty` and `tags` can change.
+         *     `counterparty`, `description` and `tags` can change.
          *
          *     A new `account_id` (or `to_account_id` for a transfer) moves the
          *     transaction: it is reversed and recorded again on the new account,
@@ -974,7 +974,7 @@ export interface paths {
          *
          *     Bucket lines can only change while the original time is in the
          *     active cycle (409 `bucket_lines_locked`); the bank amount,
-         *     counterparty and tags can change at any time. Only INC, EXP, TRF, OPB
+         *     counterparty, description and tags can change at any time. Only INC, EXP, TRF, OPB
          *     and BLA can be corrected (409 `not_correctable`), and not after a
          *     reversal (409 `already_reversed`). A correction that changes nothing
          *     gets 400 `no_change`.
@@ -1976,6 +1976,7 @@ export interface components {
             account_ids?: components["schemas"]["AccountId"][];
             bucket_ids?: components["schemas"]["BucketId"][];
             tags?: string[];
+            /** @description Only transactions whose counterparty or description contains this text, ignoring case. */
             counterparty?: string;
             /** @description Lines only. Running totals from the start of the period. */
             cumulative?: boolean;
@@ -2149,6 +2150,8 @@ export interface components {
             at: string;
             /** @description The effective counterparty, from the newest correction. */
             counterparty: string;
+            /** @description The effective description, from the newest correction, or "". It may have several lines. */
+            description: string;
             /** @description The effective tags, from the newest correction. */
             tags: string[];
             /** @description An income that triggers the refill of its account's *on income* buckets, from the newest correction. */
@@ -2216,6 +2219,8 @@ export interface components {
             at?: string;
             /** @description The company or person on the other side. */
             counterparty?: string;
+            /** @description An optional note of what it was. It may have several lines; it is trimmed, and Windows line breaks become plain ones. */
+            description?: string;
             /** @description Tag names. Existing tags are reused, ignoring case. */
             tags?: string[];
             /**
@@ -2276,6 +2281,8 @@ export interface components {
                 amount: components["schemas"]["Amount"];
             }[];
             counterparty?: string;
+            /** @description The new description; "" removes it. */
+            description?: string;
             /** @description Replaces all tags; an empty list removes them. */
             tags?: string[];
             /**
@@ -2340,6 +2347,8 @@ export interface components {
             /** @enum {string} */
             type: "INC" | "EXP" | "TRF";
             counterparty?: string;
+            /** @description An optional note, given to each transaction the schedule records. */
+            description?: string;
             tags?: string[];
             /** @description As in `POST /transactions`. Omitted, the user's `income_refill_rules` decide when it's recorded. */
             triggers_refill?: boolean;
@@ -2982,7 +2991,7 @@ export interface operations {
                 bucket_id?: components["schemas"]["BucketId"][];
                 /** @description Only transactions with any of these tags, ignoring case. Repeat for several. Not for `balance`. */
                 tag?: string[];
-                /** @description Only transactions whose counterparty contains this text, ignoring case. Not for `balance`. */
+                /** @description Only transactions whose counterparty or description contains this text, ignoring case. Not for `balance`. */
                 counterparty?: string;
                 /** @description Count transfers as income (in) and spending (out). Not for `balance`. */
                 transfers?: boolean;
@@ -3726,7 +3735,7 @@ export interface operations {
                 to?: string;
                 /** @description Only transactions with this tag, ignoring case. */
                 tag?: string;
-                /** @description Only transactions whose counterparty contains this text, ignoring case. */
+                /** @description Only transactions whose counterparty or description contains this text, ignoring case. */
                 counterparty?: string;
                 /**
                  * @description `true` lists only reversed transactions (moved originals too, as

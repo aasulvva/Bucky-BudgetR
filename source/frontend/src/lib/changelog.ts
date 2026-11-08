@@ -16,6 +16,35 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.00.00",
+    date: "2026-11-08",
+    title: {
+      en: "Transaction descriptions",
+      nb: "Beskrivelser på transaksjoner",
+      nn: "Skildringar på transaksjonar",
+    },
+    changes: {
+      en: [
+        "Version 2: the budget model and insight milestone is complete, with refill rules, dashboard widgets, graphs, scheduled transactions and notifications.",
+        "A transaction can have a description: a note of what it was, on several lines if you like. Add it when you create or edit one; on a phone, tap Add description.",
+        "Transactions shows the first line in the list and all of it in the detail, and the search finds descriptions as well as counterparties.",
+        "A schedule's description goes to every transaction it records.",
+      ],
+      nb: [
+        "Versjon 2: milepælen for budsjettmodell og innsikt er fullført, med påfyllingsregler, moduler på oversikten, grafer, planlagte transaksjoner og varsler.",
+        "En transaksjon kan ha en beskrivelse: et notat om hva det var, gjerne over flere linjer. Legg den til når du oppretter eller redigerer en; på mobil trykker du Legg til beskrivelse.",
+        "Transaksjoner viser første linje i lista og hele beskrivelsen i detaljene, og søket finner beskrivelser i tillegg til motparter.",
+        "Beskrivelsen til en planlagt transaksjon følger med hver transaksjon den registrerer.",
+      ],
+      nn: [
+        "Versjon 2: milepælen for budsjettmodell og innsikt er fullført, med påfyllingsreglar, modular på oversikta, grafar, planlagde transaksjonar og varsel.",
+        "Ein transaksjon kan ha ei skildring: eit notat om kva det var, gjerne over fleire linjer. Legg ho til når du opprettar eller redigerer ein; på mobil trykkjer du Legg til skildring.",
+        "Transaksjonar viser første linja i lista og heile skildringa i detaljane, og søket finn skildringar i tillegg til motpartar.",
+        "Skildringa til ein planlagd transaksjon følgjer med kvar transaksjon han registrerer.",
+      ],
+    },
+  },
+  {
     version: "v1.16.02",
     date: "2026-11-08",
     title: {

@@ -1,8 +1,8 @@
 -- The Stats API's sums (#121). A transaction family (an original and its
 -- corrections) counts on the original's date, as the transaction list and
 -- AccountFlows count it, so a reversed one adds up to 0. The filters work as
--- on the transaction list: tags and counterparty from the family's newest
--- header. A null filter matches everything. The queries return each
+-- on the transaction list: tags, counterparty and description from the
+-- family's newest header. A null filter matches everything. The queries return each
 -- family's net per account or bucket; Go puts them into intervals.
 
 -- name: StatsBankNets :many
@@ -12,7 +12,7 @@ WITH families AS (
     SELECT h.id, h.transaction_type, h.transaction_at
     FROM transaction_headers h
     JOIN LATERAL (
-        SELECT c.id, c.counterparty FROM transaction_headers c
+        SELECT c.id, c.counterparty, c.description FROM transaction_headers c
         WHERE c.id = h.id OR c.parent_id = h.id
         ORDER BY c.created_at DESC, c.id DESC
         LIMIT 1
@@ -23,8 +23,10 @@ WITH families AS (
       AND (sqlc.narg(tags)::text[] IS NULL OR EXISTS (
           SELECT 1 FROM transaction_tags tt JOIN tags t ON t.id = tt.tag_id
           WHERE tt.transaction_id = latest.id AND lower(t.name) = ANY(sqlc.narg(tags)::text[])))
-      -- counterparty is a LIKE pattern, escaped by the caller.
-      AND (sqlc.narg(counterparty)::text IS NULL OR latest.counterparty ILIKE sqlc.narg(counterparty)::text)
+      -- counterparty is a LIKE pattern, escaped by the caller, matching the
+  -- counterparty or the description (#130).
+      AND (sqlc.narg(counterparty)::text IS NULL OR latest.counterparty ILIKE sqlc.narg(counterparty)::text
+           OR latest.description ILIKE sqlc.narg(counterparty)::text)
 )
 SELECT f.id, f.transaction_type, f.transaction_at, b.account_id, a.currency, SUM(b.amount)::numeric AS net
 FROM families f
@@ -44,7 +46,7 @@ WITH families AS (
     SELECT h.id, h.transaction_type, h.transaction_at
     FROM transaction_headers h
     JOIN LATERAL (
-        SELECT c.id, c.counterparty FROM transaction_headers c
+        SELECT c.id, c.counterparty, c.description FROM transaction_headers c
         WHERE c.id = h.id OR c.parent_id = h.id
         ORDER BY c.created_at DESC, c.id DESC
         LIMIT 1
@@ -55,7 +57,8 @@ WITH families AS (
       AND (sqlc.narg(tags)::text[] IS NULL OR EXISTS (
           SELECT 1 FROM transaction_tags tt JOIN tags t ON t.id = tt.tag_id
           WHERE tt.transaction_id = latest.id AND lower(t.name) = ANY(sqlc.narg(tags)::text[])))
-      AND (sqlc.narg(counterparty)::text IS NULL OR latest.counterparty ILIKE sqlc.narg(counterparty)::text)
+      AND (sqlc.narg(counterparty)::text IS NULL OR latest.counterparty ILIKE sqlc.narg(counterparty)::text
+           OR latest.description ILIKE sqlc.narg(counterparty)::text)
 )
 SELECT f.id, f.transaction_type, f.transaction_at, l.bucket_id, k.source_account_id AS account_id, a.currency,
        SUM(l.amount)::numeric AS net

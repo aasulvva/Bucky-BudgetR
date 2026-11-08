@@ -13,6 +13,7 @@ import {
   Switch,
   TagsInput,
   Text,
+  Textarea,
   TextInput,
   Title,
   useMantineTheme,
@@ -57,6 +58,7 @@ import {
   fromLastTime,
   initialAccount,
   insideCycle,
+  cleanDescription,
   newLine,
   prefillFor,
   ruleMatches,
@@ -194,6 +196,9 @@ export function TransactionForm({
   const [accountTouched, setAccountTouched] = useState(start !== null);
   const [toAccountId, setToAccountId] = useState<string | null>(start?.toAccountId ?? null);
   const [counterparty, setCounterparty] = useState(start?.counterparty ?? "");
+  const [description, setDescription] = useState(start?.description ?? "");
+  // On mobile the description is behind Add description, unless it has one.
+  const [descriptionOpen, setDescriptionOpen] = useState(description !== "");
   const [tags, setTags] = useState<string[]>(start?.tags ?? []);
   const [lines, setLines] = useState<SplitLine[]>(start?.lines ?? []);
   // The rows as the user last set them, and the amount they were set for: a
@@ -245,6 +250,7 @@ export function TransactionForm({
           accountId,
           toAccountId,
           counterparty,
+          description,
           tags,
           lines,
           triggersRefill: refillChecked,
@@ -289,6 +295,8 @@ export function TransactionForm({
   const reset = () => {
     setAmount(null);
     setCounterparty("");
+    setDescription("");
+    setDescriptionOpen(false);
     setTags([]);
     setLines([]);
     setBase({ amount: null, lines: [] });
@@ -448,6 +456,7 @@ export function TransactionForm({
       // A schedule has its own times.
       ...(at && !scheduled ? { at } : {}),
       ...(tags.length > 0 ? { tags } : {}),
+      ...(cleanDescription(description) ? { description: cleanDescription(description) } : {}),
     };
     const body: TransactionCreate = transfer
       ? { type: newType, ...common, to_account_id: toAccountId ?? "" }
@@ -601,6 +610,35 @@ export function TransactionForm({
             setCounterparty(e.currentTarget.value);
           }}
         />
+      )}
+      {isDesktop || descriptionOpen ? (
+        <Textarea
+          label={t("newTransaction.description")}
+          placeholder={t("newTransaction.descriptionPlaceholder")}
+          autosize
+          minRows={1}
+          maxRows={6}
+          maxLength={500}
+          // Opened with Add description: straight to typing.
+          autoFocus={!isDesktop && description === ""}
+          value={description}
+          onChange={(e) => {
+            setDescription(e.currentTarget.value);
+          }}
+        />
+      ) : (
+        <Box>
+          <Anchor
+            component="button"
+            type="button"
+            size="sm"
+            onClick={() => {
+              setDescriptionOpen(true);
+            }}
+          >
+            {t("newTransaction.addDescription")}
+          </Anchor>
+        </Box>
       )}
       {refillShown && (
         <Card withBorder padding="sm" bg="var(--mantine-color-blue-light)">
