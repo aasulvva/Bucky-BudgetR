@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
 import type { Transaction } from "@/api/transactions";
+import { formatMoney } from "@/lib/money";
 import { rowAmount, type TransactionFilter } from "@/lib/transactionList";
 
 import { signedMoney, transactionSubLine, transactionTitle, type Lookups } from "./lookups";
@@ -39,6 +40,11 @@ export function TransactionRow({
       : tx.corrected
         ? t("transactions.edited")
         : "";
+  // Filtered to one account: its balance after the transaction (#106).
+  const account = filter.accountId;
+  const balance = account
+    ? tx.balances_after.find((b) => b.account_id === account)?.balance
+    : undefined;
   return (
     <UnstyledButton
       component={Link}
@@ -93,6 +99,13 @@ export function TransactionRow({
         >
           {signedMoney(amount, names.currencyOf(tx))}
         </Text>
+        {balance !== undefined && (
+          <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
+            {t("transactions.balanceAfter", {
+              amount: formatMoney(balance, names.accountCurrency(account ?? "")),
+            })}
+          </Text>
+        )}
         {note && (
           <Text size="xs" c="dimmed">
             {note}

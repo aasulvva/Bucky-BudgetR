@@ -10,7 +10,78 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/shopspring/decimal"
 )
+
+const balancesAfter = `-- name: BalancesAfter :many
+WITH total AS (
+    SELECT account_id, SUM(amount) AS balance FROM bank_transactions
+    WHERE account_id = ANY($2::text[])
+    GROUP BY account_id
+), later AS (
+    SELECT b.account_id, COALESCE(c.parent_id, c.id) AS root, c.transaction_at AS at, SUM(b.amount) AS amount
+    FROM transaction_headers c
+    JOIN bank_transactions b ON b.transaction_id = c.id
+    WHERE c.user_id = $3 AND c.transaction_at >= $4::timestamptz
+      AND b.account_id = ANY($2::text[])
+    GROUP BY b.account_id, COALESCE(c.parent_id, c.id), c.transaction_at
+), run AS (
+    SELECT l.account_id, l.root, l.amount,
+           t.balance - COALESCE(SUM(l.amount) OVER (
+               PARTITION BY l.account_id ORDER BY l.at DESC, l.root DESC
+               ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0) AS balance
+    FROM later l JOIN total t ON t.account_id = l.account_id
+)
+SELECT account_id, root::text AS transaction_id, balance::numeric AS balance FROM run
+WHERE root = ANY($1::text[]) AND amount <> 0
+ORDER BY account_id, transaction_id
+`
+
+type BalancesAfterParams struct {
+	Ids        []string
+	AccountIds []string
+	UserID     string
+	Since      time.Time
+}
+
+type BalancesAfterRow struct {
+	AccountID     string
+	TransactionID string
+	Balance       decimal.Decimal
+}
+
+// Each account's balance just after each of the given original transactions
+// (#106): the account's balance now, less what came after the transaction in
+// the list's order (transaction_at, id). A transaction counts with its
+// corrections, which are dated at its time: the balance as it is now
+// understood. Only lines from since (the oldest of the transactions) on are
+// sorted, so recent pages stay cheap however long the ledger is.
+// Transactions that come to 0 in an account (reversed, or moved away) get no
+// row for it.
+func (q *Queries) BalancesAfter(ctx context.Context, arg BalancesAfterParams) ([]BalancesAfterRow, error) {
+	rows, err := q.db.Query(ctx, balancesAfter,
+		arg.Ids,
+		arg.AccountIds,
+		arg.UserID,
+		arg.Since,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []BalancesAfterRow{}
+	for rows.Next() {
+		var i BalancesAfterRow
+		if err := rows.Scan(&i.AccountID, &i.TransactionID, &i.Balance); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
 
 const listBankLinesFor = `-- name: ListBankLinesFor :many
 SELECT id, transaction_id, account_id, amount, original_amount, original_currency, exchange_rate, created_at, created_by FROM bank_transactions WHERE transaction_id = ANY($1::text[]) ORDER BY id

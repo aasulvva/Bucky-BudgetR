@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/accounts"
@@ -91,6 +92,23 @@ func TestCorrectionsAPI(t *testing.T) {
 		t.Errorf("reversed %+v", got)
 	}
 	expect(t, "reversed=maybe", do(http.MethodGet, "/api/v1/transactions?reversed=maybe", nil, alice), http.StatusBadRequest, "invalid_request")
+
+	// The balance after each (#106): only the opening balance counts on Main;
+	// the moved original comes to 0 there.
+	w = do(http.MethodGet, "/api/v1/transactions?account_id="+main, nil, alice)
+	expect(t, "main's", w, http.StatusOK, "")
+	for _, tx := range decode[api.TransactionPage](t, w).Items {
+		switch {
+		case tx.Type == api.TransactionTypeOPB && (len(tx.BalancesAfter) != 1 || tx.BalancesAfter[0].AccountId != main || tx.BalancesAfter[0].Balance != "1000.00"):
+			t.Errorf("opening balance %+v", tx.BalancesAfter)
+		case tx.Type != api.TransactionTypeOPB && len(tx.BalancesAfter) != 0:
+			t.Errorf("%s %+v", tx.Type, tx.BalancesAfter)
+		}
+	}
+	w = do(http.MethodGet, "/api/v1/transactions", nil, alice)
+	if !strings.Contains(w.Body.String(), `"balances_after":[]`) || strings.Contains(w.Body.String(), `"balances_after":[{`) {
+		t.Errorf("unfiltered %s", w.Body)
+	}
 
 	w = do(http.MethodGet, "/api/v1/accounts/"+main, nil, alice)
 	if a := decode[api.Account](t, w); a.Balance != "1000.00" {

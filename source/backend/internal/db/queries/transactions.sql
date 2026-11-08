@@ -110,3 +110,34 @@ SELECT id FROM (
 ) newest
 ORDER BY transaction_at DESC, id DESC
 LIMIT sqlc.arg(row_limit);
+
+-- name: BalancesAfter :many
+-- Each account's balance just after each of the given original transactions
+-- (#106): the account's balance now, less what came after the transaction in
+-- the list's order (transaction_at, id). A transaction counts with its
+-- corrections, which are dated at its time: the balance as it is now
+-- understood. Only lines from since (the oldest of the transactions) on are
+-- sorted, so recent pages stay cheap however long the ledger is.
+-- Transactions that come to 0 in an account (reversed, or moved away) get no
+-- row for it.
+WITH total AS (
+    SELECT account_id, SUM(amount) AS balance FROM bank_transactions
+    WHERE account_id = ANY(sqlc.arg(account_ids)::text[])
+    GROUP BY account_id
+), later AS (
+    SELECT b.account_id, COALESCE(c.parent_id, c.id) AS root, c.transaction_at AS at, SUM(b.amount) AS amount
+    FROM transaction_headers c
+    JOIN bank_transactions b ON b.transaction_id = c.id
+    WHERE c.user_id = sqlc.arg(user_id) AND c.transaction_at >= sqlc.arg(since)::timestamptz
+      AND b.account_id = ANY(sqlc.arg(account_ids)::text[])
+    GROUP BY b.account_id, COALESCE(c.parent_id, c.id), c.transaction_at
+), run AS (
+    SELECT l.account_id, l.root, l.amount,
+           t.balance - COALESCE(SUM(l.amount) OVER (
+               PARTITION BY l.account_id ORDER BY l.at DESC, l.root DESC
+               ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0) AS balance
+    FROM later l JOIN total t ON t.account_id = l.account_id
+)
+SELECT account_id, root::text AS transaction_id, balance::numeric AS balance FROM run
+WHERE root = ANY(sqlc.arg(ids)::text[]) AND amount <> 0
+ORDER BY account_id, transaction_id;

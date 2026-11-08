@@ -16,6 +16,29 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.16.02",
+    date: "2026-11-08",
+    title: {
+      en: "Balance after each transaction",
+      nb: "Saldo etter hver transaksjon",
+      nn: "Saldo etter kvar transaksjon",
+    },
+    changes: {
+      en: [
+        "Filtered to one account, Transactions shows the account's balance after each transaction, like a bank statement. Other filters don't change it.",
+        "A transaction's detail shows each account's balance after it.",
+      ],
+      nb: [
+        "Filtrert på én konto viser Transaksjoner saldoen på kontoen etter hver transaksjon, som på et kontoutskrift. Andre filtre endrer den ikke.",
+        "Detaljene til en transaksjon viser saldoen på hver konto etter den.",
+      ],
+      nn: [
+        "Filtrert på éin konto viser Transaksjonar saldoen på kontoen etter kvar transaksjon, som på eit kontoutskrift. Andre filter endrar han ikkje.",
+        "Detaljane til ein transaksjon viser saldoen på kvar konto etter han.",
+      ],
+    },
+  },
+  {
     version: "v1.16.01",
     date: "2026-11-08",
     title: {

@@ -136,6 +136,58 @@ describe("Transactions", () => {
     expect(router.state.location.search).toContain("q=rema");
   });
 
+  it("shows the account's balance after each, filtered to one account (#106)", async () => {
+    const after = (balance: string) => [{ account_id: main.id, balance }];
+    apiMock.on("GET /api/v1/transactions", {
+      body: {
+        items: [
+          { ...rema, balances_after: after("29749.60") },
+          { ...salary, balances_after: after("30000.00") },
+          { ...transfer, balances_after: after("-2000.00") },
+          wine,
+        ],
+        next_cursor: null,
+      },
+    });
+    const { router } = renderRoute(`/transactions?account_id=${main.id}&reversed=1`);
+    const row = await screen.findByRole("link", { name: /Rema 1000/ });
+    expect(within(row).getByText(`Balance ${m("29749.60")}`)).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("link", { name: /Employer AS/ })).getByText(
+        `Balance ${m("30000.00")}`,
+      ),
+    ).toBeInTheDocument();
+    // A reversed one has none.
+    expect(
+      within(screen.getByRole("link", { name: /Vinmonopolet/ })).queryByText(/Balance/),
+    ).not.toBeInTheDocument();
+
+    // Not filtered to an account: none.
+    await router.navigate("/transactions?reversed=1");
+    await waitFor(() => {
+      expect(listQueries().at(-1)?.get("account_id")).toBeNull();
+    });
+    expect(screen.queryByText(`Balance ${m("29749.60")}`)).not.toBeInTheDocument();
+  });
+
+  it("shows each account's balance after a transfer in the detail (#106)", async () => {
+    apiMock.on(`GET /api/v1/transactions/${transfer.id}`, {
+      body: {
+        ...transfer,
+        balances_after: [
+          { account_id: main.id, balance: "28000.00" },
+          { account_id: buffer.id, balance: "12000.00" },
+        ],
+      },
+    });
+    renderRoute(`/transactions?open=${transfer.id}`);
+    const panel = within(
+      await screen.findByRole("article", { name: "Main account → Buffer account" }),
+    );
+    expect(await panel.findByText(`Balance after: ${m("28000.00")}`)).toBeInTheDocument();
+    expect(panel.getByText(`Balance after: ${m("12000.00")}`)).toBeInTheDocument();
+  });
+
   it("loads more pages", async () => {
     apiMock.on("GET /api/v1/transactions", (req) =>
       req.query.get("cursor") === "next"

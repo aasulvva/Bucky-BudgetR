@@ -2128,6 +2128,11 @@ export interface components {
             /** @description Signed, in the account's currency. */
             amount: components["schemas"]["Amount"];
         };
+        TransactionBalance: {
+            account_id: components["schemas"]["AccountId"];
+            /** @description Signed, in the account's currency. */
+            balance: components["schemas"]["Amount"];
+        };
         TransactionBucketLine: {
             bucket_id: components["schemas"]["BucketId"];
             cycle_id: components["schemas"]["CycleId"];
@@ -2171,6 +2176,15 @@ export interface components {
              *     reversal, so what it amounted to can still be shown. Null otherwise.
              */
             before_reversal: components["schemas"]["TransactionLines"] | null;
+            /**
+             * @description Each account's balance just after this transaction, counting
+             *     effective amounts, with corrections at the original's time (the
+             *     balance as it is now understood). `GET /transactions/{id}` fills it
+             *     for every account line; listing only with `account_id`, for that
+             *     account; other responses leave it empty. Left out for an account
+             *     the transaction comes to 0 in (reversed, or moved away).
+             */
+            balances_after: components["schemas"]["TransactionBalance"][];
             /** @description Only from `GET /transactions/{id}`. The original and its corrections, oldest first. */
             history?: components["schemas"]["TransactionVersion"][];
         };
