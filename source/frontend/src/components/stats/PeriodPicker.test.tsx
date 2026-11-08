@@ -256,4 +256,22 @@ describe("ResolutionPicker", () => {
     expect(showPer()).toHaveValue("Hour");
     expect(await options()).toEqual(["Hour", "Day", "Week", "Whole period"]);
   });
+
+  it("leaves out what it's told to, switching away from it (a pie per interval)", async () => {
+    const onChange = vi.fn();
+    renderWithProviders(
+      <ResolutionPicker
+        value="total"
+        choice={{ kind: "previous", unit: "year" }}
+        max={12}
+        cycles={[]}
+        omit={["total"]}
+        onChange={onChange}
+      />,
+    );
+    // A year has 12 months, which fit.
+    expect(onChange).toHaveBeenLastCalledWith("month");
+    await userEvent.click(screen.getByRole("combobox", { name: "Show per" }));
+    expect(screen.queryByRole("option", { name: "Whole period" })).not.toBeInTheDocument();
+  });
 });

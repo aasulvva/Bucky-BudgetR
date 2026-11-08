@@ -14,6 +14,9 @@ import {
   graphData,
   intervalLink,
   maxIntervals,
+  pieData,
+  pieSlicing,
+  queryResolution,
   shownCurrency,
   showDots,
   statsQuery,
@@ -25,6 +28,8 @@ import {
 import { getLocale } from "@/lib/locale";
 import { formatMoney } from "@/lib/money";
 import type { Period } from "@/lib/periods";
+
+import { PieView } from "./PieView";
 
 import "@mantine/charts/styles.css";
 import "./graphs.css";
@@ -43,9 +48,10 @@ interface GraphViewProps {
 }
 
 /**
- * A line or bar graph (#122), from the Stats API. It measures its width,
- * goes coarser when the intervals don't fit and says so, shows exact
- * amounts on hover, and opens the transactions behind a bar or point.
+ * A line, bar or pie graph (#122, #123), from the Stats API. It measures
+ * its width, goes coarser when the intervals don't fit and says so, shows
+ * exact amounts on hover, and opens the transactions behind a bar, point
+ * or slice.
  */
 export function GraphView({
   settings,
@@ -59,10 +65,14 @@ export function GraphView({
   const { ref, width } = useElementSize();
   const s = cleanGraph(settings);
   const plot = Math.max(0, width - AXIS_PX);
-  const fitted = period
-    ? fitResolution(period, s.resolution, s.kind, plot, cycles)
-    : { resolution: s.resolution, coarsened: null };
-  const query = useStatsSeries(period ? statsQuery(s, period, fitted.resolution) : null);
+  // A pie per bucket or account sums the whole period: nothing to fit.
+  const whole = s.kind === "pie" && pieSlicing(s) !== "interval";
+  const fitted =
+    period && !whole
+      ? fitResolution(period, s.resolution, s.kind, plot, cycles)
+      : { resolution: s.resolution, coarsened: null };
+  const resolution = queryResolution(s, fitted.resolution);
+  const query = useStatsSeries(period ? statsQuery(s, period, resolution) : null);
   const { currency, leftOut } = shownCurrency(s, accounts);
 
   return (
@@ -72,6 +82,40 @@ export function GraphView({
       ) : (
         <QueryState query={query}>
           {(result) => {
+            const coarsened = fitted.coarsened && {
+              why: fitted.coarsened,
+              resolution: t(`stats.resolution.options.${fitted.resolution}`),
+              max: maxIntervals(s.kind),
+              kind: s.kind,
+            };
+            if (s.kind === "pie") {
+              const pie = pieData(result, s, resolution, currency, accounts, buckets);
+              return (
+                <Stack gap="xs">
+                  {pie.slices.length === 0 ? (
+                    <Text c="dimmed">{t("stats.graphs.empty")}</Text>
+                  ) : (
+                    <PieView
+                      data={pie}
+                      settings={s}
+                      currency={currency}
+                      width={width}
+                      linkOf={(slice) => {
+                        const interval = result.intervals[slice.index] ?? result.intervals[0];
+                        const series = slice.name.startsWith("i-") ? "total" : slice.name;
+                        return interval ? intervalLink(s, series, interval) : "/transactions";
+                      }}
+                    />
+                  )}
+                  <Notes
+                    other={pie.other}
+                    belowZero={pie.belowZero}
+                    leftOut={leftOut}
+                    coarsened={coarsened}
+                  />
+                </Stack>
+              );
+            }
             const data = graphData(result, s, fitted.resolution, currency, accounts, buckets);
             return (
               <Stack gap="xs">
@@ -83,18 +127,7 @@ export function GraphView({
                   dots={showDots(data.rows.length, plot)}
                   intervals={result.intervals}
                 />
-                <Notes
-                  data={data}
-                  leftOut={leftOut}
-                  coarsened={
-                    fitted.coarsened && {
-                      why: fitted.coarsened,
-                      resolution: t(`stats.resolution.options.${fitted.resolution}`),
-                      max: maxIntervals(s.kind),
-                      kind: s.kind,
-                    }
-                  }
-                />
+                <Notes other={data.other} leftOut={leftOut} coarsened={coarsened} />
               </Stack>
             );
           }}
@@ -180,12 +213,20 @@ function Chart({ data, settings, currency, height, dots, intervals }: ChartProps
   );
 }
 
+const TOO_MANY = {
+  bar: "stats.graphs.tooManyBars",
+  line: "stats.graphs.tooManyPoints",
+  pie: "stats.graphs.tooManySlices",
+} as const satisfies Record<GraphKind, string>;
+
 function Notes({
-  data,
+  other,
+  belowZero = 0,
   leftOut,
   coarsened,
 }: {
-  data: GraphData;
+  other: number;
+  belowZero?: number;
   leftOut: number;
   coarsened: { why: "count" | "width"; resolution: string; max: number; kind: GraphKind } | null;
 }) {
@@ -194,11 +235,12 @@ function Notes({
     coarsened &&
       (coarsened.why === "width"
         ? t("stats.graphs.coarsened", { resolution: coarsened.resolution })
-        : t(coarsened.kind === "bar" ? "stats.graphs.tooManyBars" : "stats.graphs.tooManyPoints", {
+        : t(TOO_MANY[coarsened.kind], {
             resolution: coarsened.resolution,
             max: coarsened.max,
           })),
-    data.other > 0 && t("stats.graphs.otherNote", { count: data.other }),
+    other > 0 && t("stats.graphs.otherNote", { count: other }),
+    belowZero > 0 && t("stats.graphs.belowZero", { count: belowZero }),
     leftOut > 0 && t("stats.graphs.leftOut", { count: leftOut }),
   ].filter((n): n is string => typeof n === "string");
   if (notes.length === 0) return null;

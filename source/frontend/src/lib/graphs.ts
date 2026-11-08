@@ -1,7 +1,7 @@
-// Line and bar graphs on Stats & reports (#122): the settings as they live in
-// the URL and in saved graphs, the Stats API query they make, the rows and
-// series the chart draws, how finely a graph fits its width, and the
-// Transactions link for a bar or point.
+// Line, bar and pie graphs on Stats & reports (#122, #123): the settings as
+// they live in the URL and in saved graphs, the Stats API query they make,
+// the rows and series a chart draws (or a pie's slices), how finely a graph
+// fits its width, and the Transactions link for a bar, point or slice.
 
 import type { Account, Bucket } from "@/api/accounts";
 import type { components } from "@/api/schema";
@@ -32,13 +32,19 @@ export type SavedGraph = components["schemas"]["SavedGraph"];
 export type GraphKind = GraphSettings["kind"];
 export type GraphMetric = GraphSettings["metric"];
 export type GroupBy = NonNullable<GraphSettings["group_by"]>;
+export type PieLabels = NonNullable<GraphSettings["pie_labels"]>;
+/** What a pie's slices are. */
+export type PieSlicing = "bucket" | "account" | "interval";
 
-export const GRAPH_KINDS: GraphKind[] = ["bar", "line"];
+export const GRAPH_KINDS: GraphKind[] = ["bar", "line", "pie"];
+export const PIE_LABELS: PieLabels[] = ["list", "slices", "both"];
 export const GRAPH_METRICS: GraphMetric[] = ["spending", "income", "balance"];
 export const GROUP_BYS: GroupBy[] = ["none", "account", "bucket"];
 /** Series with their own colour: the graph palette has 8. */
 export const MAX_TOP = 8;
 export const DEFAULT_TOP = 5;
+/** The most slices a pie per interval has: the graph palette's 12 colours. */
+export const MAX_SLICES = 12;
 
 interface CycleTimes {
   id?: string;
@@ -48,9 +54,22 @@ interface CycleTimes {
 }
 
 export function groupBy(s: GraphSettings): GroupBy {
-  // Balances have no buckets: per bucket is per account.
+  // Balances have no buckets: per bucket is per account. A balance pie is
+  // always per account, since balances over time don't add up.
   const g = s.group_by ?? "none";
-  return s.metric === "balance" && g === "bucket" ? "account" : g;
+  if (s.metric === "balance" && (g === "bucket" || s.kind === "pie")) return "account";
+  return g;
+}
+
+/** A pie's slices: per bucket or account over the whole period, or per interval when not split. */
+export function pieSlicing(s: GraphSettings): PieSlicing {
+  const g = groupBy(s);
+  return g === "none" ? "interval" : g;
+}
+
+/** The resolution a graph asks the API for: a pie per bucket or account needs only the whole period. */
+export function queryResolution(s: GraphSettings, fitted: Resolution): Resolution {
+  return s.kind === "pie" && pieSlicing(s) !== "interval" ? "total" : fitted;
 }
 
 export function topOf(s: GraphSettings): number {
@@ -59,7 +78,7 @@ export function topOf(s: GraphSettings): number {
 
 /** The most intervals a graph of this kind can draw. */
 export function maxIntervals(kind: GraphKind): number {
-  return kind === "bar" ? MAX_BARS : MAX_POINTS;
+  return kind === "bar" ? MAX_BARS : kind === "pie" ? MAX_SLICES : MAX_POINTS;
 }
 
 /** The graph to start with: spending this cycle (or month) as bars. */
@@ -75,8 +94,8 @@ export function defaultGraph(cycles: CycleTimes[], now?: Date): GraphSettings {
 
 /**
  * The settings without what doesn't apply or is the default: no empty
- * lists, no cumulative on bars, no side by side on lines, no filters a
- * balance ignores. Two graphs are the same when their clean forms are.
+ * lists, no cumulative on bars, no side by side on lines, no Y axis or
+ * stacking on pies, no filters a balance ignores. Two graphs are the same when their clean forms are.
  */
 export function cleanGraph(s: GraphSettings): GraphSettings {
   const balance = s.metric === "balance";
@@ -95,7 +114,8 @@ export function cleanGraph(s: GraphSettings): GraphSettings {
   if (s.kind === "line" && s.cumulative && !balance) out.cumulative = true;
   if (s.kind === "bar" && s.side_by_side) out.side_by_side = true;
   if (s.kind === "line" && s.stepped) out.stepped = true;
-  if (s.fit_y_axis) out.fit_y_axis = true;
+  if (s.fit_y_axis && s.kind !== "pie") out.fit_y_axis = true;
+  if (s.kind === "pie" && s.pie_labels && s.pie_labels !== "list") out.pie_labels = s.pie_labels;
   if (topOf(s) !== DEFAULT_TOP) out.top = topOf(s);
   return out;
 }
@@ -121,6 +141,7 @@ export function graphToSearch(settings: GraphSettings): URLSearchParams {
   if (s.side_by_side) p.set("side", "1");
   if (s.stepped) p.set("step", "1");
   if (s.fit_y_axis) p.set("fit", "1");
+  if (s.pie_labels) p.set("labels", s.pie_labels);
   if (s.top) p.set("top", String(s.top));
   return p;
 }
@@ -155,6 +176,7 @@ export function graphFromSearch(params: URLSearchParams, fallback: GraphSettings
     side_by_side: params.get("side") === "1",
     stepped: params.get("step") === "1",
     fit_y_axis: params.get("fit") === "1",
+    pie_labels: pick("labels", PIE_LABELS) ?? "list",
     top: Number.isInteger(top) && top >= 1 && top <= MAX_TOP ? top : DEFAULT_TOP,
   });
 }
@@ -229,7 +251,7 @@ export interface GraphData {
   other: number;
 }
 
-/** The colour of a series: the graph palette's slots in order, Other in grey. */
+/** The colour of a series or slice: the graph palette's slots (0-11) in order, Other in grey. */
 export function seriesColor(slot: number | "other"): string {
   return slot === "other" ? "var(--graph-other)" : `var(--graph-${String(slot + 1)})`;
 }
@@ -387,6 +409,108 @@ export function graphData(
   return { rows, series, other: rest.length };
 }
 
+export interface PieSlice {
+  /** "a-<id>", "b-<id>", "none" and "other" as for series; "i-<index>" per interval. */
+  name: string;
+  label: string;
+  color: string;
+  /** The exact amount, a decimal string. */
+  amount: string;
+  /** Its part of the total, 0-1. */
+  share: number;
+  /** The interval it covers, in the API's result. */
+  index: number;
+}
+
+export interface PieData {
+  slices: PieSlice[];
+  /** The slices added up. */
+  total: string;
+  /** How many series went into Other. */
+  other: number;
+  /** Series or intervals below 0, which a pie can't draw. */
+  belowZero: number;
+}
+
+const isNegative = (a: string) => compareAmounts(a, "0") < 0;
+const isPositive = (a: string) => compareAmounts(a, "0") > 0;
+
+/**
+ * A pie's slices (#123), in the shown currency. Per bucket or account they
+ * are the series over the whole period, named, ranked and coloured as on a
+ * bar graph (the largest `top`, the rest as Other); per interval they are
+ * the intervals in time order, at most 12. Slices at 0 are left out, and
+ * those below 0 are counted in `belowZero`.
+ */
+export function pieData(
+  result: StatsSeries,
+  settings: GraphSettings,
+  resolution: Resolution,
+  currency: string,
+  accounts: Account[],
+  buckets: Bucket[],
+  locale = getLocale(),
+): PieData {
+  const s = cleanGraph(settings);
+  let slices: Omit<PieSlice, "share">[];
+  let other = 0;
+  let belowZero: number;
+  if (pieSlicing(s) === "interval") {
+    const lines = result.series.filter((l) => l.currency === currency);
+    const amounts = result.intervals.map((_, i) =>
+      addAmounts("0", ...lines.map((l) => l.values[i] ?? "0")),
+    );
+    belowZero = amounts.filter(isNegative).length;
+    slices = result.intervals.flatMap((interval, index) => {
+      const amount = amounts[index] ?? "0";
+      if (!isPositive(amount)) return [];
+      const { title } = intervalLabel(interval, resolution, result.intervals, locale);
+      return [{ name: `i-${String(index)}`, label: title, color: "", amount, index }];
+    });
+    slices = slices.slice(0, MAX_SLICES).map((x, i) => ({ ...x, color: seriesColor(i) }));
+  } else {
+    // A balance is the value at the period's end; a sum is the period's.
+    const value = (l: { values: string[] }) =>
+      s.metric === "balance" ? (l.values.at(-1) ?? "0") : addAmounts("0", ...l.values);
+    const lines = result.series
+      .filter((l) => l.currency === currency)
+      .map((l) => ({ ...l, values: [value(l)] }));
+    belowZero = lines.filter((l) => isNegative(l.values[0] ?? "0")).length;
+    const data = graphData(
+      {
+        intervals: result.intervals.slice(0, 1),
+        series: lines.filter((l) => isPositive(l.values[0] ?? "0")),
+      },
+      { ...s, cumulative: false },
+      "total",
+      currency,
+      accounts,
+      buckets,
+      locale,
+    );
+    other = data.other;
+    slices = data.series.map((x) => ({
+      name: x.name,
+      label: x.label,
+      color: x.color,
+      amount: x.amounts[0] ?? "0",
+      index: 0,
+    }));
+  }
+  // Slot 7 (violet) can't be told from slot 1 (blue) by colour-blind
+  // readers, and a 7-slice pie wraps from one to the other: use slot 10.
+  const last = slices[6];
+  if (slices.length === 7 && last && last.name !== "other") last.color = seriesColor(9);
+  const total = addAmounts("0", ...slices.map((x) => x.amount));
+  const sum = Number(total);
+  return {
+    slices: slices.map((x) => ({ ...x, share: sum > 0 ? Number(x.amount) / sum : 0 })),
+    total,
+    other,
+    belowZero,
+  };
+}
+
 /** A round step near `x`: 1, 2, 2.5 or 5 times a power of ten. */
 function niceStep(x: number): number {
   const power = 10 ** Math.floor(Math.log10(x));
@@ -420,8 +544,8 @@ export function yDomain(data: GraphData, settings: GraphSettings): [number, numb
   return [Math.floor((min - span / 10) / step) * step, Math.ceil((max + span / 10) / step) * step];
 }
 
-/** The width an interval needs: bars ~6 px, lines 2 px. */
-const MIN_PX: Record<GraphKind, number> = { bar: 6, line: 2 };
+/** The width an interval needs: bars ~6 px, lines 2 px; a pie's slices don't need width. */
+const MIN_PX: Record<GraphKind, number> = { bar: 6, line: 2, pie: 0 };
 /** Lines show a dot per point while each gets this much room. */
 const DOT_PX = 12;
 
@@ -552,17 +676,25 @@ export function periodLabel(
   }
 }
 
-/** One line for the settings: "Spending · This cycle · Day". */
+/**
+ * One line for the settings: "Spending · This cycle · Day", or for a pie
+ * "Spending · This year · Per bucket" (or "· Month" when per interval).
+ */
 export function graphSummary(
   settings: GraphSettings,
   cycles: CycleTimes[] = [],
   locale = getLocale(),
 ): string {
   const choice = parsePeriod(settings.period);
+  const resolution = i18n.t(`stats.resolution.options.${settings.resolution}`);
+  const group = groupBy(settings);
+  const rest =
+    settings.kind === "pie"
+      ? [group === "none" ? resolution : i18n.t(`stats.graphs.groups.${group}`)]
+      : [resolution, ...(group === "none" ? [] : [i18n.t(`stats.graphs.groups.${group}`)])];
   return [
     i18n.t(`stats.graphs.metrics.${settings.metric}`),
     choice ? periodLabel(choice, cycles, locale) : settings.period,
-    i18n.t(`stats.resolution.options.${settings.resolution}`),
-    ...(groupBy(settings) === "none" ? [] : [i18n.t(`stats.graphs.groups.${groupBy(settings)}`)]),
+    ...rest,
   ].join(" · ");
 }

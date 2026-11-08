@@ -58,6 +58,8 @@ The words for the app's concepts, so the same thing is called the same everywher
 | layout (dashboard)          | visning (skrivebordsvisning, mobilvisning)        | vising (skrivebordsvising, mobilvising) |
 | graph                       | graf (grafen, grafer)                             | graf (grafen, grafar)                   |
 | bars / line (graph kind)    | søyler / linje                                    | søyler / linje                          |
+| pie (graph kind) / slice    | kake / sektor (sektoren, sektorer)                | kake / sektor (sektoren, sektorar)      |
+| share (of a total)          | andel                                             | del                                     |
 | resolution (per day, week…) | oppløsning (vis per)                              | oppløysing (vis per)                    |
 | running total (cumulative)  | løpende sum                                       | løpande sum                             |
 | Other (grouped series)      | Annet                                             | Anna                                    |

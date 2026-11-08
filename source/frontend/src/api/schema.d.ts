@@ -1617,13 +1617,20 @@ export interface components {
             graph: components["schemas"]["GraphSettings"];
         };
         /**
-         * @description A line or bar graph on Stats & reports (#122): what it sums over
-         *     which period, and how it's drawn. The fields after `resolution`
-         *     match the Stats API's parameters and are left out when not used.
+         * @description A line, bar or pie graph on Stats & reports (#122, #123): what it
+         *     sums over which period, and how it's drawn. The fields after
+         *     `resolution` match the Stats API's parameters and are left out when
+         *     not used.
          */
         GraphSettings: {
-            /** @enum {string} */
-            kind: "line" | "bar";
+            /**
+             * @description A pie grouped by `account` or `bucket` has a slice per series
+             *     over the whole period (`resolution` is kept for when the kind
+             *     changes). Ungrouped, it has a slice per interval of
+             *     `resolution`, at most 12. A balance pie is always per account.
+             * @enum {string}
+             */
+            kind: "line" | "bar" | "pie";
             /** @enum {string} */
             metric: "spending" | "income" | "balance";
             /**
@@ -1653,6 +1660,11 @@ export interface components {
             stepped?: boolean;
             /** @description Fit the Y axis to the values instead of including 0 (the default). */
             fit_y_axis?: boolean;
+            /**
+             * @description Pies only. A list of the slices beside the pie (`list`, the default), labels on the slices, or both.
+             * @enum {string}
+             */
+            pie_labels?: "list" | "slices" | "both";
             /** @description How many series get their own colour (at most 8, the graph palette); the rest add up to Other. 5 by default. */
             top?: number;
         };

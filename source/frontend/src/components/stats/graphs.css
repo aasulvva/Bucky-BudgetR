@@ -1,7 +1,11 @@
 /*
- * The graph palette (#122): eight categorical colours in a fixed order,
- * checked for colour-blind separation on the adjacent pairs, with steps of
- * their own for dark mode. A ninth series goes into Other, which is grey.
+ * The graph palette (#122, #123): twelve categorical colours in a fixed
+ * order, with steps of their own for dark mode, checked with the dataviz
+ * validator for colour-blind and normal-vision separation between
+ * neighbours, and for pies also the wrap from the last slice back to the
+ * first. Bars and lines use slots 1-8 (a ninth series goes into Other);
+ * pies per interval go up to 12. Other is a recessive grey that clears
+ * every one of slots 1-8.
  */
 :root {
   --graph-1: #2a78d6;
@@ -12,7 +16,11 @@
   --graph-6: #008300;
   --graph-7: #6250d6;
   --graph-8: #e34948;
-  --graph-other: #898781;
+  --graph-9: #8a5100;
+  --graph-10: #8b0a8a;
+  --graph-11: #878930;
+  --graph-12: #aa0731;
+  --graph-other: #c8c7bf;
 }
 
 :root[data-mantine-color-scheme="dark"] {
@@ -24,5 +32,9 @@
   --graph-6: #008300;
   --graph-7: #9085e9;
   --graph-8: #e66767;
-  --graph-other: #898781;
+  --graph-9: #8d5406;
+  --graph-10: #9f179d;
+  --graph-11: #82830e;
+  --graph-12: #ba0135;
+  --graph-other: #52514e;
 }

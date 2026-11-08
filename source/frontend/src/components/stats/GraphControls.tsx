@@ -22,7 +22,10 @@ import {
   GROUP_BYS,
   MAX_TOP,
   maxIntervals,
+  PIE_LABELS,
+  pieSlicing,
   topOf,
+  type GraphKind,
   type GraphSettings,
 } from "@/lib/graphs";
 import { defaultPeriod, formatPeriod, parsePeriod } from "@/lib/periods";
@@ -41,7 +44,7 @@ interface GraphControlsProps {
   narrow?: boolean;
 }
 
-/** What a graph shows and how (#122). Each change is a whole new value. */
+/** What a graph shows and how (#122, pies #123). Each change is a whole new value. */
 export function GraphControls({
   value,
   onChange,
@@ -61,6 +64,17 @@ export function GraphControls({
   };
   const balance = s.metric === "balance";
   const group = groupBy(s);
+  const pie = s.kind === "pie";
+  // A pie per bucket or account covers the whole period: no resolution.
+  const whole = pie && pieSlicing(s) !== "interval";
+  const setKind = (kind: GraphKind) => {
+    // An unsplit pie is per interval; a pie starts per bucket.
+    set(
+      kind === "pie" && kind !== s.kind && group === "none"
+        ? { kind, group_by: "bucket" }
+        : { kind },
+    );
+  };
   const choice = parsePeriod(s.period) ?? defaultPeriod(cycles);
   const [counterparty, setCounterparty] = useState(s.counterparty ?? "");
   // Follow a counterparty set from elsewhere (a saved graph, Back).
@@ -73,7 +87,12 @@ export function GraphControls({
     set({ counterparty: q });
   }, 400);
 
-  const groups = GROUP_BYS.filter((g) => !(balance && g === "bucket"));
+  // A balance pie is only per account. An unsplit pie is per interval.
+  const groups = GROUP_BYS.filter(
+    (g) => !(balance && g === "bucket") && !(balance && pie && g === "none"),
+  );
+  const groupLabel = (g: (typeof GROUP_BYS)[number]) =>
+    pie && g === "none" ? t("stats.graphs.groups.interval") : t(`stats.graphs.groups.${g}`);
   const chosenAccounts = s.account_ids ?? [];
   // Buckets of the chosen accounts, when any are chosen.
   const bucketOptions = buckets
@@ -93,10 +112,11 @@ export function GraphControls({
             data={[
               { value: "bar", label: t("stats.graphs.kinds.bar") },
               { value: "line", label: t("stats.graphs.kinds.line") },
+              { value: "pie", label: t("stats.graphs.kinds.pie") },
             ]}
             value={s.kind}
             onChange={(kind) => {
-              set({ kind: kind });
+              setKind(kind);
             }}
           />
         </Input.Wrapper>
@@ -120,20 +140,23 @@ export function GraphControls({
         }}
       />
       <Stack gap="sm">
-        <ResolutionPicker
-          inline={narrow}
-          value={s.resolution}
-          choice={choice}
-          max={maxIntervals(s.kind)}
-          cycles={cycles}
-          onChange={(resolution) => {
-            if (resolution !== s.resolution) set({ resolution });
-          }}
-        />
+        {!whole && (
+          <ResolutionPicker
+            inline={narrow}
+            value={s.resolution}
+            choice={choice}
+            max={maxIntervals(s.kind)}
+            cycles={cycles}
+            omit={pie ? ["total"] : undefined}
+            onChange={(resolution) => {
+              if (resolution !== s.resolution) set({ resolution });
+            }}
+          />
+        )}
         <Select
           comboboxProps={dropdown}
           label={t("stats.graphs.groupBy")}
-          data={groups.map((g) => ({ value: g, label: t(`stats.graphs.groups.${g}`) }))}
+          data={groups.map((g) => ({ value: g, label: groupLabel(g) }))}
           value={group}
           onChange={(g) => {
             if (g) set({ group_by: g });
@@ -142,8 +165,10 @@ export function GraphControls({
         />
         {group !== "none" && (
           <NumberInput
-            label={t("stats.graphs.top")}
-            description={t("stats.graphs.topHint", { max: MAX_TOP })}
+            label={t(pie ? "stats.graphs.topPie" : "stats.graphs.top")}
+            description={t(pie ? "stats.graphs.topPieHint" : "stats.graphs.topHint", {
+              max: MAX_TOP,
+            })}
             min={1}
             max={MAX_TOP}
             clampBehavior="strict"
@@ -185,19 +210,35 @@ export function GraphControls({
             />
           </Input.Wrapper>
         )}
-        <Input.Wrapper label={t("stats.graphs.yAxis")}>
-          <SegmentedControl
-            fullWidth
-            data={[
-              { value: "zero", label: t("stats.graphs.includeZero") },
-              { value: "fit", label: t("stats.graphs.fit") },
-            ]}
-            value={s.fit_y_axis ? "fit" : "zero"}
-            onChange={(v) => {
-              set({ fit_y_axis: v === "fit" });
-            }}
-          />
-        </Input.Wrapper>
+        {pie ? (
+          <Input.Wrapper label={t("stats.graphs.pieLabels")}>
+            <SegmentedControl
+              fullWidth
+              data={PIE_LABELS.map((v) => ({
+                value: v,
+                label: t(`stats.graphs.pieLabelOptions.${v}`),
+              }))}
+              value={s.pie_labels ?? "list"}
+              onChange={(v) => {
+                set({ pie_labels: v });
+              }}
+            />
+          </Input.Wrapper>
+        ) : (
+          <Input.Wrapper label={t("stats.graphs.yAxis")}>
+            <SegmentedControl
+              fullWidth
+              data={[
+                { value: "zero", label: t("stats.graphs.includeZero") },
+                { value: "fit", label: t("stats.graphs.fit") },
+              ]}
+              value={s.fit_y_axis ? "fit" : "zero"}
+              onChange={(v) => {
+                set({ fit_y_axis: v === "fit" });
+              }}
+            />
+          </Input.Wrapper>
+        )}
         {s.kind === "line" && !balance && (
           <Switch
             label={t("stats.graphs.cumulative")}
