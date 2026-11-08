@@ -8,7 +8,7 @@ import type { components } from "@/api/schema";
 import type { StatsQuery, StatsSeries } from "@/api/stats";
 import i18n from "@/i18n";
 
-import { lastDay, localDate, formatDateRange } from "./cycles";
+import { addDays, cycleRange, formatDateRange, lastDay, localDate } from "./cycles";
 import { CURRENCY, getLocale } from "./locale";
 import { addAmounts, compareAmounts } from "./money";
 import {
@@ -42,6 +42,7 @@ export const MAX_TOP = 8;
 export const DEFAULT_TOP = 5;
 
 interface CycleTimes {
+  id?: string;
   start_at: string;
   end_at: string;
   state: string;
@@ -497,24 +498,64 @@ export function newGraphId(saved: SavedGraph[]): string {
   }
 }
 
-/** A period choice's name: "Last 30 days", "This quarter", or its dates. */
-export function periodLabel(choice: PeriodChoice, locale = getLocale()): string {
+/** A specific period's name: its date, "2–8 Nov 2026", "November 2026", "Q4 2026", "2026" or a cycle's dates. */
+export function specificLabel(
+  choice: Extract<PeriodChoice, { kind: "specific" }>,
+  cycles: CycleTimes[],
+  locale = getLocale(),
+): string {
+  const [y = 0, m = 1] = choice.at.split("-").map(Number);
+  const year = String(y);
+  const fmt = (o: Intl.DateTimeFormatOptions) =>
+    new Intl.DateTimeFormat(locale, o).format(new Date(`${choice.at}T12:00`));
+  switch (choice.unit) {
+    case "day":
+      return fmt({ weekday: "short", day: "numeric", month: "short", year: "numeric" });
+    case "week":
+      return formatDateRange(choice.at, addDays(choice.at, 6), locale);
+    case "month":
+      return fmt({ month: "long", year: "numeric" });
+    case "quarter":
+      return i18n.t("stats.period.quarterOf", { n: Math.floor((m - 1) / 3) + 1, year });
+    case "half_year":
+      return i18n.t("stats.period.halfOf", { n: m <= 6 ? 1 : 2, year });
+    case "year":
+      return year;
+    case "cycle": {
+      const c = cycles.find((x) => x.id === choice.at);
+      return c ? cycleRange(c, locale) : i18n.t("stats.period.cycleGone");
+    }
+  }
+}
+
+/** A period choice's name: "Last 30 days", "This quarter", "November 2026", or its dates. */
+export function periodLabel(
+  choice: PeriodChoice,
+  cycles: CycleTimes[] = [],
+  locale = getLocale(),
+): string {
   switch (choice.kind) {
     case "last":
       return i18n.t(`stats.period.last.${choice.unit}`, { count: choice.count });
     case "custom":
       return formatDateRange(choice.from, choice.to, locale);
+    case "specific":
+      return specificLabel(choice, cycles, locale);
     default:
       return i18n.t(`stats.period.options.${choice.kind}_${choice.unit}`);
   }
 }
 
 /** One line for the settings: "Spending · This cycle · Day". */
-export function graphSummary(settings: GraphSettings, locale = getLocale()): string {
+export function graphSummary(
+  settings: GraphSettings,
+  cycles: CycleTimes[] = [],
+  locale = getLocale(),
+): string {
   const choice = parsePeriod(settings.period);
   return [
     i18n.t(`stats.graphs.metrics.${settings.metric}`),
-    choice ? periodLabel(choice, locale) : settings.period,
+    choice ? periodLabel(choice, cycles, locale) : settings.period,
     i18n.t(`stats.resolution.options.${settings.resolution}`),
     ...(groupBy(settings) === "none" ? [] : [i18n.t(`stats.graphs.groups.${groupBy(settings)}`)]),
   ].join(" · ");

@@ -13,6 +13,7 @@ import {
   intervalLabel,
   intervalLink,
   newGraphId,
+  periodLabel,
   sameGraph,
   shownCurrency,
   showDots,
@@ -132,6 +133,16 @@ describe("URL settings", () => {
       "Spending · This month · Day · Per bucket",
     );
     expect(graphSummary({ ...base, period: "last-30-days" })).toBe("Spending · Last 30 days · Day");
+  });
+
+  it("name specific periods", () => {
+    const at = (unit: "day" | "month" | "half_year" | "year" | "cycle", value: string) =>
+      periodLabel({ kind: "specific", unit, at: value }, [], "en-GB");
+    expect(at("day", "2026-11-08")).toBe("Sun, 8 Nov 2026");
+    expect(at("month", "2026-11-01")).toBe("November 2026");
+    expect(at("half_year", "2026-07-01")).toBe("H2 2026");
+    expect(at("year", "2026-01-01")).toBe("2026");
+    expect(at("cycle", "100001000001")).toBe("A deleted cycle");
   });
 
   it("give new ids that aren't taken", () => {

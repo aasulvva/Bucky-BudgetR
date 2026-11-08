@@ -863,12 +863,6 @@
   "stats": {
     "period": {
       "label": "Tidsrom",
-      "groups": {
-        "last": "Fram til i dag",
-        "current": "Så langt",
-        "previous": "Avsluttet",
-        "custom": "Egendefinert"
-      },
       "options": {
         "last_days": "De siste dagene",
         "last_weeks": "De siste ukene",
@@ -916,7 +910,38 @@
       "dates": "Første og siste dag",
       "noActiveCycle": "Det er ingen aktiv periode.",
       "noFinishedCycle": "Ingen periode er avsluttet ennå.",
-      "noCycle": "Det er ingen periode ennå."
+      "noCycle": "Det er ingen periode ennå.",
+      "kinds": {
+        "last": "Siste",
+        "current": "Inneværende",
+        "previous": "Forrige",
+        "specific": "Bestemt",
+        "custom": "Egne datoer"
+      },
+      "unit": "Enhet",
+      "units": {
+        "day": "Dag",
+        "week": "Uke",
+        "cycle": "Periode",
+        "month": "Måned",
+        "quarter": "Kvartal",
+        "half_year": "Halvår",
+        "year": "År"
+      },
+      "unitsPlural": {
+        "days": "Dager",
+        "weeks": "Uker",
+        "months": "Måneder",
+        "cycles": "Perioder",
+        "years": "År"
+      },
+      "quarterOf": "{{n}}. kvartal {{year}}",
+      "halfOf": "{{n}}. halvår {{year}}",
+      "quarterShort": "{{n}}. kvartal",
+      "halfShort": "{{n}}. halvår",
+      "cycleGone": "En slettet periode",
+      "before": "Gå bakover",
+      "after": "Gå framover"
     },
     "resolution": {
       "label": "Vis per",

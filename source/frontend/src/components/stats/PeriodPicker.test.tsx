@@ -4,7 +4,7 @@ import dayjs from "dayjs";
 import { useState } from "react";
 
 import type { Cycle } from "@/api/cycles";
-import { addDays, formatDateRange, today } from "@/lib/cycles";
+import { addDays, cycleRange, endAtFor, formatDateRange, startAtFor, today } from "@/lib/cycles";
 import { MAX_BARS, resolvePeriod, type PeriodChoice, type Resolution } from "@/lib/periods";
 import { cycle } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
@@ -56,13 +56,24 @@ async function pick(label: string | RegExp, option: string) {
   await userEvent.click(await screen.findByRole("option", { name: option }));
 }
 
+/** Picks a kind of period, then its unit. */
+async function choose(kind: string, unit?: string) {
+  await pick("Period", kind);
+  if (unit) await pick("Unit", unit);
+}
+
 describe("PeriodPicker", () => {
-  it("picks a calendar period and shows its dates", async () => {
+  it("picks a kind and unit and shows its dates", async () => {
     const onChange = vi.fn();
     renderWithProviders(
       <Harness initial={{ kind: "current", unit: "month" }} onChange={onChange} />,
     );
-    await pick("Period", "Previous year");
+    expect(screen.getByRole("combobox", { name: "Period" })).toHaveValue("This");
+    expect(screen.getByRole("combobox", { name: "Unit" })).toHaveValue("Month");
+    // Changing the kind keeps the unit.
+    await choose("Previous");
+    expect(onChange).toHaveBeenLastCalledWith({ kind: "previous", unit: "month" });
+    await choose("Previous", "Year");
     expect(onChange).toHaveBeenLastCalledWith({ kind: "previous", unit: "year" });
     const year = new Date().getFullYear() - 1;
     expect(screen.getByTestId("period-range").textContent).toBe(
@@ -75,7 +86,7 @@ describe("PeriodPicker", () => {
     renderWithProviders(
       <Harness initial={{ kind: "current", unit: "month" }} onChange={onChange} />,
     );
-    await pick("Period", "The last few weeks");
+    await choose("Last", "Weeks");
     expect(onChange).toHaveBeenLastCalledWith({ kind: "last", unit: "weeks", count: 8 });
     const count = screen.getByRole("textbox", { name: /Number of weeks/ });
     await userEvent.clear(count);
@@ -87,7 +98,7 @@ describe("PeriodPicker", () => {
 
   it("says so when there's no active cycle", async () => {
     renderWithProviders(<Harness initial={{ kind: "current", unit: "month" }} />);
-    await pick("Period", "This cycle");
+    await choose("This", "Cycle");
     expect(screen.getByTestId("period-range")).toHaveTextContent("There's no active cycle.");
     // Nothing to cut, so no resolution to pick.
     expect(screen.getByRole("combobox", { name: "Show per" })).toBeDisabled();
@@ -101,17 +112,89 @@ describe("PeriodPicker", () => {
     );
   });
 
+  it("picks a specific month and steps through months, not past today", async () => {
+    const onChange = vi.fn();
+    renderWithProviders(
+      <Harness initial={{ kind: "current", unit: "month" }} onChange={onChange} />,
+    );
+    await choose("Specific");
+    const thisMonth = dayjs().startOf("month").format("YYYY-MM-DD");
+    expect(onChange).toHaveBeenLastCalledWith({ kind: "specific", unit: "month", at: thisMonth });
+    expect(screen.getByRole("button", { name: "Step forward" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Step back" }));
+    const lastMonth = dayjs().startOf("month").subtract(1, "month");
+    expect(onChange).toHaveBeenLastCalledWith({
+      kind: "specific",
+      unit: "month",
+      at: lastMonth.format("YYYY-MM-DD"),
+    });
+    expect(screen.getByTestId("period-range").textContent).toBe(
+      formatDateRange(
+        lastMonth.format("YYYY-MM-DD"),
+        lastMonth.endOf("month").format("YYYY-MM-DD"),
+      ),
+    );
+    expect(screen.getByRole("button", { name: "Step forward" })).toBeEnabled();
+  });
+
+  it("picks a quarter by year and number", async () => {
+    const onChange = vi.fn();
+    renderWithProviders(
+      <Harness
+        initial={{ kind: "specific", unit: "quarter", at: "2025-04-01" }}
+        onChange={onChange}
+      />,
+    );
+    expect(screen.getByRole("combobox", { name: "Quarter" })).toHaveValue("Q2");
+    await pick("Quarter", "Q4");
+    expect(onChange).toHaveBeenLastCalledWith({
+      kind: "specific",
+      unit: "quarter",
+      at: "2025-10-01",
+    });
+    expect(screen.getByTestId("period-range").textContent).toBe(
+      formatDateRange("2025-10-01", "2025-12-31"),
+    );
+  });
+
+  it("picks a cycle from the list, newest first", async () => {
+    const onChange = vi.fn();
+    const active = cycle({ id: "100001000002" });
+    const old = cycle({
+      id: "100001000001",
+      state: "finished",
+      start_at: startAtFor(addDays(today(), -40)),
+      end_at: endAtFor(addDays(today(), -11)),
+    });
+    renderWithProviders(
+      <Harness
+        initial={{ kind: "current", unit: "cycle" }}
+        cycles={[old, active]}
+        onChange={onChange}
+      />,
+    );
+    await choose("Specific");
+    expect(onChange).toHaveBeenLastCalledWith({ kind: "specific", unit: "cycle", at: active.id });
+    await userEvent.click(screen.getByRole("combobox", { name: "Cycle" }));
+    const options = (await screen.findAllByRole("option")).map((o) => o.textContent);
+    expect(options).toEqual([cycleRange(active), cycleRange(old)]);
+    await userEvent.click(screen.getByRole("option", { name: cycleRange(old) }));
+    expect(onChange).toHaveBeenLastCalledWith({ kind: "specific", unit: "cycle", at: old.id });
+    expect(screen.getByRole("button", { name: "Step back" })).toBeDisabled();
+  });
+
   it("starts custom dates from the shown ones, with no future days to pick", async () => {
     const onChange = vi.fn();
     renderWithProviders(
       <Harness initial={{ kind: "last", unit: "days", count: 3 }} onChange={onChange} />,
     );
-    await pick("Period", "Custom dates");
+    await choose("Custom dates");
     expect(onChange).toHaveBeenLastCalledWith({
       kind: "custom",
       from: addDays(today(), -2),
       to: today(),
     });
+    expect(screen.queryByRole("combobox", { name: "Unit" })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /First and last day/ }));
     // Mantine labels days "12 November 2026".
     const tomorrow = dayjs(addDays(today(), 1)).format("D MMMM YYYY");
@@ -132,7 +215,7 @@ describe("ResolutionPicker", () => {
       />,
     );
     expect(screen.getByRole("combobox", { name: "Show per" })).toHaveValue("Day");
-    await pick("Period", "Previous year");
+    await choose("Previous", "Year");
     // 365 days don't fit in 60 bars: months are the year's default.
     expect(onResolution).toHaveBeenLastCalledWith("month");
     expect(screen.getByRole("combobox", { name: "Show per" })).toHaveValue("Month");

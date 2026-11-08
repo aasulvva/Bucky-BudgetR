@@ -116,12 +116,25 @@ describe("Stats", () => {
     expect(router.state.location.search).toContain("fit=1");
   });
 
+  it("shows a specific period from the URL, named in the summary", async () => {
+    viewport.width = 375;
+    renderRoute("/stats?kind=bar&metric=spending&period=quarter-2025-q4&res=month");
+    expect(await screen.findByTestId("graph-summary")).toHaveTextContent(
+      "Spending · Q4 2025 · Month",
+    );
+    await waitFor(() => {
+      expect(lastQuery()?.get("from")).toBe(new Date(2025, 9, 1).toISOString());
+    });
+    expect(lastQuery()?.get("to")).toBe(new Date(2026, 0, 1).toISOString());
+  });
+
   it("offers the last few cycles and years", async () => {
     const { router } = renderRoute("/stats");
-    await pick("Period", "The last few cycles");
+    await pick("Period", "Last");
+    await pick("Unit", "Cycles");
     expect(screen.getByRole("textbox", { name: /Number of cycles/ })).toHaveValue("3");
     expect(router.state.location.search).toContain("period=last-3-cycles");
-    await pick("Period", "The last few years");
+    await pick("Unit", "Years");
     expect(router.state.location.search).toContain("period=last-3-years");
     await waitFor(() => {
       expect(lastQuery()?.get("from")).toBe(
@@ -137,7 +150,8 @@ describe("Stats", () => {
     });
     expect(lastQuery()?.get("group_by")).toBe("account");
     expect(lastQuery()?.get("resolution")).toBe("month");
-    expect(screen.getByRole("combobox", { name: "Period" })).toHaveValue("Previous year");
+    expect(screen.getByRole("combobox", { name: "Period" })).toHaveValue("Previous");
+    expect(screen.getByRole("combobox", { name: "Unit" })).toHaveValue("Year");
     expect(screen.queryByRole("combobox", { name: /Buckets/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: /Counterparty/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("switch", { name: /Running total/ })).not.toBeInTheDocument();
@@ -233,7 +247,8 @@ describe("Stats", () => {
     });
     expect(lastQuery()?.get("resolution")).toBe("week");
     expect(router.state.location.search).toContain("saved=g-1");
-    expect(screen.getByRole("combobox", { name: "Period" })).toHaveValue("The last few days");
+    expect(screen.getByRole("combobox", { name: "Period" })).toHaveValue("Last");
+    expect(screen.getByRole("textbox", { name: /Number of days/ })).toHaveValue("90");
   });
 
   it("puts the settings in a drawer on mobile", async () => {

@@ -863,12 +863,6 @@
   "stats": {
     "period": {
       "label": "Period",
-      "groups": {
-        "last": "Up to today",
-        "current": "So far",
-        "previous": "Finished",
-        "custom": "Custom"
-      },
       "options": {
         "last_days": "The last few days",
         "last_weeks": "The last few weeks",
@@ -916,7 +910,38 @@
       "dates": "First and last day",
       "noActiveCycle": "There's no active cycle.",
       "noFinishedCycle": "No cycle has finished yet.",
-      "noCycle": "There's no cycle yet."
+      "noCycle": "There's no cycle yet.",
+      "kinds": {
+        "last": "Last",
+        "current": "This",
+        "previous": "Previous",
+        "specific": "Specific",
+        "custom": "Custom dates"
+      },
+      "unit": "Unit",
+      "units": {
+        "day": "Day",
+        "week": "Week",
+        "cycle": "Cycle",
+        "month": "Month",
+        "quarter": "Quarter",
+        "half_year": "Half-year",
+        "year": "Year"
+      },
+      "unitsPlural": {
+        "days": "Days",
+        "weeks": "Weeks",
+        "months": "Months",
+        "cycles": "Cycles",
+        "years": "Years"
+      },
+      "quarterOf": "Q{{n}} {{year}}",
+      "halfOf": "H{{n}} {{year}}",
+      "quarterShort": "Q{{n}}",
+      "halfShort": "H{{n}}",
+      "cycleGone": "A deleted cycle",
+      "before": "Step back",
+      "after": "Step forward"
     },
     "resolution": {
       "label": "Show per",

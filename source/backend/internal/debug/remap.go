@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -227,6 +228,14 @@ func remapPreferences(raw json.RawMessage, m map[kind]map[string]string) (json.R
 	for _, g := range graphs {
 		g, _ := g.(map[string]any)
 		settings, _ := g["graph"].(map[string]any)
+		// A specific cycle is in the period, as cycle-<id>.
+		if period, ok := settings["period"].(string); ok {
+			if old, ok := strings.CutPrefix(period, "cycle-"); ok {
+				if id, ok := m[kCycle][old]; ok {
+					settings["period"] = "cycle-" + id
+				}
+			}
+		}
 		for field, k := range map[string]kind{"account_ids": kAccount, "bucket_ids": kBucket} {
 			ids, _ := settings[field].([]any)
 			for i, old := range ids {

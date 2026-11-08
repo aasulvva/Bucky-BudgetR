@@ -155,7 +155,7 @@ function Graphs({
       ) : (
         <Group justify="space-between" wrap="nowrap" gap="xs">
           <Text size="sm" c="dimmed" data-testid="graph-summary">
-            {graphSummary(settings)}
+            {graphSummary(settings, cycles)}
           </Text>
           <Button
             variant="default"
