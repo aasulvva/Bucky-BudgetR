@@ -1406,7 +1406,8 @@
       "everyRange": "Enter 1 to {{max}}",
       "endCountRange": "Enter at least 1",
       "endBeforeStart": "The end is before the start",
-      "dueDaysRange": "Enter 0 to {{max}}"
+      "dueDaysRange": "Enter 0 to {{max}}",
+      "firstApprove": "The first, {{date}}, waits for your approval on the Scheduled tab."
     },
     "queue": {
       "title": "Waiting for approval ({{count}})",

@@ -206,6 +206,41 @@ func TestCreate(t *testing.T) {
 	}
 }
 
+// A first time that has just passed (this minute, by the time it's saved) is
+// left to the scheduler; an older one isn't handled.
+func TestCreateJustPassed(t *testing.T) {
+	e := setup(t)
+	minutesAgo := func(n int, mode sqlc.ScheduleMode, freq sqlc.ScheduleFrequency) schedules.Schedule {
+		t.Helper()
+		s := e.daily("2026-10-10")
+		s.Minute, s.Mode, s.Frequency = 12*60-n, mode, freq
+		return e.create(t, s)
+	}
+	auto := minutesAgo(30, sqlc.ScheduleModeAuto, sqlc.ScheduleFrequencyDay)
+	if auto.NextIndex != 0 || !auto.NextAt.Equal(at("2026-10-10T11:30:00Z")) {
+		t.Errorf("30 minutes ago: next %d at %v", auto.NextIndex, auto.NextAt)
+	}
+	ask := minutesAgo(1, sqlc.ScheduleModeApprove, sqlc.ScheduleFrequencyOnce)
+	if ask.NextIndex != 0 || !ask.NextAt.Equal(at("2026-10-10T11:59:00Z")) {
+		t.Errorf("once, a minute ago: next %d at %v", ask.NextIndex, ask.NextAt)
+	}
+	old := minutesAgo(61, sqlc.ScheduleModeAuto, sqlc.ScheduleFrequencyDay)
+	if old.NextIndex != 1 || !old.NextAt.Equal(at("2026-10-11T10:59:00Z")) {
+		t.Errorf("61 minutes ago: next %d at %v", old.NextIndex, old.NextAt)
+	}
+
+	e.run(t, "2026-10-10T12:00:30Z")
+	if got := e.occurrences(t, auto.ID); !equal(got, []string{"10-10 11:30 applied"}) {
+		t.Errorf("auto: %v", got)
+	}
+	if got := e.occurrences(t, ask.ID); !equal(got, []string{"10-10 11:59 queued approval"}) {
+		t.Errorf("asking first: %v", got)
+	}
+	if got := e.occurrences(t, old.ID); len(got) != 0 {
+		t.Errorf("61 minutes ago: %v", got)
+	}
+}
+
 func TestRunAuto(t *testing.T) {
 	e := setup(t)
 	onIncome := e.bucket(t, sqlc.RefillModeOnIncome)
@@ -403,24 +438,39 @@ func TestCreateRecordingFirst(t *testing.T) {
 		return tx
 	}
 
-	// Two days ago, to approve: recorded anyway, dated then, and goes on from
-	// today's, which is now.
-	s := e.daily("2026-10-08")
-	s.Mode = sqlc.ScheduleModeApprove
-	sch := recordFirst(s)
+	// Two days ago: recorded, dated then, and goes on from today's, which is
+	// now.
+	sch := recordFirst(e.daily("2026-10-08"))
 	if sch.NextIndex != 2 || !sch.NextAt.Equal(at("2026-10-10T12:00:00Z")) {
 		t.Errorf("two days ago: next %d at %v", sch.NextIndex, sch.NextAt)
 	}
 	if tx := recorded(sch.ID); !tx.At.Equal(at("2026-10-08T12:00:00Z")) || tx.Counterparty != "Rent" {
 		t.Errorf("two days ago: recorded %+v", tx)
 	}
-	if got := e.occurrences(t, sch.ID); !equal(got, []string{"10-08 12:00 applied"}) {
-		t.Errorf("two days ago: %v", got)
-	}
-	// The scheduler then queues today's, and doesn't record the first again.
+	// The scheduler then records today's, and doesn't record the first again.
 	e.run(t, "2026-10-10T12:00:00Z")
-	if got := e.occurrences(t, sch.ID); !equal(got, []string{"10-08 12:00 applied", "10-10 12:00 queued approval"}) {
+	if got := e.occurrences(t, sch.ID); !equal(got, []string{"10-08 12:00 applied", "10-10 12:00 applied"}) {
 		t.Errorf("after a run: %v", got)
+	}
+
+	// Asking first: the first is queued for approval, not recorded.
+	s := e.daily("2026-10-08")
+	s.Mode = sqlc.ScheduleModeApprove
+	sch = recordFirst(s)
+	if sch.NextIndex != 2 || !sch.NextAt.Equal(at("2026-10-10T12:00:00Z")) {
+		t.Errorf("asking first: next %d at %v", sch.NextIndex, sch.NextAt)
+	}
+	page, err := e.svc.Occurrences(ctx, e.user, schedules.Filter{ScheduleID: sch.ID})
+	if err != nil || len(page.Items) != 1 {
+		t.Fatalf("asking first: %+v, %v", page.Items, err)
+	}
+	if o := page.Items[0]; o.State != sqlc.OccurrenceStateQueued || o.TransactionID != "" ||
+		!o.DueAt.Equal(at("2026-10-13T12:00:00Z")) {
+		t.Errorf("asking first: %+v", o)
+	}
+	e.run(t, "2026-10-10T12:00:00Z")
+	if got := e.occurrences(t, sch.ID); !equal(got, []string{"10-08 12:00 queued approval", "10-10 12:00 queued approval"}) {
+		t.Errorf("asking first, after a run: %v", got)
 	}
 
 	// Now: recorded, and goes on from tomorrow.
@@ -459,7 +509,7 @@ func TestCreateRecordingFirst(t *testing.T) {
 		t.Errorf("outside the cycle saved a schedule: %d, %v", len(after), err)
 	}
 
-	// Plain Create doesn't record a past first.
+	// Plain Create doesn't record a first that passed more than an hour ago.
 	sch = e.create(t, e.daily("2026-10-08"))
 	if sch.NextIndex != 2 || len(e.occurrences(t, sch.ID)) != 0 {
 		t.Errorf("create: next %d", sch.NextIndex)

@@ -1406,7 +1406,8 @@
       "everyRange": "Skriv inn 1 til {{max}}",
       "endCountRange": "Skriv inn minst 1",
       "endBeforeStart": "Slutten er før starten",
-      "dueDaysRange": "Skriv inn 0 til {{max}}"
+      "dueDaysRange": "Skriv inn 0 til {{max}}",
+      "firstApprove": "Den første, {{date}}, ventar på godkjenninga di på fana Planlagde."
     },
     "queue": {
       "title": "Ventar på godkjenning ({{count}})",

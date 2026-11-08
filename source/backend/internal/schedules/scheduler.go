@@ -183,9 +183,13 @@ func reasonOf(err error) (sqlc.OccurrenceReason, string) {
 // dueAt is when a queued occurrence is due: DueDays calendar days after now
 // in the schedule's time zone.
 func dueAt(sch Schedule, now time.Time) time.Time {
-	loc, err := time.LoadLocation(sch.TimeZone)
+	return dueFrom(sch.TimeZone, sch.DueDays, now)
+}
+
+func dueFrom(zone string, days int, now time.Time) time.Time {
+	loc, err := time.LoadLocation(zone)
 	if err != nil {
 		loc = time.UTC
 	}
-	return now.In(loc).AddDate(0, 0, sch.DueDays).UTC()
+	return now.In(loc).AddDate(0, 0, days).UTC()
 }

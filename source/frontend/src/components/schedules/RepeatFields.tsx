@@ -204,9 +204,12 @@ export function RepeatFields({
         </Group>
         {first && (
           <Text size="sm" mb={4}>
-            {t("schedules.form.firstNow", {
-              date: formatDateTime(`${first.replace(" ", "T")}:00`),
-            })}
+            {t(
+              value.mode === "approve" ? "schedules.form.firstApprove" : "schedules.form.firstNow",
+              {
+                date: formatDateTime(`${first.replace(" ", "T")}:00`),
+              },
+            )}
           </Text>
         )}
         {preview.data &&
