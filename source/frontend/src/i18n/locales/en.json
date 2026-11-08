@@ -740,9 +740,7 @@
     "futureNote": "It's in the future, so it's saved as a scheduled transaction, recorded once on {{date}}.",
     "savedRepeating": "Saved. It repeats from {{date}}.",
     "savedEnded": "Saved.",
-    "scheduledFor": "Scheduled for {{date}}.",
-    "queuedRepeating": "The first waits for your approval on the Scheduled tab. It repeats from {{date}}.",
-    "queuedEnded": "It waits for your approval on the Scheduled tab."
+    "scheduledFor": "Scheduled for {{date}}."
   },
   "transactionTypes": {
     "INC": "Income",
@@ -1392,9 +1390,9 @@
       },
       "modeHints": {
         "auto": "It's recorded at its time, with its bucket lines in the active cycle.",
-        "approve": "It waits in the approval queue on the Scheduled tab until you approve or skip it."
+        "approve": "It shows up in the approval queue on the Scheduled tab that many days before its time, so you can approve it early, and is overdue once its time has passed."
       },
-      "dueDays": "Due within (days)",
+      "dueDays": "Ask days before",
       "name": "Name",
       "namePlaceholder": "Optional, e.g. Rent",
       "paused": "Paused",
@@ -1408,8 +1406,7 @@
       "everyRange": "Enter 1 to {{max}}",
       "endCountRange": "Enter at least 1",
       "endBeforeStart": "The end is before the start",
-      "dueDaysRange": "Enter 0 to {{max}}",
-      "firstApprove": "The first, {{date}}, waits for your approval on the Scheduled tab."
+      "dueDaysRange": "Enter 0 to {{max}}"
     },
     "queue": {
       "title": "Waiting for approval ({{count}})",

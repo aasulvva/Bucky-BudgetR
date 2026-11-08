@@ -73,7 +73,8 @@ func (s *Service) Approve(ctx context.Context, userID, id string, override *tran
 			c, err := q.GetActiveCycle(ctx, userID)
 			switch {
 			case err == nil:
-				if !o.ScheduledAt.Before(c.StartAt) && o.ScheduledAt.Before(c.EndAt) {
+				// Approved early (before its time), it's dated now.
+				if !o.ScheduledAt.Before(c.StartAt) && o.ScheduledAt.Before(c.EndAt) && !o.ScheduledAt.After(n.At) {
 					n.At = o.ScheduledAt
 				}
 			case !errors.Is(err, pgx.ErrNoRows):

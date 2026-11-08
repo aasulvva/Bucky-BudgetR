@@ -93,7 +93,7 @@ func (s *Service) runSchedule(ctx context.Context, tx pgx.Tx, userID string, sch
 	}
 	k, at, ok := sch.NextIndex, sch.NextAt, true
 	for range MaxCatchUp {
-		if !ok || at.After(now) {
+		if !ok || handleFrom(sch, at).After(now) {
 			break
 		}
 		if err := s.handle(ctx, tx, userID, sch, at, now); err != nil {
@@ -134,7 +134,8 @@ func (s *Service) handle(ctx context.Context, tx pgx.Tx, userID string, sch Sche
 		p.Reason = sqlc.NullOccurrenceReason{OccurrenceReason: reason, Valid: true}
 		p.Detail = detail
 		p.QueuedAt = pgtype.Timestamptz{Time: now, Valid: true}
-		p.DueAt = pgtype.Timestamptz{Time: dueAt(sch, now), Valid: true}
+		// Due at its time: an approve one is queued DueDays before it.
+		p.DueAt = pgtype.Timestamptz{Time: at.UTC(), Valid: true}
 	}
 	_, err = ids.Insert(ctx, ids.Occurrence, func() string { return ids.NewOccurrence(sch.ID) }, func(ctx context.Context, id string) (bool, error) {
 		p.ID = id
@@ -180,16 +181,13 @@ func reasonOf(err error) (sqlc.OccurrenceReason, string) {
 	return "", ""
 }
 
-// dueAt is when a queued occurrence is due: DueDays calendar days after now
-// in the schedule's time zone.
-func dueAt(sch Schedule, now time.Time) time.Time {
-	return dueFrom(sch.TimeZone, sch.DueDays, now)
-}
-
-func dueFrom(zone string, days int, now time.Time) time.Time {
-	loc, err := time.LoadLocation(zone)
-	if err != nil {
-		loc = time.UTC
+// handleFrom is when the scheduler handles the occurrence at at: then for
+// an auto schedule, and DueDays days (of 24 hours, as in the due queries)
+// before for an approve schedule, which queues it so it can be approved
+// early.
+func handleFrom(sch Schedule, at time.Time) time.Time {
+	if sch.Mode != sqlc.ScheduleModeApprove {
+		return at
 	}
-	return now.In(loc).AddDate(0, 0, days).UTC()
+	return at.Add(-time.Duration(sch.DueDays) * 24 * time.Hour)
 }

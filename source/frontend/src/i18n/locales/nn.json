@@ -740,9 +740,7 @@
     "futureNote": "Han er fram i tid, så han vert lagra som ein planlagd transaksjon som vert ført éin gong {{date}}.",
     "savedRepeating": "Lagra. Han vert gjenteken frå {{date}}.",
     "savedEnded": "Lagra.",
-    "scheduledFor": "Planlagd til {{date}}.",
-    "queuedRepeating": "Den første ventar på godkjenninga di på fana Planlagde. Han vert gjenteken frå {{date}}.",
-    "queuedEnded": "Han ventar på godkjenninga di på fana Planlagde."
+    "scheduledFor": "Planlagd til {{date}}."
   },
   "transactionTypes": {
     "INC": "Inntekt",
@@ -1392,9 +1390,9 @@
       },
       "modeHints": {
         "auto": "Han vert ført på tidspunktet sitt, med bøttelinjene i den aktive perioden.",
-        "approve": "Han ventar i godkjenningskøen på fana Planlagde til du godkjenner eller hoppar over han."
+        "approve": "Han dukkar opp i godkjenningskøen på fana Planlagde så mange dagar før tidspunktet, så du kan godkjenne han tidleg, og har forfalle når tidspunktet er passert."
       },
-      "dueDays": "Forfell innan (dagar)",
+      "dueDays": "Spør dagar før",
       "name": "Namn",
       "namePlaceholder": "Valfritt, t.d. Husleige",
       "paused": "På pause",
@@ -1408,8 +1406,7 @@
       "everyRange": "Skriv inn 1 til {{max}}",
       "endCountRange": "Skriv inn minst 1",
       "endBeforeStart": "Slutten er før starten",
-      "dueDaysRange": "Skriv inn 0 til {{max}}",
-      "firstApprove": "Den første, {{date}}, ventar på godkjenninga di på fana Planlagde."
+      "dueDaysRange": "Skriv inn 0 til {{max}}"
     },
     "queue": {
       "title": "Ventar på godkjenning ({{count}})",

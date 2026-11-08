@@ -233,7 +233,8 @@ func (q *Queries) DeleteScheduleBucketLines(ctx context.Context, arg DeleteSched
 
 const dueSchedulesForUpdate = `-- name: DueSchedulesForUpdate :many
 SELECT id, user_id, name, transaction_type, account_id, to_account_id, amount, counterparty, tags, triggers_refill, mode, due_days, start_date, time_of_day, time_zone, frequency, every, end_count, end_date, paused, next_index, next_at, created_at, updated_at FROM schedules
-WHERE user_id = $1 AND NOT paused AND next_at IS NOT NULL AND next_at <= $2::timestamptz
+WHERE user_id = $1 AND NOT paused AND next_at IS NOT NULL
+  AND next_at - make_interval(days => CASE WHEN mode = 'approve' THEN due_days ELSE 0 END) <= $2::timestamptz
 ORDER BY next_at, id
 FOR UPDATE
 `
@@ -736,9 +737,12 @@ func (q *Queries) UserTimeZone(ctx context.Context, id string) (string, error) {
 
 const usersWithDueSchedules = `-- name: UsersWithDueSchedules :many
 SELECT DISTINCT user_id FROM schedules
-WHERE NOT paused AND next_at IS NOT NULL AND next_at <= $1::timestamptz
+WHERE NOT paused AND next_at IS NOT NULL
+  AND next_at - make_interval(days => CASE WHEN mode = 'approve' THEN due_days ELSE 0 END) <= $1::timestamptz
 `
 
+// An approve schedule's occurrence comes due (is queued) due_days before
+// its time; see schedules.handleFrom.
 func (q *Queries) UsersWithDueSchedules(ctx context.Context, now time.Time) ([]string, error) {
 	rows, err := q.db.Query(ctx, usersWithDueSchedules, now)
 	if err != nil {

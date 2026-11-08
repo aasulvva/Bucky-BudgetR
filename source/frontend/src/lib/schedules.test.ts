@@ -209,11 +209,14 @@ describe("the approval queue (#155)", () => {
 
   it("dates an approved one at its time in the active cycle, else now", () => {
     const active = cycle({ start_at: "2026-10-29T07:00:00Z", end_at: "2026-11-28T08:00:00Z" });
-    expect(approveDate(queued({ id: "1" }), active)).toBe("2026-11-01T16:00:00Z");
-    expect(approveDate(queued({ id: "1", scheduled_at: "2026-10-25T16:00:00Z" }), active)).toBe(
-      null,
-    );
-    expect(approveDate(queued({ id: "1" }), null)).toBeNull();
+    const now = new Date("2026-11-08T12:00:00Z");
+    expect(approveDate(queued({ id: "1" }), active, now)).toBe("2026-11-01T16:00:00Z");
+    expect(
+      approveDate(queued({ id: "1", scheduled_at: "2026-10-25T16:00:00Z" }), active, now),
+    ).toBe(null);
+    expect(approveDate(queued({ id: "1" }), null, now)).toBeNull();
+    // Approved early, before its time, it's dated now.
+    expect(approveDate(queued({ id: "1" }), active, new Date("2026-10-31T12:00:00Z"))).toBeNull();
   });
 
   it("puts overdue ones first, then the oldest", () => {

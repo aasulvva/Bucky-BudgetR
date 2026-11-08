@@ -1091,8 +1091,9 @@ export interface paths {
          *
          *     When an occurrence comes due, an `auto` schedule records it, dated
          *     at its scheduled time, with its bucket lines in the active cycle and
-         *     the usual refill rules. An `approve` schedule queues it, due
-         *     `due_days` later. An occurrence that can't be recorded (no active
+         *     the usual refill rules. An `approve` schedule queues it `due_days`
+         *     days before its time, so it can be approved early; it's due at its
+         *     time and overdue after. An occurrence that can't be recorded (no active
          *     cycle, a time outside it, an account or bucket that's gone) is
          *     queued too, with the reason: see `GET /scheduled-transactions`.
          *
@@ -1243,8 +1244,9 @@ export interface paths {
          * Approve a queued scheduled transaction
          * @description Records a queued one and marks it `applied`. Without a body, it
          *     records the schedule's transaction as it is, dated at its scheduled
-         *     time if the active cycle holds it, else now. With a body, it records
-         *     that instead (the user's edits), checked like `POST /transactions`.
+         *     time if that has passed and the active cycle holds it, else now
+         *     (approved early, it's dated now). With a body, it records that
+         *     instead (the user's edits), checked like `POST /transactions`.
          *     If it can't be recorded, nothing changes and the error says why (for
          *     example 409 `no_active_cycle`). One that isn't queued is 409
          *     `already_resolved`.
@@ -2277,7 +2279,7 @@ export interface components {
             transaction: components["schemas"]["ScheduleTransaction"];
             mode: components["schemas"]["ScheduleMode"];
             /**
-             * @description How many days after it's queued an occurrence is due for approval.
+             * @description For `approve`, how many days before its time an occurrence is queued for approval.
              * @default 3
              */
             due_days: number;
@@ -2383,7 +2385,7 @@ export interface components {
             queued_at: string | null;
             /**
              * Format: date-time
-             * @description When a queued one is due for approval.
+             * @description When a queued one is due for approval, its scheduled time.
              */
             due_at: string | null;
             /** @description A queued one past its due time. */

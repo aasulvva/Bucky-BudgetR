@@ -46,14 +46,18 @@ SELECT * FROM schedule_bucket_lines WHERE schedule_id = ANY(sqlc.arg(ids)::text[
 ORDER BY schedule_id, position;
 
 -- name: UsersWithDueSchedules :many
+-- An approve schedule's occurrence comes due (is queued) due_days before
+-- its time; see schedules.handleFrom.
 SELECT DISTINCT user_id FROM schedules
-WHERE NOT paused AND next_at IS NOT NULL AND next_at <= sqlc.arg(now)::timestamptz;
+WHERE NOT paused AND next_at IS NOT NULL
+  AND next_at - make_interval(days => CASE WHEN mode = 'approve' THEN due_days ELSE 0 END) <= sqlc.arg(now)::timestamptz;
 
 -- name: DueSchedulesForUpdate :many
 -- The user's schedules with an occurrence due, locked while the scheduler
 -- handles them.
 SELECT * FROM schedules
-WHERE user_id = $1 AND NOT paused AND next_at IS NOT NULL AND next_at <= sqlc.arg(now)::timestamptz
+WHERE user_id = $1 AND NOT paused AND next_at IS NOT NULL
+  AND next_at - make_interval(days => CASE WHEN mode = 'approve' THEN due_days ELSE 0 END) <= sqlc.arg(now)::timestamptz
 ORDER BY next_at, id
 FOR UPDATE;
 

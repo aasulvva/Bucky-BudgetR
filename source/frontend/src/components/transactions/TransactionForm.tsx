@@ -219,6 +219,9 @@ export function TransactionForm({
     at !== null &&
     new Date(at).getTime() > now().getTime();
   const scheduled = repeatOn || future;
+  // A new schedule's first time that's now or past is recorded at once, as
+  // entered done, unless it's Make recurring's: that's the transaction itself.
+  const recordFirst = repeatOn && !schedule?.editing && !schedule?.from;
 
   const balance = type === "OPB" || type === "BLA";
   const transfer = type === "TRF";
@@ -304,14 +307,10 @@ export function TransactionForm({
     if (!scheduleMode) {
       if (saved.next_index === 0) {
         message = t("newTransaction.scheduledFor", { date: formatDateTime(saved.next_at ?? "") });
+      } else if (saved.next_at) {
+        message = t("newTransaction.savedRepeating", { date: formatDateTime(saved.next_at) });
       } else {
-        // The first was handled now: recorded, or queued when it asks first.
-        const queued = saved.mode === "approve";
-        message = saved.next_at
-          ? t(queued ? "newTransaction.queuedRepeating" : "newTransaction.savedRepeating", {
-              date: formatDateTime(saved.next_at),
-            })
-          : t(queued ? "newTransaction.queuedEnded" : "newTransaction.savedEnded");
+        message = t("newTransaction.savedEnded");
       }
     }
     rememberAccount(saved.transaction.account_id);
@@ -473,7 +472,7 @@ export function TransactionForm({
       saveSchedule.mutate({
         ...(schedule?.editing ? { id: schedule.editing.id } : {}),
         body: input,
-        recordFirst: repeatOn && !scheduleMode,
+        recordFirst,
       });
       return;
     }
@@ -720,7 +719,7 @@ export function TransactionForm({
                 onChange={changeRepeat}
                 errors={repeatErrs}
                 editing={schedule?.editing !== undefined}
-                recordFirst={!scheduleMode}
+                recordFirst={recordFirst}
               />
             </Box>
           )}

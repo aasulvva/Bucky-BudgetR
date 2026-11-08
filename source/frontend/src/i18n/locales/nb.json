@@ -740,9 +740,7 @@
     "futureNote": "Den er frem i tid, så den lagres som en planlagt transaksjon som føres én gang {{date}}.",
     "savedRepeating": "Lagret. Den gjentas fra {{date}}.",
     "savedEnded": "Lagret.",
-    "scheduledFor": "Planlagt til {{date}}.",
-    "queuedRepeating": "Den første venter på godkjenningen din på fanen Planlagte. Den gjentas fra {{date}}.",
-    "queuedEnded": "Den venter på godkjenningen din på fanen Planlagte."
+    "scheduledFor": "Planlagt til {{date}}."
   },
   "transactionTypes": {
     "INC": "Inntekt",
@@ -1392,9 +1390,9 @@
       },
       "modeHints": {
         "auto": "Den føres på sitt tidspunkt, med bøttelinjene i den aktive perioden.",
-        "approve": "Den venter i godkjenningskøen på fanen Planlagte til du godkjenner eller hopper over den."
+        "approve": "Den dukker opp i godkjenningskøen på fanen Planlagte så mange dager før tidspunktet, så du kan godkjenne den tidlig, og har forfalt når tidspunktet er passert."
       },
-      "dueDays": "Forfaller innen (dager)",
+      "dueDays": "Spør dager før",
       "name": "Navn",
       "namePlaceholder": "Valgfritt, f.eks. Husleie",
       "paused": "På pause",
@@ -1408,8 +1406,7 @@
       "everyRange": "Skriv inn 1 til {{max}}",
       "endCountRange": "Skriv inn minst 1",
       "endBeforeStart": "Slutten er før starten",
-      "dueDaysRange": "Skriv inn 0 til {{max}}",
-      "firstApprove": "Den første, {{date}}, venter på godkjenningen din på fanen Planlagte."
+      "dueDaysRange": "Skriv inn 0 til {{max}}"
     },
     "queue": {
       "title": "Venter på godkjenning ({{count}})",

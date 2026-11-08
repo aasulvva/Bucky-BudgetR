@@ -11,6 +11,7 @@ import type { Cycle } from "@/api/cycles";
 import type { components } from "@/api/schema";
 import type { Transaction } from "@/api/transactions";
 
+import { now as clockNow } from "./clock";
 import { browserTimeZone } from "./cycleRule";
 import { formatDate, parseDate } from "./dates";
 import { getLocale } from "./locale";
@@ -371,11 +372,17 @@ export function reasonText(o: Pick<Occurrence, "reason" | "detail">, t: TFunctio
 }
 
 /**
- * The date an approved one gets (#31): its scheduled time when the active
- * cycle contains it, else null for now.
+ * The date an approved one gets (#31): its scheduled time when that has
+ * passed and the active cycle contains it, else null for now (approved
+ * early, before its time, it's dated now).
  */
-export function approveDate(o: Pick<Occurrence, "scheduled_at">, active: Cycle | null) {
-  return insideCycle(o.scheduled_at, active) ? o.scheduled_at : null;
+export function approveDate(
+  o: Pick<Occurrence, "scheduled_at">,
+  active: Cycle | null,
+  now = clockNow(),
+) {
+  const passed = new Date(o.scheduled_at).getTime() <= now.getTime();
+  return passed && insideCycle(o.scheduled_at, active, now) ? o.scheduled_at : null;
 }
 
 /** The queue's order: overdue first, then the oldest. */
