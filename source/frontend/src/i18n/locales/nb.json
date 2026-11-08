@@ -740,7 +740,9 @@
     "futureNote": "Den er frem i tid, så den lagres som en planlagt transaksjon som føres én gang {{date}}.",
     "savedRepeating": "Lagret. Den gjentas fra {{date}}.",
     "savedEnded": "Lagret.",
-    "scheduledFor": "Planlagt til {{date}}."
+    "scheduledFor": "Planlagt til {{date}}.",
+    "queuedRepeating": "Den første venter på godkjenningen din på fanen Planlagte. Den gjentas fra {{date}}.",
+    "queuedEnded": "Den venter på godkjenningen din på fanen Planlagte."
   },
   "transactionTypes": {
     "INC": "Inntekt",

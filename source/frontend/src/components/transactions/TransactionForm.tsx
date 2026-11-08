@@ -304,10 +304,14 @@ export function TransactionForm({
     if (!scheduleMode) {
       if (saved.next_index === 0) {
         message = t("newTransaction.scheduledFor", { date: formatDateTime(saved.next_at ?? "") });
-      } else if (saved.next_at) {
-        message = t("newTransaction.savedRepeating", { date: formatDateTime(saved.next_at) });
       } else {
-        message = t("newTransaction.savedEnded");
+        // The first was handled now: recorded, or queued when it asks first.
+        const queued = saved.mode === "approve";
+        message = saved.next_at
+          ? t(queued ? "newTransaction.queuedRepeating" : "newTransaction.savedRepeating", {
+              date: formatDateTime(saved.next_at),
+            })
+          : t(queued ? "newTransaction.queuedEnded" : "newTransaction.savedEnded");
       }
     }
     rememberAccount(saved.transaction.account_id);

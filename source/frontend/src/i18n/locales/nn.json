@@ -740,7 +740,9 @@
     "futureNote": "Han er fram i tid, så han vert lagra som ein planlagd transaksjon som vert ført éin gong {{date}}.",
     "savedRepeating": "Lagra. Han vert gjenteken frå {{date}}.",
     "savedEnded": "Lagra.",
-    "scheduledFor": "Planlagd til {{date}}."
+    "scheduledFor": "Planlagd til {{date}}.",
+    "queuedRepeating": "Den første ventar på godkjenninga di på fana Planlagde. Han vert gjenteken frå {{date}}.",
+    "queuedEnded": "Han ventar på godkjenninga di på fana Planlagde."
   },
   "transactionTypes": {
     "INC": "Inntekt",

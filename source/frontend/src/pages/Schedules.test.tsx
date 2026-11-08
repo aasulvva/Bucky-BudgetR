@@ -219,6 +219,37 @@ describe("Repeat in New transaction", () => {
     });
   });
 
+  it("queues the first for approval when it asks first", async () => {
+    apiMock.on("POST /api/v1/schedules", {
+      status: 201,
+      body: schedule({
+        id: "1234560010",
+        mode: "approve",
+        next_index: 1,
+        next_at: "2026-12-08T18:00:00Z",
+      }),
+    });
+    renderRoute("/transactions/new");
+    await userEvent.type(await screen.findByRole("textbox", { name: "Amount" }), "9000");
+    await pick("Account", /^Main account/);
+    await userEvent.click(screen.getByRole("switch", { name: /^Repeat or schedule/ }));
+    const repeat = within(screen.getByRole("region", { name: "Repeat" }));
+    await userEvent.click(repeat.getByRole("radio", { name: "Ask me first" }));
+    expect(
+      await repeat.findByText(/The first, .*, waits for your approval on the Scheduled tab/),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(apiMock.calls("POST /api/v1/schedules")).toHaveLength(1);
+    });
+    expect(apiMock.calls("POST /api/v1/schedules")[0]?.body).toMatchObject({ mode: "approve" });
+    expect(
+      await screen.findByText(
+        /^The first waits for your approval on the Scheduled tab\. It repeats from/,
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("checks the repeat before saving", async () => {
     renderRoute("/transactions/new");
     await userEvent.type(await screen.findByRole("textbox", { name: "Amount" }), "100");

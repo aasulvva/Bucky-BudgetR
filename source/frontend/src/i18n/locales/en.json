@@ -740,7 +740,9 @@
     "futureNote": "It's in the future, so it's saved as a scheduled transaction, recorded once on {{date}}.",
     "savedRepeating": "Saved. It repeats from {{date}}.",
     "savedEnded": "Saved.",
-    "scheduledFor": "Scheduled for {{date}}."
+    "scheduledFor": "Scheduled for {{date}}.",
+    "queuedRepeating": "The first waits for your approval on the Scheduled tab. It repeats from {{date}}.",
+    "queuedEnded": "It waits for your approval on the Scheduled tab."
   },
   "transactionTypes": {
     "INC": "Income",
