@@ -1,10 +1,13 @@
 import i18n from "@/i18n";
-import { transaction } from "@/test/fixtures";
+import { cycle, transaction } from "@/test/fixtures";
 
 import {
+  approveDate,
   defaultRepeat,
   fromTransaction,
   previewBody,
+  queueOrder,
+  reasonText,
   repeatErrors,
   repeatFromSchedule,
   repeatSentence,
@@ -12,6 +15,7 @@ import {
   startsByNow,
   toInput,
   wallTime,
+  type Occurrence,
   type RepeatValues,
   type Schedule,
 } from "./schedules";
@@ -172,5 +176,53 @@ describe("the form's values", () => {
       date: "2026-03-29",
       time: "03:30",
     });
+  });
+});
+
+describe("the approval queue (#155)", () => {
+  const queued = (overrides: Partial<Occurrence> & Pick<Occurrence, "id">): Occurrence => ({
+    schedule_id: rent.id,
+    scheduled_at: "2026-11-01T16:00:00Z",
+    state: "queued",
+    reason: "approval",
+    detail: "",
+    queued_at: "2026-11-01T16:00:00Z",
+    due_at: "2026-11-08T16:00:00Z",
+    overdue: false,
+    transaction_id: null,
+    resolved_at: null,
+    ...overrides,
+  });
+
+  it("says why one waits", () => {
+    expect(reasonText(queued({ id: "1" }), en)).toBe("Asks for approval");
+    expect(reasonText(queued({ id: "1", reason: "outside_cycle" }), en)).toBe(
+      "Its time was outside the active cycle",
+    );
+    expect(
+      reasonText(queued({ id: "1", reason: "invalid", detail: "the bucket was deleted" }), en),
+    ).toBe("It couldn't be recorded: the bucket was deleted");
+    expect(reasonText(queued({ id: "1", reason: "no_active_cycle" }), nb)).toBe(
+      "Det var ingen aktiv syklus",
+    );
+  });
+
+  it("dates an approved one at its time in the active cycle, else now", () => {
+    const active = cycle({ start_at: "2026-10-29T07:00:00Z", end_at: "2026-11-28T08:00:00Z" });
+    expect(approveDate(queued({ id: "1" }), active)).toBe("2026-11-01T16:00:00Z");
+    expect(approveDate(queued({ id: "1", scheduled_at: "2026-10-25T16:00:00Z" }), active)).toBe(
+      null,
+    );
+    expect(approveDate(queued({ id: "1" }), null)).toBeNull();
+  });
+
+  it("puts overdue ones first, then the oldest", () => {
+    const items = [
+      queued({ id: "new", scheduled_at: "2026-11-05T16:00:00Z" }),
+      queued({ id: "old", scheduled_at: "2026-11-01T16:00:00Z" }),
+      queued({ id: "late", scheduled_at: "2026-11-03T16:00:00Z", overdue: true }),
+    ];
+    expect(queueOrder(items).map((o) => o.id)).toEqual(["late", "old", "new"]);
+    expect(items[0]?.id).toBe("new");
   });
 });

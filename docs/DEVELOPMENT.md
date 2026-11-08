@@ -176,6 +176,8 @@ Schedules (#31, spec §5.6) live in `internal/schedules`.
 - `CreateRecordingFirst` (`?record_first=true`) records occurrence 0 with `RecordIn` in the create's own transaction, not a savepoint, so a failure saves nothing, and adds its `applied` occurrence row.
 - `transactions.Service.load` fills a transaction's `ScheduleID` from `schedule_occurrences.transaction_id` (`ListSchedulesFor`).
 - Frontend: `lib/schedules.ts` holds the form's repeat values, the request bodies and the sentence (`repeatSentence`); `TransactionForm` takes a `schedule` prop for the schedule pages, and its *Repeat or schedule* switch in New transaction saves with `record_first`.
+- `queue.go` approves and skips (#155). `Approve` takes `ledger.LockUser`, then the occurrence `FOR UPDATE`; one that isn't queued is `ErrResolved` (409 `already_resolved`). It records the schedule's transaction, or the edited one from the request, with `RecordIn` in the same database transaction, then marks the occurrence `applied` (`ResolveOccurrence` only changes a queued row). A failure saves nothing, so the occurrence stays queued. Without an edited transaction it's dated at `scheduled_at` when the active cycle (`start_at ≤ t < end_at`) contains it, else now. `UpcomingAll` merges `Rule.Upcoming` of every schedule that isn't paused or ended.
+- Frontend: `components/schedules/ApprovalQueue.tsx` is the queue on the Scheduled tab, `QueueBadge.tsx` the counts (from `useQueue`, polled every minute), `pages/ApproveScheduled.tsx` *Edit and approve* (`TransactionForm`'s `approve` prop), and `components/dashboard/ScheduledWidget.tsx` the widget. Bulk actions use `useResolveMany`, which sends one request at a time and refreshes once.
 
 ### Debug settings
 

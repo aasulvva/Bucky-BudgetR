@@ -37,6 +37,7 @@ import { CycleBanners } from "@/components/cycles/CycleBanners";
 import { CycleStatus } from "@/components/cycles/CycleStatus";
 import { About } from "@/components/About";
 import { DebugButton, DebugMenuItem, DebugRoot } from "@/components/debug";
+import { QueueBadge, QueueIndicator } from "@/components/schedules/QueueBadge";
 import { WhatsNew, WhatsNewPopup } from "@/components/WhatsNew";
 import { versionLabel } from "@/lib/changelog";
 import { useClockVersion } from "@/lib/clock";
@@ -149,6 +150,7 @@ function SideNav({ current }: { current: Current }) {
                   to={first.path}
                   label={t(`nav.items.${first.key}`)}
                   leftSection={<tab.icon size={18} />}
+                  rightSection={tab.id === "transactions" ? <QueueBadge /> : undefined}
                   active={first.path === pathname}
                 />
               );
@@ -234,7 +236,13 @@ function BottomTabs({ current, pathname }: { current: NavTab | undefined; pathna
         const active = tab.id === current?.id;
         const content = (
           <>
-            <tab.icon size={22} />
+            {tab.id === "transactions" ? (
+              <QueueIndicator>
+                <tab.icon size={22} />
+              </QueueIndicator>
+            ) : (
+              <tab.icon size={22} />
+            )}
             <span className={classes.tabLabel}>{t(`nav.tabs.${tab.short ?? tab.id}`)}</span>
           </>
         );

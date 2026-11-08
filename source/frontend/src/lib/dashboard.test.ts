@@ -619,3 +619,22 @@ describe("the graph widget (#124)", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 });
+
+describe("the Scheduled widget (#155)", () => {
+  it("starts with both parts and 5 rows, half width, and saves its settings back", () => {
+    const fresh = newWidget("scheduled");
+    expect(fresh).toMatchObject({ width: "half", settings: { show: "both", count: 5 } });
+    const widget: WidgetInstance<"scheduled"> = {
+      id: "sw",
+      type: "scheduled",
+      width: "half",
+      title: null,
+      settings: { show: "queue", count: 10 },
+    };
+    const prefs = layoutToPreferences([widget]);
+    expect(prefs.widgets).toEqual([
+      { id: "sw", type: "scheduled", width: "half", scheduled: { show: "queue", count: 10 } },
+    ]);
+    expect(dashboardLayout({ dashboard: prefs })).toEqual([widget]);
+  });
+});

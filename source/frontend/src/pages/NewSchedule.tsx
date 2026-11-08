@@ -6,7 +6,11 @@ import { Link, useSearchParams } from "react-router";
 import { useAccounts, useBuckets } from "@/api/accounts";
 import { useTransaction } from "@/api/transactions";
 import { QueryState } from "@/components/QueryState";
-import { TransactionForm, type ScheduleOptions } from "@/components/transactions/TransactionForm";
+import {
+  TransactionForm,
+  type ApproveOptions,
+  type ScheduleOptions,
+} from "@/components/transactions/TransactionForm";
 
 /**
  * New schedule (#154): the Create transaction form with when to record it.
@@ -29,8 +33,14 @@ function FromTransaction({ id }: { id: string }) {
   return <QueryState query={transaction}>{(tx) => <Form schedule={{ from: tx }} />}</QueryState>;
 }
 
-/** The form, once the accounts and buckets are known. */
-export function Form({ schedule }: { schedule: ScheduleOptions }): ReactNode {
+/** The form, once the accounts and buckets are known: a schedule's, or Edit and approve's. */
+export function Form({
+  schedule,
+  approve,
+}: {
+  schedule?: ScheduleOptions;
+  approve?: ApproveOptions;
+}): ReactNode {
   const accounts = useAccounts();
   const buckets = useBuckets();
   return (
@@ -46,7 +56,12 @@ export function Form({ schedule }: { schedule: ScheduleOptions }): ReactNode {
         ) : (
           <QueryState query={buckets}>
             {(bucketList) => (
-              <TransactionForm accounts={accountList} buckets={bucketList} schedule={schedule} />
+              <TransactionForm
+                accounts={accountList}
+                buckets={bucketList}
+                {...(schedule ? { schedule } : {})}
+                {...(approve ? { approve } : {})}
+              />
             )}
           </QueryState>
         )

@@ -85,3 +85,16 @@ LIMIT sqlc.arg(row_limit);
 -- name: UserTimeZone :one
 -- The user's time_zone preference, or '' when unset.
 SELECT COALESCE(preferences ->> 'time_zone', '')::text FROM users WHERE id = $1;
+
+-- name: GetOccurrence :one
+SELECT * FROM schedule_occurrences WHERE id = $1 AND user_id = $2;
+
+-- name: GetOccurrenceForUpdate :one
+SELECT * FROM schedule_occurrences WHERE id = $1 AND user_id = $2 FOR UPDATE;
+
+-- name: ResolveOccurrence :one
+-- Approves or skips a queued occurrence.
+UPDATE schedule_occurrences
+SET state = sqlc.arg(state), transaction_id = sqlc.narg(transaction_id), resolved_at = sqlc.arg(resolved_at)
+WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id) AND state = 'queued'
+RETURNING *;

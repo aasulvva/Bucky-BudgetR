@@ -342,7 +342,8 @@
       "accounts": "Your account balances, or one account.",
       "recent_transactions": "The latest transactions.",
       "in_out": "Income, expenses and their balance for a period.",
-      "graph": "One of your saved graphs from Stats & reports."
+      "graph": "One of your saved graphs from Stats & reports.",
+      "scheduled": "Scheduled transactions waiting for approval, and what's coming up."
     },
     "inOut": {
       "title": "Money in and out",
@@ -382,6 +383,23 @@
       "noneSaved": "You have no saved graphs yet. Make one on <stats>Stats & reports</stats> and save it.",
       "open": "Open in Stats",
       "openGraph": "Open {{name}} in Stats & reports"
+    },
+    "scheduled": {
+      "title": "Scheduled",
+      "all": "All scheduled",
+      "queue": "Waiting for approval",
+      "upcoming": "Coming up",
+      "nothingWaiting": "Nothing is waiting for approval.",
+      "nothingUpcoming": "Nothing is coming up.",
+      "more_one": "and {{count}} more",
+      "more_other": "and {{count}} more",
+      "show": "Show",
+      "shows": {
+        "both": "Both",
+        "queue": "Waiting for approval",
+        "upcoming": "Coming up"
+      },
+      "count": "Rows in each part"
     }
   },
   "buckets": {
@@ -1185,6 +1203,7 @@
       "active_cycle_exists": "Another cycle is active. End it first.",
       "admin_only": "Only admins can do this.",
       "already_refilled": "The bucket has already been refilled in this cycle.",
+      "already_resolved": "It has already been approved or skipped.",
       "already_reversed": "The transaction has been reversed.",
       "balance_not_zero": "The account still has money in it. Transfer it to another account or adjust the balance to 0.",
       "body_too_large": "The request is too large.",
@@ -1371,7 +1390,7 @@
       },
       "modeHints": {
         "auto": "It's recorded at its time, with its bucket lines in the active cycle.",
-        "approve": "It waits for you to approve it (the approval queue comes in the next update)."
+        "approve": "It waits in the approval queue on the Scheduled tab until you approve or skip it."
       },
       "dueDays": "Due within (days)",
       "name": "Name",
@@ -1388,6 +1407,44 @@
       "endCountRange": "Enter at least 1",
       "endBeforeStart": "The end is before the start",
       "dueDaysRange": "Enter 0 to {{max}}"
+    },
+    "queue": {
+      "title": "Waiting for approval ({{count}})",
+      "select": "Select {{name}}",
+      "selectAll": "Select all",
+      "approve": "Approve",
+      "approveName": "Approve {{name}}",
+      "editApprove": "Edit and approve",
+      "skip": "Skip",
+      "skipName": "Skip {{name}}",
+      "more": "More for {{name}}",
+      "approveSelected": "Approve selected ({{count}})",
+      "skipSelected": "Skip selected ({{count}})",
+      "approved_one": "Approved and recorded.",
+      "approved_other": "{{count}} approved and recorded.",
+      "skipped_one": "Skipped.",
+      "skipped_other": "{{count}} skipped.",
+      "approveFailed_one": "{{count}} couldn't be approved: {{reason}}",
+      "approveFailed_other": "{{count}} couldn't be approved: {{reason}}",
+      "skipFailed_one": "{{count}} couldn't be skipped: {{reason}}",
+      "skipFailed_other": "{{count}} couldn't be skipped: {{reason}}",
+      "overdue": "Overdue",
+      "due": "Due {{date}}",
+      "unknown": "Scheduled transaction",
+      "pageTitle": "Approve scheduled transaction",
+      "scheduledFor": "Scheduled for {{date}}.",
+      "notQueued": "This scheduled transaction has already been approved or skipped.",
+      "count_one": "{{count}} waiting for approval",
+      "count_other": "{{count}} waiting for approval",
+      "countOverdue_one": "{{count}} waiting for approval, overdue",
+      "countOverdue_other": "{{count}} waiting for approval, some overdue"
+    },
+    "reasons": {
+      "approval": "Asks for approval",
+      "no_active_cycle": "There was no active cycle",
+      "outside_cycle": "Its time was outside the active cycle",
+      "invalid": "It couldn't be recorded",
+      "invalidDetail": "It couldn't be recorded: {{detail}}"
     }
   }
 }

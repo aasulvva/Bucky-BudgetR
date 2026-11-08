@@ -19,6 +19,7 @@ export type WidgetType = ApiWidget["type"];
 export type WidgetWidth = ApiWidget["width"];
 export type BucketStatusMode = Schemas["BucketStatusWidgetSettings"]["mode"];
 export type AccountsMode = Schemas["AccountsWidgetSettings"]["mode"];
+export type ScheduledShow = Schemas["ScheduledWidgetSettings"]["show"];
 
 export const WIDGET_TYPES: WidgetType[] = [
   "cycle",
@@ -28,6 +29,7 @@ export const WIDGET_TYPES: WidgetType[] = [
   "recent_transactions",
   "in_out",
   "graph",
+  "scheduled",
 ];
 export const ACCOUNTS_MODES: AccountsMode[] = ["all", "account"];
 export const BUCKET_STATUS_MODES: BucketStatusMode[] = [
@@ -38,6 +40,7 @@ export const BUCKET_STATUS_MODES: BucketStatusMode[] = [
   "bucket",
 ];
 export const TRANSACTION_COUNTS = [3, 5, 10, 15, 20];
+export const SCHEDULED_SHOWS: ScheduledShow[] = ["both", "queue", "upcoming"];
 /** The most widgets a layout holds (the API's limit). */
 export const MAX_WIDGETS = 30;
 /** The longest custom title. */
@@ -73,6 +76,13 @@ export interface InOutSettings {
   accountId: string | null;
 }
 
+/** The Scheduled widget (#155): the approval queue, what's coming up, or both. */
+export interface ScheduledSettings {
+  show: ScheduledShow;
+  /** The most rows in each part. */
+  count: number;
+}
+
 export interface GraphWidgetSettings {
   /** The saved graph it shows; null until one is picked. */
   savedGraphId: string | null;
@@ -86,6 +96,7 @@ interface SettingsOf {
   recent_transactions: RecentSettings;
   in_out: InOutSettings;
   graph: GraphWidgetSettings;
+  scheduled: ScheduledSettings;
 }
 
 /** One widget on the Dashboard, with its own settings. */
@@ -129,6 +140,10 @@ const fromApi = {
   graph: (s?: Schemas["GraphWidgetSettings"]): GraphWidgetSettings => ({
     savedGraphId: s?.saved_graph_id ?? null,
   }),
+  scheduled: (s?: Schemas["ScheduledWidgetSettings"]): ScheduledSettings => ({
+    show: s?.show ?? "both",
+    count: s?.count ?? 5,
+  }),
 };
 
 /** A widget type's default settings. */
@@ -149,6 +164,8 @@ export function defaultSettings(type: WidgetType): SettingsOf[WidgetType] {
       return fromApi.inOut();
     case "graph":
       return fromApi.graph();
+    case "scheduled":
+      return fromApi.scheduled();
   }
 }
 
@@ -259,6 +276,8 @@ function widgetFromApi(w: ApiWidget): WidgetInstance {
       return { ...base, type: w.type, settings: fromApi.inOut(w.in_out) };
     case "graph":
       return { ...base, type: w.type, settings: fromApi.graph(w.graph) };
+    case "scheduled":
+      return { ...base, type: w.type, settings: fromApi.scheduled(w.scheduled) };
   }
 }
 
@@ -347,6 +366,8 @@ function widgetToApi(w: WidgetInstance): ApiWidget {
       const { savedGraphId } = w.settings;
       return savedGraphId === null ? base : { ...base, graph: { saved_graph_id: savedGraphId } };
     }
+    case "scheduled":
+      return { ...base, scheduled: { show: w.settings.show, count: w.settings.count } };
   }
 }
 

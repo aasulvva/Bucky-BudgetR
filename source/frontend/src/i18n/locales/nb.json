@@ -342,7 +342,8 @@
       "accounts": "Saldoene på kontoene dine, eller én konto.",
       "recent_transactions": "De siste transaksjonene.",
       "in_out": "Inntekter, utgifter og netto for et tidsrom.",
-      "graph": "En av de lagrede grafene dine fra Statistikk og rapporter."
+      "graph": "En av de lagrede grafene dine fra Statistikk og rapporter.",
+      "scheduled": "Planlagte transaksjoner som venter på godkjenning, og det som kommer."
     },
     "inOut": {
       "title": "Inn og ut",
@@ -382,6 +383,23 @@
       "noneSaved": "Du har ingen lagrede grafer ennå. Lag en under <stats>Statistikk og rapporter</stats> og lagre den.",
       "open": "Åpne i Statistikk",
       "openGraph": "Åpne {{name}} i Statistikk og rapporter"
+    },
+    "scheduled": {
+      "title": "Planlagte",
+      "all": "Alle planlagte",
+      "queue": "Venter på godkjenning",
+      "upcoming": "Kommer",
+      "nothingWaiting": "Ingenting venter på godkjenning.",
+      "nothingUpcoming": "Ingenting kommer.",
+      "more_one": "og {{count}} til",
+      "more_other": "og {{count}} til",
+      "show": "Vis",
+      "shows": {
+        "both": "Begge",
+        "queue": "Venter på godkjenning",
+        "upcoming": "Kommer"
+      },
+      "count": "Rader i hver del"
     }
   },
   "buckets": {
@@ -1185,6 +1203,7 @@
       "active_cycle_exists": "En annen periode er aktiv. Avslutt den først.",
       "admin_only": "Bare administratorer kan gjøre dette.",
       "already_refilled": "Bøtta er allerede fylt på i denne perioden.",
+      "already_resolved": "Den er allerede godkjent eller hoppet over.",
       "already_reversed": "Transaksjonen er reversert.",
       "balance_not_zero": "Det er fortsatt penger på kontoen. Overfør dem til en annen konto, eller juster saldoen til 0.",
       "body_too_large": "Forespørselen er for stor.",
@@ -1371,7 +1390,7 @@
       },
       "modeHints": {
         "auto": "Den føres på sitt tidspunkt, med bøttelinjene i den aktive perioden.",
-        "approve": "Den venter på at du godkjenner den (godkjenningskøen kommer i neste oppdatering)."
+        "approve": "Den venter i godkjenningskøen på fanen Planlagte til du godkjenner eller hopper over den."
       },
       "dueDays": "Forfaller innen (dager)",
       "name": "Navn",
@@ -1388,6 +1407,44 @@
       "endCountRange": "Skriv inn minst 1",
       "endBeforeStart": "Slutten er før starten",
       "dueDaysRange": "Skriv inn 0 til {{max}}"
+    },
+    "queue": {
+      "title": "Venter på godkjenning ({{count}})",
+      "select": "Velg {{name}}",
+      "selectAll": "Velg alle",
+      "approve": "Godkjenn",
+      "approveName": "Godkjenn {{name}}",
+      "editApprove": "Rediger og godkjenn",
+      "skip": "Hopp over",
+      "skipName": "Hopp over {{name}}",
+      "more": "Mer for {{name}}",
+      "approveSelected": "Godkjenn valgte ({{count}})",
+      "skipSelected": "Hopp over valgte ({{count}})",
+      "approved_one": "Godkjent og registrert.",
+      "approved_other": "{{count}} godkjent og registrert.",
+      "skipped_one": "Hoppet over.",
+      "skipped_other": "{{count}} hoppet over.",
+      "approveFailed_one": "{{count}} kunne ikke godkjennes: {{reason}}",
+      "approveFailed_other": "{{count}} kunne ikke godkjennes: {{reason}}",
+      "skipFailed_one": "{{count}} kunne ikke hoppes over: {{reason}}",
+      "skipFailed_other": "{{count}} kunne ikke hoppes over: {{reason}}",
+      "overdue": "Forfalt",
+      "due": "Forfaller {{date}}",
+      "unknown": "Planlagt transaksjon",
+      "pageTitle": "Godkjenn planlagt transaksjon",
+      "scheduledFor": "Planlagt til {{date}}.",
+      "notQueued": "Denne planlagte transaksjonen er allerede godkjent eller hoppet over.",
+      "count_one": "{{count}} venter på godkjenning",
+      "count_other": "{{count}} venter på godkjenning",
+      "countOverdue_one": "{{count}} venter på godkjenning, forfalt",
+      "countOverdue_other": "{{count}} venter på godkjenning, noen har forfalt"
+    },
+    "reasons": {
+      "approval": "Ber om godkjenning",
+      "no_active_cycle": "Det var ingen aktiv syklus",
+      "outside_cycle": "Tidspunktet var utenfor den aktive syklusen",
+      "invalid": "Den kunne ikke registreres",
+      "invalidDetail": "Den kunne ikke registreres: {{detail}}"
     }
   }
 }

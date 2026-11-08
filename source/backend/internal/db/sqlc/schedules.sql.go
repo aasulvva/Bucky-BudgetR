@@ -290,6 +290,64 @@ func (q *Queries) DueSchedulesForUpdate(ctx context.Context, arg DueSchedulesFor
 	return items, nil
 }
 
+const getOccurrence = `-- name: GetOccurrence :one
+SELECT id, schedule_id, user_id, scheduled_at, state, reason, detail, queued_at, due_at, transaction_id, resolved_at, created_at FROM schedule_occurrences WHERE id = $1 AND user_id = $2
+`
+
+type GetOccurrenceParams struct {
+	ID     string
+	UserID string
+}
+
+func (q *Queries) GetOccurrence(ctx context.Context, arg GetOccurrenceParams) (ScheduleOccurrence, error) {
+	row := q.db.QueryRow(ctx, getOccurrence, arg.ID, arg.UserID)
+	var i ScheduleOccurrence
+	err := row.Scan(
+		&i.ID,
+		&i.ScheduleID,
+		&i.UserID,
+		&i.ScheduledAt,
+		&i.State,
+		&i.Reason,
+		&i.Detail,
+		&i.QueuedAt,
+		&i.DueAt,
+		&i.TransactionID,
+		&i.ResolvedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getOccurrenceForUpdate = `-- name: GetOccurrenceForUpdate :one
+SELECT id, schedule_id, user_id, scheduled_at, state, reason, detail, queued_at, due_at, transaction_id, resolved_at, created_at FROM schedule_occurrences WHERE id = $1 AND user_id = $2 FOR UPDATE
+`
+
+type GetOccurrenceForUpdateParams struct {
+	ID     string
+	UserID string
+}
+
+func (q *Queries) GetOccurrenceForUpdate(ctx context.Context, arg GetOccurrenceForUpdateParams) (ScheduleOccurrence, error) {
+	row := q.db.QueryRow(ctx, getOccurrenceForUpdate, arg.ID, arg.UserID)
+	var i ScheduleOccurrence
+	err := row.Scan(
+		&i.ID,
+		&i.ScheduleID,
+		&i.UserID,
+		&i.ScheduledAt,
+		&i.State,
+		&i.Reason,
+		&i.Detail,
+		&i.QueuedAt,
+		&i.DueAt,
+		&i.TransactionID,
+		&i.ResolvedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getSchedule = `-- name: GetSchedule :one
 SELECT id, user_id, name, transaction_type, account_id, to_account_id, amount, counterparty, tags, triggers_refill, mode, due_days, start_date, time_of_day, time_zone, frequency, every, end_count, end_date, paused, next_index, next_at, created_at, updated_at FROM schedules WHERE id = $1 AND user_id = $2
 `
@@ -530,6 +588,48 @@ func (q *Queries) OccurrenceExists(ctx context.Context, arg OccurrenceExistsPara
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
+}
+
+const resolveOccurrence = `-- name: ResolveOccurrence :one
+UPDATE schedule_occurrences
+SET state = $1, transaction_id = $2, resolved_at = $3
+WHERE id = $4 AND user_id = $5 AND state = 'queued'
+RETURNING id, schedule_id, user_id, scheduled_at, state, reason, detail, queued_at, due_at, transaction_id, resolved_at, created_at
+`
+
+type ResolveOccurrenceParams struct {
+	State         OccurrenceState
+	TransactionID pgtype.Text
+	ResolvedAt    pgtype.Timestamptz
+	ID            string
+	UserID        string
+}
+
+// Approves or skips a queued occurrence.
+func (q *Queries) ResolveOccurrence(ctx context.Context, arg ResolveOccurrenceParams) (ScheduleOccurrence, error) {
+	row := q.db.QueryRow(ctx, resolveOccurrence,
+		arg.State,
+		arg.TransactionID,
+		arg.ResolvedAt,
+		arg.ID,
+		arg.UserID,
+	)
+	var i ScheduleOccurrence
+	err := row.Scan(
+		&i.ID,
+		&i.ScheduleID,
+		&i.UserID,
+		&i.ScheduledAt,
+		&i.State,
+		&i.Reason,
+		&i.Detail,
+		&i.QueuedAt,
+		&i.DueAt,
+		&i.TransactionID,
+		&i.ResolvedAt,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const updateSchedule = `-- name: UpdateSchedule :one

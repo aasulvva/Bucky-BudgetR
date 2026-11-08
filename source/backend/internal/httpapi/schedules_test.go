@@ -155,6 +155,38 @@ func TestSchedulesAPI(t *testing.T) {
 	}
 	expect(t, "bad state", do(http.MethodGet, "/api/v1/scheduled-transactions?state=lost", nil, alice), http.StatusBadRequest, "invalid_request")
 
+	// Approving it: its bucket line needs an active cycle, so it stays queued.
+	qid := page.Items[0].Id
+	base := "/api/v1/scheduled-transactions/" + qid
+	expect(t, "bob gets queued", do(http.MethodGet, base, nil, bob), http.StatusNotFound, "not_found")
+	expect(t, "bob approves", do(http.MethodPost, base+"/approve", nil, bob), http.StatusNotFound, "not_found")
+	expect(t, "bob skips", do(http.MethodPost, base+"/skip", nil, bob), http.StatusNotFound, "not_found")
+	expect(t, "approve without cycle", do(http.MethodPost, base+"/approve", nil, alice), http.StatusConflict, "no_active_cycle")
+	w = do(http.MethodGet, base, nil, alice)
+	expect(t, "still queued", w, http.StatusOK, "")
+	if o := decode[api.ScheduledTransaction](t, w); o.State != api.Queued || o.Overdue {
+		t.Errorf("still queued %+v", o)
+	}
+	// Edited without the bucket line, it's recorded now.
+	w = do(http.MethodPost, base+"/approve", map[string]any{"type": "EXP", "account_id": main, "amount": "8500", "counterparty": "Landlord"}, alice)
+	expect(t, "approve edited", w, http.StatusOK, "")
+	approved := decode[api.ApprovedScheduledTransaction](t, w)
+	if approved.ScheduledTransaction.State != api.Applied || approved.Transaction.ScheduleId.MustGet() != exp.Id ||
+		approved.ScheduledTransaction.TransactionId.MustGet() != approved.Transaction.Id || !approved.Transaction.At.Equal(now) {
+		t.Errorf("approved %+v", approved)
+	}
+	expect(t, "approve again", do(http.MethodPost, base+"/approve", nil, alice), http.StatusConflict, "already_resolved")
+	expect(t, "skip approved", do(http.MethodPost, base+"/skip", nil, alice), http.StatusConflict, "already_resolved")
+
+	// What's coming up: the transfer on the 25th, and the next expense.
+	w = do(http.MethodGet, "/api/v1/upcoming-transactions?count=2", nil, alice)
+	expect(t, "upcoming all", w, http.StatusOK, "")
+	if got := decode[[]api.UpcomingTransaction](t, w); len(got) != 2 || got[0].ScheduleId != exp.Id ||
+		!got[0].At.Equal(now.AddDate(0, 0, 14)) || got[1].ScheduleId != sch.Id {
+		t.Errorf("upcoming all %+v", got)
+	}
+	expect(t, "upcoming all count", do(http.MethodGet, "/api/v1/upcoming-transactions?count=0", nil, alice), http.StatusBadRequest, "invalid_request")
+
 	// Recorded first: a transfer from 09:00 today, recorded now and linked.
 	first := map[string]any{
 		"transaction": map[string]any{"type": "TRF", "account_id": main, "to_account_id": savings, "amount": "100"},

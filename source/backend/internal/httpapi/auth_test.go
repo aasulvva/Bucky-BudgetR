@@ -400,6 +400,11 @@ func TestPreferences(t *testing.T) {
 	if w := patch(graph); w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != graph {
 		t.Errorf("graph widgets: %d %s", w.Code, w.Body)
 	}
+	// A scheduled widget (#155).
+	scheduled := `{"dashboard":{"widgets":[{"id":"s-1","scheduled":{"count":10,"show":"queue"},"type":"scheduled","width":"half"}]}}`
+	if w := patch(scheduled); w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != scheduled {
+		t.Errorf("scheduled widget: %d %s", w.Code, w.Body)
+	}
 	if w := patch(`{"dashboard":{"widgets":[]}}`); strings.TrimSpace(w.Body.String()) != `{"dashboard":{"widgets":[]}}` {
 		t.Errorf("empty layout: %d %s", w.Code, w.Body)
 	}
@@ -431,6 +436,9 @@ func TestPreferences(t *testing.T) {
 		`{"dashboard":{"mobile_widgets":[{"id":"a","type":"cycle","width":"half","bucket_status":{"mode":"all"}}]}}`,
 		`{"dashboard":{"mobile_widgets":[{"id":"a","type":"health","width":"half","title":" "}]}}`,
 		`{"dashboard":{"widgets":[{"id":"a","type":"chart","width":"half"}]}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"cycle","width":"half","scheduled":{"show":"both","count":5}}]}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"scheduled","width":"half","scheduled":{"show":"all","count":5}}]}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"scheduled","width":"half","scheduled":{"show":"both","count":21}}]}}`,
 		`{"dashboard":{"widgets":[{"id":"a","type":"cycle","width":"half","graph":{"saved_graph_id":"g-1"}}]}}`,
 		`{"dashboard":{"widgets":[{"id":"a","type":"graph","width":"half","graph":{"saved_graph_id":""}}]}}`,
 		`{"dashboard":{"widgets":[{"id":"a","type":"graph","width":"half","graph":{}}]}}`,

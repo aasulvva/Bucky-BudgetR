@@ -29,7 +29,7 @@ import { useRefreshMoney, type Account, type Bucket } from "@/api/accounts";
 import { api } from "@/api/client";
 import { useCurrentCycles, type Cycle } from "@/api/cycles";
 import { unwrap } from "@/api/errors";
-import { useSaveSchedule } from "@/api/schedules";
+import { useApprove, useSaveSchedule } from "@/api/schedules";
 import {
   useCounterparties,
   useTags,
@@ -65,6 +65,7 @@ import {
 } from "@/lib/transactionForm";
 import { bucketLinesLocked, isCorrectableType } from "@/lib/transactionList";
 import {
+  approveDate,
   defaultRepeat,
   fromTransaction,
   isSchedulable,
@@ -74,6 +75,7 @@ import {
   valuesFromSchedule,
   wallTime,
   type RepeatErrors,
+  type Occurrence,
   type RepeatValues,
   type Schedule,
   type ScheduleTransaction,
@@ -118,6 +120,12 @@ export interface ScheduleOptions {
   from?: Transaction;
 }
 
+/** Edit and approve (#155): a queued one, recorded as edited. */
+export interface ApproveOptions {
+  occurrence: Occurrence;
+  schedule: Schedule;
+}
+
 /**
  * The Create transaction form (spec §9). With `editing`, it corrects that
  * transaction instead: the type is fixed, the time stays the original one, and
@@ -128,17 +136,23 @@ export interface ScheduleOptions {
  * when it's recorded (RepeatFields). New transaction can also be set to
  * repeat: it's then saved as a schedule, recorded now when its first time is
  * now or past.
+ *
+ * With `approve`, it approves a queued scheduled transaction (#155): the
+ * schedule's transaction, its type fixed, dated at its scheduled time when
+ * the active cycle contains it, else now; it can't repeat or be later.
  */
 export function TransactionForm({
   accounts,
   buckets,
   editing,
   schedule,
+  approve,
 }: {
   accounts: Account[];
   buckets: Bucket[];
   editing?: Transaction;
   schedule?: ScheduleOptions;
+  approve?: ApproveOptions;
 }) {
   const { t } = useTranslation();
   const theme = useMantineTheme();
@@ -150,6 +164,7 @@ export function TransactionForm({
   const rules = preferences?.income_refill_rules ?? [];
   const zone = preferences?.time_zone ?? browserTimeZone();
   const scheduleMode = schedule !== undefined;
+  const approving = approve !== undefined;
   const from = schedule?.from && isSchedulable(schedule.from) ? schedule.from : undefined;
   const active = useCurrentCycles().data?.active ?? null;
   const amountId = useId();
@@ -157,15 +172,21 @@ export function TransactionForm({
   const [start] = useState(() => {
     if (editing) return editState(editing);
     if (schedule?.editing) return valuesFromSchedule(schedule.editing);
+    if (approve) return valuesFromSchedule(approve.schedule);
     if (from) return editState(from);
     return null;
   });
   const [newType, setType] = useState<NewTransactionType>(
-    schedule?.editing?.transaction.type ?? from?.type ?? "EXP",
+    schedule?.editing?.transaction.type ??
+      approve?.schedule.transaction.type ??
+      from?.type ??
+      "EXP",
   );
   const type: TransactionType = editing?.type ?? newType;
   const [amount, setAmount] = useState<string | null>(start?.amount ?? null);
-  const [at, setAt] = useState<string | null>(editing?.at ?? null);
+  const [at, setAt] = useState<string | null>(() =>
+    approve ? approveDate(approve.occurrence, active) : (editing?.at ?? null),
+  );
   const [accountId, setAccountId] = useState(() =>
     start ? start.accountId : initialAccount(accounts, lastAccount()),
   );
@@ -193,6 +214,7 @@ export function TransactionForm({
   const future =
     !editing &&
     !scheduleMode &&
+    !approving &&
     !repeatOn &&
     at !== null &&
     new Date(at).getTime() > now().getTime();
@@ -320,6 +342,11 @@ export function TransactionForm({
     }
   };
 
+  const approveSave = useApprove(async () => {
+    notifications.show({ color: "green", message: t("schedules.queue.approved", { count: 1 }) });
+    await navigate("/transactions/scheduled");
+  });
+
   const save = useMutation({
     mutationFn: ({ body }: { body: TransactionCreate; addAnother: boolean }) =>
       unwrap(api.POST("/api/v1/transactions", { body })),
@@ -446,6 +473,10 @@ export function TransactionForm({
       });
       return;
     }
+    if (approve) {
+      approveSave.mutate({ id: approve.occurrence.id, body });
+      return;
+    }
     save.mutate({ body, addAnother });
   };
 
@@ -483,8 +514,8 @@ export function TransactionForm({
           value={at}
           onChange={setAt}
           error={errors.at}
-          // A later time schedules it.
-          maxDate={undefined}
+          // A later time schedules it; an approved one is recorded by now.
+          {...(approving ? {} : { maxDate: undefined })}
           {...(!transfer && lines.length > 0 && active && !isOverdue(active)
             ? { minDate: new Date(active.start_at) }
             : {})}
@@ -498,7 +529,7 @@ export function TransactionForm({
           </Stack>
         </Card>
       )}
-      {!editing && !scheduleMode && (
+      {!editing && !scheduleMode && !approving && (
         <Switch
           label={t("newTransaction.repeat")}
           description={t("newTransaction.repeatHint")}
@@ -592,13 +623,15 @@ export function TransactionForm({
     </Stack>
   );
 
-  const error = save.error ?? correct.error ?? saveSchedule.error;
+  const error = save.error ?? correct.error ?? saveSchedule.error ?? approveSave.error;
   const saving = (addAnother: boolean) =>
     editing
       ? correct.isPending
-      : saveSchedule.isPending
-        ? !addAnother
-        : save.isPending && save.variables.addAnother === addAnother;
+      : approving
+        ? approveSave.isPending
+        : saveSchedule.isPending
+          ? !addAnother
+          : save.isPending && save.variables.addAnother === addAnother;
   const cancel = (
     <Button
       variant="default"
@@ -606,7 +639,7 @@ export function TransactionForm({
         goBack(
           editing
             ? `/transactions?open=${editing.id}`
-            : scheduleMode
+            : scheduleMode || approving
               ? "/transactions/scheduled"
               : "/",
         );
@@ -622,9 +655,11 @@ export function TransactionForm({
       aria-label={
         editing
           ? t("newTransaction.editForm")
-          : scheduleMode
-            ? t(schedule.editing ? "schedules.edit" : "schedules.new")
-            : t("nav.items.newTransaction")
+          : approving
+            ? t("schedules.queue.pageTitle")
+            : scheduleMode
+              ? t(schedule.editing ? "schedules.edit" : "schedules.new")
+              : t("nav.items.newTransaction")
       }
       onSubmit={(e) => {
         e.preventDefault();
@@ -635,7 +670,7 @@ export function TransactionForm({
           scroll container and push the bar up over the last fields (#103). */}
       <Card withBorder padding={isDesktop ? "lg" : "md"} maw={960} style={{ overflow: "visible" }}>
         <Stack gap="lg">
-          {!editing && (
+          {!editing && !approving && (
             <SegmentedControl
               aria-label={t("newTransaction.type")}
               value={newType}
@@ -694,7 +729,7 @@ export function TransactionForm({
               style={{ borderTop: "1px solid var(--mantine-color-default-border)" }}
             >
               {cancel}
-              {!editing && !scheduled && (
+              {!editing && !scheduled && !approving && (
                 <Button
                   variant="outline"
                   loading={saving(true)}
@@ -710,7 +745,7 @@ export function TransactionForm({
                 disabled={editing && correction === null}
                 loading={saving(false)}
               >
-                {t("newTransaction.save")}
+                {t(approving ? "schedules.queue.approve" : "newTransaction.save")}
               </Button>
             </Group>
           ) : (
@@ -727,7 +762,7 @@ export function TransactionForm({
                 zIndex: 1,
               }}
             >
-              {!editing && !scheduled && (
+              {!editing && !scheduled && !approving && (
                 <Button
                   variant="subtle"
                   loading={saving(true)}
@@ -745,7 +780,7 @@ export function TransactionForm({
                 disabled={editing && correction === null}
                 loading={saving(false)}
               >
-                {t("newTransaction.save")}
+                {t(approving ? "schedules.queue.approve" : "newTransaction.save")}
               </Button>
             </Stack>
           )}

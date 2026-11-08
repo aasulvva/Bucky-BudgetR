@@ -19,6 +19,7 @@ import { GraphWidget } from "./GraphWidget";
 import { HealthWidget } from "./HealthWidget";
 import { InOutWidget } from "./InOutWidget";
 import { RecentWidget } from "./RecentWidget";
+import { ScheduledWidget } from "./ScheduledWidget";
 import { WidgetFrame, useWidgetTitle } from "./frame";
 import { SettingsButton } from "./Widget";
 import { WidgetSettingsDialog } from "./WidgetSettings";
@@ -75,6 +76,7 @@ export function WidgetView({
       {widget.type === "recent_transactions" && <RecentWidget widget={widget} action={cog} />}
       {widget.type === "in_out" && <InOutWidget widget={widget} action={cog} />}
       {widget.type === "graph" && <GraphWidget widget={widget} action={cog} />}
+      {widget.type === "scheduled" && <ScheduledWidget widget={widget} action={cog} />}
       <WidgetSettingsDialog
         widget={widget}
         opened={settings}

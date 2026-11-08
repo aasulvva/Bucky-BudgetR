@@ -26,6 +26,7 @@ import { useCurrentCycles, useCycles, type Cycle } from "@/api/cycles";
 import { useTags, useTransactionPages } from "@/api/transactions";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
+import { QueueBadge } from "@/components/schedules/QueueBadge";
 import { ScheduledTab } from "@/components/schedules/ScheduledTab";
 import { TransactionDetail } from "@/components/transactions/TransactionDetail";
 import { TransactionRow } from "@/components/transactions/TransactionRow";
@@ -78,7 +79,9 @@ export default function Transactions() {
       >
         <Tabs.List>
           <Tabs.Tab value="list">{t("transactions.tabs.list")}</Tabs.Tab>
-          <Tabs.Tab value="scheduled">{t("transactions.tabs.scheduled")}</Tabs.Tab>
+          <Tabs.Tab value="scheduled" rightSection={<QueueBadge />}>
+            {t("transactions.tabs.scheduled")}
+          </Tabs.Tab>
         </Tabs.List>
       </Tabs>
       {tab === "list" ? <TransactionsTab /> : <ScheduledTab />}

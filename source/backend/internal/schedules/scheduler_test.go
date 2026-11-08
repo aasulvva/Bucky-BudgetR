@@ -501,3 +501,142 @@ func TestPreview(t *testing.T) {
 		t.Errorf("count: %v", err)
 	}
 }
+
+// queuedAt returns the schedule's queued occurrence at the time.
+func (e env) queuedAt(t *testing.T, scheduleID, when string) schedules.Occurrence {
+	t.Helper()
+	page, err := e.svc.Occurrences(t.Context(), e.user, schedules.Filter{ScheduleID: scheduleID, State: sqlc.OccurrenceStateQueued})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, o := range page.Items {
+		if o.ScheduledAt.Equal(at(when)) {
+			return o
+		}
+	}
+	t.Fatalf("no queued occurrence at %s in %+v", when, page.Items)
+	return schedules.Occurrence{}
+}
+
+func TestApproveAndSkip(t *testing.T) {
+	e := setup(t)
+	ctx := t.Context()
+	groceries := e.bucket(t, sqlc.RefillModeManual)
+	s := e.daily("2026-10-10")
+	s.Mode, s.DueDays = sqlc.ScheduleModeApprove, 1
+	s.Transaction.Buckets = []transactions.BucketAmount{{BucketID: groceries, Amount: dec("60")}}
+	sch := e.create(t, s)
+	e.run(t, "2026-10-12T12:00:00Z")
+
+	// As it is: dated at its time, in the cycle.
+	first := e.queuedAt(t, sch.ID, "2026-10-10T12:00:00Z")
+	o, tx, err := e.svc.Approve(ctx, e.user, first.ID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if o.State != sqlc.OccurrenceStateApplied || o.TransactionID != tx.ID || !o.ResolvedAt.Equal(at("2026-10-12T12:00:00Z")) ||
+		!tx.At.Equal(at("2026-10-10T12:00:00Z")) || tx.ScheduleID != sch.ID || len(tx.BucketLines) != 1 {
+		t.Errorf("approved %+v, %+v", o, tx)
+	}
+	if _, _, err := e.svc.Approve(ctx, e.user, first.ID, nil); !errors.Is(err, schedules.ErrResolved) {
+		t.Errorf("approve twice: %v", err)
+	}
+
+	// Skipped: never recorded.
+	second := e.queuedAt(t, sch.ID, "2026-10-11T12:00:00Z")
+	if o, err := e.svc.Skip(ctx, e.user, second.ID); err != nil || o.State != sqlc.OccurrenceStateSkipped || o.TransactionID != "" {
+		t.Errorf("skipped %+v, %v", o, err)
+	}
+	if _, err := e.svc.Skip(ctx, e.user, second.ID); !errors.Is(err, schedules.ErrResolved) {
+		t.Errorf("skip twice: %v", err)
+	}
+	if _, _, err := e.svc.Approve(ctx, e.user, second.ID, nil); !errors.Is(err, schedules.ErrResolved) {
+		t.Errorf("approve skipped: %v", err)
+	}
+
+	// Edited: another amount, no buckets, now.
+	third := e.queuedAt(t, sch.ID, "2026-10-12T12:00:00Z")
+	future := transactions.New{Type: sqlc.TransactionTypeEXP, AccountID: e.account, Amount: dec("70"), At: at("2026-10-13T00:00:00Z")}
+	if _, _, err := e.svc.Approve(ctx, e.user, third.ID, &future); !errors.Is(err, schedules.ErrInvalid) {
+		t.Errorf("in the future: %v", err)
+	}
+	edit := transactions.New{Type: sqlc.TransactionTypeEXP, AccountID: e.account, Amount: dec("70"), Counterparty: "Shop"}
+	if _, tx, err := e.svc.Approve(ctx, e.user, third.ID, &edit); err != nil || !tx.At.Equal(at("2026-10-12T12:00:00Z")) ||
+		tx.Counterparty != "Shop" || len(tx.BucketLines) != 0 || tx.ScheduleID != sch.ID {
+		t.Errorf("edited %+v, %v", tx, err)
+	}
+
+	// Overdue a day after it was queued.
+	e.run(t, "2026-10-13T12:00:00Z")
+	if o, err := e.svc.GetOccurrence(ctx, e.user, e.queuedAt(t, sch.ID, "2026-10-13T12:00:00Z").ID); err != nil || o.Overdue {
+		t.Errorf("not yet overdue %+v, %v", o, err)
+	}
+	*e.now = at("2026-10-14T12:00:01Z")
+	fourth := e.queuedAt(t, sch.ID, "2026-10-13T12:00:00Z")
+	if !fourth.Overdue {
+		t.Errorf("overdue %+v", fourth)
+	}
+
+	// No active cycle: bucket lines can't be recorded, so it stays queued.
+	if _, err := e.pool.Exec(ctx, `UPDATE cycles SET state = 'finished' WHERE id = $1`, e.cycle.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := e.svc.Approve(ctx, e.user, fourth.ID, nil); !errors.Is(err, ledger.ErrNoActiveCycle) {
+		t.Errorf("no cycle: %v", err)
+	}
+	e.queuedAt(t, sch.ID, "2026-10-13T12:00:00Z")
+
+	if _, err := e.svc.GetOccurrence(ctx, e.user, "999999000000000001"); !errors.Is(err, schedules.ErrNotFound) {
+		t.Errorf("not found: %v", err)
+	}
+}
+
+func TestApproveOutsideCycle(t *testing.T) {
+	e := setup(t)
+	s := e.daily("2026-10-31")
+	s.Mode = sqlc.ScheduleModeApprove
+	sch := e.create(t, s)
+	// The cycle ended at 1 November; queued after it, the time isn't in the
+	// cycle, so it's dated now.
+	e.run(t, "2026-11-01T13:00:00Z")
+	o := e.queuedAt(t, sch.ID, "2026-11-01T12:00:00Z")
+	_, tx, err := e.svc.Approve(t.Context(), e.user, o.ID, nil)
+	if err != nil || !tx.At.Equal(at("2026-11-01T13:00:00Z")) {
+		t.Errorf("approved %+v, %v", tx, err)
+	}
+	// The one inside it keeps its time.
+	_, tx, err = e.svc.Approve(t.Context(), e.user, e.queuedAt(t, sch.ID, "2026-10-31T12:00:00Z").ID, nil)
+	if err != nil || !tx.At.Equal(at("2026-10-31T12:00:00Z")) {
+		t.Errorf("approved %+v, %v", tx, err)
+	}
+}
+
+func TestUpcomingAll(t *testing.T) {
+	e := setup(t)
+	daily := e.create(t, e.daily("2026-10-11"))
+	weekly := e.daily("2026-10-10")
+	weekly.Frequency, weekly.Minute = sqlc.ScheduleFrequencyWeek, 18*60
+	w := e.create(t, weekly)
+	paused := e.daily("2026-10-10")
+	paused.Paused = true
+	e.create(t, paused)
+
+	got, err := e.svc.UpcomingAll(t.Context(), e.user, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var s []string
+	for _, u := range got {
+		name := "daily"
+		if u.ScheduleID == w.ID {
+			name = "weekly"
+		}
+		s = append(s, u.At.UTC().Format("01-02 15:04")+" "+name)
+	}
+	if !equal(s, []string{"10-10 18:00 weekly", "10-11 12:00 daily", "10-12 12:00 daily", "10-13 12:00 daily"}) {
+		t.Errorf("upcoming %v (daily %s)", s, daily.ID)
+	}
+	if _, err := e.svc.UpcomingAll(t.Context(), e.user, 51); !errors.Is(err, schedules.ErrInvalid) {
+		t.Errorf("count: %v", err)
+	}
+}

@@ -108,6 +108,8 @@ type Occurrence struct {
 	// TransactionID is the transaction it recorded.
 	TransactionID string
 	ResolvedAt    time.Time
+	// Overdue is set on a queued one past its due time.
+	Overdue bool
 }
 
 // Filter narrows Occurrences. Zero fields match everything.
@@ -371,7 +373,7 @@ func (s *Service) Occurrences(ctx context.Context, userID string, f Filter) (Pag
 	}
 	page.Items = make([]Occurrence, len(rows))
 	for i, r := range rows {
-		page.Items[i] = fromOccurrence(r)
+		page.Items[i] = s.fromOccurrence(r)
 	}
 	return page, nil
 }
@@ -563,11 +565,12 @@ func fromRow(r sqlc.Schedule, lines []sqlc.ScheduleBucketLine) Schedule {
 	return s
 }
 
-func fromOccurrence(r sqlc.ScheduleOccurrence) Occurrence {
+func (s *Service) fromOccurrence(r sqlc.ScheduleOccurrence) Occurrence {
 	return Occurrence{
 		ID: r.ID, ScheduleID: r.ScheduleID, ScheduledAt: r.ScheduledAt, State: r.State,
 		Reason: r.Reason.OccurrenceReason, Detail: r.Detail,
 		QueuedAt: r.QueuedAt.Time, DueAt: r.DueAt.Time, TransactionID: r.TransactionID.String, ResolvedAt: r.ResolvedAt.Time,
+		Overdue: r.State == sqlc.OccurrenceStateQueued && r.DueAt.Valid && r.DueAt.Time.Before(s.now()),
 	}
 }
 
