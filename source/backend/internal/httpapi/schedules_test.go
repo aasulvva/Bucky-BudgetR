@@ -155,6 +155,52 @@ func TestSchedulesAPI(t *testing.T) {
 	}
 	expect(t, "bad state", do(http.MethodGet, "/api/v1/scheduled-transactions?state=lost", nil, alice), http.StatusBadRequest, "invalid_request")
 
+	// Recorded first: a transfer from 09:00 today, recorded now and linked.
+	first := map[string]any{
+		"transaction": map[string]any{"type": "TRF", "account_id": main, "to_account_id": savings, "amount": "100"},
+		"mode":        "auto", "start_date": "2026-11-08", "time": "09:00", "frequency": "week",
+	}
+	w = do(http.MethodPost, "/api/v1/schedules?record_first=true", first, alice)
+	expect(t, "record first", w, http.StatusCreated, "")
+	rec := decode[api.Schedule](t, w)
+	if rec.NextIndex != 1 || !rec.NextAt.MustGet().Equal(time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC)) {
+		t.Errorf("recorded first %+v", rec)
+	}
+	w = do(http.MethodGet, "/api/v1/scheduled-transactions?schedule_id="+rec.Id, nil, alice)
+	expect(t, "recorded", w, http.StatusOK, "")
+	page = decode[api.ScheduledTransactionPage](t, w)
+	if len(page.Items) != 1 || page.Items[0].State != api.Applied {
+		t.Fatalf("recorded %+v", page)
+	}
+	w = do(http.MethodGet, "/api/v1/transactions/"+page.Items[0].TransactionId.MustGet(), nil, alice)
+	expect(t, "recorded transaction", w, http.StatusOK, "")
+	if tx := decode[api.Transaction](t, w); tx.ScheduleId.IsNull() || tx.ScheduleId.MustGet() != rec.Id ||
+		!tx.At.Equal(time.Date(2026, 11, 8, 9, 0, 0, 0, time.UTC)) {
+		t.Errorf("recorded transaction %+v", tx)
+	}
+	// Bob's account: nothing saved.
+	first["transaction"].(map[string]any)["to_account_id"] = bobs
+	expect(t, "record first bob's", do(http.MethodPost, "/api/v1/schedules?record_first=true", first, alice), http.StatusBadRequest, "")
+
+	// A preview of a repeat that isn't saved.
+	w = do(http.MethodPost, "/api/v1/schedules/preview", map[string]any{
+		"start_date": "2026-08-31", "time": "08:00", "time_zone": "Europe/Oslo", "frequency": "month", "count": 2,
+	}, alice)
+	expect(t, "preview", w, http.StatusOK, "")
+	if got := decode[[]time.Time](t, w); len(got) != 2 || !got[0].Equal(time.Date(2026, 11, 30, 7, 0, 0, 0, time.UTC)) ||
+		!got[1].Equal(time.Date(2026, 12, 31, 7, 0, 0, 0, time.UTC)) {
+		t.Errorf("preview %v", got)
+	}
+	for name, body := range map[string]map[string]any{
+		"preview count":     {"start_date": "2026-08-31", "time": "08:00", "frequency": "month", "count": 51},
+		"preview frequency": {"start_date": "2026-08-31", "time": "08:00", "frequency": "fortnight"},
+		"preview time":      {"start_date": "2026-08-31", "time": "8", "frequency": "day"},
+		"preview ends":      {"start_date": "2026-08-31", "time": "08:00", "frequency": "day", "end_count": 2, "end_date": "2026-09-30"},
+	} {
+		expect(t, name, do(http.MethodPost, "/api/v1/schedules/preview", body, alice), http.StatusBadRequest, "invalid_request")
+	}
+	expect(t, "preview no session", do(http.MethodPost, "/api/v1/schedules/preview", map[string]any{}, nil), http.StatusUnauthorized, "unauthenticated")
+
 	// Paused and moved to 09:00.
 	transfer["paused"], transfer["time"] = true, "09:00"
 	w = do(http.MethodPut, "/api/v1/schedules/"+sch.Id, transfer, alice)
@@ -166,7 +212,7 @@ func TestSchedulesAPI(t *testing.T) {
 
 	expect(t, "delete", do(http.MethodDelete, "/api/v1/schedules/"+exp.Id, nil, alice), http.StatusNoContent, "")
 	expect(t, "deleted", do(http.MethodGet, "/api/v1/schedules/"+exp.Id, nil, alice), http.StatusNotFound, "not_found")
-	w = do(http.MethodGet, "/api/v1/scheduled-transactions", nil, alice)
+	w = do(http.MethodGet, "/api/v1/scheduled-transactions?schedule_id="+exp.Id, nil, alice)
 	expect(t, "after delete", w, http.StatusOK, "")
 	if page := decode[api.ScheduledTransactionPage](t, w); len(page.Items) != 0 {
 		t.Errorf("left %+v", page)

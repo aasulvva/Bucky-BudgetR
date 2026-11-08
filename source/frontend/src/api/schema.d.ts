@@ -1095,8 +1095,37 @@ export interface paths {
          *     `due_days` later. An occurrence that can't be recorded (no active
          *     cycle, a time outside it, an account or bucket that's gone) is
          *     queued too, with the reason: see `GET /scheduled-transactions`.
+         *
+         *     With `record_first`, a first occurrence (at `start_date` and `time`)
+         *     that is at or before now is recorded now, dated then, and the
+         *     schedule goes on from the next at or after now: a transaction
+         *     entered and set to repeat. It's checked like `POST /transactions`
+         *     (an `auto` schedule or not), and if it can't be recorded, nothing is
+         *     saved. A first occurrence in the future is left to the schedule.
          */
         post: operations["createSchedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/schedules/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a repeat
+         * @description The times of the first `count` occurrences at or after now of a
+         *     schedule with this repeat, which needn't be saved: what a schedule
+         *     form shows. The repeat is checked as for `POST /schedules`.
+         */
+        post: operations["previewSchedule"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1962,6 +1991,8 @@ export interface components {
             replaces: string | null;
             /** @description The transaction that replaced this one when it was moved to another account. */
             replaced_by: string | null;
+            /** @description The schedule that recorded it, or null (also once that schedule is deleted). */
+            schedule_id: string | null;
             /** @description Effective amounts per account, the original plus its corrections. Lines that sum to 0 are left out. */
             bank_lines: components["schemas"]["TransactionBankLine"][];
             /** @description Effective amounts per bucket, the original plus its corrections. Lines that sum to 0 are left out. */
@@ -2182,6 +2213,22 @@ export interface components {
              * @default false
              */
             paused: boolean;
+        };
+        /** @description The repeat of a ScheduleInput, and how many times to list. */
+        SchedulePreview: {
+            /** Format: date */
+            start_date: string;
+            /** @example 08:00 */
+            time: string;
+            time_zone?: string;
+            frequency: components["schemas"]["ScheduleFrequency"];
+            /** @default 1 */
+            every: number;
+            end_count?: number;
+            /** Format: date */
+            end_date?: string;
+            /** @default 5 */
+            count: number;
         };
         Schedule: {
             id: components["schemas"]["ScheduleId"];
@@ -3646,7 +3693,9 @@ export interface operations {
     };
     createSchedule: {
         parameters: {
-            query?: never;
+            query?: {
+                record_first?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3664,6 +3713,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Schedule"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    previewSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SchedulePreview"];
+            };
+        };
+        responses: {
+            /** @description The times, earliest first. Empty when none are left. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
                 };
             };
             400: components["responses"]["Error"];

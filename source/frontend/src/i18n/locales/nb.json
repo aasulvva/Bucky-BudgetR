@@ -715,7 +715,12 @@
       "BLA": "Rediger saldojustering"
     },
     "corrected": "Korrigeringen er lagret.",
-    "movedDone": "Flyttet til den nye kontoen."
+    "movedDone": "Flyttet til den nye kontoen.",
+    "repeat": "Gjenta eller planlegg",
+    "repeatHint": "Lagre den som planlagt: én gang senere, eller igjen og igjen.",
+    "savedRepeating": "Lagret. Den gjentas fra {{date}}.",
+    "savedEnded": "Lagret.",
+    "scheduledFor": "Planlagt til {{date}}."
   },
   "transactionTypes": {
     "INC": "Inntekt",
@@ -788,7 +793,14 @@
     "editableUntil": "Bøttebeløpene kan endres til perioden {{range}} er slutt.",
     "systemNote": "Registrert av påfyllingsrutinene eller Bøtteoppsett, så den kan ikke korrigeres eller reverseres her.",
     "reversedNote": "Denne transaksjonen er reversert, så den kan ikke endres.",
-    "backToList": "Tilbake til transaksjonen"
+    "backToList": "Tilbake til transaksjonen",
+    "tabs": {
+      "list": "Transaksjoner",
+      "scheduled": "Planlagte"
+    },
+    "fromSchedule": "Fra den planlagte transaksjonen <schedule>{{name}}</schedule>",
+    "scheduledMark": "Ført av en planlagt transaksjon",
+    "makeRecurring": "Gjør gjentakende"
   },
   "cycles": {
     "plan": "Planlegg en periode",
@@ -1275,5 +1287,101 @@
     "development": "Utvikling",
     "production": "Produksjon",
     "whatsNew": "Nytt i appen"
+  },
+  "schedules": {
+    "title": "Planlagte transaksjoner",
+    "new": "Ny planlagt",
+    "edit": "Rediger planlagt transaksjon",
+    "empty": "Ingen planlagte transaksjoner ennå. Planlegg en til senere, eller la en gjentas: i Ny transaksjon, med Gjør gjentakende på en transaksjon, eller med Ny planlagt.",
+    "next": "Neste: {{date}}",
+    "ended": "Ferdig",
+    "paused": "På pause",
+    "approve": "Spør først",
+    "actions": "Handlinger for {{name}}",
+    "pause": "Sett på pause",
+    "resume": "Fortsett",
+    "delete": "Slett",
+    "editAction": "Rediger",
+    "deleteConfirm": "Slette denne planlagte transaksjonen? Historikken forsvinner også. Transaksjonene den har ført, blir stående.",
+    "deleteName": "Slett {{name}}",
+    "deleted": "Den planlagte transaksjonen er slettet.",
+    "pausedDone": "Satt på pause.",
+    "resumedDone": "Fortsetter. Den går videre fra neste gang; de gangene den gikk glipp av, blir ikke ført.",
+    "saved": "Den planlagte transaksjonen er lagret.",
+    "transferTitle": "{{from}} → {{to}}",
+    "repeat": {
+      "once": "Én gang {{date}} kl. {{time}}",
+      "day_one": "Hver dag kl. {{time}}",
+      "day_other": "Hver {{count}}. dag kl. {{time}}",
+      "week_one": "Hver uke på {{weekday}} kl. {{time}}",
+      "week_other": "Hver {{count}}. uke på {{weekday}} kl. {{time}}",
+      "month_one": "Hver måned den {{day}} kl. {{time}}",
+      "month_other": "Hver {{count}}. måned den {{day}} kl. {{time}}",
+      "year_one": "Hvert år {{date}} kl. {{time}}",
+      "year_other": "Hvert {{count}}. år {{date}} kl. {{time}}",
+      "dayOfMonth_ordinal_one": "{{count}}.",
+      "dayOfMonth_ordinal_two": "{{count}}.",
+      "dayOfMonth_ordinal_few": "{{count}}.",
+      "dayOfMonth_ordinal_other": "{{count}}.",
+      "times_one": "én gang",
+      "times_other": "{{count}} ganger",
+      "until": "til og med {{date}}"
+    },
+    "form": {
+      "section": "Gjentakelse",
+      "startDate": "Starter",
+      "time": "Klokken",
+      "frequency": "Gjentas",
+      "frequencies": {
+        "once": "Én gang",
+        "day": "Daglig",
+        "week": "Ukentlig",
+        "month": "Månedlig",
+        "year": "Årlig"
+      },
+      "every": "Hver",
+      "units": {
+        "day_one": "dag",
+        "day_other": "dager",
+        "week_one": "uke",
+        "week_other": "uker",
+        "month_one": "måned",
+        "month_other": "måneder",
+        "year_one": "år",
+        "year_other": "år"
+      },
+      "ends": "Slutter",
+      "endsOptions": {
+        "never": "Aldri",
+        "after": "Etter",
+        "on": "På en dato"
+      },
+      "endCount": "Ganger",
+      "endDate": "Siste dato",
+      "mode": "Når den forfaller",
+      "modes": {
+        "auto": "Før den",
+        "approve": "Spør meg først"
+      },
+      "modeHints": {
+        "auto": "Den føres på sitt tidspunkt, med bøttelinjene i den aktive perioden.",
+        "approve": "Den venter på at du godkjenner den (godkjenningskøen kommer i neste oppdatering)."
+      },
+      "dueDays": "Forfaller innen (dager)",
+      "name": "Navn",
+      "namePlaceholder": "Valgfritt, f.eks. Husleie",
+      "paused": "På pause",
+      "pausedHint": "Tidspunktene føres ikke mens den er på pause. Når den fortsetter, går den videre fra neste gang.",
+      "preview": "Neste ganger",
+      "previewNone": "Ingen ganger igjen. Sjekk start og slutt.",
+      "firstNow": "Den første, {{date}}, lagres nå.",
+      "timeZone": "Tidene er i {{zone}}.",
+      "chooseDate": "Velg en dato",
+      "chooseTime": "Skriv inn et klokkeslett (TT:MM)",
+      "everyRange": "Skriv inn 1 til {{max}}",
+      "endCountRange": "Skriv inn minst 1",
+      "endBeforeStart": "Slutten er før starten",
+      "dueDaysRange": "Skriv inn 0 til {{max}}"
+    }
   }
 }

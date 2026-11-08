@@ -234,6 +234,7 @@ func toAPITransaction(t transactions.Transaction) api.Transaction {
 		Reversed:       t.Reversed,
 		Replaces:       nullableString(t.Replaces),
 		ReplacedBy:     nullableString(t.ReplacedBy),
+		ScheduleId:     nullableString(t.ScheduleID),
 		BankLines:      toAPIBankLines(t.BankLines),
 		BucketLines:    toAPIBucketLines(t.BucketLines),
 		BeforeReversal: nullable.NewNullNullable[api.TransactionLines](),

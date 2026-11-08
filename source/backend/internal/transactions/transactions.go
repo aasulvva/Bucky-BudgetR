@@ -93,6 +93,9 @@ type Transaction struct {
 	// Replaces is the transaction this one replaced when it was moved to
 	// another account; ReplacedBy is the one that replaced it.
 	Replaces, ReplacedBy string
+	// ScheduleID is the schedule that recorded it, or "" (also once the
+	// schedule is deleted).
+	ScheduleID string
 	// TriggersRefill is set on an income that triggers a refill.
 	TriggersRefill bool
 	// BankLines and BucketLines are the effective amounts: each account's or
@@ -580,6 +583,10 @@ func (s *Service) load(ctx context.Context, q *sqlc.Queries, userID string, orig
 	if err != nil {
 		return nil, err
 	}
+	scheduled, err := q.ListSchedulesFor(ctx, originals)
+	if err != nil {
+		return nil, err
+	}
 
 	out := make([]Transaction, 0, len(originals))
 	for _, id := range originals {
@@ -605,6 +612,11 @@ func (s *Service) load(ctx context.Context, q *sqlc.Queries, userID string, orig
 		for _, r := range replaced {
 			if r.ReplacesID == id {
 				t.ReplacedBy = r.ID
+			}
+		}
+		for _, r := range scheduled {
+			if r.TransactionID == id {
+				t.ScheduleID = r.ScheduleID
 			}
 		}
 		out = append(out, t)

@@ -1,6 +1,6 @@
 import { ActionIcon, Alert, Anchor, Button, Group, Stack, Text, Title } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { IconBucket, IconBuildingBank, IconX, type Icon } from "@tabler/icons-react";
+import { IconBucket, IconBuildingBank, IconRepeat, IconX, type Icon } from "@tabler/icons-react";
 import { useMutation } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { Trans, useTranslation } from "react-i18next";
@@ -10,12 +10,14 @@ import { useRefreshMoney } from "@/api/accounts";
 import { api } from "@/api/client";
 import { useCurrentCycles } from "@/api/cycles";
 import { unwrap } from "@/api/errors";
+import { useSchedules } from "@/api/schedules";
 import { useTransaction, type Transaction } from "@/api/transactions";
 import { useSession } from "@/app/session";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { QueryState } from "@/components/QueryState";
 import { cycleRange } from "@/lib/cycles";
 import { formatDateTime } from "@/lib/dates";
+import { isSchedulable, scheduleTitle } from "@/lib/schedules";
 import { bucketLinesLocked, isCorrectable, linesAmount, shownLines } from "@/lib/transactionList";
 
 import { signedMoney, transactionTitle, useLookups, type Lookups } from "./lookups";
@@ -79,6 +81,7 @@ function Detail({
           <Text size="sm" c="dimmed">
             {[t(`transactionTypes.${tx.type}`), formatDateTime(tx.at), ...tx.tags].join(" · ")}
           </Text>
+          {tx.schedule_id && <FromSchedule id={tx.schedule_id} names={names} />}
         </div>
         {onClose && (
           <ActionIcon
@@ -255,6 +258,16 @@ function Actions({ tx, locked, names }: { tx: Transaction; locked: boolean; name
           <Button variant="outline" component={Link} to={`/transactions/${tx.id}/edit`}>
             {t("transactions.edit")}
           </Button>
+          {isSchedulable(tx) && (
+            <Button
+              variant="default"
+              component={Link}
+              to={`/transactions/scheduled/new?from=${tx.id}`}
+              leftSection={<IconRepeat size={16} />}
+            >
+              {t("transactions.makeRecurring")}
+            </Button>
+          )}
           <Button
             variant="default"
             disabled={locked}
@@ -267,6 +280,24 @@ function Actions({ tx, locked, names }: { tx: Transaction; locked: boolean; name
         </Group>
       )}
     </Stack>
+  );
+}
+
+/** The schedule that recorded the transaction, linking to it. */
+function FromSchedule({ id, names }: { id: string; names: Lookups }) {
+  const { t } = useTranslation();
+  const schedule = useSchedules().data?.find((s) => s.id === id);
+  return (
+    <Text size="sm" c="dimmed">
+      <IconRepeat size={14} style={{ verticalAlign: "-2px", marginRight: 4 }} aria-hidden />
+      <Trans
+        i18nKey="transactions.fromSchedule"
+        values={{ name: schedule ? scheduleTitle(schedule, t, names.accountName) : `#${id}` }}
+        components={{
+          schedule: <Anchor component={Link} to={`/transactions/scheduled/${id}/edit`} />,
+        }}
+      />
+    </Text>
   );
 }
 

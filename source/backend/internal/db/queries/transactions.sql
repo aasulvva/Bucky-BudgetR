@@ -55,6 +55,11 @@ ORDER BY lower(t.name) COLLATE "C";
 SELECT id, replaces_id::text AS replaces_id FROM transaction_headers
 WHERE replaces_id = ANY(sqlc.arg(ids)::text[]);
 
+-- name: ListSchedulesFor :many
+-- The schedules that recorded any of these transactions.
+SELECT transaction_id::text AS transaction_id, schedule_id FROM schedule_occurrences
+WHERE transaction_id = ANY(sqlc.arg(ids)::text[]);
+
 -- name: ListTagSuggestions :many
 -- The user's tags for autocompletion, most recently used first (by
 -- transaction time, on any header), then unused ones by name. q is a LIKE

@@ -30,6 +30,9 @@ const pages: Partial<Record<string, () => PageModule>> = {
 /** Screens outside the navigation. */
 const extraPages: [string, () => PageModule][] = [
   ["/transactions/:id/edit", () => import("@/pages/EditTransaction")],
+  ["/transactions/scheduled", () => import("@/pages/Transactions")],
+  ["/transactions/scheduled/new", () => import("@/pages/NewSchedule")],
+  ["/transactions/scheduled/:id/edit", () => import("@/pages/EditSchedule")],
   ["/stats/reports", () => import("@/pages/Stats")],
 ];
 

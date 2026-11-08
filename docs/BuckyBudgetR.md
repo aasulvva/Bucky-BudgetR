@@ -237,7 +237,10 @@ A **schedule** records an INC, EXP or TRF later, once or again and again (#31). 
 - **Catching up:** after a downtime, the missed occurrences follow in order. Each occurrence is handled once.
 - **Occurrence-ID:** `<10-digit Schedule-ID><8-digit random>` (18 digits). Each records its scheduled time, its state (applied, queued or skipped), why it was queued and the transaction it recorded.
 - **Deleting a schedule** deletes its occurrences, queued ones too. The transactions it recorded stay.
-- **Approving** a queued one (amounts and date editable), skipping it and marking it overdue come with #155; the screens with #154.
+- **Recorded at once** (#154): a transaction entered in *Create transaction* and set to repeat is saved as a schedule whose first occurrence, when it's now or past, is recorded straight away, dated then, in the same database transaction (`POST /schedules?record_first=true`); the schedule goes on from the next at or after now. If that transaction can't be recorded, nothing is saved. A first occurrence in the future is left to the schedule.
+- **Screens** (#154): *Transactions* has a *Scheduled* tab listing the schedules in words ("Every month on the 25th at 08:00", "Every 2 weeks on Monday at 07:00 · 3 times") with their next time (local time), *Asks first* and *Paused* badges, and a menu to edit, pause or resume, and delete (after asking). The schedule form is the *Create transaction* form with a *Repeat* section (start date and time, repeats, ends, record or ask first with the due period, name, and paused when editing) and a preview of the next five times from `POST /schedules/preview`. It opens from *New schedule* on the tab, from *Repeat or schedule* in *Create transaction*, and from *Make recurring* on a transaction (which starts like it, from its time, monthly, so it goes on from the next). A schedule's bucket lines don't need an active cycle until they're recorded.
+- **Marked transactions:** a transaction a schedule recorded has `schedule_id` (null once the schedule is deleted). The list marks it with a repeat icon, and its detail links to the schedule.
+- **Approving** a queued one (amounts and date editable), skipping it and marking it overdue come with #155.
 
 ## 6. Cycle routines
 
@@ -312,7 +315,7 @@ Desktop and mobile use the same groups (decided in #8; wireframes in the design 
 | Group | Screens |
 | ----- | ------- |
 | Overview | Dashboard |
-| Transactions | Transactions (list, filters, corrections) |
+| Transactions | Transactions (list, filters, corrections) and Scheduled (§5.6) |
 | (+) New | Create transaction |
 | Budget & Reporting | Buckets, Accounts, Cycles, Savings *(later)*, Stats & reports *(later)* |
 | Setup | Account setup, Bucket setup, Budget setup, Savings setup *(later)* |

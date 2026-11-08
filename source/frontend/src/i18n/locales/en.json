@@ -715,7 +715,12 @@
       "BLA": "Edit balance adjustment"
     },
     "corrected": "Correction saved.",
-    "movedDone": "Moved to the new account."
+    "movedDone": "Moved to the new account.",
+    "repeat": "Repeat or schedule",
+    "repeatHint": "Save it as a schedule: once later, or again and again.",
+    "savedRepeating": "Saved. It repeats from {{date}}.",
+    "savedEnded": "Saved.",
+    "scheduledFor": "Scheduled for {{date}}."
   },
   "transactionTypes": {
     "INC": "Income",
@@ -788,7 +793,14 @@
     "editableUntil": "Bucket amounts can be changed until the cycle {{range}} ends.",
     "systemNote": "Recorded by the refill routines or Bucket setup, so it can't be corrected or reversed here.",
     "reversedNote": "This transaction has been reversed, so it can't change.",
-    "backToList": "Back to the transaction"
+    "backToList": "Back to the transaction",
+    "tabs": {
+      "list": "Transactions",
+      "scheduled": "Scheduled"
+    },
+    "fromSchedule": "From the schedule <schedule>{{name}}</schedule>",
+    "scheduledMark": "Recorded by a schedule",
+    "makeRecurring": "Make recurring"
   },
   "cycles": {
     "plan": "Plan a cycle",
@@ -1275,5 +1287,101 @@
     "development": "Development",
     "production": "Production",
     "whatsNew": "What's New"
+  },
+  "schedules": {
+    "title": "Scheduled transactions",
+    "new": "New schedule",
+    "edit": "Edit schedule",
+    "empty": "No scheduled transactions yet. Schedule one for later, or make one repeat: in New transaction, with Make recurring on a transaction, or with New schedule.",
+    "next": "Next: {{date}}",
+    "ended": "Ended",
+    "paused": "Paused",
+    "approve": "Asks first",
+    "actions": "Actions for {{name}}",
+    "pause": "Pause",
+    "resume": "Resume",
+    "delete": "Delete",
+    "editAction": "Edit",
+    "deleteConfirm": "Delete this schedule? Its history goes too. The transactions it recorded stay.",
+    "deleteName": "Delete {{name}}",
+    "deleted": "Schedule deleted.",
+    "pausedDone": "Schedule paused.",
+    "resumedDone": "Schedule resumed. It goes on from its next time; the times it missed aren't recorded.",
+    "saved": "Schedule saved.",
+    "transferTitle": "{{from}} → {{to}}",
+    "repeat": {
+      "once": "Once on {{date}} at {{time}}",
+      "day_one": "Every day at {{time}}",
+      "day_other": "Every {{count}} days at {{time}}",
+      "week_one": "Every week on {{weekday}} at {{time}}",
+      "week_other": "Every {{count}} weeks on {{weekday}} at {{time}}",
+      "month_one": "Every month on the {{day}} at {{time}}",
+      "month_other": "Every {{count}} months on the {{day}} at {{time}}",
+      "year_one": "Every year on {{date}} at {{time}}",
+      "year_other": "Every {{count}} years on {{date}} at {{time}}",
+      "dayOfMonth_ordinal_one": "{{count}}st",
+      "dayOfMonth_ordinal_two": "{{count}}nd",
+      "dayOfMonth_ordinal_few": "{{count}}rd",
+      "dayOfMonth_ordinal_other": "{{count}}th",
+      "times_one": "once",
+      "times_other": "{{count}} times",
+      "until": "until {{date}}"
+    },
+    "form": {
+      "section": "Repeat",
+      "startDate": "Starts",
+      "time": "At",
+      "frequency": "Repeats",
+      "frequencies": {
+        "once": "Once",
+        "day": "Daily",
+        "week": "Weekly",
+        "month": "Monthly",
+        "year": "Yearly"
+      },
+      "every": "Every",
+      "units": {
+        "day_one": "day",
+        "day_other": "days",
+        "week_one": "week",
+        "week_other": "weeks",
+        "month_one": "month",
+        "month_other": "months",
+        "year_one": "year",
+        "year_other": "years"
+      },
+      "ends": "Ends",
+      "endsOptions": {
+        "never": "Never",
+        "after": "After",
+        "on": "On a date"
+      },
+      "endCount": "Times",
+      "endDate": "Last date",
+      "mode": "When it comes due",
+      "modes": {
+        "auto": "Record it",
+        "approve": "Ask me first"
+      },
+      "modeHints": {
+        "auto": "It's recorded at its time, with its bucket lines in the active cycle.",
+        "approve": "It waits for you to approve it (the approval queue comes in the next update)."
+      },
+      "dueDays": "Due within (days)",
+      "name": "Name",
+      "namePlaceholder": "Optional, e.g. Rent",
+      "paused": "Paused",
+      "pausedHint": "Its times aren't recorded while it's paused. When it resumes, it goes on from the next time.",
+      "preview": "Next times",
+      "previewNone": "No times left. Check the start and the end.",
+      "firstNow": "The first, {{date}}, is saved now.",
+      "timeZone": "Times are in {{zone}}.",
+      "chooseDate": "Choose a date",
+      "chooseTime": "Enter a time (HH:MM)",
+      "everyRange": "Enter 1 to {{max}}",
+      "endCountRange": "Enter at least 1",
+      "endBeforeStart": "The end is before the start",
+      "dueDaysRange": "Enter 0 to {{max}}"
+    }
   }
 }

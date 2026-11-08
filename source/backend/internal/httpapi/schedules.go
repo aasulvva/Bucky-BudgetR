@@ -42,7 +42,11 @@ func (s *server) CreateSchedule(ctx context.Context, req api.CreateScheduleReque
 	if err != nil {
 		return nil, err
 	}
-	sch, err := svc.Create(ctx, sessionFrom(ctx).User.ID, in)
+	create := svc.Create
+	if deref(req.Params.RecordFirst) {
+		create = svc.CreateRecordingFirst
+	}
+	sch, err := create(ctx, sessionFrom(ctx).User.ID, in)
 	if err != nil {
 		return nil, scheduleError(err)
 	}
@@ -108,6 +112,41 @@ func (s *server) ListUpcoming(ctx context.Context, req api.ListUpcomingRequestOb
 	return out, nil
 }
 
+func (s *server) PreviewSchedule(ctx context.Context, req api.PreviewScheduleRequestObject) (api.PreviewScheduleResponseObject, error) {
+	svc, err := s.scheduleService()
+	if err != nil {
+		return nil, err
+	}
+	b := *req.Body
+	minute, err := parseTimeOfDay(b.Time)
+	if err != nil {
+		return nil, err
+	}
+	in := schedules.Settings{
+		Start: b.StartDate.Time, Minute: minute, TimeZone: deref(b.TimeZone),
+		Frequency: sqlc.ScheduleFrequency(b.Frequency), Every: 1, EndCount: deref(b.EndCount),
+	}
+	if b.Every != nil {
+		in.Every = *b.Every
+	}
+	if b.EndDate != nil {
+		in.EndDate = b.EndDate.Time
+	}
+	count := 5
+	if b.Count != nil {
+		count = *b.Count
+	}
+	times, err := svc.Preview(ctx, sessionFrom(ctx).User.ID, in, count)
+	if err != nil {
+		return nil, scheduleError(err)
+	}
+	out := make(api.PreviewSchedule200JSONResponse, len(times))
+	for i, t := range times {
+		out[i] = t.UTC()
+	}
+	return out, nil
+}
+
 func (s *server) ListScheduledTransactions(ctx context.Context, req api.ListScheduledTransactionsRequestObject) (api.ListScheduledTransactionsResponseObject, error) {
 	svc, err := s.scheduleService()
 	if err != nil {
@@ -151,14 +190,24 @@ func scheduleError(err error) error {
 	return transactionError(err)
 }
 
-func fromAPISchedule(b api.ScheduleInput) (schedules.Settings, error) {
+// parseTimeOfDay returns an HH:MM time of day as minutes after midnight.
+// The service checks the range.
+func parseTimeOfDay(s string) (int, error) {
 	var hh, mm int
-	if _, err := fmt.Sscanf(b.Time, "%d:%d", &hh, &mm); err != nil {
-		return schedules.Settings{}, &Error{Status: http.StatusBadRequest, Code: "invalid_request", Detail: "Invalid time of day.", Err: err}
+	if _, err := fmt.Sscanf(s, "%d:%d", &hh, &mm); err != nil {
+		return 0, &Error{Status: http.StatusBadRequest, Code: "invalid_request", Detail: "Invalid time of day.", Err: err}
+	}
+	return hh*60 + mm, nil
+}
+
+func fromAPISchedule(b api.ScheduleInput) (schedules.Settings, error) {
+	minute, err := parseTimeOfDay(b.Time)
+	if err != nil {
+		return schedules.Settings{}, err
 	}
 	in := schedules.Settings{
 		Name: deref(b.Name), Mode: sqlc.ScheduleMode(b.Mode), DueDays: schedules.DefaultDueDays,
-		Start: b.StartDate.Time, Minute: hh*60 + mm, TimeZone: deref(b.TimeZone),
+		Start: b.StartDate.Time, Minute: minute, TimeZone: deref(b.TimeZone),
 		Frequency: sqlc.ScheduleFrequency(b.Frequency), Every: 1, EndCount: deref(b.EndCount), Paused: deref(b.Paused),
 	}
 	if b.DueDays != nil {
@@ -175,7 +224,6 @@ func fromAPISchedule(b api.ScheduleInput) (schedules.Settings, error) {
 		Type: sqlc.TransactionType(t.Type), Counterparty: deref(t.Counterparty), AccountID: t.AccountId,
 		ToAccountID: deref(t.ToAccountId), TriggersRefill: t.TriggersRefill, Tags: deref(t.Tags),
 	}
-	var err error
 	if in.Transaction.Amount, err = parseAmount(t.Amount); err != nil {
 		return schedules.Settings{}, err
 	}
