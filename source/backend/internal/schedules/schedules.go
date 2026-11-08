@@ -152,6 +152,19 @@ func NewService(pool *pgxpool.Pool, opts Options) *Service {
 // Create saves a schedule. Its first occurrence is the first at or after now:
 // earlier ones aren't recorded.
 func (s *Service) Create(ctx context.Context, userID string, in Settings) (Schedule, error) {
+	return s.create(ctx, userID, in, false)
+}
+
+// CreateRecordingFirst saves a schedule like Create, but when its first
+// occurrence (at Start) is at or before now, it's recorded now, dated then,
+// and the schedule goes on from the next. This is a transaction entered in
+// New transaction and set to repeat. If it can't be recorded, nothing is
+// saved.
+func (s *Service) CreateRecordingFirst(ctx context.Context, userID string, in Settings) (Schedule, error) {
+	return s.create(ctx, userID, in, true)
+}
+
+func (s *Service) create(ctx context.Context, userID string, in Settings, recordFirst bool) (Schedule, error) {
 	var out Schedule
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		// The checks share-lock accounts and buckets, so the user's lock
@@ -164,7 +177,39 @@ func (s *Service) Create(ctx context.Context, userID string, in Settings) (Sched
 		if err != nil {
 			return err
 		}
-		if !p.NextAt.Valid {
+		// The first occurrence, when it's recorded now.
+		var first time.Time
+		var firstTx string
+		if recordFirst {
+			rule, err := in.Rule()
+			if err != nil {
+				return err
+			}
+			if at, ok := rule.Occurrence(0); ok && !at.After(s.now()) {
+				if s.txs == nil {
+					return errors.New("no transactions service")
+				}
+				n := in.Transaction
+				n.At = at
+				t, err := s.txs.RecordIn(ctx, tx, userID, n)
+				if err != nil {
+					return err
+				}
+				first, firstTx = at, t.ID
+				// It goes on from the first at or after now, after this one:
+				// past ones between aren't recorded, as for Create.
+				k, next, ok := rule.NextAt(s.now())
+				if ok && k < 1 {
+					k = 1
+					next, ok = rule.Occurrence(1)
+				}
+				p.NextIndex, p.NextAt = int32(max(k, 1)), pgtype.Timestamptz{}
+				if ok {
+					p.NextAt = pgtype.Timestamptz{Time: next.UTC(), Valid: true}
+				}
+			}
+		}
+		if !p.NextAt.Valid && firstTx == "" {
 			return fmt.Errorf("%w: the schedule has no occurrences from now on", ErrInvalid)
 		}
 		var row sqlc.Schedule
@@ -178,6 +223,20 @@ func (s *Service) Create(ctx context.Context, userID string, in Settings) (Sched
 		}
 		if err := addLines(ctx, q, userID, row.ID, in.Transaction.Buckets); err != nil {
 			return err
+		}
+		if firstTx != "" {
+			now := s.now()
+			o := sqlc.CreateOccurrenceParams{
+				ScheduleID: row.ID, UserID: userID, ScheduledAt: first.UTC(), State: sqlc.OccurrenceStateApplied,
+				TransactionID: pgtype.Text{String: firstTx, Valid: true}, ResolvedAt: pgtype.Timestamptz{Time: now, Valid: true},
+			}
+			if _, err := ids.Insert(ctx, ids.Occurrence, func() string { return ids.NewOccurrence(row.ID) }, func(ctx context.Context, id string) (bool, error) {
+				o.ID = id
+				_, err := q.CreateOccurrence(ctx, o)
+				return ids.Inserted(err)
+			}); err != nil {
+				return err
+			}
 		}
 		out, err = get(ctx, q, userID, row.ID)
 		return err
@@ -317,13 +376,26 @@ func (s *Service) Occurrences(ctx context.Context, userID string, f Filter) (Pag
 	return page, nil
 }
 
+// Preview returns the times of the first n occurrences at or after now of a
+// schedule with these settings, which needn't be saved. Only the repeat is
+// checked: Start, Minute, TimeZone, Frequency, Every, EndCount and EndDate.
+func (s *Service) Preview(ctx context.Context, userID string, in Settings, n int) ([]time.Time, error) {
+	if n < 1 || n > MaxUpcoming {
+		return nil, fmt.Errorf("%w: the count must be 1 to %d", ErrInvalid, MaxUpcoming)
+	}
+	rule, err := checkRule(ctx, sqlc.New(s.pool), userID, &in)
+	if err != nil {
+		return nil, err
+	}
+	return rule.Upcoming(s.now(), n), nil
+}
+
 // params checks in, fills its defaults and returns it as a row, with the next
 // occurrence from now.
 func (s *Service) params(ctx context.Context, tx pgx.Tx, userID string, in *Settings) (sqlc.CreateScheduleParams, error) {
 	invalid := func(format string, args ...any) (sqlc.CreateScheduleParams, error) {
 		return sqlc.CreateScheduleParams{}, fmt.Errorf("%w: %s", ErrInvalid, fmt.Sprintf(format, args...))
 	}
-	q := sqlc.New(tx)
 	in.Name = strings.TrimSpace(in.Name)
 	if len([]rune(in.Name)) > MaxNameLength {
 		return invalid("the name can be at most %d characters", MaxNameLength)
@@ -333,6 +405,49 @@ func (s *Service) params(ctx context.Context, tx pgx.Tx, userID string, in *Sett
 	}
 	if in.DueDays < 0 || in.DueDays > MaxDueDays {
 		return invalid("the due period must be 0 to %d days", MaxDueDays)
+	}
+	rule, err := checkRule(ctx, sqlc.New(tx), userID, in)
+	if err != nil {
+		return sqlc.CreateScheduleParams{}, err
+	}
+	n := in.Transaction
+	n.At = s.now()
+	if err := transactions.Check(ctx, tx, userID, n); err != nil {
+		return sqlc.CreateScheduleParams{}, err
+	}
+
+	p := sqlc.CreateScheduleParams{
+		UserID: userID, Name: in.Name, TransactionType: n.Type, AccountID: n.AccountID,
+		ToAccountID: pgtype.Text{String: n.ToAccountID, Valid: n.ToAccountID != ""}, Amount: n.Amount,
+		Counterparty: n.Counterparty, Tags: n.Tags, Mode: in.Mode, DueDays: int32(in.DueDays),
+		StartDate: in.Start, TimeOfDay: pgtype.Time{Microseconds: int64(in.Minute) * 60_000_000, Valid: true},
+		TimeZone: in.TimeZone, Frequency: in.Frequency, Every: int32(in.Every), //nolint:gosec // checkRule keeps it within MaxEvery
+		Paused: in.Paused,
+	}
+	if p.Tags == nil {
+		p.Tags = []string{}
+	}
+	if n.TriggersRefill != nil {
+		p.TriggersRefill = pgtype.Bool{Bool: *n.TriggersRefill, Valid: true}
+	}
+	if in.EndCount > 0 {
+		p.EndCount = pgtype.Int4{Int32: int32(min(in.EndCount, maxIndex)), Valid: true}
+	}
+	if !in.EndDate.IsZero() {
+		p.EndDate = pgtype.Date{Time: in.EndDate, Valid: true}
+	}
+	if k, at, ok := rule.NextAt(s.now()); ok {
+		p.NextIndex = int32(k) //nolint:gosec // at most maxIndex
+		p.NextAt = pgtype.Timestamptz{Time: at.UTC(), Valid: true}
+	}
+	return p, nil
+}
+
+// checkRule checks the repeat in in, fills its defaults (the user's time
+// zone), and returns its rule.
+func checkRule(ctx context.Context, q *sqlc.Queries, userID string, in *Settings) (Rule, error) {
+	invalid := func(format string, args ...any) (Rule, error) {
+		return Rule{}, fmt.Errorf("%w: %s", ErrInvalid, fmt.Sprintf(format, args...))
 	}
 	if !in.Frequency.Valid() {
 		return invalid("frequency %q", in.Frequency)
@@ -366,48 +481,14 @@ func (s *Service) params(ctx context.Context, tx pgx.Tx, userID string, in *Sett
 	if in.TimeZone == "" {
 		tz, err := q.UserTimeZone(ctx, userID)
 		if err != nil {
-			return sqlc.CreateScheduleParams{}, err
+			return Rule{}, err
 		}
 		in.TimeZone = tz
 		if _, err := time.LoadLocation(tz); tz == "" || err != nil {
 			in.TimeZone = "UTC"
 		}
 	}
-	rule, err := in.Rule()
-	if err != nil {
-		return sqlc.CreateScheduleParams{}, err
-	}
-	n := in.Transaction
-	n.At = s.now()
-	if err := transactions.Check(ctx, tx, userID, n); err != nil {
-		return sqlc.CreateScheduleParams{}, err
-	}
-
-	p := sqlc.CreateScheduleParams{
-		UserID: userID, Name: in.Name, TransactionType: n.Type, AccountID: n.AccountID,
-		ToAccountID: pgtype.Text{String: n.ToAccountID, Valid: n.ToAccountID != ""}, Amount: n.Amount,
-		Counterparty: n.Counterparty, Tags: n.Tags, Mode: in.Mode, DueDays: int32(in.DueDays),
-		StartDate: in.Start, TimeOfDay: pgtype.Time{Microseconds: int64(in.Minute) * 60_000_000, Valid: true},
-		TimeZone: in.TimeZone, Frequency: in.Frequency, Every: int32(in.Every),
-		Paused: in.Paused,
-	}
-	if p.Tags == nil {
-		p.Tags = []string{}
-	}
-	if n.TriggersRefill != nil {
-		p.TriggersRefill = pgtype.Bool{Bool: *n.TriggersRefill, Valid: true}
-	}
-	if in.EndCount > 0 {
-		p.EndCount = pgtype.Int4{Int32: int32(min(in.EndCount, maxIndex)), Valid: true}
-	}
-	if !in.EndDate.IsZero() {
-		p.EndDate = pgtype.Date{Time: in.EndDate, Valid: true}
-	}
-	if k, at, ok := rule.NextAt(s.now()); ok {
-		p.NextIndex = int32(k) //nolint:gosec // at most maxIndex
-		p.NextAt = pgtype.Timestamptz{Time: at.UTC(), Valid: true}
-	}
-	return p, nil
+	return in.Rule()
 }
 
 func addLines(ctx context.Context, q *sqlc.Queries, userID, id string, lines []transactions.BucketAmount) error {

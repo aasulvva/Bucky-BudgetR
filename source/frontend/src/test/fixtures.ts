@@ -92,6 +92,7 @@ export function transaction(
     reversed: false,
     replaces: null,
     replaced_by: null,
+    schedule_id: null,
     bank_lines: [{ account_id: "1234", amount: "-100.00" }],
     bucket_lines: [],
     before_reversal: null,

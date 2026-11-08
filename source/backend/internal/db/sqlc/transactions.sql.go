@@ -168,6 +168,37 @@ func (q *Queries) ListReplacedBy(ctx context.Context, ids []string) ([]ListRepla
 	return items, nil
 }
 
+const listSchedulesFor = `-- name: ListSchedulesFor :many
+SELECT transaction_id::text AS transaction_id, schedule_id FROM schedule_occurrences
+WHERE transaction_id = ANY($1::text[])
+`
+
+type ListSchedulesForRow struct {
+	TransactionID string
+	ScheduleID    string
+}
+
+// The schedules that recorded any of these transactions.
+func (q *Queries) ListSchedulesFor(ctx context.Context, ids []string) ([]ListSchedulesForRow, error) {
+	rows, err := q.db.Query(ctx, listSchedulesFor, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSchedulesForRow{}
+	for rows.Next() {
+		var i ListSchedulesForRow
+		if err := rows.Scan(&i.TransactionID, &i.ScheduleID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTagSuggestions = `-- name: ListTagSuggestions :many
 SELECT t.name, (used.transaction_at IS NOT NULL)::bool AS used,
        coalesce(used.transaction_at, t.created_at)::timestamptz AS last_used_at

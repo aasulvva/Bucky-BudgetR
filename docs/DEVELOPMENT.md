@@ -172,7 +172,10 @@ Schedules (#31, spec §5.6) live in `internal/schedules`.
 - `recurrence.go` is the date math, with no database: `Rule.Occurrence(k)` is occurrence `k` (from 0) as a wall time in the schedule's zone, with months and years clamped from the start date so the day doesn't drift. `Rule.NextAt(t)` is the first at or after `t`. A schedule stores `next_index` and `next_at` (UTC), and `next_at` is null once it has ended.
 - `scheduler.go` runs `RunDue` at start and every `SCHEDULE_INTERVAL` (`RunLoop`, on the business clock, so the debug clock moves it too). For each user with something due, one database transaction takes `ledger.LockUser`, locks the due schedules (`FOR UPDATE`) and handles their occurrences up to now in order, at most `MaxCatchUp` per schedule per run. An occurrence that already has a row in `schedule_occurrences` (unique per schedule and time) is skipped, so a repeated run records nothing twice.
 - An auto occurrence is recorded with `transactions.Service.RecordIn` inside a savepoint. If it fails with a rule error (`ledger.ErrNoActiveCycle`, `ErrOutsideCycle`, `ErrInvalid` and the like), the savepoint is rolled back and the occurrence queued with the reason. Any other error fails the user's run, which is logged and tried again on the next one.
-- Creating or changing a schedule checks its transaction with `transactions.Check`, the same rules as `Create` without recording.
+- Creating or changing a schedule checks its transaction with `transactions.Check`, the same rules as `Create` without recording. `checkRule` checks the repeat on its own, for `Service.Preview` (`POST /schedules/preview`).
+- `CreateRecordingFirst` (`?record_first=true`) records occurrence 0 with `RecordIn` in the create's own transaction, not a savepoint, so a failure saves nothing, and adds its `applied` occurrence row.
+- `transactions.Service.load` fills a transaction's `ScheduleID` from `schedule_occurrences.transaction_id` (`ListSchedulesFor`).
+- Frontend: `lib/schedules.ts` holds the form's repeat values, the request bodies and the sentence (`repeatSentence`); `TransactionForm` takes a `schedule` prop for the schedule pages, and its *Repeat or schedule* switch in New transaction saves with `record_first`.
 
 ### Debug settings
 

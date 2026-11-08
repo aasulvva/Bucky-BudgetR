@@ -10,6 +10,7 @@ import {
   SegmentedControl,
   Select,
   Stack,
+  Switch,
   TagsInput,
   Text,
   TextInput,
@@ -28,6 +29,7 @@ import { useRefreshMoney, type Account, type Bucket } from "@/api/accounts";
 import { api } from "@/api/client";
 import { useCurrentCycles, type Cycle } from "@/api/cycles";
 import { unwrap } from "@/api/errors";
+import { useSaveSchedule } from "@/api/schedules";
 import {
   useCounterparties,
   useTags,
@@ -41,7 +43,11 @@ import { useSession } from "@/app/session";
 import { AmountInput } from "@/components/AmountInput";
 import { DateTimeInput } from "@/components/DateTimeInput";
 import { ErrorAlert } from "@/components/ErrorAlert";
+import { ModeFields, RepeatFields } from "@/components/schedules/RepeatFields";
+import { now } from "@/lib/clock";
+import { browserTimeZone } from "@/lib/cycleRule";
 import { cycleRange, isOverdue } from "@/lib/cycles";
+import { formatDateTime } from "@/lib/dates";
 import { compareAmounts, formatMoney, subtractAmounts } from "@/lib/money";
 import {
   bucketTotals,
@@ -58,6 +64,20 @@ import {
   type SplitLine,
 } from "@/lib/transactionForm";
 import { bucketLinesLocked, isCorrectableType } from "@/lib/transactionList";
+import {
+  defaultRepeat,
+  fromTransaction,
+  isSchedulable,
+  repeatErrors,
+  repeatFromSchedule,
+  scheduleBody,
+  valuesFromSchedule,
+  wallTime,
+  type RepeatErrors,
+  type RepeatValues,
+  type Schedule,
+  type ScheduleTransaction,
+} from "@/lib/schedules";
 
 /** The last account a transaction was saved on, in this browser. */
 const LAST_ACCOUNT_KEY = "bucky.lastAccount";
@@ -90,20 +110,35 @@ interface Errors {
   lines?: Record<number, { bucket?: string; amount?: string }>;
 }
 
+/** A schedule form (#154): the transaction a schedule records, and when. */
+export interface ScheduleOptions {
+  /** The schedule being edited; otherwise a new one. */
+  editing?: Schedule;
+  /** Make recurring: a new schedule like this transaction. */
+  from?: Transaction;
+}
+
 /**
  * The Create transaction form (spec §9). With `editing`, it corrects that
  * transaction instead: the type is fixed, the time stays the original one, and
  * only what changed is sent. Bucket lines outside the active cycle are shown
  * but locked.
+ *
+ * With `schedule`, it's a schedule's form instead: the same transaction, and
+ * when it's recorded (RepeatFields). New transaction can also be set to
+ * repeat: it's then saved as a schedule, recorded now when its first time is
+ * now or past.
  */
 export function TransactionForm({
   accounts,
   buckets,
   editing,
+  schedule,
 }: {
   accounts: Account[];
   buckets: Bucket[];
   editing?: Transaction;
+  schedule?: ScheduleOptions;
 }) {
   const { t } = useTranslation();
   const theme = useMantineTheme();
@@ -111,12 +146,23 @@ export function TransactionForm({
   const navigate = useNavigate();
   const location = useLocation();
   const refresh = useRefreshMoney();
-  const rules = useSession().data?.preferences.income_refill_rules ?? [];
+  const preferences = useSession().data?.preferences;
+  const rules = preferences?.income_refill_rules ?? [];
+  const zone = preferences?.time_zone ?? browserTimeZone();
+  const scheduleMode = schedule !== undefined;
+  const from = schedule?.from && isSchedulable(schedule.from) ? schedule.from : undefined;
   const active = useCurrentCycles().data?.active ?? null;
   const amountId = useId();
 
-  const [start] = useState(() => (editing ? editState(editing) : null));
-  const [newType, setType] = useState<NewTransactionType>("EXP");
+  const [start] = useState(() => {
+    if (editing) return editState(editing);
+    if (schedule?.editing) return valuesFromSchedule(schedule.editing);
+    if (from) return editState(from);
+    return null;
+  });
+  const [newType, setType] = useState<NewTransactionType>(
+    schedule?.editing?.transaction.type ?? from?.type ?? "EXP",
+  );
   const type: TransactionType = editing?.type ?? newType;
   const [amount, setAmount] = useState<string | null>(start?.amount ?? null);
   const [at, setAt] = useState<string | null>(editing?.at ?? null);
@@ -124,7 +170,7 @@ export function TransactionForm({
     start ? start.accountId : initialAccount(accounts, lastAccount()),
   );
   // When editing, a suggestion never moves the transaction.
-  const [accountTouched, setAccountTouched] = useState(editing !== undefined);
+  const [accountTouched, setAccountTouched] = useState(start !== null);
   const [toAccountId, setToAccountId] = useState<string | null>(start?.toAccountId ?? null);
   const [counterparty, setCounterparty] = useState(start?.counterparty ?? "");
   const [tags, setTags] = useState<string[]>(start?.tags ?? []);
@@ -134,6 +180,23 @@ export function TransactionForm({
   const [base, setBase] = useState({ amount: start?.amount ?? null, lines: start?.lines ?? [] });
   const [refill, setRefill] = useState<boolean | null>(start?.triggersRefill ?? null);
   const [errors, setErrors] = useState<Errors>({});
+  // The schedule: always on a schedule's form, a choice in New transaction.
+  const [repeatOn, setRepeatOn] = useState(scheduleMode);
+  const [repeat, setRepeat] = useState<RepeatValues>(() => {
+    if (schedule?.editing) return repeatFromSchedule(schedule.editing);
+    if (from) return fromTransaction(from, zone).repeat;
+    return defaultRepeat(now(), zone);
+  });
+  const [repeatErrs, setRepeatErrs] = useState<RepeatErrors>({});
+  // A new transaction set to happen later is saved as a schedule for then,
+  // recorded once (or approved first).
+  const future =
+    !editing &&
+    !scheduleMode &&
+    !repeatOn &&
+    at !== null &&
+    new Date(at).getTime() > now().getTime();
+  const scheduled = repeatOn || future;
 
   const balance = type === "OPB" || type === "BLA";
   const transfer = type === "TRF";
@@ -146,7 +209,7 @@ export function TransactionForm({
   const totals = bucketTotals(amount, lines);
   const inCycle = insideCycle(at, active);
   const waiting = type === "INC" && !editing ? waitingOnIncome(buckets, accountId) : [];
-  const refillShown = type === "INC" && inCycle && accountId !== null;
+  const refillShown = type === "INC" && (inCycle || scheduled) && accountId !== null;
   const refillChecked = refill ?? (waiting.length > 0 || ruleMatches(rules, counterparty, amount));
   const money = (value: string) => formatMoney(value, currency);
   const correction = editing
@@ -212,6 +275,49 @@ export function TransactionForm({
   const goBack = (fallback: string) => {
     if (location.key === "default") void navigate(fallback);
     else void navigate(-1);
+  };
+
+  const saveSchedule = useSaveSchedule(async (saved) => {
+    let message: string = t("schedules.saved");
+    if (!scheduleMode) {
+      if (saved.next_index === 0) {
+        message = t("newTransaction.scheduledFor", { date: formatDateTime(saved.next_at ?? "") });
+      } else if (saved.next_at) {
+        message = t("newTransaction.savedRepeating", { date: formatDateTime(saved.next_at) });
+      } else {
+        message = t("newTransaction.savedEnded");
+      }
+    }
+    rememberAccount(saved.transaction.account_id);
+    notifications.show({ color: "green", message });
+    if (scheduleMode) await navigate("/transactions/scheduled");
+    else goBack("/");
+  });
+
+  const changeRepeat = (change: Partial<RepeatValues>) => {
+    setRepeat((r) => ({ ...r, ...change }));
+  };
+
+  /** A schedule recorded once, at `iso`. */
+  const onceAt = (iso: string): RepeatValues => {
+    const w = wallTime(iso, repeat.timeZone);
+    return {
+      ...repeat,
+      startDate: w.date,
+      time: w.time,
+      frequency: "once",
+      ends: "never",
+      name: "",
+    };
+  };
+
+  const toggleRepeat = (on: boolean) => {
+    setRepeatOn(on);
+    // It starts when the transaction was set to happen, or now.
+    if (on) {
+      const w = wallTime(at ?? now(), repeat.timeZone);
+      changeRepeat({ startDate: w.date, time: w.time });
+    }
   };
 
   const save = useMutation({
@@ -280,7 +386,7 @@ export function TransactionForm({
           amount: money(subtractAmounts("0", totals.notTied)),
         });
       }
-      if (!editing && active && !inCycle) {
+      if (!editing && !scheduled && active && !inCycle) {
         found.at = t("newTransaction.outsideCycle", { range: cycleRange(active) });
       }
     }
@@ -290,7 +396,17 @@ export function TransactionForm({
   const submit = (addAnother: boolean) => {
     const found = validate();
     setErrors(found);
-    if (Object.keys(found).length > 0 || amount === null || accountId === null) return;
+    const shape = future && at ? onceAt(at) : repeat;
+    const foundRepeat = scheduled ? repeatErrors(shape, t) : {};
+    setRepeatErrs(foundRepeat);
+    if (
+      Object.keys(found).length > 0 ||
+      Object.keys(foundRepeat).length > 0 ||
+      amount === null ||
+      accountId === null
+    ) {
+      return;
+    }
     if (editing) {
       if (correction) correct.mutate(correction);
       return;
@@ -299,7 +415,8 @@ export function TransactionForm({
     const common = {
       account_id: accountId,
       amount,
-      ...(at ? { at } : {}),
+      // A schedule has its own times.
+      ...(at && !scheduled ? { at } : {}),
       ...(tags.length > 0 ? { tags } : {}),
     };
     const body: TransactionCreate = transfer
@@ -318,6 +435,17 @@ export function TransactionForm({
             : {}),
           ...(refillShown ? { triggers_refill: refillChecked } : {}),
         };
+    if (scheduled) {
+      const transaction: ScheduleTransaction = body;
+      const input = scheduleBody(shape, transaction);
+      if (!input) return;
+      saveSchedule.mutate({
+        ...(schedule?.editing ? { id: schedule.editing.id } : {}),
+        body: input,
+        recordFirst: repeatOn && !scheduleMode,
+      });
+      return;
+    }
     save.mutate({ body, addAnother });
   };
 
@@ -348,22 +476,36 @@ export function TransactionForm({
           clearable={false}
           disabled
         />
-      ) : (
+      ) : repeatOn ? null : (
         <DateTimeInput
           label={t("newTransaction.date")}
-          description={t("common.emptyMeansNow")}
+          description={t("newTransaction.dateHint")}
           value={at}
           onChange={setAt}
           error={errors.at}
-          {...(!transfer && lines.length > 0 && active
-            ? {
-                minDate: new Date(active.start_at),
-                // DateTimeInput stops at now; an overdue cycle ends earlier.
-                ...(isOverdue(active)
-                  ? { maxDate: new Date(new Date(active.end_at).getTime() - 1) }
-                  : {}),
-              }
+          // A later time schedules it.
+          maxDate={undefined}
+          {...(!transfer && lines.length > 0 && active && !isOverdue(active)
+            ? { minDate: new Date(active.start_at) }
             : {})}
+        />
+      )}
+      {future && at && (
+        <Card withBorder padding="sm" bg="var(--mantine-color-blue-light)">
+          <Stack gap="sm">
+            <Text size="sm">{t("newTransaction.futureNote", { date: formatDateTime(at) })}</Text>
+            <ModeFields value={repeat} onChange={changeRepeat} errors={repeatErrs} />
+          </Stack>
+        </Card>
+      )}
+      {!editing && !scheduleMode && (
+        <Switch
+          label={t("newTransaction.repeat")}
+          description={t("newTransaction.repeatHint")}
+          checked={repeatOn}
+          onChange={(e) => {
+            toggleRepeat(e.currentTarget.checked);
+          }}
         />
       )}
       <Select
@@ -405,7 +547,7 @@ export function TransactionForm({
                 accountTouched,
                 tags,
                 lines,
-                bucketsAllowed: active !== null && !locked,
+                bucketsAllowed: (active !== null || scheduled) && !locked,
               },
               accounts,
               buckets,
@@ -450,13 +592,24 @@ export function TransactionForm({
     </Stack>
   );
 
-  const pending = save.isPending || correct.isPending;
-  const error = save.error ?? correct.error;
+  const error = save.error ?? correct.error ?? saveSchedule.error;
+  const saving = (addAnother: boolean) =>
+    editing
+      ? correct.isPending
+      : saveSchedule.isPending
+        ? !addAnother
+        : save.isPending && save.variables.addAnother === addAnother;
   const cancel = (
     <Button
       variant="default"
       onClick={() => {
-        goBack(editing ? `/transactions?open=${editing.id}` : "/");
+        goBack(
+          editing
+            ? `/transactions?open=${editing.id}`
+            : scheduleMode
+              ? "/transactions/scheduled"
+              : "/",
+        );
       }}
     >
       {t("common.cancel")}
@@ -466,7 +619,13 @@ export function TransactionForm({
   return (
     <form
       noValidate
-      aria-label={editing ? t("newTransaction.editForm") : t("nav.items.newTransaction")}
+      aria-label={
+        editing
+          ? t("newTransaction.editForm")
+          : scheduleMode
+            ? t(schedule.editing ? "schedules.edit" : "schedules.new")
+            : t("nav.items.newTransaction")
+      }
       onSubmit={(e) => {
         e.preventDefault();
         submit(false);
@@ -507,9 +666,25 @@ export function TransactionForm({
                 onChange={changeLines}
                 errors={errors}
                 locked={locked}
+                needsCycle={!scheduled}
               />
             )}
           </Group>
+          {repeatOn && (
+            <Box
+              pt="md"
+              maw={560}
+              style={{ borderTop: "1px solid var(--mantine-color-default-border)" }}
+            >
+              <RepeatFields
+                value={repeat}
+                onChange={changeRepeat}
+                errors={repeatErrs}
+                editing={schedule?.editing !== undefined}
+                recordFirst={!scheduleMode}
+              />
+            </Box>
+          )}
           {error && <ErrorAlert error={error} />}
           {isDesktop ? (
             <Group
@@ -519,10 +694,10 @@ export function TransactionForm({
               style={{ borderTop: "1px solid var(--mantine-color-default-border)" }}
             >
               {cancel}
-              {!editing && (
+              {!editing && !scheduled && (
                 <Button
                   variant="outline"
-                  loading={save.isPending && save.variables.addAnother}
+                  loading={saving(true)}
                   onClick={() => {
                     submit(true);
                   }}
@@ -533,7 +708,7 @@ export function TransactionForm({
               <Button
                 type="submit"
                 disabled={editing && correction === null}
-                loading={editing ? correct.isPending : save.isPending && !save.variables.addAnother}
+                loading={saving(false)}
               >
                 {t("newTransaction.save")}
               </Button>
@@ -552,10 +727,10 @@ export function TransactionForm({
                 zIndex: 1,
               }}
             >
-              {!editing && (
+              {!editing && !scheduled && (
                 <Button
                   variant="subtle"
-                  loading={save.isPending && save.variables.addAnother}
+                  loading={saving(true)}
                   onClick={() => {
                     submit(true);
                   }}
@@ -568,7 +743,7 @@ export function TransactionForm({
                 size="lg"
                 fullWidth
                 disabled={editing && correction === null}
-                loading={editing ? pending : save.isPending && !save.variables.addAnother}
+                loading={saving(false)}
               >
                 {t("newTransaction.save")}
               </Button>
@@ -644,6 +819,7 @@ function BucketSplit({
   onChange,
   errors,
   locked,
+  needsCycle,
 }: {
   account: Account | undefined;
   own: Bucket[];
@@ -654,6 +830,8 @@ function BucketSplit({
   onChange: (lines: SplitLine[]) => void;
   errors: Errors;
   locked: boolean;
+  /** Bucket lines need an active cycle, unlike a schedule's. */
+  needsCycle: boolean;
 }) {
   const { t } = useTranslation();
   const money = (value: string) => formatMoney(value, account?.currency);
@@ -708,7 +886,7 @@ function BucketSplit({
         {t("newTransaction.chooseAccountFirst")}
       </Text>
     );
-  } else if (!active) {
+  } else if (!active && needsCycle) {
     body = (
       <Text size="sm" c="dimmed">
         <Trans

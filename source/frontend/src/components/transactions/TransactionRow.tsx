@@ -1,4 +1,5 @@
-import { Badge, Box, Text, UnstyledButton } from "@mantine/core";
+import { Badge, Box, Group, Text, UnstyledButton } from "@mantine/core";
+import { IconRepeat } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
@@ -60,9 +61,25 @@ export function TransactionRow({
         </Badge>
       )}
       <Box style={{ minWidth: 0 }}>
-        <Text fw={600} truncate>
-          {transactionTitle(tx, names)}
-        </Text>
+        <Group gap={4} wrap="nowrap">
+          {tx.schedule_id && (
+            <Box
+              component="span"
+              title={t("transactions.scheduledMark")}
+              style={{ display: "inline-flex", flex: "none" }}
+            >
+              <IconRepeat
+                size={14}
+                role="img"
+                aria-label={t("transactions.scheduledMark")}
+                color="var(--mantine-color-dimmed)"
+              />
+            </Box>
+          )}
+          <Text fw={600} truncate>
+            {transactionTitle(tx, names)}
+          </Text>
+        </Group>
         <Text size="sm" c="dimmed" truncate>
           {transactionSubLine(tx, names)}
         </Text>

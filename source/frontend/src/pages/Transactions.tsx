@@ -8,6 +8,7 @@ import {
   Loader,
   Select,
   Stack,
+  Tabs,
   Text,
   TextInput,
   Title,
@@ -18,13 +19,14 @@ import { useDebouncedCallback, useMediaQuery } from "@mantine/hooks";
 import { IconAdjustmentsHorizontal, IconPlus, IconSearch, IconX } from "@tabler/icons-react";
 import { useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, useSearchParams } from "react-router";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 
 import { useAccounts, useBuckets } from "@/api/accounts";
 import { useCurrentCycles, useCycles, type Cycle } from "@/api/cycles";
 import { useTags, useTransactionPages } from "@/api/transactions";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
+import { ScheduledTab } from "@/components/schedules/ScheduledTab";
 import { TransactionDetail } from "@/components/transactions/TransactionDetail";
 import { TransactionRow } from "@/components/transactions/TransactionRow";
 import { useLookups, type Lookups } from "@/components/transactions/lookups";
@@ -45,12 +47,51 @@ import {
 
 type FilterChange = (change: Partial<TransactionFilter>) => void;
 
+const SCHEDULED_PATH = "/transactions/scheduled";
+
 /**
- * Transactions (spec §9, canvas "Transactions"): the list, newest first and
- * grouped by day, with filters in the URL, and a transaction's detail beside
- * it (full screen on mobile) to edit or reverse it.
+ * Transactions (spec §9, canvas "Transactions"), in two tabs: the
+ * transactions, and the scheduled ones (#154).
  */
 export default function Transactions() {
+  const { t } = useTranslation();
+  const theme = useMantineTheme();
+  const isDesktop = useMediaQuery(`(min-width: ${theme.breakpoints.sm})`, true);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const tab = location.pathname === SCHEDULED_PATH ? "scheduled" : "list";
+  return (
+    <Stack gap="md">
+      <Group justify="space-between" gap="md">
+        <Title order={2}>{t("nav.items.transactions")}</Title>
+        {isDesktop && tab === "list" && (
+          <Button component={Link} to="/transactions/new" leftSection={<IconPlus size={16} />}>
+            {t("transactions.new")}
+          </Button>
+        )}
+      </Group>
+      <Tabs
+        value={tab}
+        onChange={(v) => {
+          void navigate(v === "scheduled" ? SCHEDULED_PATH : "/transactions");
+        }}
+      >
+        <Tabs.List>
+          <Tabs.Tab value="list">{t("transactions.tabs.list")}</Tabs.Tab>
+          <Tabs.Tab value="scheduled">{t("transactions.tabs.scheduled")}</Tabs.Tab>
+        </Tabs.List>
+      </Tabs>
+      {tab === "list" ? <TransactionsTab /> : <ScheduledTab />}
+    </Stack>
+  );
+}
+
+/**
+ * The transactions, newest first and grouped by day, with filters in the
+ * URL, and a transaction's detail beside it (full screen on mobile) to edit
+ * or reverse it.
+ */
+function TransactionsTab() {
   const { t } = useTranslation();
   const theme = useMantineTheme();
   const isDesktop = useMediaQuery(`(min-width: ${theme.breakpoints.sm})`, true);
@@ -152,15 +193,6 @@ export default function Transactions() {
 
   return (
     <Stack gap="md">
-      <Group justify="space-between" gap="md">
-        <Title order={2}>{t("nav.items.transactions")}</Title>
-        {isDesktop && (
-          <Button component={Link} to="/transactions/new" leftSection={<IconPlus size={16} />}>
-            {t("transactions.new")}
-          </Button>
-        )}
-      </Group>
-
       {isDesktop ? (
         <Group gap="xs" align="flex-end" wrap="wrap">
           <Search filter={filter} onChange={change} style={{ flex: "1 1 200px" }} />

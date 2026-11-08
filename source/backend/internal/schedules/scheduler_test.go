@@ -374,3 +374,130 @@ func TestOccurrencesPages(t *testing.T) {
 		t.Errorf("bob sees %v %v", page, err)
 	}
 }
+
+func TestCreateRecordingFirst(t *testing.T) {
+	e := setup(t)
+	ctx := t.Context()
+	recordFirst := func(s schedules.Settings) schedules.Schedule {
+		t.Helper()
+		out, err := e.svc.CreateRecordingFirst(ctx, e.user, s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	// The recorded transaction of a schedule's only occurrence.
+	recorded := func(id string) transactions.Transaction {
+		t.Helper()
+		page, err := e.svc.Occurrences(ctx, e.user, schedules.Filter{ScheduleID: id})
+		if err != nil || len(page.Items) != 1 || page.Items[0].TransactionID == "" {
+			t.Fatalf("occurrences %+v, %v", page.Items, err)
+		}
+		tx, err := e.tx.Get(ctx, e.user, page.Items[0].TransactionID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if tx.ScheduleID != id {
+			t.Errorf("schedule of the transaction: %q, want %q", tx.ScheduleID, id)
+		}
+		return tx
+	}
+
+	// Two days ago, to approve: recorded anyway, dated then, and goes on from
+	// today's, which is now.
+	s := e.daily("2026-10-08")
+	s.Mode = sqlc.ScheduleModeApprove
+	sch := recordFirst(s)
+	if sch.NextIndex != 2 || !sch.NextAt.Equal(at("2026-10-10T12:00:00Z")) {
+		t.Errorf("two days ago: next %d at %v", sch.NextIndex, sch.NextAt)
+	}
+	if tx := recorded(sch.ID); !tx.At.Equal(at("2026-10-08T12:00:00Z")) || tx.Counterparty != "Rent" {
+		t.Errorf("two days ago: recorded %+v", tx)
+	}
+	if got := e.occurrences(t, sch.ID); !equal(got, []string{"10-08 12:00 applied"}) {
+		t.Errorf("two days ago: %v", got)
+	}
+	// The scheduler then queues today's, and doesn't record the first again.
+	e.run(t, "2026-10-10T12:00:00Z")
+	if got := e.occurrences(t, sch.ID); !equal(got, []string{"10-08 12:00 applied", "10-10 12:00 queued approval"}) {
+		t.Errorf("after a run: %v", got)
+	}
+
+	// Now: recorded, and goes on from tomorrow.
+	sch = recordFirst(e.daily("2026-10-10"))
+	if sch.NextIndex != 1 || !sch.NextAt.Equal(at("2026-10-11T12:00:00Z")) {
+		t.Errorf("now: next %d at %v", sch.NextIndex, sch.NextAt)
+	}
+	recorded(sch.ID)
+
+	// Once, in the past: recorded, and ended.
+	s = e.daily("2026-10-09")
+	s.Frequency = sqlc.ScheduleFrequencyOnce
+	sch = recordFirst(s)
+	if sch.NextIndex != 1 || !sch.NextAt.IsZero() {
+		t.Errorf("once: next %d at %v", sch.NextIndex, sch.NextAt)
+	}
+	recorded(sch.ID)
+
+	// In the future: left to the schedule.
+	sch = recordFirst(e.daily("2026-10-12"))
+	if sch.NextIndex != 0 || !sch.NextAt.Equal(at("2026-10-12T12:00:00Z")) || len(e.occurrences(t, sch.ID)) != 0 {
+		t.Errorf("future: next %d at %v", sch.NextIndex, sch.NextAt)
+	}
+
+	// Outside the cycle, with a bucket line: nothing is saved.
+	before, err := e.svc.List(ctx, e.user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s = e.daily("2026-09-20")
+	s.Transaction.Buckets = []transactions.BucketAmount{{BucketID: e.bucket(t, sqlc.RefillModeManual), Amount: dec("50")}}
+	if _, err := e.svc.CreateRecordingFirst(ctx, e.user, s); !errors.Is(err, ledger.ErrOutsideCycle) {
+		t.Errorf("outside the cycle: %v", err)
+	}
+	if after, err := e.svc.List(ctx, e.user); err != nil || len(after) != len(before) {
+		t.Errorf("outside the cycle saved a schedule: %d, %v", len(after), err)
+	}
+
+	// Plain Create doesn't record a past first.
+	sch = e.create(t, e.daily("2026-10-08"))
+	if sch.NextIndex != 2 || len(e.occurrences(t, sch.ID)) != 0 {
+		t.Errorf("create: next %d", sch.NextIndex)
+	}
+}
+
+func TestPreview(t *testing.T) {
+	e := setup(t)
+	ctx := t.Context()
+	s := schedules.Settings{Start: date("2026-08-31"), Minute: 8 * 60, Frequency: sqlc.ScheduleFrequencyMonth, Every: 1}
+	got, err := e.svc.Preview(ctx, e.user, s, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []time.Time{at("2026-10-31T08:00:00Z"), at("2026-11-30T08:00:00Z"), at("2026-12-31T08:00:00Z")}
+	if len(got) != 3 || !got[0].Equal(want[0]) || !got[1].Equal(want[1]) || !got[2].Equal(want[2]) {
+		t.Errorf("monthly from the 31st: %v", got)
+	}
+	s.EndCount = 3
+	if got, err := e.svc.Preview(ctx, e.user, s, 5); err != nil || len(got) != 1 {
+		t.Errorf("ends after 3: %v, %v", got, err)
+	}
+	for name, change := range map[string]func(*schedules.Settings){
+		"frequency":  func(s *schedules.Settings) { s.Frequency = "fortnight" },
+		"every":      func(s *schedules.Settings) { s.Every = 0 },
+		"time zone":  func(s *schedules.Settings) { s.TimeZone = "Mars/Olympus" },
+		"both ends":  func(s *schedules.Settings) { s.EndDate = date("2027-01-01") },
+		"no start":   func(s *schedules.Settings) { s.Start = time.Time{} },
+		"after 24h":  func(s *schedules.Settings) { s.Minute = 24 * 60 },
+		"end before": func(s *schedules.Settings) { s.EndCount, s.EndDate = 0, date("2026-08-01") },
+	} {
+		c := s
+		change(&c)
+		if _, err := e.svc.Preview(ctx, e.user, c, 5); !errors.Is(err, schedules.ErrInvalid) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	if _, err := e.svc.Preview(ctx, e.user, s, 51); !errors.Is(err, schedules.ErrInvalid) {
+		t.Errorf("count: %v", err)
+	}
+}

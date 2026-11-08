@@ -16,6 +16,38 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.14.00",
+    date: "2026-11-08",
+    title: {
+      en: "Scheduled and recurring transactions",
+      nb: "Planlagte og gjentakende transaksjoner",
+      nn: "Planlagde og gjentakande transaksjonar",
+    },
+    changes: {
+      en: [
+        "Schedule a transaction for later, or make it repeat every so many days, weeks, months or years, such as the rent on the 25th. Turn on Repeat or schedule in New transaction: a transaction dated now or earlier is saved at once and repeats from the next time.",
+        'Transactions has a new Scheduled tab with your schedules in words, such as "Every month on the 25th at 08:00", and their next time. Create one with New schedule, edit it, pause it or delete it there, and choose whether paused and ended ones show. The form shows the next times as you change it.',
+        "A transaction dated in the future is saved as a scheduled one, recorded once at that time, or set to ask you first.",
+        "Make recurring on a transaction starts a schedule like it. Transactions recorded by a schedule are marked in the list, and their detail links to the schedule.",
+        "A schedule can record its transactions by itself, or ask you first. Approving them comes in the next update.",
+      ],
+      nb: [
+        "Planlegg en transaksjon til senere, eller la den gjentas med noen dagers, ukers, måneders eller års mellomrom, for eksempel husleien den 25. Slå på Gjenta eller planlegg i Ny transaksjon: en transaksjon datert nå eller tidligere lagres med en gang og gjentas fra neste gang.",
+        "Transaksjoner har en ny fane, Planlagte, med de planlagte transaksjonene dine i ord, for eksempel «Hver måned den 25. kl. 08:00», og neste gang. Lag en med Ny planlagt, og rediger, sett på pause eller slett den der, og velg om de som er på pause eller ferdige, skal vises. Skjemaet viser de neste gangene mens du endrer det.",
+        "En transaksjon datert frem i tid lagres som planlagt og føres én gang på det tidspunktet, eller spør deg først om du vil.",
+        "Gjør gjentakende på en transaksjon lager en planlagt transaksjon lik den. Transaksjoner som er ført av en planlagt transaksjon, er merket i listen, og detaljene lenker til den.",
+        "En planlagt transaksjon kan føre transaksjonene selv, eller spørre deg først. Godkjenning kommer i neste oppdatering.",
+      ],
+      nn: [
+        "Planlegg ein transaksjon til seinare, eller la han verte gjenteken med nokre dagars, vekers, månaders eller års mellomrom, til dømes husleiga den 25. Slå på Gjenta eller planlegg i Ny transaksjon: ein transaksjon datert no eller tidlegare vert lagra med ein gong og gjenteken frå neste gong.",
+        "Transaksjonar har ei ny fane, Planlagde, med dei planlagde transaksjonane dine i ord, til dømes «Kvar månad den 25. kl. 08:00», og neste gong. Lag ein med Ny planlagd, og rediger, set på pause eller slett han der, og vel om dei som er på pause eller ferdige, skal visast. Skjemaet viser dei neste gongene medan du endrar det.",
+        "Ein transaksjon datert fram i tid vert lagra som planlagd og ført éin gong på det tidspunktet, eller spør deg først om du vil.",
+        "Gjer gjentakande på ein transaksjon lagar ein planlagd transaksjon lik han. Transaksjonar som er førte av ein planlagd transaksjon, er merkte i lista, og detaljane lenkjer til han.",
+        "Ein planlagd transaksjon kan føre transaksjonane sjølv, eller spørje deg først. Godkjenning kjem i neste oppdatering.",
+      ],
+    },
+  },
+  {
     version: "v1.13.01",
     date: "2026-11-08",
     title: {
