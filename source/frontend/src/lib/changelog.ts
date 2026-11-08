@@ -16,6 +16,35 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.11.00",
+    date: "2026-11-08",
+    title: {
+      en: "Graphs",
+      nb: "Grafer",
+      nn: "Grafar",
+    },
+    changes: {
+      en: [
+        "Stats & reports shows your spending, income or balances over time, as bars or a line. Pick the period (such as the last 30 days, the last 3 cycles, this cycle, the previous year, one specific month or quarter, or your own dates) and whether to show it per day, week, month, cycle and so on.",
+        "Show everything at once, or split it per account or per bucket. The largest get their own colour and the rest add up to Other. Filter on accounts, buckets, tags or counterparty, and show a line as a running total. Lines can be straight or stepped, and the Y axis starts at 0 or fits the values.",
+        "Hover over a bar or point to see the exact amount, and click it to open those transactions. If there's more detail than the graph can draw (such as a year per hour) or than fits the screen, it shows it coarser and says so.",
+        "Save a graph by name to come back to it, or bookmark the page: the settings are in its address.",
+      ],
+      nb: [
+        "Statistikk og rapporter viser utgiftene, inntektene eller saldoene dine over tid, som søyler eller en linje. Velg tidsrommet (for eksempel de siste 30 dagene, de siste 3 periodene, denne perioden, i fjor, en bestemt måned eller et bestemt kvartal, eller egne datoer) og om det skal vises per dag, uke, måned, periode og så videre.",
+        "Vis alt samlet, eller del det opp per konto eller per bøtte. De største får egen farge, og resten legges sammen som Annet. Filtrer på kontoer, bøtter, tagger eller motpart, og vis en linje som løpende sum. Linjer kan være rette eller trinnvise, og Y-aksen starter på 0 eller tilpasses dataene.",
+        "Hold over en søyle eller et punkt for å se det nøyaktige beløpet, og klikk for å åpne transaksjonene. Er det flere detaljer enn grafen kan tegne (for eksempel et år per time) eller enn det er plass til på skjermen, viser den det grovere og sier fra.",
+        "Lagre en graf med et navn for å komme tilbake til den, eller lag et bokmerke: innstillingene ligger i adressen.",
+      ],
+      nn: [
+        "Statistikk og rapportar viser utgiftene, inntektene eller saldoane dine over tid, som søyler eller ei linje. Vel tidsrommet (til dømes dei siste 30 dagane, dei siste 3 periodane, denne perioden, i fjor, ein bestemt månad eller eit bestemt kvartal, eller eigne datoar) og om det skal visast per dag, veke, månad, periode og så vidare.",
+        "Vis alt samla, eller del det opp per konto eller per bøtte. Dei største får eigen farge, og resten vert lagt saman som Anna. Filtrer på kontoar, bøtter, taggar eller motpart, og vis ei linje som løpande sum. Linjer kan vere rette eller trinnvise, og Y-aksen startar på 0 eller vert tilpassa dataa.",
+        "Hald over ei søyle eller eit punkt for å sjå det nøyaktige beløpet, og klikk for å opne transaksjonane. Er det fleire detaljar enn grafen kan teikne (til dømes eit år per time) eller enn det er plass til på skjermen, viser han det grovare og seier frå.",
+        "Lagre ein graf med eit namn for å kome tilbake til han, eller lag eit bokmerke: innstillingane ligg i adressa.",
+      ],
+    },
+  },
+  {
     version: "v1.10.01",
     date: "2026-11-08",
     title: {

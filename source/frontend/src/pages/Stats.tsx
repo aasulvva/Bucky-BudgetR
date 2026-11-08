@@ -1,0 +1,195 @@
+import {
+  Anchor,
+  Button,
+  Drawer,
+  Group,
+  Paper,
+  Stack,
+  Tabs,
+  Text,
+  Title,
+  useMantineTheme,
+} from "@mantine/core";
+import { useMediaQuery } from "@mantine/hooks";
+import { IconAdjustmentsHorizontal } from "@tabler/icons-react";
+import { useState } from "react";
+import { Trans, useTranslation } from "react-i18next";
+import { useLocation, useNavigate, useSearchParams } from "react-router";
+
+import { useAccounts, useBuckets, type Account, type Bucket } from "@/api/accounts";
+import { useCycles, type Cycle } from "@/api/cycles";
+import { useTags } from "@/api/transactions";
+import { useSession } from "@/app/session";
+import { QueryState } from "@/components/QueryState";
+import { GraphControls } from "@/components/stats/GraphControls";
+import { GraphView } from "@/components/stats/GraphView";
+import { SavedGraphs } from "@/components/stats/SavedGraphs";
+import { useClockVersion } from "@/lib/clock";
+import {
+  defaultGraph,
+  graphFromSearch,
+  graphSummary,
+  graphToSearch,
+  type GraphSettings,
+  type SavedGraph,
+} from "@/lib/graphs";
+import { defaultPeriod, parsePeriod, resolvePeriod } from "@/lib/periods";
+
+const REPORTS_PATH = "/stats/reports";
+
+/** Stats & reports (spec §9): graphs now (#122), reports with #125. */
+export default function Stats() {
+  const { t } = useTranslation();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const tab = location.pathname === REPORTS_PATH ? "reports" : "graphs";
+  return (
+    <Stack gap="md">
+      <Title order={2}>{t("nav.items.stats")}</Title>
+      <Tabs
+        value={tab}
+        onChange={(v) => {
+          void navigate(v === "reports" ? REPORTS_PATH : "/stats");
+        }}
+      >
+        <Tabs.List>
+          <Tabs.Tab value="graphs">{t("stats.tabs.graphs")}</Tabs.Tab>
+          <Tabs.Tab value="reports">{t("stats.tabs.reports")}</Tabs.Tab>
+        </Tabs.List>
+      </Tabs>
+      {tab === "graphs" ? <GraphsTab /> : <ReportsTab />}
+    </Stack>
+  );
+}
+
+function ReportsTab() {
+  return (
+    <Text c="dimmed">
+      <Trans
+        i18nKey="stats.reports.comingIn"
+        values={{ issue: 125 }}
+        components={{
+          issue: (
+            <Anchor href="https://github.com/aasulvva/Bucky-BudgetR/issues/125" target="_blank" />
+          ),
+        }}
+      />
+    </Text>
+  );
+}
+
+function GraphsTab() {
+  const cycles = useCycles();
+  const accounts = useAccounts();
+  const buckets = useBuckets();
+  return (
+    <QueryState query={cycles}>
+      {(c) => (
+        <QueryState query={accounts}>
+          {(a) => (
+            <QueryState query={buckets}>
+              {(b) => <Graphs cycles={c} accounts={a} buckets={b} />}
+            </QueryState>
+          )}
+        </QueryState>
+      )}
+    </QueryState>
+  );
+}
+
+function Graphs({
+  cycles,
+  accounts,
+  buckets,
+}: {
+  cycles: Cycle[];
+  accounts: Account[];
+  buckets: Bucket[];
+}) {
+  const { t } = useTranslation();
+  const theme = useMantineTheme();
+  const isDesktop = useMediaQuery(`(min-width: ${theme.breakpoints.sm})`, true);
+  useClockVersion();
+  const [params, setParams] = useSearchParams();
+  const [drawer, setDrawer] = useState(false);
+  const tags = (useTags().data ?? []).map((x) => x.name);
+  const saved = useSession().data?.preferences.saved_graphs ?? [];
+
+  const settings = graphFromSearch(params, defaultGraph(cycles));
+  const period = resolvePeriod(parsePeriod(settings.period) ?? defaultPeriod(cycles), cycles);
+  const selectedId = params.get("saved");
+
+  const show = (s: GraphSettings, savedId: string | null, replace: boolean) => {
+    const next = graphToSearch(s);
+    if (savedId) next.set("saved", savedId);
+    setParams(next, { replace });
+  };
+  const change = (s: GraphSettings) => {
+    show(s, selectedId, true);
+  };
+  const select = (g: SavedGraph | null) => {
+    if (g) show(g.graph, g.id, false);
+    else show(settings, null, true);
+  };
+
+  const controls = (narrow: boolean) => (
+    <GraphControls
+      value={settings}
+      onChange={change}
+      cycles={cycles}
+      accounts={accounts}
+      buckets={buckets}
+      tags={tags}
+      narrow={narrow}
+    />
+  );
+
+  return (
+    <Stack gap="md">
+      <SavedGraphs saved={saved} current={settings} selectedId={selectedId} onSelect={select} />
+      {isDesktop ? (
+        <Paper withBorder p="md">
+          {controls(false)}
+        </Paper>
+      ) : (
+        <Group justify="space-between" wrap="nowrap" gap="xs">
+          <Text size="sm" c="dimmed" data-testid="graph-summary" style={{ flex: 1, minWidth: 0 }}>
+            {graphSummary(settings, cycles)}
+          </Text>
+          <Button
+            variant="default"
+            size="xs"
+            style={{ flexShrink: 0 }}
+            leftSection={<IconAdjustmentsHorizontal size={16} />}
+            onClick={() => {
+              setDrawer(true);
+            }}
+          >
+            {t("stats.graphs.settings")}
+          </Button>
+        </Group>
+      )}
+      <GraphView
+        settings={settings}
+        period={period}
+        cycles={cycles}
+        accounts={accounts}
+        buckets={buckets}
+        height={isDesktop ? 360 : 280}
+      />
+      {!isDesktop && (
+        <Drawer
+          opened={drawer}
+          onClose={() => {
+            setDrawer(false);
+          }}
+          position="bottom"
+          size="90%"
+          title={t("stats.graphs.settings")}
+        >
+          {controls(true)}
+        </Drawer>
+      )}
+    </Stack>
+  );
+}

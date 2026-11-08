@@ -1,7 +1,8 @@
 // The period and resolution a graph, widget or report shows (#120): what the
 // user picks, as a value the URL and settings can keep, and the local dates
-// and UTC moments it covers today. The Stats API (#121) cuts the intervals;
-// this counts them beforehand, so the pickers only offer what fits.
+// and UTC moments it covers today, and the resolutions that make sense for
+// it. The Stats API (#121) cuts the intervals; this counts them beforehand,
+// so a graph can go coarser when they don't fit.
 
 import dayjs, { type Dayjs } from "dayjs";
 
@@ -9,28 +10,69 @@ import { now as clockNow } from "./clock";
 import { addDays, endAtFor, firstDay, lastDay, startAtFor, today, type LocalDate } from "./cycles";
 import { getLocale } from "./locale";
 
-export type LastUnit = "days" | "weeks" | "months";
-export type CalendarUnit = "cycle" | "month" | "quarter" | "half_year" | "year";
+export type LastUnit = "days" | "weeks" | "cycles" | "months" | "quarters" | "half_years" | "years";
+export type SpecificUnit = "day" | "week" | "cycle" | "month" | "quarter" | "half_year" | "year";
+/** The units of This … and Previous …: the same as one specific period's. */
+export type CalendarUnit = SpecificUnit;
 
 export type PeriodChoice =
   | { kind: "last"; unit: LastUnit; count: number }
   | { kind: "current" | "previous"; unit: CalendarUnit }
+  /** One day, week, cycle, month, quarter, half-year or year: `at` is its first day, or the cycle's ID. */
+  | { kind: "specific"; unit: SpecificUnit; at: string }
   | { kind: "custom"; from: LocalDate; to: LocalDate };
 
 export type Resolution = "hour" | "day" | "week" | "month" | "year" | "cycle" | "total";
 
-export const LAST_UNITS: LastUnit[] = ["days", "weeks", "months"];
-export const CALENDAR_UNITS: CalendarUnit[] = ["cycle", "month", "quarter", "half_year", "year"];
+/** The units in the order the pickers list them, shortest first. */
+export const LAST_UNITS: LastUnit[] = [
+  "days",
+  "weeks",
+  "cycles",
+  "months",
+  "quarters",
+  "half_years",
+  "years",
+];
+export const SPECIFIC_UNITS: SpecificUnit[] = [
+  "day",
+  "week",
+  "cycle",
+  "month",
+  "quarter",
+  "half_year",
+  "year",
+];
+export const CALENDAR_UNITS: CalendarUnit[] = SPECIFIC_UNITS;
 export const RESOLUTIONS: Resolution[] = ["hour", "day", "week", "month", "year", "cycle", "total"];
 
 /** The most a "last N" period can count back. */
-export const LAST_MAX: Record<LastUnit, number> = { days: 366, weeks: 104, months: 120 };
+export const LAST_MAX: Record<LastUnit, number> = {
+  days: 366,
+  weeks: 104,
+  cycles: 120,
+  months: 120,
+  quarters: 40,
+  half_years: 20,
+  years: 20,
+};
+/** How many a "last N" period starts with. */
+export const LAST_DEFAULT: Record<LastUnit, number> = {
+  days: 30,
+  weeks: 8,
+  cycles: 3,
+  months: 6,
+  quarters: 4,
+  half_years: 2,
+  years: 3,
+};
 /** The most bars a bar graph shows. */
 export const MAX_BARS = 60;
 /** The most intervals the Stats API returns. */
 export const MAX_POINTS = 1000;
 
 interface CycleTimes {
+  id?: string;
   start_at: string;
   end_at: string;
   state: string;
@@ -79,6 +121,24 @@ export function formatPeriod(choice: PeriodChoice): string {
       return `last-${choice.count}-${choice.unit}`;
     case "custom":
       return `custom-${choice.from}-${choice.to}`;
+    case "specific": {
+      const [y, m] = choice.at.split("-").map(Number);
+      switch (choice.unit) {
+        case "day":
+        case "week":
+        case "cycle":
+          return `${choice.unit}-${choice.at}`;
+        case "month":
+          return `month-${choice.at.slice(0, 7)}`;
+        case "quarter":
+          return `quarter-${String(y)}-q${String(Math.floor(((m ?? 1) - 1) / 3) + 1)}`;
+        case "half_year":
+          return `half_year-${String(y)}-h${(m ?? 1) <= 6 ? "1" : "2"}`;
+        case "year":
+          return `year-${String(y)}`;
+      }
+      break;
+    }
     default:
       return `${choice.kind}-${choice.unit}`;
   }
@@ -87,7 +147,7 @@ export function formatPeriod(choice: PeriodChoice): string {
 /** The choice formatPeriod wrote; null for anything else. */
 export function parsePeriod(s: string | null | undefined): PeriodChoice | null {
   if (!s) return null;
-  const last = /^last-(\d{1,4})-(days|weeks|months)$/.exec(s);
+  const last = /^last-(\d{1,4})-(days|weeks|cycles|months|quarters|half_years|years)$/.exec(s);
   if (last) {
     const unit = last[2] as LastUnit;
     const count = Number(last[1]);
@@ -98,7 +158,30 @@ export function parsePeriod(s: string | null | undefined): PeriodChoice | null {
     const [, from = "", to = ""] = custom;
     return validDate(from) && validDate(to) && from <= to ? { kind: "custom", from, to } : null;
   }
-  const calendar = /^(current|previous)-(cycle|month|quarter|half_year|year)$/.exec(s);
+  const day = /^(day|week)-(\d{4}-\d{2}-\d{2})$/.exec(s);
+  if (day?.[2]) {
+    return validDate(day[2])
+      ? { kind: "specific", unit: day[1] as "day" | "week", at: day[2] }
+      : null;
+  }
+  const cycle = /^cycle-([1-9]\d{11})$/.exec(s);
+  if (cycle?.[1]) return { kind: "specific", unit: "cycle", at: cycle[1] };
+  const month = /^month-(\d{4})-(\d{2})$/.exec(s);
+  if (month) {
+    const at = `${month[1] ?? ""}-${month[2] ?? ""}-01`;
+    return validDate(at) ? { kind: "specific", unit: "month", at } : null;
+  }
+  const part = /^(quarter|half_year)-(\d{4})-(q[1-4]|h[12])$/.exec(s);
+  const which = part?.[3] ?? "";
+  if (part && (part[1] === "quarter") === which.startsWith("q")) {
+    const n = Number(which.slice(1));
+    const first = part[1] === "quarter" ? (n - 1) * 3 + 1 : (n - 1) * 6 + 1;
+    const at = `${part[2] ?? ""}-${String(first).padStart(2, "0")}-01`;
+    return { kind: "specific", unit: part[1] as "quarter" | "half_year", at };
+  }
+  const year = /^year-(\d{4})$/.exec(s);
+  if (year?.[1]) return { kind: "specific", unit: "year", at: `${year[1]}-01-01` };
+  const calendar = /^(current|previous)-(day|week|cycle|month|quarter|half_year|year)$/.exec(s);
   if (calendar) {
     return { kind: calendar[1] as "current" | "previous", unit: calendar[2] as CalendarUnit };
   }
@@ -143,12 +226,39 @@ function span(from: Dayjs, to: LocalDate, toAt: string): Period {
   return { from: f, to, fromAt: startAtFor(f), toAt };
 }
 
+/** The one-period unit a last-N unit counts: days → day. */
+export const LAST_UNIT_OF: Record<LastUnit, SpecificUnit> = {
+  days: "day",
+  weeks: "week",
+  cycles: "cycle",
+  months: "month",
+  quarters: "quarter",
+  half_years: "half_year",
+  years: "year",
+};
+
+type CalendarSpecific = Exclude<SpecificUnit, "cycle">;
+
+/** The first day of the day, week, month, quarter, half-year or year holding `d`. */
+function unitStart(d: Dayjs, unit: CalendarSpecific, locale?: string): Dayjs {
+  return unit === "day" ? d.startOf("day") : startOf(d, unit, locale);
+}
+
+/** `start` moved by `n` days, weeks, months, quarters, half-years or years. */
+function shift(start: Dayjs, unit: CalendarSpecific, n: number): Dayjs {
+  if (unit === "day") return start.add(n, "day");
+  if (unit === "week") return start.add(7 * n, "day");
+  return start.add(MONTHS[unit] * n, "month");
+}
+
 /**
- * The days and moments a choice covers now. Last N and This … run to now;
- * Previous … is the whole period before; Previous cycle is the latest
- * finished one. A custom period ends today at the latest. Null for This
- * cycle without an active cycle, Previous cycle without a finished one, and a
- * custom period that starts in the future.
+ * The days and moments a choice covers now. Last N and This … run to now
+ * (the last N cycles from the start of the Nth latest started cycle);
+ * Previous … is the whole period before (Previous day is yesterday);
+ * Previous cycle is the latest finished one. A specific or custom period
+ * ends today at the latest. Null for This cycle without an active cycle,
+ * Previous cycle without a finished one, the last N cycles without a
+ * started one, and a period that starts in the future.
  */
 export function resolvePeriod(
   choice: PeriodChoice,
@@ -162,10 +272,12 @@ export function resolvePeriod(
   switch (choice.kind) {
     case "last": {
       const n = Math.max(1, Math.min(Math.trunc(choice.count), LAST_MAX[choice.unit])) - 1;
-      if (choice.unit === "days") return span(dayjs(addDays(day, -n)), day, nowAt);
-      if (choice.unit === "weeks")
-        return span(startOf(d, "week", locale).subtract(n, "week"), day, nowAt);
-      return span(d.startOf("month").subtract(n, "month"), day, nowAt);
+      const unit = LAST_UNIT_OF[choice.unit];
+      if (unit !== "cycle") return span(shift(unitStart(d, unit, locale), unit, -n), day, nowAt);
+      // The latest started cycles: the active one (or the last finished) and the n before it.
+      const started = startedCycles(cycles);
+      const first = started.at(-(n + 1)) ?? started[0];
+      return first ? { from: firstDay(first), to: day, fromAt: first.start_at, toAt: nowAt } : null;
     }
     case "current":
       if (choice.unit === "cycle") {
@@ -174,13 +286,10 @@ export function resolvePeriod(
           ? { from: firstDay(active), to: day, fromAt: active.start_at, toAt: nowAt }
           : null;
       }
-      return span(startOf(d, choice.unit), day, nowAt);
+      return span(unitStart(d, choice.unit, locale), day, nowAt);
     case "previous": {
       if (choice.unit === "cycle") {
-        const finished = cycles
-          .filter((c) => c.state === "finished")
-          .sort((a, b) => Date.parse(a.end_at) - Date.parse(b.end_at))
-          .at(-1);
+        const finished = latestFinished(cycles);
         return finished
           ? {
               from: firstDay(finished),
@@ -190,9 +299,24 @@ export function resolvePeriod(
             }
           : null;
       }
-      const start = startOf(d, choice.unit).subtract(MONTHS[choice.unit], "month");
-      const end = start.add(MONTHS[choice.unit], "month").subtract(1, "day").format(FORMAT);
+      const start = shift(unitStart(d, choice.unit, locale), choice.unit, -1);
+      const end = specificEnd(choice.unit, start.format(FORMAT));
       return span(start, end, endAtFor(end));
+    }
+    case "specific": {
+      if (choice.unit === "cycle") {
+        const c = cycles.find((x) => x.id === choice.at);
+        if (!c || c.state === "future") return null;
+        // The active cycle runs to now; a finished one is whole.
+        return c.state === "active"
+          ? { from: firstDay(c), to: day, fromAt: c.start_at, toAt: nowAt }
+          : { from: firstDay(c), to: lastDay(c), fromAt: c.start_at, toAt: c.end_at };
+      }
+      if (choice.at > day) return null;
+      const end = specificEnd(choice.unit, choice.at);
+      return end < day
+        ? span(dayjs(choice.at), end, endAtFor(end))
+        : span(dayjs(choice.at), day, nowAt);
     }
     case "custom": {
       const to = choice.to < day ? choice.to : day;
@@ -200,6 +324,108 @@ export function resolvePeriod(
       return span(dayjs(choice.from), to, to === day ? nowAt : endAtFor(to));
     }
   }
+}
+
+function latestFinished<C extends CycleTimes>(cycles: C[]): C | undefined {
+  return cycles
+    .filter((c) => c.state === "finished")
+    .sort((a, b) => Date.parse(a.end_at) - Date.parse(b.end_at))
+    .at(-1);
+}
+
+/**
+ * The days a choice covers once it's over: This month is the whole month,
+ * the last 3 weeks run to the end of this week, the active cycle to its
+ * last day, custom dates to their last day. Null when it doesn't resolve.
+ */
+export function wholePeriod(
+  choice: PeriodChoice,
+  cycles: CycleTimes[],
+  now = clockNow(),
+  locale = getLocale(),
+): { from: LocalDate; to: LocalDate } | null {
+  const period = resolvePeriod(choice, cycles, now, locale);
+  if (!period) return null;
+  const whole = (to: LocalDate) => ({ from: period.from, to: to > period.to ? to : period.to });
+  switch (choice.kind) {
+    case "last": {
+      const unit = LAST_UNIT_OF[choice.unit];
+      if (unit !== "cycle") {
+        return whole(specificEnd(unit, unitStart(dayjs(today(now)), unit, locale).format(FORMAT)));
+      }
+      const latest = startedCycles(cycles).at(-1);
+      return whole(latest ? lastDay(latest) : period.to);
+    }
+    case "current":
+    case "specific": {
+      if (choice.unit === "cycle") {
+        const c =
+          choice.kind === "specific"
+            ? cycles.find((x) => x.id === choice.at)
+            : cycles.find((x) => x.state === "active");
+        return whole(c ? lastDay(c) : period.to);
+      }
+      return whole(specificEnd(choice.unit, period.from));
+    }
+    case "previous":
+      return whole(period.to);
+    case "custom":
+      return whole(choice.to);
+  }
+}
+
+/** The last day of the day, week, month, quarter, half-year or year starting on `start`. */
+function specificEnd(unit: CalendarSpecific, start: LocalDate): LocalDate {
+  if (unit === "day") return start;
+  if (unit === "week") return addDays(start, 6);
+  return dayjs(start).add(MONTHS[unit], "month").subtract(1, "day").format(FORMAT);
+}
+
+/** The cycles that have started, oldest first. */
+function startedCycles<C extends CycleTimes>(cycles: C[]): C[] {
+  return cycles
+    .filter((c) => c.state !== "future")
+    .sort((a, b) => Date.parse(a.start_at) - Date.parse(b.start_at));
+}
+
+/**
+ * The specific period of a unit that holds `date`: its first day, or for a
+ * cycle the latest one started by then (the first one if none had). Null
+ * for a cycle when none has started.
+ */
+export function specificAt(
+  unit: SpecificUnit,
+  date: LocalDate,
+  cycles: CycleTimes[],
+  locale = getLocale(),
+): PeriodChoice | null {
+  if (unit === "cycle") {
+    const started = startedCycles(cycles);
+    const c = started.filter((x) => firstDay(x) <= date).at(-1) ?? started[0];
+    return c?.id ? { kind: "specific", unit, at: c.id } : null;
+  }
+  const at = unitStart(dayjs(date), unit, locale).format(FORMAT);
+  return { kind: "specific", unit, at };
+}
+
+/**
+ * The specific period before (-1) or after (1) this one; null past the
+ * first or latest started cycle, or when the next one starts after today.
+ */
+export function stepSpecific(
+  choice: Extract<PeriodChoice, { kind: "specific" }>,
+  direction: -1 | 1,
+  cycles: CycleTimes[],
+  now = clockNow(),
+): PeriodChoice | null {
+  if (choice.unit === "cycle") {
+    const started = startedCycles(cycles);
+    const i = started.findIndex((c) => c.id === choice.at);
+    const next = i < 0 ? undefined : started[i + direction];
+    return next?.id ? { ...choice, at: next.id } : null;
+  }
+  const at = shift(dayjs(choice.at), choice.unit, direction).format(FORMAT);
+  return at > today(now) ? null : { ...choice, at };
 }
 
 /** The period to start with: This cycle, or This month without an active cycle. */
@@ -246,16 +472,50 @@ export function intervalCount(
   return count;
 }
 
-/** The resolutions that cut the period into 1 to `max` intervals, finest first. */
-export function fittingResolutions(
-  period: Period,
-  max: number,
+/** The fewest days one interval of a resolution spans; a cycle's is its own length. */
+const RESOLUTION_DAYS: Record<Exclude<Resolution, "cycle" | "total">, number> = {
+  hour: 0,
+  day: 1,
+  week: 7,
+  month: 28,
+  year: 365,
+};
+
+function days(from: LocalDate, to: LocalDate): number {
+  return dayjs(to).diff(dayjs(from), "day") + 1;
+}
+
+/**
+ * The resolutions that make sense for a choice, finest first: those whose
+ * interval is no longer than the whole period (not per month for a week,
+ * but per hour for anything), per cycle when a cycle overlaps it (a cycle
+ * counts as a month at most, so a month offers per cycle and a cycle per
+ * month), and the whole period. Too many intervals to draw is the graph's
+ * problem: it goes coarser and says so. Empty when the choice doesn't resolve.
+ */
+export function applicableResolutions(
+  choice: PeriodChoice,
   cycles: CycleTimes[],
+  now = clockNow(),
   locale = getLocale(),
 ): Resolution[] {
+  const period = resolvePeriod(choice, cycles, now, locale);
+  const whole = wholePeriod(choice, cycles, now, locale);
+  if (!period || !whole) return [];
+  const length = days(whole.from, whole.to);
+  const from = Date.parse(period.fromAt);
+  const to = Date.parse(period.toAt);
+  const overlapping = cycles.filter(
+    (c) => Date.parse(c.end_at) > from && Date.parse(c.start_at) < to,
+  );
   return RESOLUTIONS.filter((r) => {
-    const n = intervalCount(period, r, cycles, locale, max);
-    return n >= 1 && n <= max;
+    if (r === "total") return true;
+    if (r === "cycle") {
+      if (overlapping.length === 0) return false;
+      const shortest = Math.min(...overlapping.map((c) => days(firstDay(c), lastDay(c))));
+      return Math.min(shortest, RESOLUTION_DAYS.month) <= length;
+    }
+    return RESOLUTION_DAYS[r] <= length;
   });
 }
 
@@ -267,25 +527,30 @@ export function coarser(resolution: Resolution): Resolution | null {
 }
 
 /**
- * The resolution to start with for a period: hours up to 2 days, days up to
- * about 2 months, weeks up to about 6 months, months up to 3 years, else
- * years; coarser if that gives more than `max` intervals.
+ * The resolution to start with for a choice, by the whole period's length:
+ * hours up to 2 days, days up to about 2 months, weeks up to about 6
+ * months, months up to 3 years, else years; coarser if that gives more
+ * than `max` intervals now.
  */
 export function defaultResolution(
-  period: Period,
+  choice: PeriodChoice,
+  cycles: CycleTimes[],
   max: number = MAX_POINTS,
-  cycles: CycleTimes[] = [],
+  now = clockNow(),
   locale = getLocale(),
 ): Resolution {
-  const days = dayjs(period.to).diff(dayjs(period.from), "day") + 1;
+  const period = resolvePeriod(choice, cycles, now, locale);
+  const whole = wholePeriod(choice, cycles, now, locale);
+  if (!period || !whole) return "day";
+  const length = days(whole.from, whole.to);
   let r: Resolution =
-    days <= 2
+    length <= 2
       ? "hour"
-      : days <= 62
+      : length <= 62
         ? "day"
-        : days <= 186
+        : length <= 186
           ? "week"
-          : days <= 3 * 366
+          : length <= 3 * 366
             ? "month"
             : "year";
   for (
@@ -300,16 +565,17 @@ export function defaultResolution(
 
 /**
  * The resolution to keep when the period changes: the current one if it
- * still fits, else the period's default.
+ * still makes sense for it, else the period's default.
  */
 export function keptResolution(
   resolution: Resolution,
-  period: Period,
-  max: number,
+  choice: PeriodChoice,
   cycles: CycleTimes[],
+  max: number = MAX_POINTS,
+  now = clockNow(),
   locale = getLocale(),
 ): Resolution {
-  return fittingResolutions(period, max, cycles, locale).includes(resolution)
+  return applicableResolutions(choice, cycles, now, locale).includes(resolution)
     ? resolution
-    : defaultResolution(period, max, cycles, locale);
+    : defaultResolution(choice, cycles, max, now, locale);
 }

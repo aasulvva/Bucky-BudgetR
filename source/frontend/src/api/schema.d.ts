@@ -1219,6 +1219,13 @@ export interface components {
             whats_new_seen?: string | null;
             /** @description Whether What's New pops up after an update. Null means true. */
             whats_new_popup?: boolean | null;
+            /**
+             * @description The graphs saved on Stats & reports (#122), in the order the
+             *     user sees them. Each id is unique and each name is not blank
+             *     (400 `invalid_request` otherwise). Replaced as a whole on update.
+             *     Null means none.
+             */
+            saved_graphs?: components["schemas"]["SavedGraph"][] | null;
         };
         /**
          * @description The Dashboard's layouts. When `widgets` is set, it is the desktop
@@ -1603,6 +1610,51 @@ export interface components {
             transfers_in: components["schemas"]["Amount"];
             /** @description Transfers out of the account (TRF), as a positive amount. */
             transfers_out: components["schemas"]["Amount"];
+        };
+        SavedGraph: {
+            id: string;
+            name: string;
+            graph: components["schemas"]["GraphSettings"];
+        };
+        /**
+         * @description A line or bar graph on Stats & reports (#122): what it sums over
+         *     which period, and how it's drawn. The fields after `resolution`
+         *     match the Stats API's parameters and are left out when not used.
+         */
+        GraphSettings: {
+            /** @enum {string} */
+            kind: "line" | "bar";
+            /** @enum {string} */
+            metric: "spending" | "income" | "balance";
+            /**
+             * @description The period, relative to when the graph is shown:
+             *     `last-<n>-days|weeks|cycles|months|quarters|half_years|years`,
+             *     `current-<unit>` or `previous-<unit>` (unit `day`, `week`,
+             *     `cycle`, `month`, `quarter`, `half_year` or `year`), one specific period (`day-<date>`, `week-<first
+             *     day>`, `month-<yyyy-mm>`, `quarter-<yyyy>-q<1-4>`,
+             *     `half_year-<yyyy>-h<1-2>`, `year-<yyyy>` or `cycle-<cycle ID>`),
+             *     or `custom-<first day>-<last day>`.
+             * @example last-30-days
+             */
+            period: string;
+            /** @enum {string} */
+            resolution: "hour" | "day" | "week" | "month" | "year" | "cycle" | "total";
+            /** @enum {string} */
+            group_by?: "none" | "account" | "bucket";
+            account_ids?: components["schemas"]["AccountId"][];
+            bucket_ids?: components["schemas"]["BucketId"][];
+            tags?: string[];
+            counterparty?: string;
+            /** @description Lines only. Running totals from the start of the period. */
+            cumulative?: boolean;
+            /** @description Bars only. Series side by side instead of stacked. */
+            side_by_side?: boolean;
+            /** @description Lines only. Each interval's value is held until the next, instead of a straight line between points. */
+            stepped?: boolean;
+            /** @description Fit the Y axis to the values instead of including 0 (the default). */
+            fit_y_axis?: boolean;
+            /** @description How many series get their own colour (at most 8, the graph palette); the rest add up to Other. 5 by default. */
+            top?: number;
         };
         /** @description A period cut into intervals, and one value per interval in each series. */
         StatsSeries: {

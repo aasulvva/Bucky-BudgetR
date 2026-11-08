@@ -863,49 +863,99 @@
   "stats": {
     "period": {
       "label": "Tidsrom",
-      "groups": {
-        "last": "Fram til i dag",
-        "current": "Så langt",
-        "previous": "Avslutta",
-        "custom": "Eigendefinert"
-      },
       "options": {
         "last_days": "Dei siste dagane",
         "last_weeks": "Dei siste vekene",
         "last_months": "Dei siste månadene",
+        "current_day": "I dag",
+        "current_week": "Denne veka",
         "current_cycle": "Denne perioden",
         "current_month": "Denne månaden",
         "current_quarter": "Dette kvartalet",
         "current_half_year": "Dette halvåret",
         "current_year": "I år",
+        "previous_day": "I går",
+        "previous_week": "Førre veke",
         "previous_cycle": "Førre periode",
         "previous_month": "Førre månad",
         "previous_quarter": "Førre kvartal",
         "previous_half_year": "Førre halvår",
         "previous_year": "I fjor",
-        "custom": "Eigne datoar"
+        "custom": "Eigne datoar",
+        "last_cycles": "Dei siste periodane",
+        "last_years": "Dei siste åra"
       },
       "count": {
         "days": "Tal på dagar",
         "weeks": "Tal på veker",
-        "months": "Tal på månader"
+        "cycles": "Tal på periodar",
+        "months": "Tal på månader",
+        "quarters": "Tal på kvartal",
+        "half_years": "Tal på halvår",
+        "years": "Tal på år"
       },
       "countHint": {
         "days": "I dag er teke med.",
         "weeks": "Denne veka er teken med.",
-        "months": "Denne månaden er teken med."
+        "cycles": "Den siste perioden er teken med.",
+        "months": "Denne månaden er teken med.",
+        "quarters": "Dette kvartalet er teke med.",
+        "half_years": "Dette halvåret er teke med.",
+        "years": "I år er teke med."
       },
       "last": {
         "days_one": "I dag",
         "days_other": "Siste {{count}} dagar",
         "weeks_one": "Denne veka",
         "weeks_other": "Siste {{count}} veker",
+        "cycles_one": "Denne perioden",
+        "cycles_other": "Siste {{count}} periodar",
         "months_one": "Denne månaden",
-        "months_other": "Siste {{count}} månader"
+        "months_other": "Siste {{count}} månader",
+        "quarters_one": "Dette kvartalet",
+        "quarters_other": "Siste {{count}} kvartal",
+        "half_years_one": "Dette halvåret",
+        "half_years_other": "Siste {{count}} halvår",
+        "years_one": "I år",
+        "years_other": "Siste {{count}} år"
       },
       "dates": "Første og siste dag",
       "noActiveCycle": "Det er ingen aktiv periode.",
-      "noFinishedCycle": "Ingen periode er avslutta enno."
+      "noFinishedCycle": "Ingen periode er avslutta enno.",
+      "noCycle": "Det er ingen periode enno.",
+      "kinds": {
+        "last": "Siste",
+        "current": "Inneverande",
+        "previous": "Førre",
+        "specific": "Bestemt",
+        "custom": "Eigne datoar"
+      },
+      "unit": "Eining",
+      "units": {
+        "day": "Dag",
+        "week": "Veke",
+        "cycle": "Periode",
+        "month": "Månad",
+        "quarter": "Kvartal",
+        "half_year": "Halvår",
+        "year": "År"
+      },
+      "unitsPlural": {
+        "days": "Dagar",
+        "weeks": "Veker",
+        "cycles": "Periodar",
+        "months": "Månader",
+        "quarters": "Kvartal",
+        "half_years": "Halvår",
+        "years": "År"
+      },
+      "quarterOf": "{{n}}. kvartal {{year}}",
+      "halfOf": "{{n}}. halvår {{year}}",
+      "quarterShort": "{{n}}. kvartal",
+      "halfShort": "{{n}}. halvår",
+      "cycleGone": "Ein sletta periode",
+      "before": "Gå bakover",
+      "after": "Gå framover"
     },
     "resolution": {
       "label": "Vis per",
@@ -918,6 +968,82 @@
         "cycle": "Periode",
         "total": "Heile tidsrommet"
       }
+    },
+    "tabs": {
+      "graphs": "Grafar",
+      "reports": "Rapportar"
+    },
+    "reports": {
+      "comingIn": "Rapportar kjem i <issue>#{{issue}}</issue>: modular, samanlikningar, malar og PDF-eksport."
+    },
+    "graphs": {
+      "settings": "Grafinnstillingar",
+      "kind": "Graf",
+      "kinds": {
+        "bar": "Søyler",
+        "line": "Linje"
+      },
+      "metric": "Vis",
+      "metrics": {
+        "spending": "Utgifter",
+        "income": "Inntekter",
+        "balance": "Saldo"
+      },
+      "groupBy": "Del opp",
+      "groups": {
+        "none": "Samla",
+        "account": "Per konto",
+        "bucket": "Per bøtte"
+      },
+      "top": "Tal på seriar",
+      "topHint": "Dei største får eigen farge, opptil {{max}}; resten vert lagt saman som Anna.",
+      "bars": "Søyler",
+      "stacked": "Stabla",
+      "sideBySide": "Side om side",
+      "cumulative": "Løpande sum",
+      "cumulativeHint": "Summerer frå starten av tidsrommet.",
+      "accounts": "Kontoar",
+      "allAccounts": "Alle kontoar",
+      "accountsHint": "Med éin konto tel overføringar inn og ut som inntekter og utgifter.",
+      "buckets": "Bøtter",
+      "allBuckets": "Alle bøtter",
+      "tags": "Taggar",
+      "anyTag": "Alle taggar",
+      "counterparty": "Motpart inneheld",
+      "total": "Totalt",
+      "noBucket": "Inga bøtte",
+      "other": "Anna",
+      "noPeriod": "Dette tidsrommet har ingen datoar enno. Vel eit anna.",
+      "empty": "Ingenting å vise for dette tidsrommet.",
+      "chartLabel": "Graf",
+      "coarsened": "Vist per {{resolution}}: skjermen er for smal for vald oppløysing.",
+      "tooManyBars": "Vist per {{resolution}}: grafen viser høgst {{max}} søyler.",
+      "tooManyPoints": "Vist per {{resolution}}: grafen viser høgst {{max}} punkt.",
+      "otherNote_one": "Anna: {{count}} serie til.",
+      "otherNote_other": "Anna: {{count}} seriar til.",
+      "leftOut_one": "{{count}} konto i ein annan valuta er ikkje teken med.",
+      "leftOut_other": "{{count}} kontoar i andre valutaer er ikkje tekne med.",
+      "lineStyle": "Linje",
+      "straight": "Rett",
+      "stepped": "Trinnvis",
+      "yAxis": "Y-akse",
+      "includeZero": "Ta med 0",
+      "fit": "Tilpass til data"
+    },
+    "saved": {
+      "label": "Lagra grafar",
+      "none": "Ingen lagra enno",
+      "pick": "Vel ein lagra graf",
+      "save": "Lagre graf…",
+      "saveAs": "Lagre som ny…",
+      "more": "Meir",
+      "rename": "Gje nytt namn",
+      "unsaved": "Ulagra endringar",
+      "saveAsTitle": "Lagre graf",
+      "renameTitle": "Gje grafen nytt namn",
+      "deleteTitle": "Slett graf",
+      "deleteText": "Slette den lagra grafen «{{name}}»? Innstillingane vert ståande på skjermen.",
+      "name": "Namn"
     }
   },
   "admin": {

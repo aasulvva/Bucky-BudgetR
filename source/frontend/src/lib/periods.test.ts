@@ -1,11 +1,12 @@
+import type { Cycle } from "@/api/cycles";
 import { cycle } from "@/test/fixtures";
 
 import { endAtFor, startAtFor } from "./cycles";
 import {
+  applicableResolutions,
   coarser,
   defaultPeriod,
   defaultResolution,
-  fittingResolutions,
   formatPeriod,
   intervalCount,
   keptResolution,
@@ -14,8 +15,12 @@ import {
   parsePeriod,
   parseResolution,
   resolvePeriod,
+  specificAt,
+  stepSpecific,
   type Period,
   type PeriodChoice,
+  type Resolution,
+  type SpecificUnit,
 } from "./periods";
 
 // Wednesday 11 November 2026, in the afternoon (local time: the tests run in
@@ -36,13 +41,38 @@ describe("formatPeriod and parsePeriod", () => {
       { kind: "last", unit: "days", count: 30 },
       { kind: "last", unit: "weeks", count: 104 },
       { kind: "last", unit: "months", count: 1 },
+      { kind: "last", unit: "cycles", count: 3 },
+      { kind: "last", unit: "quarters", count: 40 },
+      { kind: "last", unit: "half_years", count: 2 },
+      { kind: "last", unit: "years", count: 20 },
+      { kind: "current", unit: "day" },
+      { kind: "current", unit: "week" },
       { kind: "current", unit: "cycle" },
+      { kind: "previous", unit: "day" },
+      { kind: "previous", unit: "week" },
       { kind: "current", unit: "half_year" },
       { kind: "previous", unit: "year" },
       { kind: "custom", from: "2026-01-01", to: "2026-03-31" },
+      { kind: "specific", unit: "day", at: "2026-11-08" },
+      { kind: "specific", unit: "week", at: "2026-11-02" },
+      { kind: "specific", unit: "cycle", at: "100001000001" },
+      { kind: "specific", unit: "month", at: "2026-11-01" },
+      { kind: "specific", unit: "quarter", at: "2026-10-01" },
+      { kind: "specific", unit: "half_year", at: "2026-07-01" },
+      { kind: "specific", unit: "year", at: "2026-01-01" },
     ];
     for (const c of choices) expect(parsePeriod(formatPeriod(c))).toEqual(c);
     expect(formatPeriod({ kind: "last", unit: "days", count: 30 })).toBe("last-30-days");
+    expect(formatPeriod({ kind: "specific", unit: "month", at: "2026-11-01" })).toBe(
+      "month-2026-11",
+    );
+    expect(formatPeriod({ kind: "specific", unit: "quarter", at: "2026-10-01" })).toBe(
+      "quarter-2026-q4",
+    );
+    expect(formatPeriod({ kind: "specific", unit: "half_year", at: "2026-01-01" })).toBe(
+      "half_year-2026-h1",
+    );
+    expect(formatPeriod({ kind: "specific", unit: "year", at: "2026-01-01" })).toBe("year-2026");
     expect(formatPeriod({ kind: "custom", from: "2026-01-01", to: "2026-03-31" })).toBe(
       "custom-2026-01-01-2026-03-31",
     );
@@ -55,12 +85,22 @@ describe("formatPeriod and parsePeriod", () => {
       "last-0-days",
       "last-367-days",
       "last-105-weeks",
-      "last-3-years",
-      "current-week",
+      "last-21-years",
+      "last-41-quarters",
+      "last-21-half_years",
+      "last-3-decades",
+      "current-decade",
       "previous-",
       "custom-2026-02-30-2026-03-01",
       "custom-2026-03-02-2026-03-01",
       "custom-2026-1-1-2026-03-01",
+      "day-2026-02-30",
+      "month-2026-13",
+      "quarter-2026-q5",
+      "quarter-2026-h1",
+      "half_year-2026-q1",
+      "cycle-12",
+      "year-26",
     ]) {
       expect(parsePeriod(s)).toBeNull();
     }
@@ -85,6 +125,75 @@ describe("resolvePeriod", () => {
     expect(dates(resolved({ kind: "last", unit: "months", count: 3 }))).toEqual({
       from: "2026-09-01",
       to: "2026-11-11",
+    });
+  });
+
+  it("counts the last years and the latest started cycles back", () => {
+    expect(dates(resolved({ kind: "last", unit: "years", count: 3 }))).toEqual({
+      from: "2024-01-01",
+      to: "2026-11-11",
+    });
+    const c = (id: string, from: string, to: string, state: string) =>
+      cycle({ id, start_at: startAtFor(from), end_at: endAtFor(to), state: state as "active" });
+    const cycles = [
+      c("4", "2026-12-01", "2026-12-31", "future"),
+      c("3", "2026-11-01", "2026-11-30", "active"),
+      c("1", "2026-09-01", "2026-09-30", "finished"),
+      c("2", "2026-10-01", "2026-10-31", "finished"),
+    ];
+    const last = (count: number) =>
+      resolvePeriod({ kind: "last", unit: "cycles", count }, cycles, now);
+    expect(last(1)).toEqual({
+      from: "2026-11-01",
+      to: "2026-11-11",
+      fromAt: startAtFor("2026-11-01"),
+      toAt: now.toISOString(),
+    });
+    expect(last(2)?.from).toBe("2026-10-01");
+    // More than there are: from the first one.
+    expect(last(10)?.from).toBe("2026-09-01");
+    expect(resolvePeriod({ kind: "last", unit: "cycles", count: 3 }, [], now)).toBeNull();
+  });
+
+  it("counts the last quarters and half-years back from this one", () => {
+    expect(dates(resolved({ kind: "last", unit: "quarters", count: 2 }))).toEqual({
+      from: "2026-07-01",
+      to: "2026-11-11",
+    });
+    expect(dates(resolved({ kind: "last", unit: "half_years", count: 3 }))).toEqual({
+      from: "2025-07-01",
+      to: "2026-11-11",
+    });
+  });
+
+  it("runs today and this week to now, and gives yesterday and the previous week whole", () => {
+    expect(resolved({ kind: "current", unit: "day" })).toEqual({
+      from: "2026-11-11",
+      to: "2026-11-11",
+      fromAt: startAtFor("2026-11-11"),
+      toAt: now.toISOString(),
+    });
+    expect(dates(resolved({ kind: "current", unit: "week" }, now, "nb-NO"))).toEqual({
+      from: "2026-11-09",
+      to: "2026-11-11",
+    });
+    expect(resolved({ kind: "previous", unit: "day" })).toEqual({
+      from: "2026-11-10",
+      to: "2026-11-10",
+      fromAt: startAtFor("2026-11-10"),
+      toAt: endAtFor("2026-11-10"),
+    });
+    expect(dates(resolved({ kind: "previous", unit: "week" }, now, "nb-NO"))).toEqual({
+      from: "2026-11-02",
+      to: "2026-11-08",
+    });
+    expect(dates(resolved({ kind: "previous", unit: "week" }, now, "en-US"))).toEqual({
+      from: "2026-11-01",
+      to: "2026-11-07",
+    });
+    expect(dates(resolved({ kind: "previous", unit: "day" }, new Date(2027, 0, 1, 9)))).toEqual({
+      from: "2026-12-31",
+      to: "2026-12-31",
     });
   });
 
@@ -199,6 +308,89 @@ describe("resolvePeriod", () => {
   });
 });
 
+describe("specific periods", () => {
+  const sep = cycle({
+    id: "100001000001",
+    state: "finished",
+    start_at: startAtFor("2026-09-01"),
+    end_at: endAtFor("2026-09-30"),
+  });
+  const nov = cycle({
+    id: "100001000002",
+    state: "active",
+    start_at: startAtFor("2026-11-01"),
+    end_at: endAtFor("2026-11-30"),
+  });
+  const dec = cycle({
+    id: "100001000003",
+    state: "future",
+    start_at: startAtFor("2026-12-01"),
+    end_at: endAtFor("2026-12-31"),
+  });
+  const cycles = [nov, dec, sep];
+  const specific = (unit: SpecificUnit, at: string) => ({ kind: "specific" as const, unit, at });
+
+  it("cover their whole period, up to now for the current one", () => {
+    expect(dates(resolvePeriod(specific("day", "2026-11-08"), [], now))).toEqual({
+      from: "2026-11-08",
+      to: "2026-11-08",
+    });
+    expect(resolvePeriod(specific("week", "2026-11-02"), [], now)?.toAt).toBe(
+      endAtFor("2026-11-08"),
+    );
+    expect(dates(resolvePeriod(specific("quarter", "2026-07-01"), [], now))).toEqual({
+      from: "2026-07-01",
+      to: "2026-09-30",
+    });
+    expect(resolvePeriod(specific("month", "2026-11-01"), [], now)).toEqual({
+      from: "2026-11-01",
+      to: "2026-11-11",
+      fromAt: startAtFor("2026-11-01"),
+      toAt: now.toISOString(),
+    });
+    expect(resolvePeriod(specific("year", "2027-01-01"), [], now)).toBeNull();
+  });
+
+  it("cover a cycle by its ID, the active one up to now", () => {
+    expect(resolvePeriod(specific("cycle", sep.id), cycles, now)).toEqual({
+      from: "2026-09-01",
+      to: "2026-09-30",
+      fromAt: sep.start_at,
+      toAt: sep.end_at,
+    });
+    expect(resolvePeriod(specific("cycle", nov.id), cycles, now)?.toAt).toBe(now.toISOString());
+    expect(resolvePeriod(specific("cycle", dec.id), cycles, now)).toBeNull();
+    expect(resolvePeriod(specific("cycle", "999999999999"), cycles, now)).toBeNull();
+  });
+
+  it("find the one holding a date", () => {
+    expect(specificAt("week", "2026-11-11", [], "nb-NO")).toEqual(specific("week", "2026-11-09"));
+    expect(specificAt("week", "2026-11-11", [], "en-US")).toEqual(specific("week", "2026-11-08"));
+    expect(specificAt("half_year", "2026-11-11", [])).toEqual(specific("half_year", "2026-07-01"));
+    expect(specificAt("cycle", "2026-10-15", cycles)).toEqual(specific("cycle", sep.id));
+    expect(specificAt("cycle", "2026-11-11", cycles)).toEqual(specific("cycle", nov.id));
+    expect(specificAt("cycle", "2026-11-11", [])).toBeNull();
+  });
+
+  it("step to the one before or after, not past today or the started cycles", () => {
+    expect(stepSpecific(specific("month", "2026-10-01"), 1, [], now)).toEqual(
+      specific("month", "2026-11-01"),
+    );
+    expect(stepSpecific(specific("month", "2026-11-01"), 1, [], now)).toBeNull();
+    expect(stepSpecific(specific("week", "2026-11-02"), -1, [], now)).toEqual(
+      specific("week", "2026-10-26"),
+    );
+    expect(stepSpecific(specific("quarter", "2026-01-01"), -1, [], now)).toEqual(
+      specific("quarter", "2025-10-01"),
+    );
+    expect(stepSpecific(specific("cycle", sep.id), 1, cycles, now)).toEqual(
+      specific("cycle", nov.id),
+    );
+    expect(stepSpecific(specific("cycle", nov.id), 1, cycles, now)).toBeNull();
+    expect(stepSpecific(specific("cycle", sep.id), -1, cycles, now)).toBeNull();
+  });
+});
+
 describe("intervalCount", () => {
   const october = resolved({ kind: "previous", unit: "month" });
   const year2025 = resolved({ kind: "previous", unit: "year" });
@@ -244,38 +436,62 @@ describe("intervalCount", () => {
 });
 
 describe("resolutions", () => {
-  const year2025 = resolved({ kind: "previous", unit: "year" });
+  const year2025: PeriodChoice = { kind: "previous", unit: "year" };
+  const offered = (choice: PeriodChoice, cycles: Cycle[] = []) =>
+    applicableResolutions(choice, cycles, now, "nb-NO");
 
-  it("offer only those that fit", () => {
-    expect(fittingResolutions(year2025, MAX_BARS, [], "nb-NO")).toEqual([
+  it("offer every one no longer than the period, per hour always", () => {
+    expect(offered(year2025)).toEqual(["hour", "day", "week", "month", "year", "total"]);
+    expect(offered({ kind: "current", unit: "day" })).toEqual(["hour", "day", "total"]);
+    // The whole week counts, not the days of it so far.
+    expect(offered({ kind: "current", unit: "week" })).toEqual(["hour", "day", "week", "total"]);
+    expect(offered({ kind: "last", unit: "weeks", count: 3 })).toEqual([
+      "hour",
+      "day",
       "week",
-      "month",
-      "year",
       "total",
     ]);
-    expect(fittingResolutions(year2025, MAX_POINTS, [cycle()], "nb-NO")).toEqual([
+    expect(offered({ kind: "current", unit: "month" })).toEqual([
+      "hour",
       "day",
       "week",
       "month",
-      "year",
       "total",
     ]);
+    expect(offered({ kind: "custom", from: "2026-01-01", to: "2026-12-30" })).not.toContain("year");
+    expect(offered({ kind: "current", unit: "cycle" })).toEqual([]);
+  });
+
+  it("offer per cycle when one overlaps, counting a cycle as a month at most", () => {
     const thisCycle = [
       cycle({ start_at: startAtFor("2025-12-15"), end_at: endAtFor("2026-01-14") }),
     ];
-    expect(fittingResolutions(year2025, MAX_BARS, thisCycle, "nb-NO")).toContain("cycle");
+    expect(offered(year2025, thisCycle)).toContain("cycle");
+    const active = [cycle({ start_at: startAtFor("2026-11-01"), end_at: endAtFor("2026-11-30") })];
+    expect(offered({ kind: "current", unit: "cycle" }, active)).toEqual([
+      "hour",
+      "day",
+      "week",
+      "month",
+      "cycle",
+      "total",
+    ]);
+    expect(offered({ kind: "current", unit: "month" }, active)).toContain("cycle");
+    expect(offered({ kind: "current", unit: "week" }, active)).not.toContain("cycle");
   });
 
-  it("start from the period's length", () => {
-    expect(defaultResolution(resolved({ kind: "last", unit: "days", count: 2 }))).toBe("hour");
-    expect(defaultResolution(resolved({ kind: "last", unit: "days", count: 30 }))).toBe("day");
-    expect(defaultResolution(resolved({ kind: "previous", unit: "quarter" }))).toBe("week");
-    expect(defaultResolution(year2025)).toBe("month");
-    expect(
-      defaultResolution(resolved({ kind: "custom", from: "2020-01-01", to: "2026-11-11" })),
-    ).toBe("year");
+  it("start from the whole period's length", () => {
+    const start = (choice: PeriodChoice, max?: number) =>
+      defaultResolution(choice, [], max, now, "nb-NO");
+    expect(start({ kind: "last", unit: "days", count: 2 })).toBe("hour");
+    expect(start({ kind: "last", unit: "days", count: 30 })).toBe("day");
+    expect(start({ kind: "current", unit: "week" })).toBe("day");
+    expect(start({ kind: "previous", unit: "quarter" })).toBe("week");
+    expect(start(year2025)).toBe("month");
+    expect(start({ kind: "current", unit: "year" })).toBe("month");
+    expect(start({ kind: "custom", from: "2020-01-01", to: "2026-11-11" })).toBe("year");
     // Today has 16 hours so far: they don't fit in 10 bars.
-    expect(defaultResolution(resolved({ kind: "last", unit: "days", count: 1 }), 10)).toBe("day");
+    expect(start({ kind: "last", unit: "days", count: 1 }, 10)).toBe("day");
   });
 
   it("go coarser one step at a time", () => {
@@ -287,10 +503,14 @@ describe("resolutions", () => {
     expect(coarser("total")).toBeNull();
   });
 
-  it("keep the current one while it fits", () => {
-    const month = resolved({ kind: "last", unit: "days", count: 30 });
-    expect(keptResolution("week", month, MAX_BARS, [])).toBe("week");
-    expect(keptResolution("day", year2025, MAX_BARS, [])).toBe("month");
-    expect(keptResolution("cycle", year2025, MAX_BARS, [])).toBe("month");
+  it("keep the current one while it makes sense for the period", () => {
+    const kept = (r: Resolution, choice: PeriodChoice) =>
+      keptResolution(r, choice, [], MAX_BARS, now, "nb-NO");
+    const month: PeriodChoice = { kind: "last", unit: "days", count: 30 };
+    expect(kept("week", month)).toBe("week");
+    expect(kept("hour", year2025)).toBe("hour");
+    expect(kept("year", month)).toBe("day");
+    expect(kept("cycle", year2025)).toBe("month");
+    expect(kept("month", { kind: "current", unit: "week" })).toBe("day");
   });
 });

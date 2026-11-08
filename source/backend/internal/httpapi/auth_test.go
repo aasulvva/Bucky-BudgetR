@@ -401,6 +401,14 @@ func TestPreferences(t *testing.T) {
 	if w := patch(`{"dashboard":null}`); strings.TrimSpace(w.Body.String()) != `{}` {
 		t.Errorf("dashboard reset: %d %s", w.Code, w.Body)
 	}
+	// Saved graphs (#122) are kept as given, and null removes them.
+	graphs := `{"saved_graphs":[{"graph":{"account_ids":["1234"],"group_by":"bucket","kind":"bar","metric":"spending","period":"last-4-quarters","resolution":"day","tags":["food"],"top":5},"id":"g-1","name":"Food"},{"graph":{"fit_y_axis":true,"kind":"line","metric":"balance","period":"last-3-cycles","resolution":"week","stepped":true},"id":"g-2","name":"Balance"}]}`
+	if w := patch(graphs); w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != graphs {
+		t.Errorf("saved graphs: %d %s", w.Code, w.Body)
+	}
+	if w := patch(`{"saved_graphs":null}`); strings.TrimSpace(w.Body.String()) != `{}` {
+		t.Errorf("saved graphs reset: %d %s", w.Code, w.Body)
+	}
 
 	for _, body := range []string{
 		`{"theme":"dark"}`, `{"locale":"not a locale!"}`, `{"locale":42}`, `{"language":"de"}`, `[]`,
@@ -429,6 +437,13 @@ func TestPreferences(t *testing.T) {
 		`{"dashboard":{"widgets":[{"id":"a","type":"cycle","width":"half","in_out":{"figures":["income"],"period":"month"}}]}}`,
 		`{"dashboard":{"widgets":[{"id":"a","type":"health","width":"half","title":""}]}}`,
 		`{"dashboard":{"widgets":[{"id":"a","type":"health","width":"half","title":"` + strings.Repeat("x", 41) + `"}]}}`,
+		`{"saved_graphs":[{"id":"a","name":"A","graph":{"kind":"bar","metric":"spending","period":"current-month","resolution":"day"}},{"id":"a","name":"B","graph":{"kind":"bar","metric":"spending","period":"current-month","resolution":"day"}}]}`,
+		`{"saved_graphs":[{"id":"a","name":"  ","graph":{"kind":"bar","metric":"spending","period":"current-month","resolution":"day"}}]}`,
+		`{"saved_graphs":[{"id":"a","name":"A","graph":{"kind":"pie","metric":"spending","period":"current-month","resolution":"day"}}]}`,
+		`{"saved_graphs":[{"id":"a","name":"A","graph":{"kind":"bar","metric":"spending","period":"current-decade","resolution":"day"}}]}`,
+		`{"saved_graphs":[{"id":"a","name":"A","graph":{"kind":"bar","metric":"spending","period":"current-month","resolution":"day","top":9}}]}`,
+		`{"saved_graphs":[{"id":"a","name":"A","graph":{"kind":"bar","metric":"spending","period":"current-month","resolution":"day","colour":"red"}}]}`,
+		`{"saved_graphs":[{"id":"a","name":"A"}]}`,
 	} {
 		w := patch(body)
 		if w.Code != http.StatusBadRequest || deref(decodeProblem(t, w).Code) != "invalid_request" {

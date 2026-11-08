@@ -863,49 +863,99 @@
   "stats": {
     "period": {
       "label": "Period",
-      "groups": {
-        "last": "Up to today",
-        "current": "So far",
-        "previous": "Finished",
-        "custom": "Custom"
-      },
       "options": {
         "last_days": "The last few days",
         "last_weeks": "The last few weeks",
         "last_months": "The last few months",
+        "current_day": "Today",
+        "current_week": "This week",
         "current_cycle": "This cycle",
         "current_month": "This month",
         "current_quarter": "This quarter",
         "current_half_year": "This half-year",
         "current_year": "This year",
+        "previous_day": "Yesterday",
+        "previous_week": "Previous week",
         "previous_cycle": "Previous cycle",
         "previous_month": "Previous month",
         "previous_quarter": "Previous quarter",
         "previous_half_year": "Previous half-year",
         "previous_year": "Previous year",
-        "custom": "Custom dates"
+        "custom": "Custom dates",
+        "last_cycles": "The last few cycles",
+        "last_years": "The last few years"
       },
       "count": {
         "days": "Number of days",
         "weeks": "Number of weeks",
-        "months": "Number of months"
+        "cycles": "Number of cycles",
+        "months": "Number of months",
+        "quarters": "Number of quarters",
+        "half_years": "Number of half-years",
+        "years": "Number of years"
       },
       "countHint": {
         "days": "Today included.",
         "weeks": "This week included.",
-        "months": "This month included."
+        "cycles": "The latest cycle included.",
+        "months": "This month included.",
+        "quarters": "This quarter included.",
+        "half_years": "This half-year included.",
+        "years": "This year included."
       },
       "last": {
         "days_one": "Today",
         "days_other": "Last {{count}} days",
         "weeks_one": "This week",
         "weeks_other": "Last {{count}} weeks",
+        "cycles_one": "This cycle",
+        "cycles_other": "Last {{count}} cycles",
         "months_one": "This month",
-        "months_other": "Last {{count}} months"
+        "months_other": "Last {{count}} months",
+        "quarters_one": "This quarter",
+        "quarters_other": "Last {{count}} quarters",
+        "half_years_one": "This half-year",
+        "half_years_other": "Last {{count}} half-years",
+        "years_one": "This year",
+        "years_other": "Last {{count}} years"
       },
       "dates": "First and last day",
       "noActiveCycle": "There's no active cycle.",
-      "noFinishedCycle": "No cycle has finished yet."
+      "noFinishedCycle": "No cycle has finished yet.",
+      "noCycle": "There's no cycle yet.",
+      "kinds": {
+        "last": "Last",
+        "current": "This",
+        "previous": "Previous",
+        "specific": "Specific",
+        "custom": "Custom dates"
+      },
+      "unit": "Unit",
+      "units": {
+        "day": "Day",
+        "week": "Week",
+        "cycle": "Cycle",
+        "month": "Month",
+        "quarter": "Quarter",
+        "half_year": "Half-year",
+        "year": "Year"
+      },
+      "unitsPlural": {
+        "days": "Days",
+        "weeks": "Weeks",
+        "cycles": "Cycles",
+        "months": "Months",
+        "quarters": "Quarters",
+        "half_years": "Half-years",
+        "years": "Years"
+      },
+      "quarterOf": "Q{{n}} {{year}}",
+      "halfOf": "H{{n}} {{year}}",
+      "quarterShort": "Q{{n}}",
+      "halfShort": "H{{n}}",
+      "cycleGone": "A deleted cycle",
+      "before": "Step back",
+      "after": "Step forward"
     },
     "resolution": {
       "label": "Show per",
@@ -918,6 +968,82 @@
         "cycle": "Cycle",
         "total": "Whole period"
       }
+    },
+    "tabs": {
+      "graphs": "Graphs",
+      "reports": "Reports"
+    },
+    "reports": {
+      "comingIn": "Reports are coming in <issue>#{{issue}}</issue>: modules, comparisons, templates and PDF export."
+    },
+    "graphs": {
+      "settings": "Graph settings",
+      "kind": "Graph",
+      "kinds": {
+        "bar": "Bars",
+        "line": "Line"
+      },
+      "metric": "Show",
+      "metrics": {
+        "spending": "Spending",
+        "income": "Income",
+        "balance": "Balance"
+      },
+      "groupBy": "Split",
+      "groups": {
+        "none": "Overall",
+        "account": "Per account",
+        "bucket": "Per bucket"
+      },
+      "top": "Series shown",
+      "topHint": "The largest get their own colour, up to {{max}}; the rest add up to Other.",
+      "bars": "Bars",
+      "stacked": "Stacked",
+      "sideBySide": "Side by side",
+      "cumulative": "Running total",
+      "cumulativeHint": "Adds up from the start of the period.",
+      "accounts": "Accounts",
+      "allAccounts": "All accounts",
+      "accountsHint": "With one account, transfers in and out count as income and spending.",
+      "buckets": "Buckets",
+      "allBuckets": "All buckets",
+      "tags": "Tags",
+      "anyTag": "Any tag",
+      "counterparty": "Counterparty contains",
+      "total": "Total",
+      "noBucket": "No bucket",
+      "other": "Other",
+      "noPeriod": "This period has no dates yet. Pick another one.",
+      "empty": "Nothing to show for this period.",
+      "chartLabel": "Graph",
+      "coarsened": "Shown per {{resolution}}: the screen is too narrow for the chosen resolution.",
+      "tooManyBars": "Shown per {{resolution}}: a graph shows at most {{max}} bars.",
+      "tooManyPoints": "Shown per {{resolution}}: a graph shows at most {{max}} points.",
+      "otherNote_one": "Other: {{count}} more series.",
+      "otherNote_other": "Other: {{count}} more series.",
+      "leftOut_one": "{{count}} account in another currency isn't included.",
+      "leftOut_other": "{{count}} accounts in other currencies aren't included.",
+      "lineStyle": "Line",
+      "straight": "Straight",
+      "stepped": "Stepped",
+      "yAxis": "Y axis",
+      "includeZero": "Include 0",
+      "fit": "Fit to data"
+    },
+    "saved": {
+      "label": "Saved graphs",
+      "none": "None saved yet",
+      "pick": "Pick a saved graph",
+      "save": "Save graph…",
+      "saveAs": "Save as new…",
+      "more": "More",
+      "rename": "Rename",
+      "unsaved": "Unsaved changes",
+      "saveAsTitle": "Save graph",
+      "renameTitle": "Rename graph",
+      "deleteTitle": "Delete graph",
+      "deleteText": "Delete the saved graph \"{{name}}\"? The graph's settings stay on screen.",
+      "name": "Name"
     }
   },
   "admin": {

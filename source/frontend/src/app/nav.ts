@@ -61,7 +61,7 @@ export const navTabs: NavTab[] = [
       { path: "/accounts", key: "accounts", issue: 21 },
       { path: "/cycles", key: "cycles", issue: 22 },
       { path: "/savings", key: "savings", issue: 35, later: true },
-      { path: "/stats", key: "stats", issue: 34, later: true },
+      { path: "/stats", key: "stats", issue: 122 },
     ],
   },
   {

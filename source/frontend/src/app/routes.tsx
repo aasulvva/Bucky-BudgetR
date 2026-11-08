@@ -22,6 +22,7 @@ const pages: Partial<Record<string, () => PageModule>> = {
   "/budget": () => import("@/pages/BudgetSetup"),
   "/cycles": () => import("@/pages/Cycles"),
   "/settings": () => import("@/pages/Settings"),
+  "/stats": () => import("@/pages/Stats"),
   "/transactions": () => import("@/pages/Transactions"),
   "/transactions/new": () => import("@/pages/NewTransaction"),
 };
@@ -29,6 +30,7 @@ const pages: Partial<Record<string, () => PageModule>> = {
 /** Screens outside the navigation. */
 const extraPages: [string, () => PageModule][] = [
   ["/transactions/:id/edit", () => import("@/pages/EditTransaction")],
+  ["/stats/reports", () => import("@/pages/Stats")],
 ];
 
 /** The paths whose screen is built, rather than a placeholder. */

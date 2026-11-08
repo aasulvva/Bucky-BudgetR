@@ -3,27 +3,46 @@ import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { Cycle } from "@/api/cycles";
-import { fittingResolutions, keptResolution, type Period, type Resolution } from "@/lib/periods";
+import { now as clockNow, useClockVersion } from "@/lib/clock";
+import {
+  applicableResolutions,
+  keptResolution,
+  type PeriodChoice,
+  type Resolution,
+} from "@/lib/periods";
 
 interface ResolutionPickerProps {
   value: Resolution;
   onChange: (value: Resolution) => void;
-  /** The period it cuts; null when it doesn't resolve (nothing to pick). */
-  period: Period | null;
-  /** The most intervals allowed: MAX_BARS for bars, MAX_POINTS for lines. */
+  /** The period it cuts. */
+  choice: PeriodChoice;
+  /** The most intervals the default may give: MAX_BARS for bars, MAX_POINTS for lines. */
   max: number;
   cycles: Cycle[];
+  /** Render the dropdown in place, not in a portal (inside a drawer). */
+  inline?: boolean;
 }
 
 /**
- * The resolution for a period (#120), offering only those that give at most
- * `max` intervals. When the period changes and the value no longer fits, it
- * switches to the period's default.
+ * The resolution for a period (#120): every one whose interval is no longer
+ * than the period, per hour to the whole period. When the period changes
+ * and the value no longer makes sense, it switches to the period's default.
+ * A graph that can't draw that many intervals goes coarser itself.
  */
-export function ResolutionPicker({ value, onChange, period, max, cycles }: ResolutionPickerProps) {
+export function ResolutionPicker({
+  value,
+  onChange,
+  choice,
+  max,
+  cycles,
+  inline = false,
+}: ResolutionPickerProps) {
   const { t } = useTranslation();
-  const options = period ? fittingResolutions(period, max, cycles) : [];
-  const kept = period ? keptResolution(value, period, max, cycles) : value;
+  const dropdown = inline ? { withinPortal: false } : undefined;
+  useClockVersion();
+  const now = clockNow();
+  const options = applicableResolutions(choice, cycles, now);
+  const kept = options.length > 0 ? keptResolution(value, choice, cycles, max, now) : value;
 
   useEffect(() => {
     if (kept !== value) onChange(kept);
@@ -31,6 +50,7 @@ export function ResolutionPicker({ value, onChange, period, max, cycles }: Resol
 
   return (
     <Select
+      comboboxProps={dropdown}
       label={t("stats.resolution.label")}
       data={options.map((r) => ({ value: r, label: t(`stats.resolution.options.${r}`) }))}
       value={kept}
@@ -38,7 +58,7 @@ export function ResolutionPicker({ value, onChange, period, max, cycles }: Resol
         if (v) onChange(v);
       }}
       allowDeselect={false}
-      disabled={period === null}
+      disabled={options.length === 0}
     />
   );
 }
