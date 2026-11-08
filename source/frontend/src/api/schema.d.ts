@@ -1628,7 +1628,7 @@ export interface components {
             metric: "spending" | "income" | "balance";
             /**
              * @description The period, relative to when the graph is shown:
-             *     `last-<n>-days|weeks|months`, `current-<unit>` or
+             *     `last-<n>-days|weeks|months|cycles|years`, `current-<unit>` or
              *     `previous-<unit>` (unit `cycle`, `month`, `quarter`, `half_year`
              *     or `year`), or `custom-<first day>-<last day>`.
              * @example last-30-days
@@ -1646,6 +1646,10 @@ export interface components {
             cumulative?: boolean;
             /** @description Bars only. Series side by side instead of stacked. */
             side_by_side?: boolean;
+            /** @description Lines only. Each interval's value is held until the next, instead of a straight line between points. */
+            stepped?: boolean;
+            /** @description Fit the Y axis to the values instead of including 0 (the default). */
+            fit_y_axis?: boolean;
             /** @description How many series get their own colour (at most 8, the graph palette); the rest add up to Other. 5 by default. */
             top?: number;
         };

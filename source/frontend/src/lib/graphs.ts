@@ -95,6 +95,8 @@ export function cleanGraph(s: GraphSettings): GraphSettings {
   if (!balance && s.counterparty?.trim()) out.counterparty = s.counterparty.trim();
   if (s.kind === "line" && s.cumulative && !balance) out.cumulative = true;
   if (s.kind === "bar" && s.side_by_side) out.side_by_side = true;
+  if (s.kind === "line" && s.stepped) out.stepped = true;
+  if (s.fit_y_axis) out.fit_y_axis = true;
   if (topOf(s) !== DEFAULT_TOP) out.top = topOf(s);
   return out;
 }
@@ -118,6 +120,8 @@ export function graphToSearch(settings: GraphSettings): URLSearchParams {
   if (s.counterparty) p.set("q", s.counterparty);
   if (s.cumulative) p.set("cum", "1");
   if (s.side_by_side) p.set("side", "1");
+  if (s.stepped) p.set("step", "1");
+  if (s.fit_y_axis) p.set("fit", "1");
   if (s.top) p.set("top", String(s.top));
   return p;
 }
@@ -150,6 +154,8 @@ export function graphFromSearch(params: URLSearchParams, fallback: GraphSettings
     counterparty: (params.get("q") ?? "").slice(0, 200),
     cumulative: params.get("cum") === "1",
     side_by_side: params.get("side") === "1",
+    stepped: params.get("step") === "1",
+    fit_y_axis: params.get("fit") === "1",
     top: Number.isInteger(top) && top >= 1 && top <= MAX_TOP ? top : DEFAULT_TOP,
   });
 }
@@ -380,6 +386,39 @@ export function graphData(
     return row;
   });
   return { rows, series, other: rest.length };
+}
+
+/** A round step near `x`: 1, 2, 2.5 or 5 times a power of ten. */
+function niceStep(x: number): number {
+  const power = 10 ** Math.floor(Math.log10(x));
+  const f = x / power;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * power;
+}
+
+/**
+ * The Y axis range for "Fit to data": the values' range (stacked bars by
+ * their totals), padded by a tenth and rounded out to a round step, so
+ * 30 000–50 000 becomes 25 000–55 000. Undefined means the chart's default,
+ * which includes 0.
+ */
+export function yDomain(data: GraphData, settings: GraphSettings): [number, number] | undefined {
+  const s = cleanGraph(settings);
+  if (!s.fit_y_axis || data.rows.length === 0) return undefined;
+  const stacked = s.kind === "bar" && !s.side_by_side;
+  const values = data.rows.flatMap((row) => {
+    const v = data.series.map((x) => Number(row[x.name] ?? 0));
+    if (!stacked) return v;
+    // A stack reaches from the sum of its negative parts to the sum of its positive ones.
+    const neg = v.filter((n) => n < 0);
+    const top = v.filter((n) => n > 0).reduce((a, b) => a + b, 0);
+    return neg.length > 0 ? [neg.reduce((a, b) => a + b, 0), top] : [top];
+  });
+  if (values.length === 0) return undefined;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || Math.abs(max) || 1;
+  const step = niceStep(span / 4);
+  return [Math.floor((min - span / 10) / step) * step, Math.ceil((max + span / 10) / step) * step];
 }
 
 /** The width an interval needs: bars ~6 px, lines 2 px. */

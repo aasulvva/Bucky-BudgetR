@@ -99,6 +99,37 @@ describe("Stats", () => {
     expect(screen.queryByText(/another currency/)).not.toBeInTheDocument();
   });
 
+  it("draws a line stepped and fits the Y axis, kept in the URL", async () => {
+    const { router } = renderRoute("/stats");
+    await userEvent.click(await screen.findByRole("radio", { name: "Line" }));
+    expect(screen.getByRole("radio", { name: "Straight" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Include 0" })).toBeChecked();
+    await userEvent.click(screen.getByRole("radio", { name: "Stepped" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Fit to data" }));
+    expect(router.state.location.search).toContain("kind=line");
+    expect(router.state.location.search).toContain("step=1");
+    expect(router.state.location.search).toContain("fit=1");
+    // Bars aren't stepped; the Y axis setting stays.
+    await userEvent.click(screen.getByRole("radio", { name: "Bars" }));
+    expect(screen.queryByRole("radio", { name: "Stepped" })).not.toBeInTheDocument();
+    expect(router.state.location.search).not.toContain("step=1");
+    expect(router.state.location.search).toContain("fit=1");
+  });
+
+  it("offers the last few cycles and years", async () => {
+    const { router } = renderRoute("/stats");
+    await pick("Period", "The last few cycles");
+    expect(screen.getByRole("textbox", { name: /Number of cycles/ })).toHaveValue("3");
+    expect(router.state.location.search).toContain("period=last-3-cycles");
+    await pick("Period", "The last few years");
+    expect(router.state.location.search).toContain("period=last-3-years");
+    await waitFor(() => {
+      expect(lastQuery()?.get("from")).toBe(
+        new Date(new Date().getFullYear() - 2, 0, 1).toISOString(),
+      );
+    });
+  });
+
   it("opens the settings from the URL, and a balance has no bucket filters", async () => {
     renderRoute("/stats?kind=line&metric=balance&period=previous-year&res=month&group=account");
     await waitFor(() => {

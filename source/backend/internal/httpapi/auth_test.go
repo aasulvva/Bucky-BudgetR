@@ -402,7 +402,7 @@ func TestPreferences(t *testing.T) {
 		t.Errorf("dashboard reset: %d %s", w.Code, w.Body)
 	}
 	// Saved graphs (#122) are kept as given, and null removes them.
-	graphs := `{"saved_graphs":[{"graph":{"account_ids":["1234"],"group_by":"bucket","kind":"bar","metric":"spending","period":"last-30-days","resolution":"day","tags":["food"],"top":5},"id":"g-1","name":"Food"},{"graph":{"kind":"line","metric":"balance","period":"custom-2026-01-01-2026-03-31","resolution":"week"},"id":"g-2","name":"Balance"}]}`
+	graphs := `{"saved_graphs":[{"graph":{"account_ids":["1234"],"group_by":"bucket","kind":"bar","metric":"spending","period":"last-30-days","resolution":"day","tags":["food"],"top":5},"id":"g-1","name":"Food"},{"graph":{"fit_y_axis":true,"kind":"line","metric":"balance","period":"last-3-cycles","resolution":"week","stepped":true},"id":"g-2","name":"Balance"}]}`
 	if w := patch(graphs); w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != graphs {
 		t.Errorf("saved graphs: %d %s", w.Code, w.Body)
 	}

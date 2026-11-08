@@ -883,17 +883,23 @@
         "previous_quarter": "Previous quarter",
         "previous_half_year": "Previous half-year",
         "previous_year": "Previous year",
-        "custom": "Custom dates"
+        "custom": "Custom dates",
+        "last_cycles": "The last few cycles",
+        "last_years": "The last few years"
       },
       "count": {
         "days": "Number of days",
         "weeks": "Number of weeks",
-        "months": "Number of months"
+        "months": "Number of months",
+        "cycles": "Number of cycles",
+        "years": "Number of years"
       },
       "countHint": {
         "days": "Today included.",
         "weeks": "This week included.",
-        "months": "This month included."
+        "months": "This month included.",
+        "cycles": "The latest cycle included.",
+        "years": "This year included."
       },
       "last": {
         "days_one": "Today",
@@ -901,11 +907,16 @@
         "weeks_one": "This week",
         "weeks_other": "Last {{count}} weeks",
         "months_one": "This month",
-        "months_other": "Last {{count}} months"
+        "months_other": "Last {{count}} months",
+        "cycles_one": "This cycle",
+        "cycles_other": "Last {{count}} cycles",
+        "years_one": "This year",
+        "years_other": "Last {{count}} years"
       },
       "dates": "First and last day",
       "noActiveCycle": "There's no active cycle.",
-      "noFinishedCycle": "No cycle has finished yet."
+      "noFinishedCycle": "No cycle has finished yet.",
+      "noCycle": "There's no cycle yet."
     },
     "resolution": {
       "label": "Show per",
@@ -970,7 +981,13 @@
       "otherNote_one": "Other: {{count}} more series.",
       "otherNote_other": "Other: {{count}} more series.",
       "leftOut_one": "{{count}} account in another currency isn't included.",
-      "leftOut_other": "{{count}} accounts in other currencies aren't included."
+      "leftOut_other": "{{count}} accounts in other currencies aren't included.",
+      "lineStyle": "Line",
+      "straight": "Straight",
+      "stepped": "Stepped",
+      "yAxis": "Y axis",
+      "includeZero": "Include 0",
+      "fit": "Fit to data"
     },
     "saved": {
       "label": "Saved graphs",

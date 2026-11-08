@@ -883,17 +883,23 @@
         "previous_quarter": "Forrige kvartal",
         "previous_half_year": "Forrige halvår",
         "previous_year": "I fjor",
-        "custom": "Egne datoer"
+        "custom": "Egne datoer",
+        "last_cycles": "De siste periodene",
+        "last_years": "De siste årene"
       },
       "count": {
         "days": "Antall dager",
         "weeks": "Antall uker",
-        "months": "Antall måneder"
+        "months": "Antall måneder",
+        "cycles": "Antall perioder",
+        "years": "Antall år"
       },
       "countHint": {
         "days": "I dag er tatt med.",
         "weeks": "Denne uken er tatt med.",
-        "months": "Denne måneden er tatt med."
+        "months": "Denne måneden er tatt med.",
+        "cycles": "Den siste perioden er tatt med.",
+        "years": "I år er tatt med."
       },
       "last": {
         "days_one": "I dag",
@@ -901,11 +907,16 @@
         "weeks_one": "Denne uken",
         "weeks_other": "Siste {{count}} uker",
         "months_one": "Denne måneden",
-        "months_other": "Siste {{count}} måneder"
+        "months_other": "Siste {{count}} måneder",
+        "cycles_one": "Denne perioden",
+        "cycles_other": "Siste {{count}} perioder",
+        "years_one": "I år",
+        "years_other": "Siste {{count}} år"
       },
       "dates": "Første og siste dag",
       "noActiveCycle": "Det er ingen aktiv periode.",
-      "noFinishedCycle": "Ingen periode er avsluttet ennå."
+      "noFinishedCycle": "Ingen periode er avsluttet ennå.",
+      "noCycle": "Det er ingen periode ennå."
     },
     "resolution": {
       "label": "Vis per",
@@ -970,7 +981,13 @@
       "otherNote_one": "Annet: {{count}} serie til.",
       "otherNote_other": "Annet: {{count}} serier til.",
       "leftOut_one": "{{count}} konto i en annen valuta er ikke tatt med.",
-      "leftOut_other": "{{count}} kontoer i andre valutaer er ikke tatt med."
+      "leftOut_other": "{{count}} kontoer i andre valutaer er ikke tatt med.",
+      "lineStyle": "Linje",
+      "straight": "Rett",
+      "stepped": "Trinnvis",
+      "yAxis": "Y-akse",
+      "includeZero": "Ta med 0",
+      "fit": "Tilpass til data"
     },
     "saved": {
       "label": "Lagrede grafer",

@@ -165,6 +165,34 @@ export function GraphControls({
             />
           </Input.Wrapper>
         )}
+        {s.kind === "line" && (
+          <Input.Wrapper label={t("stats.graphs.lineStyle")}>
+            <SegmentedControl
+              fullWidth
+              data={[
+                { value: "straight", label: t("stats.graphs.straight") },
+                { value: "stepped", label: t("stats.graphs.stepped") },
+              ]}
+              value={s.stepped ? "stepped" : "straight"}
+              onChange={(v) => {
+                set({ stepped: v === "stepped" });
+              }}
+            />
+          </Input.Wrapper>
+        )}
+        <Input.Wrapper label={t("stats.graphs.yAxis")}>
+          <SegmentedControl
+            fullWidth
+            data={[
+              { value: "zero", label: t("stats.graphs.includeZero") },
+              { value: "fit", label: t("stats.graphs.fit") },
+            ]}
+            value={s.fit_y_axis ? "fit" : "zero"}
+            onChange={(v) => {
+              set({ fit_y_axis: v === "fit" });
+            }}
+          />
+        </Input.Wrapper>
         {s.kind === "line" && !balance && (
           <Switch
             label={t("stats.graphs.cumulative")}

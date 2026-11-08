@@ -17,6 +17,7 @@ import {
   shownCurrency,
   showDots,
   statsQuery,
+  yDomain,
   type GraphSettings,
 } from "./graphs";
 import { resolvePeriod, type Period } from "./periods";
@@ -100,6 +101,15 @@ describe("URL settings", () => {
       cumulative: true,
     });
     expect(s).toEqual({ ...base, kind: "line", metric: "balance", group_by: "account" });
+  });
+
+  it("keep stepped for lines and a fitted axis for any graph", () => {
+    const s: GraphSettings = { ...base, kind: "line", stepped: true, fit_y_axis: true };
+    expect(graphToSearch(s).toString()).toBe(
+      "kind=line&metric=spending&period=current-month&res=day&step=1&fit=1",
+    );
+    expect(graphFromSearch(graphToSearch(s), base)).toEqual(s);
+    expect(cleanGraph({ ...s, kind: "bar" })).toEqual({ ...base, fit_y_axis: true });
   });
 
   it("compare graphs by their clean form", () => {
@@ -348,6 +358,59 @@ describe("intervalLabel", () => {
       label: "2 Nov",
       title: formatDateRange("2026-11-02", "2026-11-08", "en-GB"),
     });
+  });
+});
+
+describe("yDomain", () => {
+  const rows = (values: number[][]) => ({
+    rows: values.map((v, index) => ({ label: "", title: "", index, a: v[0] ?? 0, b: v[1] ?? 0 })),
+    series: [
+      { name: "a", label: "A", color: "", amounts: [] },
+      { name: "b", label: "B", color: "", amounts: [] },
+    ],
+    other: 0,
+  });
+
+  it("includes 0 unless fitted", () => {
+    expect(yDomain(rows([[30000, 50000]]), { ...base, kind: "line" })).toBeUndefined();
+  });
+
+  it("pads the values' range and rounds it out", () => {
+    const line = { ...base, kind: "line" as const, fit_y_axis: true };
+    expect(
+      yDomain(
+        rows([
+          [30000, 40000],
+          [50000, 45000],
+        ]),
+        line,
+      ),
+    ).toEqual([25000, 55000]);
+    expect(yDomain(rows([[-120, 80]]), line)).toEqual([-150, 100]);
+    // A flat line still gets a range.
+    expect(yDomain(rows([[500, 500]]), line)).toEqual([400, 600]);
+  });
+
+  it("fits stacked bars by their totals", () => {
+    const bars = { ...base, fit_y_axis: true };
+    expect(
+      yDomain(
+        rows([
+          [30000, 20000],
+          [40000, 15000],
+        ]),
+        bars,
+      ),
+    ).toEqual([48000, 56000]);
+    expect(
+      yDomain(
+        rows([
+          [30000, 20000],
+          [40000, 15000],
+        ]),
+        { ...bars, side_by_side: true },
+      ),
+    ).toEqual([10000, 50000]);
   });
 });
 

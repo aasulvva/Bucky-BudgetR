@@ -16,6 +16,7 @@ import {
   shownCurrency,
   showDots,
   statsQuery,
+  yDomain,
   type GraphData,
   type GraphSettings,
 } from "@/lib/graphs";
@@ -117,6 +118,7 @@ function Chart({ data, settings, currency, height, dots, intervals }: ChartProps
     const interval = intervals[Number(index)];
     if (interval) void navigate(intervalLink(settings, seriesName, interval));
   };
+  const domain = yDomain(data, settings);
   const money = (n: number) => formatMoney(n.toFixed(2), currency);
   const compact = (n: number) =>
     new Intl.NumberFormat(getLocale(), { notation: "compact", maximumFractionDigits: 1 }).format(n);
@@ -128,7 +130,7 @@ function Chart({ data, settings, currency, height, dots, intervals }: ChartProps
     valueFormatter: money,
     withLegend: data.series.length > 1,
     legendProps: { verticalAlign: "bottom" as const },
-    yAxisProps: { tickFormatter: compact, width: AXIS_PX - 8 },
+    yAxisProps: { tickFormatter: compact, width: AXIS_PX - 8, ...(domain ? { domain } : {}) },
     xAxisProps: { minTickGap: 12 },
     tooltipProps: {
       labelFormatter: (_: unknown, payload: readonly { payload?: { title?: string } }[]) =>
@@ -155,7 +157,7 @@ function Chart({ data, settings, currency, height, dots, intervals }: ChartProps
   return (
     <LineChart
       {...common}
-      curveType="linear"
+      curveType={settings.stepped ? "stepAfter" : "linear"}
       strokeWidth={2}
       withDots={dots}
       dotProps={{ r: 4 }}

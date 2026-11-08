@@ -8,6 +8,7 @@ import { now as clockNow, useClockVersion } from "@/lib/clock";
 import { formatDateRange, today, type LocalDate } from "@/lib/cycles";
 import {
   CALENDAR_UNITS,
+  LAST_DEFAULT,
   LAST_MAX,
   LAST_UNITS,
   resolvePeriod,
@@ -69,8 +70,7 @@ export function PeriodPicker({ value, onChange, cycles }: PeriodPickerProps) {
     const [kind, ...rest] = option.split("_");
     const unit = rest.join("_");
     if (kind === "last") {
-      const count = value.kind === "last" ? Math.min(value.count, LAST_MAX[unit as LastUnit]) : 7;
-      onChange({ kind: "last", unit: unit as LastUnit, count });
+      onChange({ kind: "last", unit: unit as LastUnit, count: LAST_DEFAULT[unit as LastUnit] });
     } else {
       onChange({
         kind: kind as "current" | "previous",
@@ -80,7 +80,11 @@ export function PeriodPicker({ value, onChange, cycles }: PeriodPickerProps) {
   };
 
   const missing =
-    value.kind === "current" ? t("stats.period.noActiveCycle") : t("stats.period.noFinishedCycle");
+    value.kind === "current"
+      ? t("stats.period.noActiveCycle")
+      : value.kind === "last"
+        ? t("stats.period.noCycle")
+        : t("stats.period.noFinishedCycle");
 
   return (
     <Stack gap="xs">

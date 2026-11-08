@@ -36,6 +36,8 @@ describe("formatPeriod and parsePeriod", () => {
       { kind: "last", unit: "days", count: 30 },
       { kind: "last", unit: "weeks", count: 104 },
       { kind: "last", unit: "months", count: 1 },
+      { kind: "last", unit: "cycles", count: 3 },
+      { kind: "last", unit: "years", count: 20 },
       { kind: "current", unit: "cycle" },
       { kind: "current", unit: "half_year" },
       { kind: "previous", unit: "year" },
@@ -55,7 +57,8 @@ describe("formatPeriod and parsePeriod", () => {
       "last-0-days",
       "last-367-days",
       "last-105-weeks",
-      "last-3-years",
+      "last-21-years",
+      "last-3-decades",
       "current-week",
       "previous-",
       "custom-2026-02-30-2026-03-01",
@@ -86,6 +89,33 @@ describe("resolvePeriod", () => {
       from: "2026-09-01",
       to: "2026-11-11",
     });
+  });
+
+  it("counts the last years and the latest started cycles back", () => {
+    expect(dates(resolved({ kind: "last", unit: "years", count: 3 }))).toEqual({
+      from: "2024-01-01",
+      to: "2026-11-11",
+    });
+    const c = (id: string, from: string, to: string, state: string) =>
+      cycle({ id, start_at: startAtFor(from), end_at: endAtFor(to), state: state as "active" });
+    const cycles = [
+      c("4", "2026-12-01", "2026-12-31", "future"),
+      c("3", "2026-11-01", "2026-11-30", "active"),
+      c("1", "2026-09-01", "2026-09-30", "finished"),
+      c("2", "2026-10-01", "2026-10-31", "finished"),
+    ];
+    const last = (count: number) =>
+      resolvePeriod({ kind: "last", unit: "cycles", count }, cycles, now);
+    expect(last(1)).toEqual({
+      from: "2026-11-01",
+      to: "2026-11-11",
+      fromAt: startAtFor("2026-11-01"),
+      toAt: now.toISOString(),
+    });
+    expect(last(2)?.from).toBe("2026-10-01");
+    // More than there are: from the first one.
+    expect(last(10)?.from).toBe("2026-09-01");
+    expect(resolvePeriod({ kind: "last", unit: "cycles", count: 3 }, [], now)).toBeNull();
   });
 
   it("starts weeks on the locale's first day", () => {

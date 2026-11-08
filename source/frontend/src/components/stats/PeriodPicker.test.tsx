@@ -76,7 +76,7 @@ describe("PeriodPicker", () => {
       <Harness initial={{ kind: "current", unit: "month" }} onChange={onChange} />,
     );
     await pick("Period", "The last few weeks");
-    expect(onChange).toHaveBeenLastCalledWith({ kind: "last", unit: "weeks", count: 7 });
+    expect(onChange).toHaveBeenLastCalledWith({ kind: "last", unit: "weeks", count: 8 });
     const count = screen.getByRole("textbox", { name: /Number of weeks/ });
     await userEvent.clear(count);
     await userEvent.type(count, "999");
