@@ -72,6 +72,7 @@ It is configured with environment variables. The Makefile exports everything in 
 | `SHUTDOWN_TIMEOUT` | `10s` | How long to wait for in-flight requests on shutdown. |
 | `SESSION_IDLE_TIMEOUT` | `168h` | A session ends after this long without use. |
 | `SESSION_MAX_AGE` | `720h` | A session ends this long after login, however much it's used. At least `SESSION_IDLE_TIMEOUT`. |
+| `SCHEDULE_INTERVAL` | `30s` | How often the scheduler looks for scheduled transactions that are due (#31). At least `1s`. |
 | `BUCKY_INITIAL_ADMIN_PASSWORD` | `BuckyBudgetR_ADMIN_Pa$$w0rd` | Password of the `admin` account created on first start. Must meet the password policy. |
 | `TRUSTED_PROXIES` | (none) | Comma-separated addresses or CIDR ranges of reverse proxies whose `X-Forwarded-For` gives the client's address. `deploy/compose.yaml` sets Caddy's. |
 
@@ -164,6 +165,14 @@ The cycle rule (#72, spec §3) plans cycles on the server, in the user's `time_z
 - `cycles/rule.go` plans with them. `topUp` adds cycles after the latest one, flagged `generated`, until the rule's `ahead` are planned. It runs inside `Start` and `End`, hourly (`PlanLoop`), and through `Replan` when a preferences PATCH touches `cycle_rule` or `time_zone`. `Replan` first deletes the generated cycles that haven't started. `SetCycleTimes` clears the flag, so a cycle moved by hand (or pushed along) is the user's.
 - `POST /api/v1/cycle-rule/periods` previews a rule without saving it; Settings and the cycle dialogs use it, so the holidays live only in Go.
 - The binary embeds `time/tzdata`, so zones work in the distroless image.
+
+### Scheduled transactions
+
+Schedules (#31, spec §5.6) live in `internal/schedules`.
+- `recurrence.go` is the date math, with no database: `Rule.Occurrence(k)` is occurrence `k` (from 0) as a wall time in the schedule's zone, with months and years clamped from the start date so the day doesn't drift. `Rule.NextAt(t)` is the first at or after `t`. A schedule stores `next_index` and `next_at` (UTC), and `next_at` is null once it has ended.
+- `scheduler.go` runs `RunDue` at start and every `SCHEDULE_INTERVAL` (`RunLoop`, on the business clock, so the debug clock moves it too). For each user with something due, one database transaction takes `ledger.LockUser`, locks the due schedules (`FOR UPDATE`) and handles their occurrences up to now in order, at most `MaxCatchUp` per schedule per run. An occurrence that already has a row in `schedule_occurrences` (unique per schedule and time) is skipped, so a repeated run records nothing twice.
+- An auto occurrence is recorded with `transactions.Service.RecordIn` inside a savepoint. If it fails with a rule error (`ledger.ErrNoActiveCycle`, `ErrOutsideCycle`, `ErrInvalid` and the like), the savepoint is rolled back and the occurrence queued with the reason. Any other error fails the user's run, which is logged and tried again on the next one.
+- Creating or changing a schedule checks its transaction with `transactions.Check`, the same rules as `Create` without recording.
 
 ### Debug settings
 

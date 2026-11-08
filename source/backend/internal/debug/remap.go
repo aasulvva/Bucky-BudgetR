@@ -26,25 +26,31 @@ const (
 	kTransaction
 	kBankLine
 	kBucketLine
+	kSchedule
+	kOccurrence
 )
 
 // idColumns lists, per table, every column that holds an ID and its kind.
 // A clone gives each ID a new one. TestIDColumns checks it against the
 // schema's foreign keys.
 var idColumns = map[string]map[string]kind{
-	"bank_accounts":       {"id": kAccount, "user_id": kUser},
-	"cycles":              {"id": kCycle, "user_id": kUser},
-	"buckets":             {"id": kBucket, "user_id": kUser, "source_account_id": kAccount},
-	"tags":                {"id": kTag, "user_id": kUser},
-	"transaction_headers": {"id": kTransaction, "user_id": kUser, "parent_id": kTransaction, "replaces_id": kTransaction, "created_by": kUser},
-	"bank_transactions":   {"id": kBankLine, "transaction_id": kTransaction, "account_id": kAccount, "created_by": kUser},
-	"bucket_transactions": {"id": kBucketLine, "transaction_id": kTransaction, "bucket_id": kBucket, "cycle_id": kCycle, "created_by": kUser},
-	"transaction_tags":    {"transaction_id": kTransaction, "tag_id": kTag, "user_id": kUser},
-	"refills":             {"bucket_id": kBucket, "cycle_id": kCycle, "user_id": kUser, "ref_id": kTransaction, "ovf_id": kTransaction, "income_id": kTransaction},
+	"bank_accounts":         {"id": kAccount, "user_id": kUser},
+	"cycles":                {"id": kCycle, "user_id": kUser},
+	"buckets":               {"id": kBucket, "user_id": kUser, "source_account_id": kAccount},
+	"tags":                  {"id": kTag, "user_id": kUser},
+	"transaction_headers":   {"id": kTransaction, "user_id": kUser, "parent_id": kTransaction, "replaces_id": kTransaction, "created_by": kUser},
+	"bank_transactions":     {"id": kBankLine, "transaction_id": kTransaction, "account_id": kAccount, "created_by": kUser},
+	"bucket_transactions":   {"id": kBucketLine, "transaction_id": kTransaction, "bucket_id": kBucket, "cycle_id": kCycle, "created_by": kUser},
+	"transaction_tags":      {"transaction_id": kTransaction, "tag_id": kTag, "user_id": kUser},
+	"refills":               {"bucket_id": kBucket, "cycle_id": kCycle, "user_id": kUser, "ref_id": kTransaction, "ovf_id": kTransaction, "income_id": kTransaction},
+	"schedules":             {"id": kSchedule, "user_id": kUser, "account_id": kAccount, "to_account_id": kAccount},
+	"schedule_bucket_lines": {"schedule_id": kSchedule, "bucket_id": kBucket, "user_id": kUser},
+	"schedule_occurrences":  {"id": kOccurrence, "schedule_id": kSchedule, "user_id": kUser, "transaction_id": kTransaction},
 }
 
 // remap returns data with new IDs for userID: new accounts, cycles, buckets,
-// tags, transactions and lines, with every reference following. IDs are
+// tags, transactions, lines, schedules and occurrences, with every reference
+// following. IDs are
 // unique across users, so the new ones are checked against other users' rows.
 func remap(ctx context.Context, tx pgx.Tx, userID string, data Data) (Data, error) {
 	m := map[kind]map[string]string{}
@@ -77,8 +83,13 @@ func remap(ctx context.Context, tx pgx.Tx, userID string, data Data) (Data, erro
 	if m[kTag], err = newTagIDs(ctx, tx, keys(data.Tables["tags"], "id")); err != nil {
 		return Data{}, err
 	}
+	if m[kSchedule], err = newIDs(ctx, tx, userID, "schedules", keys(data.Tables["schedules"], "id"),
+		func(string) string { return ids.NewSchedule(userID) }); err != nil {
+		return Data{}, err
+	}
 	m[kBankLine] = map[string]string{}
 	m[kBucketLine] = map[string]string{}
+	m[kOccurrence] = map[string]string{}
 
 	out := Data{Tables: map[string][]row{}}
 	for name, rows := range data.Tables {
@@ -101,6 +112,8 @@ func remap(ctx context.Context, tx pgx.Tx, userID string, data Data) (Data, erro
 					n[col] = lineID(m[kBankLine], old, func() string { return ids.NewBankLine(m[kAccount][fmt.Sprint(r["account_id"])]) })
 				case kBucketLine:
 					n[col] = lineID(m[kBucketLine], old, func() string { return ids.NewBucketLine(m[kBucket][fmt.Sprint(r["bucket_id"])]) })
+				case kOccurrence:
+					n[col] = lineID(m[kOccurrence], old, func() string { return ids.NewOccurrence(m[kSchedule][fmt.Sprint(r["schedule_id"])]) })
 				default:
 					id, ok := m[k][old]
 					if !ok {

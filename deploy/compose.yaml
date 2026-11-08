@@ -41,6 +41,7 @@ services:
       BUCKY_INITIAL_ADMIN_PASSWORD: ${BUCKY_INITIAL_ADMIN_PASSWORD:-}
       SESSION_IDLE_TIMEOUT: ${SESSION_IDLE_TIMEOUT:-}
       SESSION_MAX_AGE: ${SESSION_MAX_AGE:-}
+      SCHEDULE_INTERVAL: ${SCHEDULE_INTERVAL:-}
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]

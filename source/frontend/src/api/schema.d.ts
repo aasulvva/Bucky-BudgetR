@@ -1062,6 +1062,124 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/schedules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List schedules
+         * @description The user's schedules, the next due first, then the ones that have ended.
+         */
+        get: operations["listSchedules"];
+        put?: never;
+        /**
+         * Schedule a transaction
+         * @description Schedules an income, expense or transfer once, or every `every`
+         *     days, weeks, months or years from `start_date`, at `time` in
+         *     `time_zone`. Monthly and yearly ones keep the start date's day,
+         *     using the last day of shorter months. It ends never, after
+         *     `end_count` occurrences (counted from the start date) or after the
+         *     one on `end_date`.
+         *
+         *     The transaction is checked like `POST /transactions` (400
+         *     `invalid_request` or `currency_mismatch`). The first occurrence is
+         *     the first at or after now; earlier ones aren't recorded, and a
+         *     schedule with none left is 400.
+         *
+         *     When an occurrence comes due, an `auto` schedule records it, dated
+         *     at its scheduled time, with its bucket lines in the active cycle and
+         *     the usual refill rules. An `approve` schedule queues it, due
+         *     `due_days` later. An occurrence that can't be recorded (no active
+         *     cycle, a time outside it, an account or bucket that's gone) is
+         *     queued too, with the reason: see `GET /scheduled-transactions`.
+         */
+        post: operations["createSchedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/schedules/{scheduleId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scheduleId: components["parameters"]["ScheduleId"];
+            };
+            cookie?: never;
+        };
+        /** Get a schedule */
+        get: operations["getSchedule"];
+        /**
+         * Change a schedule
+         * @description Replaces the schedule's settings, checked as for a new one. Its next
+         *     occurrence is then the first at or after now, so resuming a paused
+         *     schedule doesn't record the ones it missed. A schedule with no
+         *     occurrences left stays, ended.
+         */
+        put: operations["updateSchedule"];
+        post?: never;
+        /**
+         * Delete a schedule
+         * @description Deletes the schedule and its occurrences, queued ones too. The transactions it recorded stay.
+         */
+        delete: operations["deleteSchedule"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/schedules/{scheduleId}/upcoming": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scheduleId: components["parameters"]["ScheduleId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The next occurrences of a schedule
+         * @description The times of the schedule's next occurrences, from its next one (a
+         *     paused schedule from now). Empty when it has ended.
+         */
+        get: operations["listUpcoming"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scheduled-transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List scheduled transactions that came due
+         * @description The occurrences of the user's schedules that came due, newest first,
+         *     one page at a time: `applied` ones with the transaction they
+         *     recorded, `queued` ones waiting for approval with the reason and due
+         *     time, and `skipped` ones. Pass `next_cursor` as `cursor` to get the
+         *     next page.
+         */
+        get: operations["listScheduledTransactions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1986,6 +2104,153 @@ export interface components {
             /** @description Same as the `X-Request-ID` response header. Quote it when reporting a bug. */
             request_id?: string;
         };
+        /**
+         * @description 10-digit schedule ID (the owner's user ID, then 4 digits).
+         * @example 4829135521
+         */
+        ScheduleId: string;
+        /**
+         * @description 18-digit ID of a schedule's occurrence (the schedule's ID, then 8 digits).
+         * @example 482913552100417731
+         */
+        ScheduledTransactionId: string;
+        /**
+         * @description `auto` records each occurrence when it comes due; `approve` queues it for approval.
+         * @enum {string}
+         */
+        ScheduleMode: "auto" | "approve";
+        /** @enum {string} */
+        ScheduleFrequency: "once" | "day" | "week" | "month" | "year";
+        /** @description What a schedule records, as in `POST /transactions` without `at`. */
+        ScheduleTransaction: {
+            /** @enum {string} */
+            type: "INC" | "EXP" | "TRF";
+            counterparty?: string;
+            tags?: string[];
+            /** @description As in `POST /transactions`. Omitted, the user's `income_refill_rules` decide when it's recorded. */
+            triggers_refill?: boolean;
+            account_id: components["schemas"]["AccountId"];
+            to_account_id?: components["schemas"]["AccountId"];
+            /** @description Positive. */
+            amount: components["schemas"]["Amount"];
+            bucket_lines?: {
+                bucket_id: components["schemas"]["BucketId"];
+                /** @description Positive. */
+                amount: components["schemas"]["Amount"];
+            }[];
+        };
+        ScheduleInput: {
+            /** @description Optional, trimmed. */
+            name?: string;
+            transaction: components["schemas"]["ScheduleTransaction"];
+            mode: components["schemas"]["ScheduleMode"];
+            /**
+             * @description How many days after it's queued an occurrence is due for approval.
+             * @default 3
+             */
+            due_days: number;
+            /**
+             * Format: date
+             * @description The date of the first occurrence, in `time_zone`.
+             */
+            start_date: string;
+            /**
+             * @description The time of day of each occurrence (HH:MM), in `time_zone`.
+             * @example 08:00
+             */
+            time: string;
+            /**
+             * @description An IANA time zone. Omitted, the user's `time_zone` preference, else UTC.
+             * @example Europe/Oslo
+             */
+            time_zone?: string;
+            frequency: components["schemas"]["ScheduleFrequency"];
+            /**
+             * @description Every how many days, weeks, months or years. Ignored for `once`.
+             * @default 1
+             */
+            every: number;
+            /** @description Ends after this many occurrences, counted from `start_date`. Not with `end_date`. */
+            end_count?: number;
+            /**
+             * Format: date
+             * @description Ends after the occurrence on this date. Not with `end_count`.
+             */
+            end_date?: string;
+            /**
+             * @description A paused schedule's occurrences aren't recorded or queued.
+             * @default false
+             */
+            paused: boolean;
+        };
+        Schedule: {
+            id: components["schemas"]["ScheduleId"];
+            name: string;
+            transaction: components["schemas"]["ScheduleTransaction"];
+            mode: components["schemas"]["ScheduleMode"];
+            due_days: number;
+            /** Format: date */
+            start_date: string;
+            /** @example 08:00 */
+            time: string;
+            time_zone: string;
+            frequency: components["schemas"]["ScheduleFrequency"];
+            every: number;
+            end_count: number | null;
+            /** Format: date */
+            end_date: string | null;
+            paused: boolean;
+            /** @description The number of the next occurrence, from 0 (counted from `start_date`). */
+            next_index: number;
+            /**
+             * Format: date-time
+             * @description When the next occurrence is due. Null when the schedule has ended.
+             */
+            next_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /** @enum {string} */
+        ScheduledTransactionState: "applied" | "queued" | "skipped";
+        /**
+         * @description Why it's queued: the schedule asks for approval, there was no active
+         *     cycle, its time was outside the active cycle, or the transaction
+         *     broke a rule (see `detail`), for example a deleted account or bucket.
+         * @enum {string}
+         */
+        ScheduledTransactionReason: "approval" | "no_active_cycle" | "outside_cycle" | "invalid";
+        ScheduledTransaction: {
+            id: components["schemas"]["ScheduledTransactionId"];
+            schedule_id: components["schemas"]["ScheduleId"];
+            /** Format: date-time */
+            scheduled_at: string;
+            state: components["schemas"]["ScheduledTransactionState"];
+            /** @description Set when it was queued. */
+            reason: (string & components["schemas"]["ScheduledTransactionReason"]) | null;
+            /** @description For `invalid`, the rule it broke. */
+            detail: string;
+            /** Format: date-time */
+            queued_at: string | null;
+            /**
+             * Format: date-time
+             * @description When a queued one is due for approval.
+             */
+            due_at: string | null;
+            /** @description The transaction it recorded. */
+            transaction_id: (string & components["schemas"]["TransactionId"]) | null;
+            /**
+             * Format: date-time
+             * @description When it was applied or skipped.
+             */
+            resolved_at: string | null;
+        };
+        ScheduledTransactionPage: {
+            items: components["schemas"]["ScheduledTransaction"][];
+            /** @description Pass as `cursor` for the next page. Null on the last page. */
+            next_cursor: string | null;
+        };
     };
     responses: {
         /** @description Any error. */
@@ -2004,6 +2269,7 @@ export interface components {
         CycleId: components["schemas"]["CycleId"];
         BucketId: components["schemas"]["BucketId"];
         TransactionId: components["schemas"]["TransactionId"];
+        ScheduleId: components["schemas"]["ScheduleId"];
     };
     requestBodies: never;
     headers: {
@@ -3349,6 +3615,191 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CounterpartySuggestion"][];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listSchedules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The schedules. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Schedule"][];
+                };
+            };
+            401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleInput"];
+            };
+        };
+        responses: {
+            /** @description The new schedule. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Schedule"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scheduleId: components["parameters"]["ScheduleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The schedule. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Schedule"];
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    updateSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scheduleId: components["parameters"]["ScheduleId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleInput"];
+            };
+        };
+        responses: {
+            /** @description The changed schedule. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Schedule"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scheduleId: components["parameters"]["ScheduleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listUpcoming: {
+        parameters: {
+            query?: {
+                count?: number;
+            };
+            header?: never;
+            path: {
+                scheduleId: components["parameters"]["ScheduleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The times, earliest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listScheduledTransactions: {
+        parameters: {
+            query?: {
+                state?: components["schemas"]["ScheduledTransactionState"];
+                schedule_id?: components["schemas"]["ScheduleId"];
+                /** @description The page size. */
+                limit?: number;
+                /** @description The previous page's `next_cursor`. */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of scheduled transactions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledTransactionPage"];
                 };
             };
             400: components["responses"]["Error"];

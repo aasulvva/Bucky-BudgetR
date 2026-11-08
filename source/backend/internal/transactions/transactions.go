@@ -215,6 +215,42 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Transaction
 	return out, nil
 }
 
+// Check checks n as Create would, without recording it: the rules of its
+// type, and that its accounts and buckets are the user's live ones. A zero At
+// counts as now.
+func Check(ctx context.Context, db sqlc.DBTX, userID string, n New) error {
+	bank, buckets, err := signedLines(n)
+	if err != nil {
+		return err
+	}
+	at := n.At
+	if at.IsZero() {
+		at = time.Now()
+	}
+	if err := ledger.Validate(ledger.Entry{
+		UserID: userID, CreatedBy: userID, Type: n.Type, At: at,
+		Counterparty: n.Counterparty, Tags: n.Tags, BankLines: bank, BucketLines: buckets,
+	}); err != nil {
+		return err
+	}
+	q := sqlc.New(db)
+	if err := checkAccounts(ctx, q, userID, n); err != nil {
+		return err
+	}
+	return checkBuckets(ctx, q, userID, n)
+}
+
+// RecordIn records n inside tx, whose caller holds the user's lock
+// (ledger.LockUser), as Create does but at any time n.At, past or future.
+// The scheduler records its occurrences with it.
+func (s *Service) RecordIn(ctx context.Context, tx pgx.Tx, userID string, n New) (Transaction, error) {
+	t, err := s.record(ctx, tx, userID, n, "")
+	if err != nil {
+		return Transaction{}, err
+	}
+	return merge([]sqlc.TransactionHeader{t.Header}, t.BankLines, t.BucketLines, t.Tags, false), nil
+}
+
 // record checks n and records it inside tx. replaces is the transaction it
 // replaces, if any. An income that triggers a refill refills its account's
 // "On income" buckets.

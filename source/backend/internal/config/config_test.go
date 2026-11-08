@@ -28,6 +28,7 @@ func TestLoadDefaults(t *testing.T) {
 		ShutdownTimeout:    10 * time.Second,
 		SessionIdleTimeout: 7 * 24 * time.Hour,
 		SessionMaxAge:      30 * 24 * time.Hour,
+		ScheduleInterval:   30 * time.Second,
 	}
 	if !reflect.DeepEqual(cfg, want) {
 		t.Errorf("got %+v, want %+v", cfg, want)
@@ -71,12 +72,13 @@ func TestLoadReportsAllErrors(t *testing.T) {
 		"SHUTDOWN_TIMEOUT":     "-1s",
 		"SESSION_IDLE_TIMEOUT": "soon",
 		"SESSION_MAX_AGE":      "0s",
+		"SCHEDULE_INTERVAL":    "10ms",
 		"TRUSTED_PROXIES":      "10.0.0.0/8, proxy",
 	}))
 	if err == nil {
 		t.Fatal("expected an error")
 	}
-	for _, key := range []string{"APP_ENV", "DATABASE_URL", "API_PORT", "LOG_LEVEL", "LOG_FORMAT", "MIGRATE_ON_START", "SHUTDOWN_TIMEOUT", "SESSION_IDLE_TIMEOUT", "SESSION_MAX_AGE", "TRUSTED_PROXIES"} {
+	for _, key := range []string{"APP_ENV", "DATABASE_URL", "API_PORT", "LOG_LEVEL", "LOG_FORMAT", "MIGRATE_ON_START", "SHUTDOWN_TIMEOUT", "SESSION_IDLE_TIMEOUT", "SESSION_MAX_AGE", "SCHEDULE_INTERVAL", "TRUSTED_PROXIES"} {
 		if !strings.Contains(err.Error(), key) {
 			t.Errorf("error does not mention %s: %v", key, err)
 		}

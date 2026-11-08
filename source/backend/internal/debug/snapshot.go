@@ -47,6 +47,9 @@ var tables = []table{
 	{"bucket_transactions", "bucket_id IN (SELECT id FROM buckets WHERE user_id = $1)", "id"},
 	{"transaction_tags", "user_id = $1", "transaction_id, tag_id"},
 	{"refills", "user_id = $1", "bucket_id, cycle_id"},
+	{"schedules", "user_id = $1", "id"},
+	{"schedule_bucket_lines", "user_id = $1", "schedule_id, bucket_id"},
+	{"schedule_occurrences", "user_id = $1", "id"},
 }
 
 type row = map[string]any
@@ -334,7 +337,7 @@ func (d *Debug) Restore(ctx context.Context, id int64, userID string, setClock b
 // idsFree reports whether none of the snapshot's IDs belong to another user
 // now, so it can be restored as it is. IDs are unique across users.
 func idsFree(ctx context.Context, tx pgx.Tx, userID string, data Data) (bool, error) {
-	for _, t := range []string{"bank_accounts", "cycles", "buckets", "tags", "transaction_headers"} {
+	for _, t := range []string{"bank_accounts", "cycles", "buckets", "tags", "transaction_headers", "schedules"} {
 		var taken bool
 		err := tx.QueryRow(ctx, fmt.Sprintf(`
 			SELECT EXISTS (SELECT 1 FROM %s WHERE id::text = ANY($1) AND user_id <> $2)`, t),

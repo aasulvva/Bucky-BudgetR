@@ -48,7 +48,7 @@ func TestBucketsAPI(t *testing.T) {
 	// The preference sets the default refill mode.
 	w = do(http.MethodPatch, "/api/v1/me/preferences", map[string]any{"default_refill_mode": "manual"}, alice)
 	expect(t, "set preference", w, http.StatusOK, "")
-	if p := decode[api.Preferences](t, w); p.DefaultRefillMode.MustGet() != api.Manual {
+	if p := decode[api.Preferences](t, w); p.DefaultRefillMode.MustGet() != api.RefillModeManual {
 		t.Errorf("preferences %+v", p)
 	}
 	expect(t, "bad preference", do(http.MethodPatch, "/api/v1/me/preferences",
@@ -67,7 +67,7 @@ func TestBucketsAPI(t *testing.T) {
 	expect(t, "create", w, http.StatusCreated, "")
 	b := decode[api.Bucket](t, w)
 	if b.Capacity.MustGet() != "5000.00" || b.CapMultiplier.MustGet() != "1.25" || !b.CapAmount.IsNull() ||
-		b.RefillMode != api.Manual || b.Currency != "NOK" || b.TargetFunds != "0.00" || b.CurrentAvailableFunds != "0.00" ||
+		b.RefillMode != api.RefillModeManual || b.Currency != "NOK" || b.TargetFunds != "0.00" || b.CurrentAvailableFunds != "0.00" ||
 		b.NegativeTf != api.Clear {
 		t.Errorf("created %+v", b)
 	}

@@ -16,6 +16,26 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.13.01",
+    date: "2026-11-08",
+    title: {
+      en: "Groundwork for scheduled transactions",
+      nb: "Grunnlag for planlagte transaksjoner",
+      nn: "Grunnlag for planlagde transaksjonar",
+    },
+    changes: {
+      en: [
+        "The server can now hold scheduled and recurring transactions, such as the rent every month, and record them on time or queue them for you to approve. The screens to set them up come next. Nothing changes in the app yet.",
+      ],
+      nb: [
+        "Serveren kan nå ta vare på planlagte og gjentakende transaksjoner, for eksempel husleien hver måned, og føre dem i tide eller legge dem i kø så du kan godkjenne dem. Skjermene for å sette dem opp kommer snart. Ingenting endres i appen ennå.",
+      ],
+      nn: [
+        "Tenaren kan no ta vare på planlagde og gjentakande transaksjonar, til dømes husleiga kvar månad, og føre dei i tide eller leggje dei i kø så du kan godkjenne dei. Skjermane for å setje dei opp kjem snart. Ingenting vert endra i appen enno.",
+      ],
+    },
+  },
+  {
     version: "v1.13.00",
     date: "2026-11-08",
     title: {
