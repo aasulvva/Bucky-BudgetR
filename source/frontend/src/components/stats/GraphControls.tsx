@@ -52,6 +52,9 @@ export function GraphControls({
   narrow = false,
 }: GraphControlsProps) {
   const { t } = useTranslation();
+  // The drawer locks page scrolling and lets touches through only inside
+  // it, so dropdowns there render inside it rather than at the page's end.
+  const dropdown = narrow ? { withinPortal: false } : undefined;
   const s = cleanGraph(value);
   const set = (patch: Partial<GraphSettings>) => {
     onChange(cleanGraph({ ...value, ...patch }));
@@ -98,6 +101,7 @@ export function GraphControls({
           />
         </Input.Wrapper>
         <Select
+          comboboxProps={dropdown}
           label={t("stats.graphs.metric")}
           data={GRAPH_METRICS.map((m) => ({ value: m, label: t(`stats.graphs.metrics.${m}`) }))}
           value={s.metric}
@@ -108,6 +112,7 @@ export function GraphControls({
         />
       </Stack>
       <PeriodPicker
+        inline={narrow}
         value={choice}
         cycles={cycles}
         onChange={(choice) => {
@@ -116,6 +121,7 @@ export function GraphControls({
       />
       <Stack gap="sm">
         <ResolutionPicker
+          inline={narrow}
           value={s.resolution}
           choice={choice}
           max={maxIntervals(s.kind)}
@@ -125,6 +131,7 @@ export function GraphControls({
           }}
         />
         <Select
+          comboboxProps={dropdown}
           label={t("stats.graphs.groupBy")}
           data={groups.map((g) => ({ value: g, label: t(`stats.graphs.groups.${g}`) }))}
           value={group}
@@ -204,6 +211,7 @@ export function GraphControls({
       </Stack>
       <Stack gap="sm">
         <MultiSelect
+          comboboxProps={dropdown}
           label={t("stats.graphs.accounts")}
           placeholder={chosenAccounts.length === 0 ? t("stats.graphs.allAccounts") : undefined}
           description={!balance ? t("stats.graphs.accountsHint") : undefined}
@@ -218,6 +226,7 @@ export function GraphControls({
         {!balance && (
           <>
             <MultiSelect
+              comboboxProps={dropdown}
               label={t("stats.graphs.buckets")}
               placeholder={
                 (s.bucket_ids ?? []).length === 0 ? t("stats.graphs.allBuckets") : undefined
@@ -231,6 +240,7 @@ export function GraphControls({
               clearable
             />
             <MultiSelect
+              comboboxProps={dropdown}
               label={t("stats.graphs.tags")}
               placeholder={(s.tags ?? []).length === 0 ? t("stats.graphs.anyTag") : undefined}
               data={[...new Set([...tags, ...(s.tags ?? [])])]}

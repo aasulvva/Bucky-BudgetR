@@ -27,6 +27,8 @@ interface PeriodPickerProps {
   onChange: (value: PeriodChoice) => void;
   /** The user's cycles, for the cycle periods. */
   cycles: Cycle[];
+  /** Render dropdowns and calendars in place, not in a portal (inside a drawer). */
+  inline?: boolean;
 }
 
 type Kind = PeriodChoice["kind"];
@@ -46,8 +48,9 @@ function unitOf(choice: PeriodChoice): SpecificUnit | null {
  * Custom dates) and its unit, then what that needs (N, the one period with
  * arrows to step through them, or two dates), then the dates it covers.
  */
-export function PeriodPicker({ value, onChange, cycles }: PeriodPickerProps) {
+export function PeriodPicker({ value, onChange, cycles, inline = false }: PeriodPickerProps) {
   const { t } = useTranslation();
+  const dropdown = inline ? { withinPortal: false } : undefined;
   useClockVersion();
   const now = clockNow();
   const day = today(now);
@@ -100,6 +103,7 @@ export function PeriodPicker({ value, onChange, cycles }: PeriodPickerProps) {
     <Stack gap="xs">
       <Group gap="xs" grow align="flex-end" wrap="nowrap">
         <Select
+          comboboxProps={dropdown}
           label={t("stats.period.label")}
           data={KINDS.map((k) => ({ value: k, label: t(`stats.period.kinds.${k}`) }))}
           value={value.kind}
@@ -112,6 +116,7 @@ export function PeriodPicker({ value, onChange, cycles }: PeriodPickerProps) {
         />
         {value.kind !== "custom" && (
           <Select
+            comboboxProps={dropdown}
             aria-label={t("stats.period.unit")}
             data={units.map((u) => ({ value: u, label: unitLabel(u) }))}
             value={unitValue}
@@ -144,10 +149,18 @@ export function PeriodPicker({ value, onChange, cycles }: PeriodPickerProps) {
         />
       )}
       {value.kind === "specific" && (
-        <SpecificPicker value={value} onChange={onChange} cycles={cycles} day={day} now={now} />
+        <SpecificPicker
+          value={value}
+          onChange={onChange}
+          cycles={cycles}
+          day={day}
+          now={now}
+          inline={inline}
+        />
       )}
       {value.kind === "custom" && (
         <DatePickerInput
+          popoverProps={dropdown}
           type="range"
           label={t("stats.period.dates")}
           valueFormat="D MMM YYYY"
@@ -176,11 +189,13 @@ interface SpecificPickerProps {
   cycles: Cycle[];
   day: LocalDate;
   now: Date;
+  inline: boolean;
 }
 
 /** One day, week, cycle, month, quarter, half-year or year, with arrows to the one before and after. */
-function SpecificPicker({ value, onChange, cycles, day, now }: SpecificPickerProps) {
+function SpecificPicker({ value, onChange, cycles, day, now, inline }: SpecificPickerProps) {
   const { t } = useTranslation();
+  const dropdown = inline ? { withinPortal: false } : undefined;
   const before = stepSpecific(value, -1, cycles, now);
   const after = stepSpecific(value, 1, cycles, now);
   const pick = (unit: SpecificUnit, date: LocalDate | null) => {
@@ -197,6 +212,7 @@ function SpecificPicker({ value, onChange, cycles, day, now }: SpecificPickerPro
       const end = value.unit === "week" ? addDays(value.at, 6) : value.at;
       picker = (
         <DatePickerInput
+          popoverProps={dropdown}
           aria-label={label}
           value={value.at}
           maxDate={day}
@@ -222,6 +238,7 @@ function SpecificPicker({ value, onChange, cycles, day, now }: SpecificPickerPro
     case "month":
       picker = (
         <MonthPickerInput
+          popoverProps={dropdown}
           aria-label={label}
           value={value.at}
           maxDate={day}
@@ -235,6 +252,7 @@ function SpecificPicker({ value, onChange, cycles, day, now }: SpecificPickerPro
     case "year":
       picker = (
         <YearPickerInput
+          popoverProps={dropdown}
           aria-label={label}
           value={value.at}
           maxDate={day}
@@ -263,6 +281,7 @@ function SpecificPicker({ value, onChange, cycles, day, now }: SpecificPickerPro
       picker = (
         <Group gap="xs" grow wrap="nowrap">
           <YearPickerInput
+            popoverProps={dropdown}
             aria-label={t("stats.period.units.year")}
             value={`${year}-01-01`}
             maxDate={day}
@@ -274,6 +293,7 @@ function SpecificPicker({ value, onChange, cycles, day, now }: SpecificPickerPro
             }}
           />
           <Select
+            comboboxProps={dropdown}
             aria-label={label}
             data={parts}
             value={value.at}
@@ -292,6 +312,7 @@ function SpecificPicker({ value, onChange, cycles, day, now }: SpecificPickerPro
         .sort((a, b) => Date.parse(b.start_at) - Date.parse(a.start_at));
       picker = (
         <Select
+          comboboxProps={dropdown}
           aria-label={label}
           data={started.map((c) => ({ value: c.id, label: cycleRange(c) }))}
           value={value.at}

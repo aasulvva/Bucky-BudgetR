@@ -19,6 +19,8 @@ interface ResolutionPickerProps {
   /** The most intervals the default may give: MAX_BARS for bars, MAX_POINTS for lines. */
   max: number;
   cycles: Cycle[];
+  /** Render the dropdown in place, not in a portal (inside a drawer). */
+  inline?: boolean;
 }
 
 /**
@@ -27,8 +29,16 @@ interface ResolutionPickerProps {
  * and the value no longer makes sense, it switches to the period's default.
  * A graph that can't draw that many intervals goes coarser itself.
  */
-export function ResolutionPicker({ value, onChange, choice, max, cycles }: ResolutionPickerProps) {
+export function ResolutionPicker({
+  value,
+  onChange,
+  choice,
+  max,
+  cycles,
+  inline = false,
+}: ResolutionPickerProps) {
   const { t } = useTranslation();
+  const dropdown = inline ? { withinPortal: false } : undefined;
   useClockVersion();
   const now = clockNow();
   const options = applicableResolutions(choice, cycles, now);
@@ -40,6 +50,7 @@ export function ResolutionPicker({ value, onChange, choice, max, cycles }: Resol
 
   return (
     <Select
+      comboboxProps={dropdown}
       label={t("stats.resolution.label")}
       data={options.map((r) => ({ value: r, label: t(`stats.resolution.options.${r}`) }))}
       value={kept}

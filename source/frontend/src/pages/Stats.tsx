@@ -153,12 +153,13 @@ function Graphs({
         </Paper>
       ) : (
         <Group justify="space-between" wrap="nowrap" gap="xs">
-          <Text size="sm" c="dimmed" data-testid="graph-summary">
+          <Text size="sm" c="dimmed" data-testid="graph-summary" style={{ flex: 1, minWidth: 0 }}>
             {graphSummary(settings, cycles)}
           </Text>
           <Button
             variant="default"
             size="xs"
+            style={{ flexShrink: 0 }}
             leftSection={<IconAdjustmentsHorizontal size={16} />}
             onClick={() => {
               setDrawer(true);
