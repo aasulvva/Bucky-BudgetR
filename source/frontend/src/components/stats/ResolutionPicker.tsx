@@ -6,7 +6,7 @@ import type { Cycle } from "@/api/cycles";
 import { now as clockNow, useClockVersion } from "@/lib/clock";
 import {
   applicableResolutions,
-  keptResolution,
+  defaultResolution,
   type PeriodChoice,
   type Resolution,
 } from "@/lib/periods";
@@ -21,6 +21,8 @@ interface ResolutionPickerProps {
   cycles: Cycle[];
   /** Render the dropdown in place, not in a portal (inside a drawer). */
   inline?: boolean;
+  /** Resolutions not to offer, such as the whole period for a pie per interval. */
+  omit?: Resolution[];
 }
 
 /**
@@ -36,13 +38,20 @@ export function ResolutionPicker({
   max,
   cycles,
   inline = false,
+  omit = [],
 }: ResolutionPickerProps) {
   const { t } = useTranslation();
   const dropdown = inline ? { withinPortal: false } : undefined;
   useClockVersion();
   const now = clockNow();
-  const options = applicableResolutions(choice, cycles, now);
-  const kept = options.length > 0 ? keptResolution(value, choice, cycles, max, now) : value;
+  const options = applicableResolutions(choice, cycles, now).filter((r) => !omit.includes(r));
+  // A value no longer offered becomes the period's default, or when that
+  // isn't offered either, the coarsest one left.
+  const fallback = () => {
+    const d = defaultResolution(choice, cycles, max, now);
+    return options.includes(d) ? d : (options.at(-1) ?? value);
+  };
+  const kept = options.length === 0 || options.includes(value) ? value : fallback();
 
   useEffect(() => {
     if (kept !== value) onChange(kept);

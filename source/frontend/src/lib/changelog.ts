@@ -16,6 +16,35 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.12.00",
+    date: "2026-11-08",
+    title: {
+      en: "Pie charts",
+      nb: "Kakediagrammer",
+      nn: "Kakediagram",
+    },
+    changes: {
+      en: [
+        "Graphs can now be pies: your spending, income or balances split per bucket or per account, or spread over time, such as one slice per month of the year (up to 12 slices).",
+        "The total is in the middle. Next to the pie, a list shows each slice's amount and share. Or put the names and shares on the slices, or show both.",
+        "The largest get their own slice and the rest add up to Other. Click a slice or a row in the list to open its transactions. Pies are saved like any other graph.",
+        "Graphs have four new colours for this, and Other is a quieter grey that's easier to tell apart from them.",
+      ],
+      nb: [
+        "Grafer kan nå være kakediagrammer: utgiftene, inntektene eller saldoene dine fordelt per bøtte eller per konto, eller over tid, for eksempel én sektor per måned i året (opptil 12 sektorer).",
+        "Totalen står i midten. Ved siden av kaka viser en liste beløpet og andelen for hver sektor. Du kan også sette navn og andel på sektorene, eller vise begge.",
+        "De største får egen sektor, og resten legges sammen som Annet. Klikk på en sektor eller en rad i listen for å åpne transaksjonene. Kakediagrammer lagres som andre grafer.",
+        "Grafene har fått fire nye farger til dette, og Annet er en dempet grå som er lettere å skille fra dem.",
+      ],
+      nn: [
+        "Grafar kan no vere kakediagram: utgiftene, inntektene eller saldoane dine fordelte per bøtte eller per konto, eller over tid, til dømes éin sektor per månad i året (opptil 12 sektorar).",
+        "Totalen står i midten. Ved sida av kaka viser ei liste beløpet og delen for kvar sektor. Du kan òg setje namn og del på sektorane, eller vise begge.",
+        "Dei største får eigen sektor, og resten vert lagt saman som Anna. Klikk på ein sektor eller ei rad i lista for å opne transaksjonane. Kakediagram vert lagra som andre grafar.",
+        "Grafane har fått fire nye fargar til dette, og Anna er ein dempa grå som er lettare å skilje frå dei.",
+      ],
+    },
+  },
+  {
     version: "v1.11.00",
     date: "2026-11-08",
     title: {

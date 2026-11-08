@@ -274,6 +274,127 @@ describe("Stats", () => {
     expect(drawer.getByRole("combobox", { name: "Show" })).toHaveValue("Spending");
   });
 
+  it("draws spending per bucket as a pie with a list, and opens a slice's transactions", async () => {
+    apiMock.on(stats, (req) => ({
+      body: {
+        intervals: [{ start: req.query.get("from") ?? "", end: req.query.get("to") ?? "" }],
+        series: [
+          { account_id: "1234", bucket_id: "1000000001", currency: "NOK", values: ["300.00"] },
+          { account_id: "1234", bucket_id: null, currency: "NOK", values: ["100.00"] },
+        ],
+      },
+    }));
+    const { router } = renderRoute(
+      "/stats?kind=pie&metric=spending&period=current-month&res=day&group=bucket",
+    );
+    const list = within(await screen.findByTestId("pie-list"));
+    expect(lastQuery()?.get("resolution")).toBe("total");
+    expect(lastQuery()?.get("group_by")).toBe("bucket");
+    const rows = list.getAllByRole("row").map((r) => r.textContent);
+    expect(rows[1]).toMatch(/^Food.*300.*75%$/);
+    expect(rows[2]).toMatch(/^No bucket.*100.*25%$/);
+    expect(rows[3]).toMatch(/^Total.*400/);
+    // The whole period has no resolution to pick.
+    expect(screen.queryByRole("combobox", { name: "Show per" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: "Include 0" })).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /Slices shown/ })).toHaveValue("5");
+
+    await userEvent.click(list.getByRole("link", { name: "Food" }));
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe("/transactions");
+    });
+    const q = new URLSearchParams(router.state.location.search);
+    expect(q.get("bucket_id")).toBe("1000000001");
+    expect(q.get("type")).toBe("EXP");
+  });
+
+  it("starts a pie per bucket, and per interval asks for a resolution without Top N", async () => {
+    const { router } = renderRoute("/stats");
+    await userEvent.click(await screen.findByRole("radio", { name: "Pie" }));
+    await waitFor(() => {
+      expect(lastQuery()?.get("group_by")).toBe("bucket");
+    });
+    expect(lastQuery()?.get("resolution")).toBe("total");
+    expect(router.state.location.search).toContain("kind=pie");
+
+    await pick("Split", "Per interval");
+    await waitFor(() => {
+      expect(lastQuery()?.get("group_by")).toBe("none");
+    });
+    expect(lastQuery()?.get("resolution")).not.toBe("total");
+    expect(screen.queryByRole("textbox", { name: /Slices shown/ })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("combobox", { name: "Show per" }));
+    expect(screen.queryByRole("option", { name: "Whole period" })).not.toBeInTheDocument();
+  });
+
+  it("shows balances per account in a pie, leaving out those below 0", async () => {
+    apiMock.on(stats, (req) => ({
+      body: {
+        intervals: [{ start: req.query.get("from") ?? "", end: req.query.get("to") ?? "" }],
+        series: [
+          { account_id: "1234", currency: "NOK", values: ["500.00"] },
+          { account_id: "2345", currency: "NOK", values: ["-80.00"] },
+        ],
+      },
+    }));
+    renderRoute("/stats?kind=pie&metric=balance&period=current-month&res=day");
+    expect(
+      await screen.findByText("1 below 0 isn't shown: a pie can't show it."),
+    ).toBeInTheDocument();
+    expect(lastQuery()?.get("group_by")).toBe("account");
+    expect(within(screen.getByTestId("pie-list")).getByText("Main")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("combobox", { name: "Split" }));
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Per account"]);
+  });
+
+  it("puts labels on the slices instead of the list, and saves the pie", async () => {
+    const { router } = renderRoute(
+      "/stats?kind=pie&metric=spending&period=current-month&res=day&group=bucket",
+    );
+    expect(await screen.findByTestId("pie-list")).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "List" })).toBeChecked();
+    await userEvent.click(screen.getByRole("radio", { name: "On the slices" }));
+    expect(router.state.location.search).toContain("labels=slices");
+    await waitFor(() => {
+      expect(screen.queryByTestId("pie-list")).not.toBeInTheDocument();
+    });
+    expect(screen.getByTestId("pie")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Save graph…" }));
+    const dialog = within(await screen.findByRole("dialog", { name: "Save graph" }));
+    await userEvent.type(dialog.getByRole("textbox", { name: "Name" }), "Buckets");
+    await userEvent.click(dialog.getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(apiMock.calls("PATCH /api/v1/me/preferences").at(-1)?.body).toEqual({
+        saved_graphs: [
+          {
+            id: "g-1",
+            name: "Buckets",
+            graph: {
+              kind: "pie",
+              metric: "spending",
+              period: "current-month",
+              resolution: "day",
+              group_by: "bucket",
+              pie_labels: "slices",
+            },
+          },
+        ],
+      });
+    });
+  });
+
+  it("puts a pie's settings in the mobile drawer, summarised", async () => {
+    viewport.width = 375;
+    renderRoute("/stats?kind=pie&metric=spending&period=current-year&res=month");
+    expect(await screen.findByTestId("graph-summary")).toHaveTextContent(
+      "Spending · This year · Month",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Graph settings" }));
+    const drawer = within(await screen.findByRole("dialog", { name: "Graph settings" }));
+    expect(drawer.getByRole("combobox", { name: "Split" })).toHaveValue("Per interval");
+  });
+
   it("has a Reports tab for later", async () => {
     const { router } = renderRoute("/stats");
     await userEvent.click(await screen.findByRole("tab", { name: "Reports" }));

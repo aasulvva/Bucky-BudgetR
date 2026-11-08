@@ -981,7 +981,8 @@
       "kind": "Graph",
       "kinds": {
         "bar": "Bars",
-        "line": "Line"
+        "line": "Line",
+        "pie": "Pie"
       },
       "metric": "Show",
       "metrics": {
@@ -993,7 +994,8 @@
       "groups": {
         "none": "Overall",
         "account": "Per account",
-        "bucket": "Per bucket"
+        "bucket": "Per bucket",
+        "interval": "Per interval"
       },
       "top": "Series shown",
       "topHint": "The largest get their own colour, up to {{max}}; the rest add up to Other.",
@@ -1028,7 +1030,21 @@
       "stepped": "Stepped",
       "yAxis": "Y axis",
       "includeZero": "Include 0",
-      "fit": "Fit to data"
+      "fit": "Fit to data",
+      "topPie": "Slices shown",
+      "topPieHint": "The largest get their own slice, up to {{max}}; the rest add up to Other.",
+      "tooManySlices": "Shown per {{resolution}}: a pie shows at most {{max}} slices.",
+      "belowZero_one": "{{count}} below 0 isn't shown: a pie can't show it.",
+      "belowZero_other": "{{count}} below 0 aren't shown: a pie can't show them.",
+      "slice": "Slice",
+      "amount": "Amount",
+      "share": "Share",
+      "pieLabels": "Details",
+      "pieLabelOptions": {
+        "list": "List",
+        "slices": "On the slices",
+        "both": "Both"
+      }
     },
     "saved": {
       "label": "Saved graphs",

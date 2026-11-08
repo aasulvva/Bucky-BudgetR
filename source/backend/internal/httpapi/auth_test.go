@@ -401,8 +401,8 @@ func TestPreferences(t *testing.T) {
 	if w := patch(`{"dashboard":null}`); strings.TrimSpace(w.Body.String()) != `{}` {
 		t.Errorf("dashboard reset: %d %s", w.Code, w.Body)
 	}
-	// Saved graphs (#122) are kept as given, and null removes them.
-	graphs := `{"saved_graphs":[{"graph":{"account_ids":["1234"],"group_by":"bucket","kind":"bar","metric":"spending","period":"last-4-quarters","resolution":"day","tags":["food"],"top":5},"id":"g-1","name":"Food"},{"graph":{"fit_y_axis":true,"kind":"line","metric":"balance","period":"last-3-cycles","resolution":"week","stepped":true},"id":"g-2","name":"Balance"}]}`
+	// Saved graphs (#122, pies #123) are kept as given, and null removes them.
+	graphs := `{"saved_graphs":[{"graph":{"account_ids":["1234"],"group_by":"bucket","kind":"bar","metric":"spending","period":"last-4-quarters","resolution":"day","tags":["food"],"top":5},"id":"g-1","name":"Food"},{"graph":{"fit_y_axis":true,"kind":"line","metric":"balance","period":"last-3-cycles","resolution":"week","stepped":true},"id":"g-2","name":"Balance"},{"graph":{"group_by":"bucket","kind":"pie","metric":"spending","period":"current-year","pie_labels":"both","resolution":"month"},"id":"g-3","name":"Pie"}]}`
 	if w := patch(graphs); w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != graphs {
 		t.Errorf("saved graphs: %d %s", w.Code, w.Body)
 	}
@@ -439,7 +439,8 @@ func TestPreferences(t *testing.T) {
 		`{"dashboard":{"widgets":[{"id":"a","type":"health","width":"half","title":"` + strings.Repeat("x", 41) + `"}]}}`,
 		`{"saved_graphs":[{"id":"a","name":"A","graph":{"kind":"bar","metric":"spending","period":"current-month","resolution":"day"}},{"id":"a","name":"B","graph":{"kind":"bar","metric":"spending","period":"current-month","resolution":"day"}}]}`,
 		`{"saved_graphs":[{"id":"a","name":"  ","graph":{"kind":"bar","metric":"spending","period":"current-month","resolution":"day"}}]}`,
-		`{"saved_graphs":[{"id":"a","name":"A","graph":{"kind":"pie","metric":"spending","period":"current-month","resolution":"day"}}]}`,
+		`{"saved_graphs":[{"id":"a","name":"A","graph":{"kind":"donut","metric":"spending","period":"current-month","resolution":"day"}}]}`,
+		`{"saved_graphs":[{"id":"a","name":"A","graph":{"kind":"pie","metric":"spending","period":"current-month","resolution":"day","pie_labels":"inside"}}]}`,
 		`{"saved_graphs":[{"id":"a","name":"A","graph":{"kind":"bar","metric":"spending","period":"current-decade","resolution":"day"}}]}`,
 		`{"saved_graphs":[{"id":"a","name":"A","graph":{"kind":"bar","metric":"spending","period":"current-month","resolution":"day","top":9}}]}`,
 		`{"saved_graphs":[{"id":"a","name":"A","graph":{"kind":"bar","metric":"spending","period":"current-month","resolution":"day","colour":"red"}}]}`,

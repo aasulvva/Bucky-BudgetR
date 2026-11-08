@@ -981,7 +981,8 @@
       "kind": "Graf",
       "kinds": {
         "bar": "Søyler",
-        "line": "Linje"
+        "line": "Linje",
+        "pie": "Kake"
       },
       "metric": "Vis",
       "metrics": {
@@ -993,7 +994,8 @@
       "groups": {
         "none": "Samla",
         "account": "Per konto",
-        "bucket": "Per bøtte"
+        "bucket": "Per bøtte",
+        "interval": "Per intervall"
       },
       "top": "Tal på seriar",
       "topHint": "Dei største får eigen farge, opptil {{max}}; resten vert lagt saman som Anna.",
@@ -1028,7 +1030,21 @@
       "stepped": "Trinnvis",
       "yAxis": "Y-akse",
       "includeZero": "Ta med 0",
-      "fit": "Tilpass til data"
+      "fit": "Tilpass til data",
+      "topPie": "Tal på sektorar",
+      "topPieHint": "Dei største får eigen sektor, opptil {{max}}; resten vert lagt saman som Anna.",
+      "tooManySlices": "Vist per {{resolution}}: ei kake viser høgst {{max}} sektorar.",
+      "belowZero_one": "{{count}} under 0 vert ikkje vist: ei kake kan ikkje vise det.",
+      "belowZero_other": "{{count}} under 0 vert ikkje viste: ei kake kan ikkje vise dei.",
+      "slice": "Sektor",
+      "amount": "Beløp",
+      "share": "Del",
+      "pieLabels": "Detaljar",
+      "pieLabelOptions": {
+        "list": "Liste",
+        "slices": "På sektorane",
+        "both": "Begge"
+      }
     },
     "saved": {
       "label": "Lagra grafar",

@@ -14,6 +14,10 @@ import {
   intervalLink,
   newGraphId,
   periodLabel,
+  pieData,
+  pieSlicing,
+  queryResolution,
+  seriesColor,
   sameGraph,
   shownCurrency,
   showDots,
@@ -82,7 +86,7 @@ describe("URL settings", () => {
   it("fall back to the default per field", () => {
     const s = graphFromSearch(
       new URLSearchParams(
-        "kind=pie&metric=spending&period=next-year&res=decade&group=tag&top=99&account=12+34",
+        "kind=donut&metric=spending&period=next-year&res=decade&group=tag&top=99&account=12+34",
       ),
       base,
     );
@@ -499,5 +503,172 @@ describe("intervalLink", () => {
     expect(intervalLink({ ...base, tags: ["a", "b"] }, "other", day)).toBe(
       "/transactions?cycle_id=all&from=2026-11-01&to=2026-11-01&type=EXP",
     );
+  });
+});
+
+describe("pies", () => {
+  const pie: GraphSettings = { ...base, kind: "pie", group_by: "bucket" };
+  const whole = [{ start: startAtFor("2026-11-01"), end: startAtFor("2026-12-01") }];
+  const food = bucket({ id: "b1", name: "Food", source_account_id: "1234" });
+  const fun = bucket({ id: "b2", name: "Fun", source_account_id: "1234" });
+  const rent = bucket({ id: "b3", name: "Rent", source_account_id: "1234" });
+  const refund = bucket({ id: "b4", name: "Refunds", source_account_id: "1234" });
+  const buckets = [food, fun, rent, refund];
+  const line = (bucket_id: string | null, value: string) => ({
+    account_id: "1234",
+    bucket_id,
+    currency: "NOK",
+    values: [value],
+  });
+
+  it("keep their labels setting in the URL, and drop what only bars and lines have", () => {
+    const s = cleanGraph({ ...pie, pie_labels: "both", fit_y_axis: true, stepped: true });
+    expect(s).toEqual({ ...pie, pie_labels: "both" });
+    expect(graphToSearch(s).toString()).toBe(
+      "kind=pie&metric=spending&period=current-month&res=day&group=bucket&labels=both",
+    );
+    expect(graphFromSearch(graphToSearch(s), base)).toEqual(s);
+    // A list is the default, and bars have no labels setting.
+    expect(cleanGraph({ ...pie, pie_labels: "list" }).pie_labels).toBeUndefined();
+    expect(cleanGraph({ ...base, pie_labels: "both" }).pie_labels).toBeUndefined();
+    expect(graphFromSearch(new URLSearchParams("kind=pie&labels=inside"), base).pie_labels).toBe(
+      undefined,
+    );
+  });
+
+  it("slice per bucket or account over the whole period, or per interval when not split", () => {
+    expect(pieSlicing(pie)).toBe("bucket");
+    expect(pieSlicing({ ...pie, group_by: "account" })).toBe("account");
+    expect(pieSlicing({ ...pie, group_by: "none" })).toBe("interval");
+    // A balance pie is always per account.
+    expect(pieSlicing({ ...pie, metric: "balance", group_by: "none" })).toBe("account");
+    expect(cleanGraph({ ...pie, metric: "balance", group_by: "none" }).group_by).toBe("account");
+    expect(queryResolution(pie, "day")).toBe("total");
+    expect(queryResolution({ ...pie, group_by: "none" }, "month")).toBe("month");
+    expect(queryResolution(base, "day")).toBe("day");
+  });
+
+  it("summarise in one line", () => {
+    expect(graphSummary({ ...pie, period: "current-year", resolution: "month" })).toBe(
+      "Spending · This year · Per bucket",
+    );
+    expect(
+      graphSummary({ ...pie, group_by: "none", period: "current-year", resolution: "month" }),
+    ).toBe("Spending · This year · Month");
+  });
+
+  it("have a slice per bucket with its share: the largest, in name order, and the rest as Other", () => {
+    const result: StatsSeries = {
+      intervals: whole,
+      series: [
+        line("b1", "300.00"),
+        line("b2", "100.00"),
+        line("b3", "500.00"),
+        line(null, "100.00"),
+        { ...line("b1", "50.00"), currency: "EUR" },
+      ],
+    };
+    const data = pieData(result, { ...pie, top: 3 }, "total", "NOK", [main], buckets);
+    expect(data.slices.map((x) => [x.name, x.label, x.color, x.amount, x.share])).toEqual([
+      // The largest three (No bucket ties with Fun and comes after it), in name order.
+      ["b-b1", "Food", "var(--graph-1)", "300.00", 0.3],
+      ["b-b2", "Fun", "var(--graph-2)", "100.00", 0.1],
+      ["b-b3", "Rent", "var(--graph-3)", "500.00", 0.5],
+      ["other", "Other", "var(--graph-other)", "100.00", 0.1],
+    ]);
+    expect(data.total).toBe("1000.00");
+    expect(data.other).toBe(1);
+    expect(data.belowZero).toBe(0);
+    expect(data.slices.every((x) => x.index === 0)).toBe(true);
+  });
+
+  it("give expenses on no bucket a slice, and leave out what's at or below 0", () => {
+    const result: StatsSeries = {
+      intervals: whole,
+      series: [
+        line("b1", "300.00"),
+        line("b2", "0.00"),
+        line("b4", "-40.00"),
+        line(null, "100.00"),
+      ],
+    };
+    const data = pieData(result, pie, "total", "NOK", [main], buckets);
+    expect(data.slices.map((x) => [x.name, x.label])).toEqual([
+      ["b-b1", "Food"],
+      ["none", "No bucket"],
+    ]);
+    expect(data.belowZero).toBe(1);
+    expect(data.slices.reduce((a, x) => a + x.share, 0)).toBeCloseTo(1);
+  });
+
+  it("show balances at the period's end, per account, without the negative ones", () => {
+    const card = account({ id: "4567", name: "Card" });
+    const result: StatsSeries = {
+      intervals: whole,
+      series: [
+        { account_id: "1234", currency: "NOK", values: ["750.00"] },
+        { account_id: "2345", currency: "NOK", values: ["250.00"] },
+        { account_id: "4567", currency: "NOK", values: ["-500.00"] },
+      ],
+    };
+    const s: GraphSettings = { ...pie, metric: "balance", group_by: "none" };
+    const data = pieData(result, s, "total", "NOK", [main, savings, card], []);
+    expect(data.slices.map((x) => [x.name, x.label, x.share])).toEqual([
+      ["a-1234", "Main", 0.75],
+      ["a-2345", "Savings", 0.25],
+    ]);
+    expect(data.belowZero).toBe(1);
+  });
+
+  it("have a slice per interval in time order, up to 12 colours", () => {
+    const months = Array.from({ length: 12 }, (_, i) => ({
+      start: startAtFor(`2026-${String(i + 1).padStart(2, "0")}-01`),
+      end: startAtFor(i === 11 ? "2027-01-01" : `2026-${String(i + 2).padStart(2, "0")}-01`),
+    }));
+    const values = months.map((_, i) => (i === 3 ? "0.00" : i === 5 ? "-10.00" : "100.00"));
+    const result: StatsSeries = { intervals: months, series: [{ currency: "NOK", values }] };
+    const s: GraphSettings = {
+      ...pie,
+      group_by: "none",
+      period: "current-year",
+      resolution: "month",
+    };
+    const data = pieData(result, s, "month", "NOK", [main], [], "en-GB");
+    expect(data.slices).toHaveLength(10);
+    expect(data.slices.slice(0, 4).map((x) => [x.name, x.label, x.color, x.index])).toEqual([
+      ["i-0", "January 2026", "var(--graph-1)", 0],
+      ["i-1", "February 2026", "var(--graph-2)", 1],
+      ["i-2", "March 2026", "var(--graph-3)", 2],
+      // April is 0 and June below 0: left out, and the colours run on.
+      ["i-4", "May 2026", "var(--graph-4)", 4],
+    ]);
+    expect(data.slices.at(-1)?.color).toBe("var(--graph-10)");
+    expect(data.belowZero).toBe(1);
+    expect(data.total).toBe("1000.00");
+  });
+
+  it("don't put slot 7 next to slot 1 in a pie of 7 slices", () => {
+    const week = days(7);
+    const result: StatsSeries = {
+      intervals: week,
+      series: [{ currency: "NOK", values: week.map(() => "10.00") }],
+    };
+    const s: GraphSettings = { ...pie, group_by: "none", period: "current-week" };
+    const colors = pieData(result, s, "day", "NOK", [main], []).slices.map((x) => x.color);
+    expect(colors.slice(0, 6)).toEqual([0, 1, 2, 3, 4, 5].map((i) => seriesColor(i)));
+    expect(colors[6]).toBe("var(--graph-10)");
+    expect(seriesColor(11)).toBe("var(--graph-12)");
+  });
+
+  it("go coarser when there are more than 12 intervals", () => {
+    const month = period({ kind: "last", unit: "days", count: 30 });
+    expect(fitResolution(month, "day", "pie", 300, [])).toEqual({
+      resolution: "week",
+      coarsened: "count",
+    });
+    expect(fitResolution(month, "week", "pie", 100, [])).toEqual({
+      resolution: "week",
+      coarsened: null,
+    });
   });
 });
