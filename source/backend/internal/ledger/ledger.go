@@ -314,6 +314,13 @@ func Get(ctx context.Context, db sqlc.DBTX, userID, id string) (*Transaction, er
 	return t, nil
 }
 
+// Validate checks e as Record would before touching the database: types,
+// signs, tags, counterparty and lines given twice.
+func Validate(e Entry) error {
+	_, err := normalize(e)
+	return err
+}
+
 // normalize checks everything that doesn't need the database and returns e
 // in its stored form.
 func normalize(e Entry) (Entry, error) {

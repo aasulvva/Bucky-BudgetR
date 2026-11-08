@@ -55,6 +55,8 @@ tags:
     description: User management, for admins only.
   - name: stats
     description: Aggregated series for graphs and reports (#119).
+  - name: schedules
+    description: Scheduled and recurring transactions and their approval queue (#31).
 
 paths:
   /healthz:
@@ -1736,6 +1738,218 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/v1/schedules:
+    get:
+      operationId: listSchedules
+      tags: [schedules]
+      summary: List schedules
+      description: The user's schedules, the next due first, then the ones that have ended.
+      responses:
+        "200":
+          description: The schedules.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Schedule"
+        "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+    post:
+      operationId: createSchedule
+      tags: [schedules]
+      summary: Schedule a transaction
+      description: |
+        Schedules an income, expense or transfer once, or every `every`
+        days, weeks, months or years from `start_date`, at `time` in
+        `time_zone`. Monthly and yearly ones keep the start date's day,
+        using the last day of shorter months. It ends never, after
+        `end_count` occurrences (counted from the start date) or after the
+        one on `end_date`.
+
+        The transaction is checked like `POST /transactions` (400
+        `invalid_request` or `currency_mismatch`). The first occurrence is
+        the first at or after now; earlier ones aren't recorded, and a
+        schedule with none left is 400.
+
+        When an occurrence comes due, an `auto` schedule records it, dated
+        at its scheduled time, with its bucket lines in the active cycle and
+        the usual refill rules. An `approve` schedule queues it, due
+        `due_days` later. An occurrence that can't be recorded (no active
+        cycle, a time outside it, an account or bucket that's gone) is
+        queued too, with the reason: see `GET /scheduled-transactions`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScheduleInput"
+      responses:
+        "201":
+          description: The new schedule.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Schedule"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/schedules/{scheduleId}:
+    parameters:
+      - $ref: "#/components/parameters/ScheduleId"
+    get:
+      operationId: getSchedule
+      tags: [schedules]
+      summary: Get a schedule
+      responses:
+        "200":
+          description: The schedule.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Schedule"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+    put:
+      operationId: updateSchedule
+      tags: [schedules]
+      summary: Change a schedule
+      description: |
+        Replaces the schedule's settings, checked as for a new one. Its next
+        occurrence is then the first at or after now, so resuming a paused
+        schedule doesn't record the ones it missed. A schedule with no
+        occurrences left stays, ended.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScheduleInput"
+      responses:
+        "200":
+          description: The changed schedule.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Schedule"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+    delete:
+      operationId: deleteSchedule
+      tags: [schedules]
+      summary: Delete a schedule
+      description: Deletes the schedule and its occurrences, queued ones too. The transactions it recorded stay.
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/schedules/{scheduleId}/upcoming:
+    parameters:
+      - $ref: "#/components/parameters/ScheduleId"
+    get:
+      operationId: listUpcoming
+      tags: [schedules]
+      summary: The next occurrences of a schedule
+      description: |
+        The times of the schedule's next occurrences, from its next one (a
+        paused schedule from now). Empty when it has ended.
+      parameters:
+        - name: count
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 5
+      responses:
+        "200":
+          description: The times, earliest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                  format: date-time
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/scheduled-transactions:
+    get:
+      operationId: listScheduledTransactions
+      tags: [schedules]
+      summary: List scheduled transactions that came due
+      description: |
+        The occurrences of the user's schedules that came due, newest first,
+        one page at a time: `applied` ones with the transaction they
+        recorded, `queued` ones waiting for approval with the reason and due
+        time, and `skipped` ones. Pass `next_cursor` as `cursor` to get the
+        next page.
+      parameters:
+        - name: state
+          in: query
+          schema:
+            $ref: "#/components/schemas/ScheduledTransactionState"
+        - name: schedule_id
+          in: query
+          schema:
+            $ref: "#/components/schemas/ScheduleId"
+        - name: limit
+          in: query
+          description: The page size.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          description: The previous page's `next_cursor`.
+          schema:
+            type: string
+            maxLength: 100
+      responses:
+        "200":
+          description: A page of scheduled transactions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduledTransactionPage"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
 components:
   securitySchemes:
     cookieAuth:
@@ -1785,6 +1999,13 @@ components:
       required: true
       schema:
         $ref: "#/components/schemas/TransactionId"
+
+    ScheduleId:
+      name: scheduleId
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/ScheduleId"
 
   responses:
     Error:
@@ -3451,3 +3672,243 @@ components:
         request_id:
           type: string
           description: Same as the `X-Request-ID` response header. Quote it when reporting a bug.
+
+    ScheduleId:
+      type: string
+      description: 10-digit schedule ID (the owner's user ID, then 4 digits).
+      pattern: "^[1-9][0-9]{9}$"
+      example: "4829135521"
+
+    ScheduledTransactionId:
+      type: string
+      description: 18-digit ID of a schedule's occurrence (the schedule's ID, then 8 digits).
+      pattern: "^[1-9][0-9]{17}$"
+      example: "482913552100417731"
+
+    ScheduleMode:
+      type: string
+      enum: [auto, approve]
+      description: "`auto` records each occurrence when it comes due; `approve` queues it for approval."
+
+    ScheduleFrequency:
+      type: string
+      enum: [once, day, week, month, year]
+
+    ScheduleTransaction:
+      type: object
+      additionalProperties: false
+      required: [type, account_id, amount]
+      description: What a schedule records, as in `POST /transactions` without `at`.
+      properties:
+        type:
+          type: string
+          enum: [INC, EXP, TRF]
+        counterparty:
+          type: string
+          maxLength: 200
+        tags:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            maxLength: 50
+        triggers_refill:
+          type: boolean
+          description: As in `POST /transactions`. Omitted, the user's `income_refill_rules` decide when it's recorded.
+        account_id:
+          $ref: "#/components/schemas/AccountId"
+        to_account_id:
+          $ref: "#/components/schemas/AccountId"
+        amount:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Positive.
+        bucket_lines:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [bucket_id, amount]
+            properties:
+              bucket_id:
+                $ref: "#/components/schemas/BucketId"
+              amount:
+                allOf:
+                  - $ref: "#/components/schemas/Amount"
+                description: Positive.
+
+    ScheduleInput:
+      type: object
+      additionalProperties: false
+      required: [transaction, mode, start_date, time, frequency]
+      properties:
+        name:
+          type: string
+          maxLength: 60
+          description: Optional, trimmed.
+        transaction:
+          $ref: "#/components/schemas/ScheduleTransaction"
+        mode:
+          $ref: "#/components/schemas/ScheduleMode"
+        due_days:
+          type: integer
+          minimum: 0
+          maximum: 60
+          default: 3
+          description: How many days after it's queued an occurrence is due for approval.
+        start_date:
+          type: string
+          format: date
+          description: The date of the first occurrence, in `time_zone`.
+        time:
+          type: string
+          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+          description: The time of day of each occurrence (HH:MM), in `time_zone`.
+          example: "08:00"
+        time_zone:
+          type: string
+          maxLength: 64
+          description: An IANA time zone. Omitted, the user's `time_zone` preference, else UTC.
+          example: Europe/Oslo
+        frequency:
+          $ref: "#/components/schemas/ScheduleFrequency"
+        every:
+          type: integer
+          minimum: 1
+          maximum: 366
+          default: 1
+          description: Every how many days, weeks, months or years. Ignored for `once`.
+        end_count:
+          type: integer
+          minimum: 1
+          description: Ends after this many occurrences, counted from `start_date`. Not with `end_date`.
+        end_date:
+          type: string
+          format: date
+          description: Ends after the occurrence on this date. Not with `end_count`.
+        paused:
+          type: boolean
+          default: false
+          description: A paused schedule's occurrences aren't recorded or queued.
+
+    Schedule:
+      type: object
+      additionalProperties: false
+      required: [id, name, transaction, mode, due_days, start_date, time, time_zone, frequency, every,
+        end_count, end_date, paused, next_index, next_at, created_at, updated_at]
+      properties:
+        id:
+          $ref: "#/components/schemas/ScheduleId"
+        name:
+          type: string
+        transaction:
+          $ref: "#/components/schemas/ScheduleTransaction"
+        mode:
+          $ref: "#/components/schemas/ScheduleMode"
+        due_days:
+          type: integer
+        start_date:
+          type: string
+          format: date
+        time:
+          type: string
+          example: "08:00"
+        time_zone:
+          type: string
+        frequency:
+          $ref: "#/components/schemas/ScheduleFrequency"
+        every:
+          type: integer
+        end_count:
+          type: integer
+          nullable: true
+        end_date:
+          type: string
+          format: date
+          nullable: true
+        paused:
+          type: boolean
+        next_index:
+          type: integer
+          description: The number of the next occurrence, from 0 (counted from `start_date`).
+        next_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the next occurrence is due. Null when the schedule has ended.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ScheduledTransactionState:
+      type: string
+      enum: [applied, queued, skipped]
+
+    ScheduledTransactionReason:
+      type: string
+      enum: [approval, no_active_cycle, outside_cycle, invalid]
+      description: |
+        Why it's queued: the schedule asks for approval, there was no active
+        cycle, its time was outside the active cycle, or the transaction
+        broke a rule (see `detail`), for example a deleted account or bucket.
+
+    ScheduledTransaction:
+      type: object
+      additionalProperties: false
+      required: [id, schedule_id, scheduled_at, state, reason, detail, queued_at, due_at, transaction_id, resolved_at]
+      properties:
+        id:
+          $ref: "#/components/schemas/ScheduledTransactionId"
+        schedule_id:
+          $ref: "#/components/schemas/ScheduleId"
+        scheduled_at:
+          type: string
+          format: date-time
+        state:
+          $ref: "#/components/schemas/ScheduledTransactionState"
+        reason:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/ScheduledTransactionReason"
+          nullable: true
+          description: Set when it was queued.
+        detail:
+          type: string
+          description: For `invalid`, the rule it broke.
+        queued_at:
+          type: string
+          format: date-time
+          nullable: true
+        due_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When a queued one is due for approval.
+        transaction_id:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/TransactionId"
+          nullable: true
+          description: The transaction it recorded.
+        resolved_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When it was applied or skipped.
+
+    ScheduledTransactionPage:
+      type: object
+      additionalProperties: false
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScheduledTransaction"
+        next_cursor:
+          type: string
+          nullable: true
+          description: Pass as `cursor` for the next page. Null on the last page.

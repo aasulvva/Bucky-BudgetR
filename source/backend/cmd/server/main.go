@@ -44,6 +44,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/logging"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/refill"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/schedules"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/transactions"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/web"
 )
@@ -133,13 +134,17 @@ func run(ctx context.Context, args []string, getenv func(string) string, out, lo
 	refills := refill.NewService(pool, ledgerSvc, refill.Options{Now: now})
 	cyclesSvc := cycles.NewService(pool, cycles.Options{Now: now, OnEnd: refills.OnEnd, OnStart: refills.OnStart})
 	go cyclesSvc.PlanLoop(ctx, time.Hour, logger)
+	transactionsSvc := transactions.NewService(pool, ledgerSvc, transactions.Options{Now: now, Refills: refills})
+	schedulesSvc := schedules.NewService(pool, schedules.Options{Now: now, Transactions: transactionsSvc})
+	go schedulesSvc.RunLoop(ctx, cfg.ScheduleInterval, logger)
 	handler, err := httpapi.NewHandler(logger, pool, httpapi.Options{
 		Auth:           authSvc,
 		Accounts:       accounts.NewService(pool, ledgerSvc, accounts.Options{Now: now}),
 		Cycles:         cyclesSvc,
 		Buckets:        buckets.NewService(pool, ledgerSvc, buckets.Options{Now: now, OnCreate: refills.OnCreate}),
-		Transactions:   transactions.NewService(pool, ledgerSvc, transactions.Options{Now: now, Refills: refills}),
+		Transactions:   transactionsSvc,
 		Refills:        refills,
+		Schedules:      schedulesSvc,
 		Docs:           cfg.Env == config.EnvDevelopment,
 		Web:            web.Handler(),
 		TrustedProxies: cfg.TrustedProxies,

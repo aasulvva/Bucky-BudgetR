@@ -218,6 +218,27 @@ Only **INC, EXP, TRF and INP** can be created from the *Create transaction* scre
 - **Suggestions:** `GET /tags` lists the user's tags, most recently used first. `GET /counterparties` lists the counterparties of incomes and expenses, each once (ignoring case), newest first, with the effective account, tags and buckets of its newest transaction that isn't reversed.
 - **Math:** calculate with full precision. Stored amounts use 2 decimals, rounded half away from zero (0.005 → 0.01, −0.005 → −0.01). Exchange rates use 8 decimals.
 
+### 5.6 Scheduled transactions
+
+A **schedule** records an INC, EXP or TRF later, once or again and again (#31). It holds the transaction as *Create transaction* would (account, amount, counterparty, tags, bucket lines) and when to record it.
+
+| Field | Notes |
+| ----- | ----- |
+| Schedule-ID | `<6-digit User-ID><4-digit random>` (10 digits) |
+| Repeat | once, or every N days, weeks, months or years from a start date |
+| Time | a time of day in a time zone (the user's when it's created), so it stays at the same local time across DST |
+| End | never, after N occurrences counted from the start date, or after the one on an end date |
+| Mode | **auto** (record it when due) or **approve** (queue it, due a number of days later) |
+| Paused | a paused schedule records and queues nothing |
+
+- **Monthly and yearly** keep the start date's day, using the last day of shorter months (31 Jan → 28 Feb → 31 Mar).
+- **First occurrence:** the first at or after the time the schedule is created or changed. Earlier ones aren't recorded, so resuming a paused schedule skips the ones it missed.
+- **When it's due,** the scheduler (a background loop) records it dated at its scheduled time, with its bucket lines in the active cycle and the usual refill rules (§6). An occurrence it can't record goes to the **approval queue** with the reason: no active cycle, its time is outside the active cycle (e.g. after the server was down), or the transaction breaks a rule (a deleted account or bucket).
+- **Catching up:** after a downtime, the missed occurrences follow in order. Each occurrence is handled once.
+- **Occurrence-ID:** `<10-digit Schedule-ID><8-digit random>` (18 digits). Each records its scheduled time, its state (applied, queued or skipped), why it was queued and the transaction it recorded.
+- **Deleting a schedule** deletes its occurrences, queued ones too. The transactions it recorded stay.
+- **Approving** a queued one (amounts and date editable), skipping it and marking it overdue come with #155; the screens with #154.
+
 ## 6. Cycle routines
 
 The routines run in the same database transaction as ending or starting the cycle, so they happen exactly once.
@@ -326,7 +347,7 @@ Desktop and mobile use the same groups (decided in #8; wireframes in the design 
 
 **MVP:** users/auth, bank accounts, transactions (OPB, BLA, INC, EXP, TRF + bucket types), corrections, cycles, buckets, refill/overflow, allocation routine, core screens, deployment.
 
-**Post-MVP:** scheduled & recurring transactions (auto-apply or approval queue with a due date), internal payments, multi-currency, stats & reports, savings module, dashboard widgets, data export/import.
+**Post-MVP:** scheduled & recurring transactions (auto-apply or approval queue with a due date; §5.6, #31: #153–#155), internal payments, multi-currency, stats & reports, savings module, dashboard widgets, data export/import.
 
 ## 11. Open questions & future ideas
 

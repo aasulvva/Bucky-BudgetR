@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 	"testing"
@@ -21,6 +22,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/refill"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/schedules"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/testdb"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/transactions"
 )
@@ -90,6 +92,7 @@ type env struct {
 	buckets  *buckets.Service
 	cycles   *cycles.Service
 	tx       *transactions.Service
+	sched    *schedules.Service
 }
 
 func setup(t *testing.T) env {
@@ -106,12 +109,14 @@ func setup(t *testing.T) env {
 	clock := d.Clock.Now
 	l := ledger.New(ledger.Options{AfterRecord: allocation.AfterRecord})
 	r := refill.NewService(pool, l, refill.Options{Now: clock})
+	tx := transactions.NewService(pool, l, transactions.Options{Now: clock, Refills: r})
 	return env{
 		pool: pool, d: d,
 		accounts: accounts.NewService(pool, l, accounts.Options{Now: clock}),
 		buckets:  buckets.NewService(pool, l, buckets.Options{Now: clock, OnCreate: r.OnCreate}),
 		cycles:   cycles.NewService(pool, cycles.Options{Now: clock, OnEnd: r.OnEnd, OnStart: r.OnStart}),
-		tx:       transactions.NewService(pool, l, transactions.Options{Now: clock, Refills: r}),
+		tx:       tx,
+		sched:    schedules.NewService(pool, schedules.Options{Now: clock, Transactions: tx}),
 	}
 }
 
@@ -127,7 +132,8 @@ func must[T any](t *testing.T) func(T, error) T {
 
 // scenario gives the user one of everything: accounts, an active and a
 // planned cycle, a refilled bucket, tagged transactions, a correction, a
-// reversal, a move and preferences with IDs.
+// reversal, a move, schedules with an applied and a queued occurrence, and
+// preferences with IDs.
 func (e env) scenario(t *testing.T, userID string) {
 	t.Helper()
 	ctx := t.Context()
@@ -158,6 +164,21 @@ func (e env) scenario(t *testing.T, userID string) {
 	must[transactions.Transaction](t)(e.tx.Create(ctx, userID, transactions.New{
 		Type: sqlc.TransactionTypeTRF, AccountID: a.ID, ToAccountID: b.ID, Amount: dec("100"),
 	}))
+	// Due now: the scheduler applies the first and queues the second.
+	daily := schedules.Settings{
+		Transaction: transactions.New{Type: sqlc.TransactionTypeEXP, Counterparty: "Lunch", Tags: []string{"food"}, AccountID: a.ID,
+			Amount: dec("20"), Buckets: []transactions.BucketAmount{{BucketID: food.ID, Amount: dec("20")}}},
+		Mode: sqlc.ScheduleModeAuto, DueDays: 3, Start: at("2026-10-10T00:00:00Z"), Minute: 12 * 60, TimeZone: "UTC",
+		Frequency: sqlc.ScheduleFrequencyDay, Every: 1,
+	}
+	must[schedules.Schedule](t)(e.sched.Create(ctx, userID, daily))
+	monthly := daily
+	monthly.Transaction = transactions.New{Type: sqlc.TransactionTypeTRF, AccountID: a.ID, ToAccountID: b.ID, Amount: dec("50")}
+	monthly.Mode, monthly.Frequency = sqlc.ScheduleModeApprove, sqlc.ScheduleFrequencyMonth
+	must[schedules.Schedule](t)(e.sched.Create(ctx, userID, monthly))
+	if err := e.sched.RunDue(ctx, slog.New(slog.DiscardHandler)); err != nil {
+		t.Fatal(err)
+	}
 	prefs := fmt.Sprintf(`{"locale":"nb-NO","dashboard":{"accounts":{"mode":"account","account_id":%q},"bucket_status":{"mode":"bucket","bucket_id":%q},"widgets":[{"id":"w1","type":"accounts","width":"half","accounts":{"mode":"account","account_id":%q}},{"id":"w2","type":"bucket_status","width":"full","bucket_status":{"mode":"bucket","bucket_id":%q}},{"id":"w3","type":"in_out","width":"half","in_out":{"figures":["income"],"period":"month","account_id":%q}},{"id":"w4","type":"bucket_status","width":"half","bucket_status":{"mode":"account","account_id":%q}}],"mobile_widgets":[{"id":"w1","type":"accounts","width":"full","accounts":{"mode":"account","account_id":%q}}]},"saved_graphs":[{"id":"g1","name":"Food","graph":{"kind":"bar","metric":"spending","period":"cycle-%s","resolution":"day","account_ids":[%q,%q],"bucket_ids":[%q]}}]}`, a.ID, food.ID, b.ID, food.ID, a.ID, b.ID, a.ID, oct.ID, a.ID, b.ID, food.ID)
 	if _, err := e.pool.Exec(ctx, `UPDATE users SET preferences = $2 WHERE id = $1`, userID, prefs); err != nil {
 		t.Fatal(err)
@@ -277,7 +298,10 @@ func TestClone(t *testing.T) {
 	}
 	// No ID of alice's appears in bob's data.
 	bobJSON := asJSON(t, bobs)
-	for _, name := range []string{"bank_accounts", "cycles", "buckets", "transaction_headers"} {
+	for _, name := range []string{"bank_accounts", "cycles", "buckets", "transaction_headers", "schedules", "schedule_occurrences"} {
+		if len(aliceBefore.Tables[name]) == 0 {
+			t.Errorf("the scenario has no %s", name)
+		}
 		for _, id := range keys(aliceBefore.Tables[name], "id") {
 			if strings.Contains(bobJSON, `"`+id+`"`) {
 				t.Errorf("bob's data has alice's %s ID %s", name, id)

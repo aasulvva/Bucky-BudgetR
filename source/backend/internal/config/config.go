@@ -35,6 +35,9 @@ type Config struct {
 	// SessionMaxAge ends every session this long after login.
 	SessionIdleTimeout time.Duration
 	SessionMaxAge      time.Duration
+	// ScheduleInterval is how often the scheduler looks for scheduled
+	// transactions that are due.
+	ScheduleInterval time.Duration
 	// InitialAdminPassword overrides the spec's default password for the admin
 	// account created on first start. Empty means the default.
 	InitialAdminPassword string
@@ -112,6 +115,10 @@ func Load(getenv func(string) string) (Config, error) {
 		errs = append(errs, fmt.Errorf("SESSION_MAX_AGE: must be a positive duration such as 720h, got %q", getenv("SESSION_MAX_AGE")))
 	} else if cfg.SessionMaxAge < cfg.SessionIdleTimeout {
 		errs = append(errs, errors.New("SESSION_MAX_AGE: must not be shorter than SESSION_IDLE_TIMEOUT"))
+	}
+	cfg.ScheduleInterval, err = time.ParseDuration(get("SCHEDULE_INTERVAL", "30s"))
+	if err != nil || cfg.ScheduleInterval < time.Second {
+		errs = append(errs, fmt.Errorf("SCHEDULE_INTERVAL: must be a duration of at least 1s such as 30s, got %q", getenv("SCHEDULE_INTERVAL")))
 	}
 
 	for v := range strings.SplitSeq(getenv("TRUSTED_PROXIES"), ",") {

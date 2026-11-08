@@ -10,6 +10,8 @@
 //	Transaction  YYYYMMDD + 8 random  16 digits (date in UTC)
 //	BankLine     Account + 12 random  16 digits
 //	BucketLine   Bucket + 14 random   24 digits
+//	Schedule     User + 4 random      10 digits
+//	Occurrence   Schedule + 8 random  18 digits
 //
 // The database stores them as text with a CHECK on Kind.Pattern. They are
 // drawn with crypto/rand; see Insert for handling collisions.
@@ -47,6 +49,8 @@ var (
 	Transaction = newKind("transaction", 16, `^[0-9]{16}$`)
 	BankLine    = newKind("bank line", 16, `^[1-9][0-9]{15}$`)
 	BucketLine  = newKind("bucket line", 24, `^[1-9][0-9]{23}$`)
+	Schedule    = newKind("schedule", 10, `^[1-9][0-9]{9}$`)
+	Occurrence  = newKind("occurrence", 18, `^[1-9][0-9]{17}$`)
 )
 
 // Valid reports whether s is a well-formed ID of this kind. For transactions
@@ -84,6 +88,12 @@ func NewBankLine(accountID string) string { return withPrefix(Account, accountID
 
 // NewBucketLine returns a random ID for a bucket transaction line of bucketID.
 func NewBucketLine(bucketID string) string { return withPrefix(Bucket, bucketID, 14) }
+
+// NewSchedule returns a random ID for a schedule owned by userID.
+func NewSchedule(userID string) string { return withPrefix(User, userID, 4) }
+
+// NewOccurrence returns a random ID for an occurrence of scheduleID.
+func NewOccurrence(scheduleID string) string { return withPrefix(Schedule, scheduleID, 8) }
 
 // withPrefix appends n random digits to an owner ID. A malformed owner ID is
 // a programming error, so it panics rather than returning an error.

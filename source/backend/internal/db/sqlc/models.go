@@ -280,6 +280,114 @@ func (e NegativeTf) Valid() bool {
 	return false
 }
 
+type OccurrenceReason string
+
+const (
+	OccurrenceReasonApproval      OccurrenceReason = "approval"
+	OccurrenceReasonNoActiveCycle OccurrenceReason = "no_active_cycle"
+	OccurrenceReasonOutsideCycle  OccurrenceReason = "outside_cycle"
+	OccurrenceReasonInvalid       OccurrenceReason = "invalid"
+)
+
+func (e *OccurrenceReason) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = OccurrenceReason(s)
+	case string:
+		*e = OccurrenceReason(s)
+	default:
+		return fmt.Errorf("unsupported scan type for OccurrenceReason: %T", src)
+	}
+	return nil
+}
+
+type NullOccurrenceReason struct {
+	OccurrenceReason OccurrenceReason
+	Valid            bool // Valid is true if OccurrenceReason is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullOccurrenceReason) Scan(value interface{}) error {
+	if value == nil {
+		ns.OccurrenceReason, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.OccurrenceReason.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullOccurrenceReason) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.OccurrenceReason), nil
+}
+
+func (e OccurrenceReason) Valid() bool {
+	switch e {
+	case OccurrenceReasonApproval,
+		OccurrenceReasonNoActiveCycle,
+		OccurrenceReasonOutsideCycle,
+		OccurrenceReasonInvalid:
+		return true
+	}
+	return false
+}
+
+type OccurrenceState string
+
+const (
+	OccurrenceStateApplied OccurrenceState = "applied"
+	OccurrenceStateQueued  OccurrenceState = "queued"
+	OccurrenceStateSkipped OccurrenceState = "skipped"
+)
+
+func (e *OccurrenceState) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = OccurrenceState(s)
+	case string:
+		*e = OccurrenceState(s)
+	default:
+		return fmt.Errorf("unsupported scan type for OccurrenceState: %T", src)
+	}
+	return nil
+}
+
+type NullOccurrenceState struct {
+	OccurrenceState OccurrenceState
+	Valid           bool // Valid is true if OccurrenceState is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullOccurrenceState) Scan(value interface{}) error {
+	if value == nil {
+		ns.OccurrenceState, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.OccurrenceState.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullOccurrenceState) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.OccurrenceState), nil
+}
+
+func (e OccurrenceState) Valid() bool {
+	switch e {
+	case OccurrenceStateApplied,
+		OccurrenceStateQueued,
+		OccurrenceStateSkipped:
+		return true
+	}
+	return false
+}
+
 type OverflowDestination string
 
 const (
@@ -383,6 +491,114 @@ func (e RefillMode) Valid() bool {
 		RefillModeManual,
 		RefillModeOnIncome,
 		RefillModeFullyManual:
+		return true
+	}
+	return false
+}
+
+type ScheduleFrequency string
+
+const (
+	ScheduleFrequencyOnce  ScheduleFrequency = "once"
+	ScheduleFrequencyDay   ScheduleFrequency = "day"
+	ScheduleFrequencyWeek  ScheduleFrequency = "week"
+	ScheduleFrequencyMonth ScheduleFrequency = "month"
+	ScheduleFrequencyYear  ScheduleFrequency = "year"
+)
+
+func (e *ScheduleFrequency) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ScheduleFrequency(s)
+	case string:
+		*e = ScheduleFrequency(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ScheduleFrequency: %T", src)
+	}
+	return nil
+}
+
+type NullScheduleFrequency struct {
+	ScheduleFrequency ScheduleFrequency
+	Valid             bool // Valid is true if ScheduleFrequency is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullScheduleFrequency) Scan(value interface{}) error {
+	if value == nil {
+		ns.ScheduleFrequency, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ScheduleFrequency.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullScheduleFrequency) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ScheduleFrequency), nil
+}
+
+func (e ScheduleFrequency) Valid() bool {
+	switch e {
+	case ScheduleFrequencyOnce,
+		ScheduleFrequencyDay,
+		ScheduleFrequencyWeek,
+		ScheduleFrequencyMonth,
+		ScheduleFrequencyYear:
+		return true
+	}
+	return false
+}
+
+type ScheduleMode string
+
+const (
+	ScheduleModeAuto    ScheduleMode = "auto"
+	ScheduleModeApprove ScheduleMode = "approve"
+)
+
+func (e *ScheduleMode) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ScheduleMode(s)
+	case string:
+		*e = ScheduleMode(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ScheduleMode: %T", src)
+	}
+	return nil
+}
+
+type NullScheduleMode struct {
+	ScheduleMode ScheduleMode
+	Valid        bool // Valid is true if ScheduleMode is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullScheduleMode) Scan(value interface{}) error {
+	if value == nil {
+		ns.ScheduleMode, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ScheduleMode.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullScheduleMode) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ScheduleMode), nil
+}
+
+func (e ScheduleMode) Valid() bool {
+	switch e {
+	case ScheduleModeAuto,
+		ScheduleModeApprove:
 		return true
 	}
 	return false
@@ -541,6 +757,56 @@ type Refill struct {
 	OvfID     pgtype.Text
 	IncomeID  pgtype.Text
 	CreatedAt time.Time
+}
+
+type Schedule struct {
+	ID              string
+	UserID          string
+	Name            string
+	TransactionType TransactionType
+	AccountID       string
+	ToAccountID     pgtype.Text
+	Amount          decimal.Decimal
+	Counterparty    string
+	Tags            []string
+	TriggersRefill  pgtype.Bool
+	Mode            ScheduleMode
+	DueDays         int32
+	StartDate       time.Time
+	TimeOfDay       pgtype.Time
+	TimeZone        string
+	Frequency       ScheduleFrequency
+	Every           int32
+	EndCount        pgtype.Int4
+	EndDate         pgtype.Date
+	Paused          bool
+	NextIndex       int32
+	NextAt          pgtype.Timestamptz
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+type ScheduleBucketLine struct {
+	ScheduleID string
+	BucketID   string
+	UserID     string
+	Amount     decimal.Decimal
+	Position   int32
+}
+
+type ScheduleOccurrence struct {
+	ID            string
+	ScheduleID    string
+	UserID        string
+	ScheduledAt   time.Time
+	State         OccurrenceState
+	Reason        NullOccurrenceReason
+	Detail        string
+	QueuedAt      pgtype.Timestamptz
+	DueAt         pgtype.Timestamptz
+	TransactionID pgtype.Text
+	ResolvedAt    pgtype.Timestamptz
+	CreatedAt     time.Time
 }
 
 type Session struct {
