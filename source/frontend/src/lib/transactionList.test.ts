@@ -9,8 +9,10 @@ import {
   isCorrectable,
   isFiltered,
   listQuery,
+  loadShowReversed,
   readFilter,
   rowAmount,
+  saveShowReversed,
   shownCycle,
   withFilter,
 } from "./transactionList";
@@ -45,11 +47,40 @@ describe("filters in the URL", () => {
   });
 });
 
+describe("show reversed (#91)", () => {
+  it("comes from the URL, else the browser's last choice", () => {
+    expect(readFilter(new URLSearchParams()).reversed).toBe(false);
+    expect(readFilter(new URLSearchParams(), { reversed: true }).reversed).toBe(true);
+    expect(readFilter(new URLSearchParams("reversed=0"), { reversed: true }).reversed).toBe(false);
+    expect(readFilter(new URLSearchParams("reversed=1")).reversed).toBe(true);
+  });
+
+  it("is written either way, so the URL keeps it", () => {
+    expect(withFilter(new URLSearchParams(), { reversed: false }).get("reversed")).toBe("0");
+    expect(withFilter(new URLSearchParams(), { reversed: true }).get("reversed")).toBe("1");
+  });
+
+  it("asks for both when on, and doesn't count as narrowing", () => {
+    const on = readFilter(new URLSearchParams("reversed=1"));
+    expect(listQuery(on, active)).not.toHaveProperty("reversed");
+    expect(isFiltered(on)).toBe(false);
+  });
+
+  it("is remembered in the browser", () => {
+    expect(loadShowReversed()).toBe(false);
+    saveShowReversed(true);
+    expect(loadShowReversed()).toBe(true);
+    saveShowReversed(false);
+    expect(loadShowReversed()).toBe(false);
+  });
+});
+
 describe("listQuery", () => {
   it("hides the system types unless asked, and turns local dates into UTC", () => {
     expect(listQuery(readFilter(new URLSearchParams()), active)).toEqual({
       type: USER_TYPES,
       cycle_id: active.id,
+      reversed: false,
     });
     const q = listQuery(
       readFilter(

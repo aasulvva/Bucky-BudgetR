@@ -301,3 +301,43 @@ func TestMoveToAnotherAccount(t *testing.T) {
 		t.Errorf("moved TRF %v (replaces %s)", lines(got), got.Replaces)
 	}
 }
+
+func TestListReversed(t *testing.T) {
+	e := setup(t)
+	card := ledgertest.Account(t, e.pool, e.user, "NOK")
+	newest := e.create(t, transactions.New{Type: sqlc.TransactionTypeEXP, Amount: dec("10"), At: now.Add(-day / 24)})
+	reversed := e.create(t, transactions.New{Type: sqlc.TransactionTypeEXP, Amount: dec("20"), At: now.Add(-2 * day / 24)})
+	moved := e.create(t, transactions.New{Type: sqlc.TransactionTypeEXP, Amount: dec("30"), At: now.Add(-3 * day / 24)})
+	oldest := e.create(t, transactions.New{Type: sqlc.TransactionTypeEXP, Amount: dec("40"), At: now.Add(-4 * day / 24)})
+	if _, err := e.svc.Reverse(t.Context(), e.user, reversed.ID); err != nil {
+		t.Fatal(err)
+	}
+	replacement := e.correct(t, moved.ID, transactions.Changes{AccountID: &card})
+
+	ids := func(f transactions.Filter) []string {
+		t.Helper()
+		page, err := e.svc.List(t.Context(), e.user, f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := make([]string, len(page.Items))
+		for i, tx := range page.Items {
+			out[i] = tx.ID
+		}
+		return out
+	}
+	no, yes := false, true
+	if got, want := ids(transactions.Filter{}), []string{newest.ID, reversed.ID, replacement.ID, moved.ID, oldest.ID}; !equal(got, want) {
+		t.Errorf("all = %v, want %v", got, want)
+	}
+	if got, want := ids(transactions.Filter{Reversed: &no}), []string{newest.ID, replacement.ID, oldest.ID}; !equal(got, want) {
+		t.Errorf("not reversed = %v, want %v", got, want)
+	}
+	if got, want := ids(transactions.Filter{Reversed: &yes}), []string{reversed.ID, moved.ID}; !equal(got, want) {
+		t.Errorf("reversed = %v, want %v", got, want)
+	}
+	// Pages stay full: the reversed ones are left out in the query.
+	if got, want := ids(transactions.Filter{Reversed: &no, Limit: 2}), []string{newest.ID, replacement.ID}; !equal(got, want) {
+		t.Errorf("a page of 2 = %v, want %v", got, want)
+	}
+}

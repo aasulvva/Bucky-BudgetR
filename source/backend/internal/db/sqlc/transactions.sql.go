@@ -353,10 +353,14 @@ WHERE h.user_id = $1 AND h.correction_type = 'none'
       WHERE tt.transaction_id = latest.id AND lower(t.name) = lower($7::text)))
   -- counterparty is a LIKE pattern, escaped by the caller.
   AND ($8::text IS NULL OR latest.counterparty ILIKE $8::text)
-  AND ($9::timestamptz IS NULL
-       OR (h.transaction_at, h.id) < ($9::timestamptz, $10::text))
+  -- reversed: only reversed ones (moved originals too), or only the others.
+  AND ($9::boolean IS NULL OR EXISTS (
+      SELECT 1 FROM transaction_headers r WHERE r.parent_id = h.id AND r.correction_type = 'reversal'
+  ) = $9::boolean)
+  AND ($10::timestamptz IS NULL
+       OR (h.transaction_at, h.id) < ($10::timestamptz, $11::text))
 ORDER BY h.transaction_at DESC, h.id DESC
-LIMIT $11
+LIMIT $12
 `
 
 type ListTransactionsParams struct {
@@ -368,6 +372,7 @@ type ListTransactionsParams struct {
 	BucketID     pgtype.Text
 	Tag          pgtype.Text
 	Counterparty pgtype.Text
+	Reversed     pgtype.Bool
 	BeforeAt     pgtype.Timestamptz
 	BeforeID     pgtype.Text
 	RowLimit     int32
@@ -388,6 +393,7 @@ func (q *Queries) ListTransactions(ctx context.Context, arg ListTransactionsPara
 		arg.BucketID,
 		arg.Tag,
 		arg.Counterparty,
+		arg.Reversed,
 		arg.BeforeAt,
 		arg.BeforeID,
 		arg.RowLimit,

@@ -36,6 +36,8 @@ export interface TransactionFilter {
   to: LocalDate | null;
   /** Also show the system types. */
   system: boolean;
+  /** Also show reversed transactions and moved originals (#91). */
+  reversed: boolean;
 }
 
 export const ALL_CYCLES = "all";
@@ -50,12 +52,38 @@ const PARAMS: Record<keyof TransactionFilter, string> = {
   from: "from",
   to: "to",
   system: "system",
+  reversed: "reversed",
 };
+
+/** Whether Show reversed was last on in this browser (#91). */
+const REVERSED_KEY = "bucky.showReversed";
+
+export function loadShowReversed(): boolean {
+  try {
+    return localStorage.getItem(REVERSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function saveShowReversed(on: boolean): void {
+  try {
+    localStorage.setItem(REVERSED_KEY, on ? "1" : "0");
+  } catch {
+    // Not remembered; the next visit starts off.
+  }
+}
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** The filter in the screen's URL. */
-export function readFilter(params: URLSearchParams): TransactionFilter {
+/**
+ * The filter in the screen's URL. Show reversed is `reversed=1` or `0`;
+ * without it, defaults.reversed (the browser's last choice).
+ */
+export function readFilter(
+  params: URLSearchParams,
+  defaults: { reversed: boolean } = { reversed: false },
+): TransactionFilter {
   const get = (key: keyof TransactionFilter) => {
     const v = params.get(PARAMS[key]);
     return v === "" ? null : v;
@@ -75,6 +103,7 @@ export function readFilter(params: URLSearchParams): TransactionFilter {
     from: date("from"),
     to: date("to"),
     system: get("system") === "1",
+    reversed: get("reversed") === null ? defaults.reversed : get("reversed") === "1",
   };
 }
 
@@ -89,7 +118,9 @@ export function withFilter(
     TransactionFilter[keyof TransactionFilter],
   ][]) {
     const name = PARAMS[key];
-    if (value === null || value === "" || value === false) out.delete(name);
+    // Kept either way, so the URL wins over the browser's last choice.
+    if (key === "reversed") out.set(name, value ? "1" : "0");
+    else if (value === null || value === "" || value === false) out.delete(name);
     else out.set(name, value === true ? "1" : value);
   }
   return out;
@@ -101,7 +132,10 @@ export function shownCycle(filter: TransactionFilter, active: Cycle | null): str
   return filter.cycleId ?? active?.id ?? null;
 }
 
-/** Whether the filter narrows more than the default (the active cycle, no system types). */
+/**
+ * Whether the filter narrows more than the default (the active cycle, no
+ * system types). Show reversed only adds, so it doesn't count.
+ */
 export function isFiltered(filter: TransactionFilter): boolean {
   return (
     filter.q.trim() !== "" ||
@@ -129,6 +163,7 @@ export function listQuery(filter: TransactionFilter, active: Cycle | null): Tran
     ...(filter.to ? { to: endAtFor(filter.to) } : {}),
     ...(filter.tag ? { tag: filter.tag } : {}),
     ...(q ? { counterparty: q } : {}),
+    ...(filter.reversed ? {} : { reversed: false }),
   };
 }
 

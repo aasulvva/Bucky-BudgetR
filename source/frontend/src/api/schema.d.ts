@@ -3709,6 +3709,12 @@ export interface operations {
                 tag?: string;
                 /** @description Only transactions whose counterparty contains this text, ignoring case. */
                 counterparty?: string;
+                /**
+                 * @description `true` lists only reversed transactions (moved originals too, as
+                 *     moving reverses the original), `false` only the others. Omitted,
+                 *     both.
+                 */
+                reversed?: boolean;
                 /** @description The page size. */
                 limit?: number;
                 /** @description The previous page's `next_cursor`. */

@@ -154,6 +154,9 @@ type Filter struct {
 	Tag string
 	// Counterparty matches part of the counterparty, ignoring case.
 	Counterparty string
+	// Reversed, if set, lists only reversed transactions (moved originals
+	// too) when true, or only the others when false.
+	Reversed *bool
 	// Limit is the page size: DefaultLimit if 0, at most MaxLimit.
 	Limit int
 	// Cursor continues from a previous page's Next.
@@ -404,6 +407,9 @@ func (s *Service) List(ctx context.Context, userID string, f Filter) (Page, erro
 	p.BucketID = text(f.BucketID)
 	p.Tag = text(strings.TrimSpace(f.Tag))
 	p.Counterparty = likeContains(f.Counterparty)
+	if f.Reversed != nil {
+		p.Reversed = pgtype.Bool{Bool: *f.Reversed, Valid: true}
+	}
 	if f.Cursor != "" {
 		at, id, err := decodeCursor(f.Cursor)
 		if err != nil {

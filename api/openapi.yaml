@@ -1472,6 +1472,14 @@ paths:
           schema:
             type: string
             maxLength: 200
+        - name: reversed
+          in: query
+          schema:
+            type: boolean
+          description: |
+            `true` lists only reversed transactions (moved originals too, as
+            moving reverses the original), `false` only the others. Omitted,
+            both.
         - name: limit
           in: query
           description: The page size.

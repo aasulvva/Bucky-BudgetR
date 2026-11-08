@@ -773,6 +773,7 @@
       "allCycles": "Alle perioder",
       "activeCycle": "{{range}} (aktiv)",
       "system": "Vis påfyll og justeringer",
+      "reversed": "Vis reverserte og flyttede",
       "more": "Filter",
       "done": "Vis transaksjoner",
       "remove": "Fjern filteret {{name}}",

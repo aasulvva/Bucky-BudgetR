@@ -40,7 +40,9 @@ import {
   groupByDay,
   isFiltered,
   listQuery,
+  loadShowReversed,
   readFilter,
+  saveShowReversed,
   shownCycle,
   withFilter,
   type TransactionFilter,
@@ -99,7 +101,7 @@ function TransactionsTab() {
   const theme = useMantineTheme();
   const isDesktop = useMediaQuery(`(min-width: ${theme.breakpoints.sm})`, true);
   const [params, setParams] = useSearchParams();
-  const filter = readFilter(params);
+  const filter = readFilter(params, { reversed: loadShowReversed() });
   const current = useCurrentCycles();
   const active = current.data?.active ?? null;
   // The default cycle is the active one, so wait until it's known.
@@ -109,6 +111,7 @@ function TransactionsTab() {
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const change: FilterChange = (c) => {
+    if (c.reversed !== undefined) saveShowReversed(c.reversed);
     setParams((prev) => withFilter(prev, c), { replace: true });
   };
   const openLink = (id: string) => {
@@ -430,6 +433,14 @@ function FilterFields({
         }}
         style={inline ? { alignSelf: "center", paddingTop: 22 } : undefined}
       />
+      <Checkbox
+        label={t("transactions.filters.reversed")}
+        checked={filter.reversed}
+        onChange={(e) => {
+          onChange({ reversed: e.currentTarget.checked });
+        }}
+        style={inline ? { alignSelf: "center", paddingTop: 22 } : undefined}
+      />
     </>
   );
 }
@@ -490,6 +501,13 @@ function Chips({
       key: "system",
       label: t("transactions.filters.system"),
       clear: { system: false },
+    });
+  }
+  if (filter.reversed) {
+    chips.push({
+      key: "reversed",
+      label: t("transactions.filters.reversed"),
+      clear: { reversed: false },
     });
   }
   return (
