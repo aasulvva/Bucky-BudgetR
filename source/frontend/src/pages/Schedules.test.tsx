@@ -209,6 +209,53 @@ describe("Repeat in New transaction", () => {
   });
 });
 
+describe("A future date in New transaction", () => {
+  it("schedules it once, recorded or approved then", async () => {
+    apiMock.on("POST /api/v1/schedules", {
+      status: 201,
+      body: schedule({ id: "1234560009", frequency: "once", next_index: 0 }),
+    });
+    const later = new Date(Date.now() + 2 * 24 * 3600 * 1000);
+    const day = new Intl.DateTimeFormat("en-GB", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    }).format(later);
+    renderRoute("/transactions/new");
+    await userEvent.type(
+      await screen.findByRole("textbox", { name: "Amount" }, { timeout: 5000 }),
+      "500",
+    );
+    await pick("Account", /^Main account/);
+    await userEvent.click(screen.getByRole("button", { name: /^Date/ }));
+    await userEvent.click(await screen.findByRole("button", { name: day }));
+    const submit = document.querySelector<HTMLButtonElement>(
+      ".mantine-DateTimePicker-submitButton",
+    );
+    if (!submit) throw new Error("no submit button");
+    await userEvent.click(submit);
+
+    expect(await screen.findByText(/It's in the future/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save and add another" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("radio", { name: "Ask me first" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(apiMock.calls("POST /api/v1/schedules")).toHaveLength(1);
+    });
+    const req = apiMock.calls("POST /api/v1/schedules")[0];
+    expect(req?.query.get("record_first")).toBeNull();
+    expect(req?.body).toMatchObject({
+      transaction: { type: "EXP", account_id: main.id, amount: "500.00" },
+      frequency: "once",
+      mode: "approve",
+      due_days: 3,
+      start_date: wallTime(later, LA).date,
+    });
+    expect(apiMock.calls("POST /api/v1/transactions")).toHaveLength(0);
+    expect(await screen.findByText(/Scheduled for/)).toBeInTheDocument();
+  });
+});
+
 describe("Schedule pages", () => {
   it("makes a transaction recurring from its time", async () => {
     const tx = transaction({

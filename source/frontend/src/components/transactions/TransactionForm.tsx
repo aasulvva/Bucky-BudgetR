@@ -43,7 +43,7 @@ import { useSession } from "@/app/session";
 import { AmountInput } from "@/components/AmountInput";
 import { DateTimeInput } from "@/components/DateTimeInput";
 import { ErrorAlert } from "@/components/ErrorAlert";
-import { RepeatFields } from "@/components/schedules/RepeatFields";
+import { ModeFields, RepeatFields } from "@/components/schedules/RepeatFields";
 import { now } from "@/lib/clock";
 import { browserTimeZone } from "@/lib/cycleRule";
 import { cycleRange, isOverdue } from "@/lib/cycles";
@@ -188,6 +188,15 @@ export function TransactionForm({
     return defaultRepeat(now(), zone);
   });
   const [repeatErrs, setRepeatErrs] = useState<RepeatErrors>({});
+  // A new transaction set to happen later is saved as a schedule for then,
+  // recorded once (or approved first).
+  const future =
+    !editing &&
+    !scheduleMode &&
+    !repeatOn &&
+    at !== null &&
+    new Date(at).getTime() > now().getTime();
+  const scheduled = repeatOn || future;
 
   const balance = type === "OPB" || type === "BLA";
   const transfer = type === "TRF";
@@ -200,7 +209,7 @@ export function TransactionForm({
   const totals = bucketTotals(amount, lines);
   const inCycle = insideCycle(at, active);
   const waiting = type === "INC" && !editing ? waitingOnIncome(buckets, accountId) : [];
-  const refillShown = type === "INC" && (inCycle || repeatOn) && accountId !== null;
+  const refillShown = type === "INC" && (inCycle || scheduled) && accountId !== null;
   const refillChecked = refill ?? (waiting.length > 0 || ruleMatches(rules, counterparty, amount));
   const money = (value: string) => formatMoney(value, currency);
   const correction = editing
@@ -268,9 +277,9 @@ export function TransactionForm({
     else void navigate(-1);
   };
 
-  const saveSchedule = useSaveSchedule(async (saved, { recordFirst }) => {
+  const saveSchedule = useSaveSchedule(async (saved) => {
     let message: string = t("schedules.saved");
-    if (recordFirst) {
+    if (!scheduleMode) {
       if (saved.next_index === 0) {
         message = t("newTransaction.scheduledFor", { date: formatDateTime(saved.next_at ?? "") });
       } else if (saved.next_at) {
@@ -287,6 +296,19 @@ export function TransactionForm({
 
   const changeRepeat = (change: Partial<RepeatValues>) => {
     setRepeat((r) => ({ ...r, ...change }));
+  };
+
+  /** A schedule recorded once, at `iso`. */
+  const onceAt = (iso: string): RepeatValues => {
+    const w = wallTime(iso, repeat.timeZone);
+    return {
+      ...repeat,
+      startDate: w.date,
+      time: w.time,
+      frequency: "once",
+      ends: "never",
+      name: "",
+    };
   };
 
   const toggleRepeat = (on: boolean) => {
@@ -364,7 +386,7 @@ export function TransactionForm({
           amount: money(subtractAmounts("0", totals.notTied)),
         });
       }
-      if (!editing && !repeatOn && active && !inCycle) {
+      if (!editing && !scheduled && active && !inCycle) {
         found.at = t("newTransaction.outsideCycle", { range: cycleRange(active) });
       }
     }
@@ -374,7 +396,8 @@ export function TransactionForm({
   const submit = (addAnother: boolean) => {
     const found = validate();
     setErrors(found);
-    const foundRepeat = repeatOn ? repeatErrors(repeat, t) : {};
+    const shape = future && at ? onceAt(at) : repeat;
+    const foundRepeat = scheduled ? repeatErrors(shape, t) : {};
     setRepeatErrs(foundRepeat);
     if (
       Object.keys(found).length > 0 ||
@@ -393,7 +416,7 @@ export function TransactionForm({
       account_id: accountId,
       amount,
       // A schedule has its own times.
-      ...(at && !repeatOn ? { at } : {}),
+      ...(at && !scheduled ? { at } : {}),
       ...(tags.length > 0 ? { tags } : {}),
     };
     const body: TransactionCreate = transfer
@@ -412,14 +435,14 @@ export function TransactionForm({
             : {}),
           ...(refillShown ? { triggers_refill: refillChecked } : {}),
         };
-    if (repeatOn) {
+    if (scheduled) {
       const transaction: ScheduleTransaction = body;
-      const input = scheduleBody(repeat, transaction);
+      const input = scheduleBody(shape, transaction);
       if (!input) return;
       saveSchedule.mutate({
         ...(schedule?.editing ? { id: schedule.editing.id } : {}),
         body: input,
-        recordFirst: !scheduleMode,
+        recordFirst: repeatOn && !scheduleMode,
       });
       return;
     }
@@ -456,20 +479,24 @@ export function TransactionForm({
       ) : repeatOn ? null : (
         <DateTimeInput
           label={t("newTransaction.date")}
-          description={t("common.emptyMeansNow")}
+          description={t("newTransaction.dateHint")}
           value={at}
           onChange={setAt}
           error={errors.at}
-          {...(!transfer && lines.length > 0 && active
-            ? {
-                minDate: new Date(active.start_at),
-                // DateTimeInput stops at now; an overdue cycle ends earlier.
-                ...(isOverdue(active)
-                  ? { maxDate: new Date(new Date(active.end_at).getTime() - 1) }
-                  : {}),
-              }
+          // A later time schedules it.
+          maxDate={undefined}
+          {...(!transfer && lines.length > 0 && active && !isOverdue(active)
+            ? { minDate: new Date(active.start_at) }
             : {})}
         />
+      )}
+      {future && at && (
+        <Card withBorder padding="sm" bg="var(--mantine-color-blue-light)">
+          <Stack gap="sm">
+            <Text size="sm">{t("newTransaction.futureNote", { date: formatDateTime(at) })}</Text>
+            <ModeFields value={repeat} onChange={changeRepeat} errors={repeatErrs} />
+          </Stack>
+        </Card>
       )}
       {!editing && !scheduleMode && (
         <Switch
@@ -520,7 +547,7 @@ export function TransactionForm({
                 accountTouched,
                 tags,
                 lines,
-                bucketsAllowed: (active !== null || repeatOn) && !locked,
+                bucketsAllowed: (active !== null || scheduled) && !locked,
               },
               accounts,
               buckets,
@@ -639,7 +666,7 @@ export function TransactionForm({
                 onChange={changeLines}
                 errors={errors}
                 locked={locked}
-                needsCycle={!repeatOn}
+                needsCycle={!scheduled}
               />
             )}
           </Group>
@@ -667,7 +694,7 @@ export function TransactionForm({
               style={{ borderTop: "1px solid var(--mantine-color-default-border)" }}
             >
               {cancel}
-              {!editing && !repeatOn && (
+              {!editing && !scheduled && (
                 <Button
                   variant="outline"
                   loading={saving(true)}
@@ -700,7 +727,7 @@ export function TransactionForm({
                 zIndex: 1,
               }}
             >
-              {!editing && !repeatOn && (
+              {!editing && !scheduled && (
                 <Button
                   variant="subtle"
                   loading={saving(true)}

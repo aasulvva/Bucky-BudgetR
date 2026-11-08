@@ -169,39 +169,7 @@ export function RepeatFields({
           )}
         </Stack>
       )}
-      <Stack gap={6}>
-        <Text size="sm" fw={500}>
-          {t("schedules.form.mode")}
-        </Text>
-        <SegmentedControl
-          aria-label={t("schedules.form.mode")}
-          value={value.mode}
-          onChange={(v) => {
-            const m = MODES.find((x) => x === v);
-            if (m) onChange({ mode: m });
-          }}
-          data={MODES.map((m) => ({ value: m, label: t(`schedules.form.modes.${m}`) }))}
-          style={{ alignSelf: "flex-start" }}
-        />
-        <Text size="xs" c="dimmed">
-          {t(`schedules.form.modeHints.${value.mode}`)}
-        </Text>
-        {value.mode === "approve" && (
-          <NumberInput
-            label={t("schedules.form.dueDays")}
-            min={0}
-            max={MAX_DUE_DAYS}
-            allowDecimal={false}
-            allowNegative={false}
-            value={value.dueDays}
-            onChange={(v) => {
-              onChange({ dueDays: v });
-            }}
-            error={errors.dueDays}
-            maw={160}
-          />
-        )}
-      </Stack>
+      <ModeFields value={value} onChange={onChange} errors={errors} />
       <TextInput
         label={t("schedules.form.name")}
         placeholder={t("schedules.form.namePlaceholder")}
@@ -254,6 +222,54 @@ export function RepeatFields({
             </List>
           ))}
       </Box>
+    </Stack>
+  );
+}
+
+/** Record it when due, or ask first and when it's due: a schedule's mode. */
+export function ModeFields({
+  value,
+  onChange,
+  errors,
+}: {
+  value: Pick<RepeatValues, "mode" | "dueDays">;
+  onChange: (change: Partial<RepeatValues>) => void;
+  errors: Pick<RepeatErrors, "dueDays">;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Stack gap={6}>
+      <Text size="sm" fw={500}>
+        {t("schedules.form.mode")}
+      </Text>
+      <SegmentedControl
+        aria-label={t("schedules.form.mode")}
+        value={value.mode}
+        onChange={(v) => {
+          const m = MODES.find((x) => x === v);
+          if (m) onChange({ mode: m });
+        }}
+        data={MODES.map((m) => ({ value: m, label: t(`schedules.form.modes.${m}`) }))}
+        style={{ alignSelf: "flex-start" }}
+      />
+      <Text size="xs" c="dimmed">
+        {t(`schedules.form.modeHints.${value.mode}`)}
+      </Text>
+      {value.mode === "approve" && (
+        <NumberInput
+          label={t("schedules.form.dueDays")}
+          min={0}
+          max={MAX_DUE_DAYS}
+          allowDecimal={false}
+          allowNegative={false}
+          value={value.dueDays}
+          onChange={(v) => {
+            onChange({ dueDays: v });
+          }}
+          error={errors.dueDays}
+          maw={160}
+        />
+      )}
     </Stack>
   );
 }

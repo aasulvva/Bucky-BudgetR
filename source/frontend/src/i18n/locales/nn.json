@@ -718,6 +718,8 @@
     "movedDone": "Flytta til den nye kontoen.",
     "repeat": "Gjenta eller planlegg",
     "repeatHint": "Lagre han som planlagd: éin gong seinare, eller att og att.",
+    "dateHint": "Tomt tyder no. Eit seinare tidspunkt planlegg han.",
+    "futureNote": "Han er fram i tid, så han vert lagra som ein planlagd transaksjon som vert ført éin gong {{date}}.",
     "savedRepeating": "Lagra. Han vert gjenteken frå {{date}}.",
     "savedEnded": "Lagra.",
     "scheduledFor": "Planlagd til {{date}}."

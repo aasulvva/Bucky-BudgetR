@@ -718,6 +718,8 @@
     "movedDone": "Flyttet til den nye kontoen.",
     "repeat": "Gjenta eller planlegg",
     "repeatHint": "Lagre den som planlagt: én gang senere, eller igjen og igjen.",
+    "dateHint": "Tomt betyr nå. Et senere tidspunkt planlegger den.",
+    "futureNote": "Den er frem i tid, så den lagres som en planlagt transaksjon som føres én gang {{date}}.",
     "savedRepeating": "Lagret. Den gjentas fra {{date}}.",
     "savedEnded": "Lagret.",
     "scheduledFor": "Planlagt til {{date}}."

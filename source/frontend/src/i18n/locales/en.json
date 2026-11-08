@@ -718,6 +718,8 @@
     "movedDone": "Moved to the new account.",
     "repeat": "Repeat or schedule",
     "repeatHint": "Save it as a schedule: once later, or again and again.",
+    "dateHint": "Empty means now. A later time schedules it.",
+    "futureNote": "It's in the future, so it's saved as a scheduled transaction, recorded once on {{date}}.",
     "savedRepeating": "Saved. It repeats from {{date}}.",
     "savedEnded": "Saved.",
     "scheduledFor": "Scheduled for {{date}}."
