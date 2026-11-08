@@ -25,20 +25,15 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
-import { useAccounts } from "@/api/accounts";
 import { useDeleteSchedule, useSaveSchedule, useSchedules } from "@/api/schedules";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { QueryState } from "@/components/QueryState";
 import { useLookups, type Lookups } from "@/components/transactions/lookups";
 import { formatDateTime } from "@/lib/dates";
-import { formatMoney } from "@/lib/money";
-import {
-  repeatSentence,
-  scheduleState,
-  scheduleTitle,
-  toInput,
-  type Schedule,
-} from "@/lib/schedules";
+import { repeatSentence, scheduleState, toInput, type Schedule } from "@/lib/schedules";
+
+import { ApprovalQueue } from "./ApprovalQueue";
+import { useScheduleText } from "./scheduleText";
 
 /** Which schedules the tab shows, remembered in this browser. */
 const SHOW_KEY = "bucky.scheduledShow";
@@ -66,9 +61,9 @@ function saveShow(show: Show) {
 }
 
 /**
- * The Scheduled tab of Transactions (#154): the user's schedules, each in
- * words with its next time, to edit, pause or delete. Paused ones show and
- * ended ones don't, unless switched.
+ * The Scheduled tab of Transactions (#154): the approval queue (#155), then
+ * the user's schedules, each in words with its next time, to edit, pause or
+ * delete. Paused ones show and ended ones don't, unless switched.
  */
 export function ScheduledTab() {
   const { t } = useTranslation();
@@ -82,6 +77,7 @@ export function ScheduledTab() {
   };
   return (
     <Stack gap="md">
+      <ApprovalQueue />
       <Group justify="space-between" gap="sm">
         <Group gap="md">
           <Checkbox
@@ -139,12 +135,9 @@ export function ScheduledTab() {
 
 function ScheduleRow({ schedule: s, names }: { schedule: Schedule; names: Lookups }) {
   const { t, i18n } = useTranslation();
-  const accounts = useAccounts().data ?? [];
   const [confirming, setConfirming] = useState(false);
-  const title = scheduleTitle(s, t, names.accountName);
+  const { title, amount, income } = useScheduleText()(s);
   const tx = s.transaction;
-  const currency = accounts.find((a) => a.id === tx.account_id)?.currency;
-  const amount = formatMoney(tx.type === "EXP" ? `-${tx.amount}` : tx.amount, currency);
   const where =
     tx.type === "TRF" && tx.to_account_id
       ? `${names.accountName(tx.account_id)} → ${names.accountName(tx.to_account_id)}`
@@ -192,7 +185,7 @@ function ScheduleRow({ schedule: s, names }: { schedule: Schedule; names: Lookup
               <Text
                 fw={600}
                 style={{ whiteSpace: "nowrap" }}
-                c={tx.type === "INC" ? "var(--mantine-color-blue-text)" : undefined}
+                c={income ? "var(--mantine-color-blue-text)" : undefined}
               >
                 {amount}
               </Text>

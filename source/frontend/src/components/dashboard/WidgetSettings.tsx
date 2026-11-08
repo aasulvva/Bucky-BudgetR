@@ -22,6 +22,7 @@ import {
   ACCOUNTS_MODES,
   BUCKET_STATUS_MODES,
   MAX_TITLE,
+  SCHEDULED_SHOWS,
   TRANSACTION_COUNTS,
   customTitle,
   settingsComplete,
@@ -162,6 +163,32 @@ export function WidgetSettingsForm({
             if (v) setDraft({ ...draft, settings: { count: Number(v) } });
           }}
         />
+      )}
+      {draft.type === "scheduled" && (
+        <>
+          <Select
+            label={t("dashboard.scheduled.show")}
+            data={SCHEDULED_SHOWS.map((v) => ({
+              value: v,
+              label: t(`dashboard.scheduled.shows.${v}`),
+            }))}
+            value={draft.settings.show}
+            allowDeselect={false}
+            onChange={(v) => {
+              const show = SCHEDULED_SHOWS.find((x) => x === v);
+              if (show) setDraft({ ...draft, settings: { ...draft.settings, show } });
+            }}
+          />
+          <Select
+            label={t("dashboard.scheduled.count")}
+            data={TRANSACTION_COUNTS.map((n) => ({ value: String(n), label: String(n) }))}
+            value={String(draft.settings.count)}
+            allowDeselect={false}
+            onChange={(v) => {
+              if (v) setDraft({ ...draft, settings: { ...draft.settings, count: Number(v) } });
+            }}
+          />
+        </>
       )}
       {draft.type === "in_out" && (
         <InOutForm

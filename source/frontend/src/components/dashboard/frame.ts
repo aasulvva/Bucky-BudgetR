@@ -15,6 +15,7 @@ const TITLE_KEYS = {
   recent_transactions: "dashboard.recent.title",
   in_out: "dashboard.inOut.title",
   graph: "dashboard.graph.title",
+  scheduled: "dashboard.scheduled.title",
 } as const satisfies Record<WidgetType, string>;
 
 /** A widget type's name, and its title when it has no other. */

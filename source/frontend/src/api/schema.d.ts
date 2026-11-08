@@ -1091,8 +1091,9 @@ export interface paths {
          *
          *     When an occurrence comes due, an `auto` schedule records it, dated
          *     at its scheduled time, with its bucket lines in the active cycle and
-         *     the usual refill rules. An `approve` schedule queues it, due
-         *     `due_days` later. An occurrence that can't be recorded (no active
+         *     the usual refill rules. An `approve` schedule queues it `due_days`
+         *     days before its time, so it can be approved early; it's due at its
+         *     time and overdue after. An occurrence that can't be recorded (no active
          *     cycle, a time outside it, an account or bucket that's gone) is
          *     queued too, with the reason: see `GET /scheduled-transactions`.
          *
@@ -1201,6 +1202,98 @@ export interface paths {
          *     next page.
          */
         get: operations["listScheduledTransactions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scheduled-transactions/{scheduledTransactionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scheduledTransactionId: components["parameters"]["ScheduledTransactionId"];
+            };
+            cookie?: never;
+        };
+        /** Get a scheduled transaction that came due */
+        get: operations["getScheduledTransaction"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scheduled-transactions/{scheduledTransactionId}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scheduledTransactionId: components["parameters"]["ScheduledTransactionId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve a queued scheduled transaction
+         * @description Records a queued one and marks it `applied`. Without a body, it
+         *     records the schedule's transaction as it is, dated at its scheduled
+         *     time if that has passed and the active cycle holds it, else now
+         *     (approved early, it's dated now). With a body, it records that
+         *     instead (the user's edits), checked like `POST /transactions`.
+         *     If it can't be recorded, nothing changes and the error says why (for
+         *     example 409 `no_active_cycle`). One that isn't queued is 409
+         *     `already_resolved`.
+         */
+        post: operations["approveScheduledTransaction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scheduled-transactions/{scheduledTransactionId}/skip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scheduledTransactionId: components["parameters"]["ScheduledTransactionId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Skip a queued scheduled transaction
+         * @description Marks a queued one `skipped`; it's never recorded. One that isn't queued is 409 `already_resolved`.
+         */
+        post: operations["skipScheduledTransaction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/upcoming-transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What the schedules record next
+         * @description The next times any of the user's schedules comes due, earliest
+         *     first, from each one's next occurrence. Paused and ended schedules
+         *     are left out.
+         */
+        get: operations["listUpcomingTransactions"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1403,7 +1496,7 @@ export interface components {
             /** @description Made by the web app; unique in the layout. */
             id: string;
             /** @enum {string} */
-            type: "cycle" | "health" | "bucket_status" | "accounts" | "recent_transactions" | "in_out" | "graph";
+            type: "cycle" | "health" | "bucket_status" | "accounts" | "recent_transactions" | "in_out" | "graph" | "scheduled";
             /**
              * @description Half or the full width of the Dashboard on wide screens.
              * @enum {string}
@@ -1421,6 +1514,7 @@ export interface components {
             recent_transactions?: components["schemas"]["RecentWidgetSettings"];
             in_out?: components["schemas"]["InOutWidgetSettings"];
             graph?: components["schemas"]["GraphWidgetSettings"];
+            scheduled?: components["schemas"]["ScheduledWidgetSettings"];
         };
         CycleWidgetSettings: {
             /** @description Also show the next planned cycle. True by default. */
@@ -1478,6 +1572,15 @@ export interface components {
              *     or missing means all accounts, without transfers.
              */
             account_id?: (string & components["schemas"]["AccountId"]) | null;
+        };
+        ScheduledWidgetSettings: {
+            /**
+             * @description The approval queue, what's coming up, or both (the default).
+             * @enum {string}
+             */
+            show: "both" | "queue" | "upcoming";
+            /** @description How many of each it shows. 5 by default. */
+            count: number;
         };
         RecentWidgetSettings: {
             /** @description How many transactions it shows. 5 by default. */
@@ -2176,7 +2279,7 @@ export interface components {
             transaction: components["schemas"]["ScheduleTransaction"];
             mode: components["schemas"]["ScheduleMode"];
             /**
-             * @description How many days after it's queued an occurrence is due for approval.
+             * @description For `approve`, how many days before its time an occurrence is queued for approval.
              * @default 3
              */
             due_days: number;
@@ -2282,9 +2385,11 @@ export interface components {
             queued_at: string | null;
             /**
              * Format: date-time
-             * @description When a queued one is due for approval.
+             * @description When a queued one is due for approval, its scheduled time.
              */
             due_at: string | null;
+            /** @description A queued one past its due time. */
+            overdue: boolean;
             /** @description The transaction it recorded. */
             transaction_id: (string & components["schemas"]["TransactionId"]) | null;
             /**
@@ -2292,6 +2397,15 @@ export interface components {
              * @description When it was applied or skipped.
              */
             resolved_at: string | null;
+        };
+        ApprovedScheduledTransaction: {
+            scheduled_transaction: components["schemas"]["ScheduledTransaction"];
+            transaction: components["schemas"]["Transaction"];
+        };
+        UpcomingTransaction: {
+            schedule_id: components["schemas"]["ScheduleId"];
+            /** Format: date-time */
+            at: string;
         };
         ScheduledTransactionPage: {
             items: components["schemas"]["ScheduledTransaction"][];
@@ -2317,6 +2431,7 @@ export interface components {
         BucketId: components["schemas"]["BucketId"];
         TransactionId: components["schemas"]["TransactionId"];
         ScheduleId: components["schemas"]["ScheduleId"];
+        ScheduledTransactionId: components["schemas"]["ScheduledTransactionId"];
     };
     requestBodies: never;
     headers: {
@@ -3876,6 +3991,113 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScheduledTransactionPage"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getScheduledTransaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scheduledTransactionId: components["parameters"]["ScheduledTransactionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The scheduled transaction. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledTransaction"];
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    approveScheduledTransaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scheduledTransactionId: components["parameters"]["ScheduledTransactionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TransactionCreate"];
+            };
+        };
+        responses: {
+            /** @description The applied scheduled transaction and the transaction it recorded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovedScheduledTransaction"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    skipScheduledTransaction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scheduledTransactionId: components["parameters"]["ScheduledTransactionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The skipped scheduled transaction. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledTransaction"];
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listUpcomingTransactions: {
+        parameters: {
+            query?: {
+                count?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The upcoming times. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpcomingTransaction"][];
                 };
             };
             400: components["responses"]["Error"];

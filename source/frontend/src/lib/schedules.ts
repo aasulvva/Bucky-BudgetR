@@ -7,13 +7,21 @@
 
 import type { TFunction } from "i18next";
 
+import type { Cycle } from "@/api/cycles";
 import type { components } from "@/api/schema";
 import type { Transaction } from "@/api/transactions";
 
+import { now as clockNow } from "./clock";
 import { browserTimeZone } from "./cycleRule";
 import { formatDate, parseDate } from "./dates";
 import { getLocale } from "./locale";
-import { editState, newLine, type EditValues, type SplitLine } from "./transactionForm";
+import {
+  editState,
+  insideCycle,
+  newLine,
+  type EditValues,
+  type SplitLine,
+} from "./transactionForm";
 
 export type Schedule = components["schemas"]["Schedule"];
 export type ScheduleInput = components["schemas"]["ScheduleInput"];
@@ -21,6 +29,8 @@ export type ScheduleTransaction = components["schemas"]["ScheduleTransaction"];
 export type ScheduleFrequency = components["schemas"]["ScheduleFrequency"];
 export type ScheduleMode = components["schemas"]["ScheduleMode"];
 export type SchedulePreview = components["schemas"]["SchedulePreview"];
+export type Occurrence = components["schemas"]["ScheduledTransaction"];
+export type Upcoming = components["schemas"]["UpcomingTransaction"];
 
 export const FREQUENCIES: ScheduleFrequency[] = ["once", "day", "week", "month", "year"];
 export const MAX_NAME = 60;
@@ -342,4 +352,49 @@ export function scheduleState(
 ): "active" | "paused" | "ended" {
   if (s.next_at === null) return "ended";
   return s.paused ? "paused" : "active";
+}
+
+/** Why a scheduled transaction waits in the queue (#155), in words. */
+export function reasonText(o: Pick<Occurrence, "reason" | "detail">, t: TFunction): string {
+  switch (o.reason) {
+    case "no_active_cycle":
+      return t("schedules.reasons.no_active_cycle");
+    case "outside_cycle":
+      return t("schedules.reasons.outside_cycle");
+    case "invalid":
+      return o.detail
+        ? t("schedules.reasons.invalidDetail", { detail: o.detail })
+        : t("schedules.reasons.invalid");
+    case "approval":
+    case null:
+      return t("schedules.reasons.approval");
+  }
+}
+
+/**
+ * The date an approved one gets (#31): its scheduled time when that has
+ * passed and the active cycle contains it, else null for now (approved
+ * early, before its time, it's dated now).
+ */
+export function approveDate(
+  o: Pick<Occurrence, "scheduled_at">,
+  active: Cycle | null,
+  now = clockNow(),
+) {
+  const passed = new Date(o.scheduled_at).getTime() <= now.getTime();
+  return passed && insideCycle(o.scheduled_at, active, now) ? o.scheduled_at : null;
+}
+
+/** The queue's order: overdue first, then the oldest. */
+export function queueOrder(items: Occurrence[]): Occurrence[] {
+  return [...items].sort(
+    (a, b) =>
+      Number(b.overdue) - Number(a.overdue) ||
+      new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime(),
+  );
+}
+
+/** Where Edit and approve opens a queued one. */
+export function approvePath(id: string): string {
+  return `/transactions/scheduled/queue/${id}/approve`;
 }

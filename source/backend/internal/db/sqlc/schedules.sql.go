@@ -233,7 +233,8 @@ func (q *Queries) DeleteScheduleBucketLines(ctx context.Context, arg DeleteSched
 
 const dueSchedulesForUpdate = `-- name: DueSchedulesForUpdate :many
 SELECT id, user_id, name, transaction_type, account_id, to_account_id, amount, counterparty, tags, triggers_refill, mode, due_days, start_date, time_of_day, time_zone, frequency, every, end_count, end_date, paused, next_index, next_at, created_at, updated_at FROM schedules
-WHERE user_id = $1 AND NOT paused AND next_at IS NOT NULL AND next_at <= $2::timestamptz
+WHERE user_id = $1 AND NOT paused AND next_at IS NOT NULL
+  AND next_at - make_interval(days => CASE WHEN mode = 'approve' THEN due_days ELSE 0 END) <= $2::timestamptz
 ORDER BY next_at, id
 FOR UPDATE
 `
@@ -288,6 +289,64 @@ func (q *Queries) DueSchedulesForUpdate(ctx context.Context, arg DueSchedulesFor
 		return nil, err
 	}
 	return items, nil
+}
+
+const getOccurrence = `-- name: GetOccurrence :one
+SELECT id, schedule_id, user_id, scheduled_at, state, reason, detail, queued_at, due_at, transaction_id, resolved_at, created_at FROM schedule_occurrences WHERE id = $1 AND user_id = $2
+`
+
+type GetOccurrenceParams struct {
+	ID     string
+	UserID string
+}
+
+func (q *Queries) GetOccurrence(ctx context.Context, arg GetOccurrenceParams) (ScheduleOccurrence, error) {
+	row := q.db.QueryRow(ctx, getOccurrence, arg.ID, arg.UserID)
+	var i ScheduleOccurrence
+	err := row.Scan(
+		&i.ID,
+		&i.ScheduleID,
+		&i.UserID,
+		&i.ScheduledAt,
+		&i.State,
+		&i.Reason,
+		&i.Detail,
+		&i.QueuedAt,
+		&i.DueAt,
+		&i.TransactionID,
+		&i.ResolvedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getOccurrenceForUpdate = `-- name: GetOccurrenceForUpdate :one
+SELECT id, schedule_id, user_id, scheduled_at, state, reason, detail, queued_at, due_at, transaction_id, resolved_at, created_at FROM schedule_occurrences WHERE id = $1 AND user_id = $2 FOR UPDATE
+`
+
+type GetOccurrenceForUpdateParams struct {
+	ID     string
+	UserID string
+}
+
+func (q *Queries) GetOccurrenceForUpdate(ctx context.Context, arg GetOccurrenceForUpdateParams) (ScheduleOccurrence, error) {
+	row := q.db.QueryRow(ctx, getOccurrenceForUpdate, arg.ID, arg.UserID)
+	var i ScheduleOccurrence
+	err := row.Scan(
+		&i.ID,
+		&i.ScheduleID,
+		&i.UserID,
+		&i.ScheduledAt,
+		&i.State,
+		&i.Reason,
+		&i.Detail,
+		&i.QueuedAt,
+		&i.DueAt,
+		&i.TransactionID,
+		&i.ResolvedAt,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const getSchedule = `-- name: GetSchedule :one
@@ -532,6 +591,48 @@ func (q *Queries) OccurrenceExists(ctx context.Context, arg OccurrenceExistsPara
 	return exists, err
 }
 
+const resolveOccurrence = `-- name: ResolveOccurrence :one
+UPDATE schedule_occurrences
+SET state = $1, transaction_id = $2, resolved_at = $3
+WHERE id = $4 AND user_id = $5 AND state = 'queued'
+RETURNING id, schedule_id, user_id, scheduled_at, state, reason, detail, queued_at, due_at, transaction_id, resolved_at, created_at
+`
+
+type ResolveOccurrenceParams struct {
+	State         OccurrenceState
+	TransactionID pgtype.Text
+	ResolvedAt    pgtype.Timestamptz
+	ID            string
+	UserID        string
+}
+
+// Approves or skips a queued occurrence.
+func (q *Queries) ResolveOccurrence(ctx context.Context, arg ResolveOccurrenceParams) (ScheduleOccurrence, error) {
+	row := q.db.QueryRow(ctx, resolveOccurrence,
+		arg.State,
+		arg.TransactionID,
+		arg.ResolvedAt,
+		arg.ID,
+		arg.UserID,
+	)
+	var i ScheduleOccurrence
+	err := row.Scan(
+		&i.ID,
+		&i.ScheduleID,
+		&i.UserID,
+		&i.ScheduledAt,
+		&i.State,
+		&i.Reason,
+		&i.Detail,
+		&i.QueuedAt,
+		&i.DueAt,
+		&i.TransactionID,
+		&i.ResolvedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const updateSchedule = `-- name: UpdateSchedule :one
 UPDATE schedules SET
     name = $3, transaction_type = $4, account_id = $5, to_account_id = $6, amount = $7,
@@ -636,9 +737,12 @@ func (q *Queries) UserTimeZone(ctx context.Context, id string) (string, error) {
 
 const usersWithDueSchedules = `-- name: UsersWithDueSchedules :many
 SELECT DISTINCT user_id FROM schedules
-WHERE NOT paused AND next_at IS NOT NULL AND next_at <= $1::timestamptz
+WHERE NOT paused AND next_at IS NOT NULL
+  AND next_at - make_interval(days => CASE WHEN mode = 'approve' THEN due_days ELSE 0 END) <= $1::timestamptz
 `
 
+// An approve schedule's occurrence comes due (is queued) due_days before
+// its time; see schedules.handleFrom.
 func (q *Queries) UsersWithDueSchedules(ctx context.Context, now time.Time) ([]string, error) {
 	rows, err := q.db.Query(ctx, usersWithDueSchedules, now)
 	if err != nil {

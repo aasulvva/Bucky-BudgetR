@@ -48,6 +48,10 @@ const (
 	MaxLimit     = 200
 	// MaxUpcoming is the most occurrences Upcoming lists.
 	MaxUpcoming = 50
+	// FirstGrace is how long ago a new schedule's first occurrence can be
+	// and still be handled: a time set to this minute has passed by the time
+	// it's saved.
+	FirstGrace = time.Hour
 )
 
 // Settings are what a schedule records and when: what the user sets.
@@ -108,6 +112,8 @@ type Occurrence struct {
 	// TransactionID is the transaction it recorded.
 	TransactionID string
 	ResolvedAt    time.Time
+	// Overdue is set on a queued one past its due time.
+	Overdue bool
 }
 
 // Filter narrows Occurrences. Zero fields match everything.
@@ -150,7 +156,8 @@ func NewService(pool *pgxpool.Pool, opts Options) *Service {
 }
 
 // Create saves a schedule. Its first occurrence is the first at or after now:
-// earlier ones aren't recorded.
+// earlier ones aren't recorded, except occurrence 0 when it passed at most
+// FirstGrace ago. The scheduler then handles that one on its next run.
 func (s *Service) Create(ctx context.Context, userID string, in Settings) (Schedule, error) {
 	return s.create(ctx, userID, in, false)
 }
@@ -159,7 +166,7 @@ func (s *Service) Create(ctx context.Context, userID string, in Settings) (Sched
 // occurrence (at Start) is at or before now, it's recorded now, dated then,
 // and the schedule goes on from the next. This is a transaction entered in
 // New transaction and set to repeat. If it can't be recorded, nothing is
-// saved.
+// saved. A schedule that asks first records it too: it's entered as done.
 func (s *Service) CreateRecordingFirst(ctx context.Context, userID string, in Settings) (Schedule, error) {
 	return s.create(ctx, userID, in, true)
 }
@@ -177,37 +184,42 @@ func (s *Service) create(ctx context.Context, userID string, in Settings, record
 		if err != nil {
 			return err
 		}
-		// The first occurrence, when it's recorded now.
+		rule, err := in.Rule()
+		if err != nil {
+			return err
+		}
+		now := s.now()
+		// The first occurrence, when it's recorded (or queued) now.
 		var first time.Time
 		var firstTx string
-		if recordFirst {
-			rule, err := in.Rule()
+		at, past := rule.Occurrence(0)
+		past = past && !at.After(now)
+		switch {
+		case recordFirst && past:
+			if s.txs == nil {
+				return errors.New("no transactions service")
+			}
+			n := in.Transaction
+			n.At = at
+			t, err := s.txs.RecordIn(ctx, tx, userID, n)
 			if err != nil {
 				return err
 			}
-			if at, ok := rule.Occurrence(0); ok && !at.After(s.now()) {
-				if s.txs == nil {
-					return errors.New("no transactions service")
-				}
-				n := in.Transaction
-				n.At = at
-				t, err := s.txs.RecordIn(ctx, tx, userID, n)
-				if err != nil {
-					return err
-				}
-				first, firstTx = at, t.ID
-				// It goes on from the first at or after now, after this one:
-				// past ones between aren't recorded, as for Create.
-				k, next, ok := rule.NextAt(s.now())
-				if ok && k < 1 {
-					k = 1
-					next, ok = rule.Occurrence(1)
-				}
-				p.NextIndex, p.NextAt = int32(max(k, 1)), pgtype.Timestamptz{}
-				if ok {
-					p.NextAt = pgtype.Timestamptz{Time: next.UTC(), Valid: true}
-				}
+			first, firstTx = at, t.ID
+			// It goes on from the first at or after now, after this one:
+			// past ones between aren't recorded, as for Create.
+			k, next, ok := rule.NextAt(now)
+			if ok && k < 1 {
+				k = 1
+				next, ok = rule.Occurrence(1)
 			}
+			p.NextIndex, p.NextAt = int32(max(k, 1)), pgtype.Timestamptz{}
+			if ok {
+				p.NextAt = pgtype.Timestamptz{Time: next.UTC(), Valid: true}
+			}
+		case past && now.Sub(at) <= FirstGrace:
+			// Just passed: left to the scheduler, like one that's due.
+			p.NextIndex, p.NextAt = 0, pgtype.Timestamptz{Time: at.UTC(), Valid: true}
 		}
 		if !p.NextAt.Valid && firstTx == "" {
 			return fmt.Errorf("%w: the schedule has no occurrences from now on", ErrInvalid)
@@ -225,7 +237,6 @@ func (s *Service) create(ctx context.Context, userID string, in Settings, record
 			return err
 		}
 		if firstTx != "" {
-			now := s.now()
 			o := sqlc.CreateOccurrenceParams{
 				ScheduleID: row.ID, UserID: userID, ScheduledAt: first.UTC(), State: sqlc.OccurrenceStateApplied,
 				TransactionID: pgtype.Text{String: firstTx, Valid: true}, ResolvedAt: pgtype.Timestamptz{Time: now, Valid: true},
@@ -371,7 +382,7 @@ func (s *Service) Occurrences(ctx context.Context, userID string, f Filter) (Pag
 	}
 	page.Items = make([]Occurrence, len(rows))
 	for i, r := range rows {
-		page.Items[i] = fromOccurrence(r)
+		page.Items[i] = s.fromOccurrence(r)
 	}
 	return page, nil
 }
@@ -563,11 +574,12 @@ func fromRow(r sqlc.Schedule, lines []sqlc.ScheduleBucketLine) Schedule {
 	return s
 }
 
-func fromOccurrence(r sqlc.ScheduleOccurrence) Occurrence {
+func (s *Service) fromOccurrence(r sqlc.ScheduleOccurrence) Occurrence {
 	return Occurrence{
 		ID: r.ID, ScheduleID: r.ScheduleID, ScheduledAt: r.ScheduledAt, State: r.State,
 		Reason: r.Reason.OccurrenceReason, Detail: r.Detail,
 		QueuedAt: r.QueuedAt.Time, DueAt: r.DueAt.Time, TransactionID: r.TransactionID.String, ResolvedAt: r.ResolvedAt.Time,
+		Overdue: r.State == sqlc.OccurrenceStateQueued && r.DueAt.Valid && r.DueAt.Time.Before(s.now()),
 	}
 }
 

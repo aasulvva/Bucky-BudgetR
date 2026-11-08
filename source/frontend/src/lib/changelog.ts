@@ -16,6 +16,38 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.15.00",
+    date: "2026-11-08",
+    title: {
+      en: "Approve scheduled transactions",
+      nb: "Godkjenn planlagte transaksjoner",
+      nn: "Godkjenn planlagde transaksjonar",
+    },
+    changes: {
+      en: [
+        "Scheduled transactions that ask first, or that couldn't be recorded on time, now wait for you at the top of the Scheduled tab, with why and when they're due. Overdue ones are marked in red and come first.",
+        "Approve one as it is, open Edit and approve to change its amount, bucket lines, account or date first, or skip it. Select several to approve or skip them at once. An approved one is dated at its scheduled time when that has passed and is in the active cycle, otherwise now.",
+        "Transactions in the menu, and the Scheduled tab, show how many are waiting, in red when one is overdue.",
+        "The Dashboard has a new Scheduled widget with what's waiting for approval and what's coming up, or just one of them.",
+        "Ask days before sets how early a schedule that asks first shows up in the queue, for example 14 days before rent is due on the 1st, so you can approve it early. It's overdue once its time has passed. New schedule now records a first time that's now or past straight away, as New transaction does, and a schedule set to start this minute no longer skips its first time.",
+      ],
+      nb: [
+        "Planlagte transaksjoner som spør først, eller som ikke kunne føres i tide, venter nå på deg øverst på fanen Planlagte, med hvorfor og når de forfaller. De som har forfalt, er merket med rødt og kommer først.",
+        "Godkjenn en som den er, åpne Rediger og godkjenn for å endre beløpet, bøttelinjene, kontoen eller datoen først, eller hopp over den. Velg flere for å godkjenne eller hoppe over dem på en gang. En godkjent transaksjon dateres til det planlagte tidspunktet når det er passert og i den aktive syklusen, ellers nå.",
+        "Transaksjoner i menyen og fanen Planlagte viser hvor mange som venter, med rødt når en har forfalt.",
+        "Oversikten har en ny modul, Planlagte, med det som venter på godkjenning og det som kommer, eller bare ett av dem.",
+        "Spør dager før bestemmer hvor tidlig en planlagt transaksjon som spør først, dukker opp i køen, for eksempel 14 dager før husleien forfaller den 1., så du kan godkjenne den tidlig. Den har forfalt når tidspunktet er passert. Ny planlagt fører nå et første tidspunkt som er nå eller passert, med en gang, slik Ny transaksjon gjør, og en planlagt transaksjon som skal starte dette minuttet, hopper ikke lenger over første gang.",
+      ],
+      nn: [
+        "Planlagde transaksjonar som spør først, eller som ikkje kunne førast i tide, ventar no på deg øvst på fana Planlagde, med kvifor og når dei forfell. Dei som har forfalle, er merkte med raudt og kjem først.",
+        "Godkjenn ein som han er, opne Rediger og godkjenn for å endre beløpet, bøttelinjene, kontoen eller datoen først, eller hopp over han. Vel fleire for å godkjenne eller hoppe over dei på ein gong. Ein godkjend transaksjon vert datert til det planlagde tidspunktet når det er passert og i den aktive syklusen, elles no.",
+        "Transaksjonar i menyen og fana Planlagde viser kor mange som ventar, med raudt når ein har forfalle.",
+        "Oversikta har ein ny modul, Planlagde, med det som ventar på godkjenning og det som kjem, eller berre eitt av dei.",
+        "Spør dagar før bestemmer kor tidleg ein planlagd transaksjon som spør først, dukkar opp i køen, til dømes 14 dagar før husleiga forfell den 1., så du kan godkjenne han tidleg. Han har forfalle når tidspunktet er passert. Ny planlagd fører no eit første tidspunkt som er no eller passert, med ein gong, slik Ny transaksjon gjer, og ein planlagd transaksjon som skal starte dette minuttet, hoppar ikkje lenger over første gong.",
+      ],
+    },
+  },
+  {
     version: "v1.14.00",
     date: "2026-11-08",
     title: {

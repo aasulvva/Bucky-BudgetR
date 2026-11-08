@@ -1776,8 +1776,9 @@ paths:
 
         When an occurrence comes due, an `auto` schedule records it, dated
         at its scheduled time, with its bucket lines in the active cycle and
-        the usual refill rules. An `approve` schedule queues it, due
-        `due_days` later. An occurrence that can't be recorded (no active
+        the usual refill rules. An `approve` schedule queues it `due_days`
+        days before its time, so it can be approved early; it's due at its
+        time and overdue after. An occurrence that can't be recorded (no active
         cycle, a time outside it, an account or bucket that's gone) is
         queued too, with the reason: see `GET /scheduled-transactions`.
 
@@ -1995,6 +1996,124 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/v1/scheduled-transactions/{scheduledTransactionId}:
+    parameters:
+      - $ref: "#/components/parameters/ScheduledTransactionId"
+    get:
+      operationId: getScheduledTransaction
+      tags: [schedules]
+      summary: Get a scheduled transaction that came due
+      responses:
+        "200":
+          description: The scheduled transaction.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduledTransaction"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/scheduled-transactions/{scheduledTransactionId}/approve:
+    parameters:
+      - $ref: "#/components/parameters/ScheduledTransactionId"
+    post:
+      operationId: approveScheduledTransaction
+      tags: [schedules]
+      summary: Approve a queued scheduled transaction
+      description: |
+        Records a queued one and marks it `applied`. Without a body, it
+        records the schedule's transaction as it is, dated at its scheduled
+        time if that has passed and the active cycle holds it, else now
+        (approved early, it's dated now). With a body, it records that
+        instead (the user's edits), checked like `POST /transactions`.
+        If it can't be recorded, nothing changes and the error says why (for
+        example 409 `no_active_cycle`). One that isn't queued is 409
+        `already_resolved`.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransactionCreate"
+      responses:
+        "200":
+          description: The applied scheduled transaction and the transaction it recorded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApprovedScheduledTransaction"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/scheduled-transactions/{scheduledTransactionId}/skip:
+    parameters:
+      - $ref: "#/components/parameters/ScheduledTransactionId"
+    post:
+      operationId: skipScheduledTransaction
+      tags: [schedules]
+      summary: Skip a queued scheduled transaction
+      description: Marks a queued one `skipped`; it's never recorded. One that isn't queued is 409 `already_resolved`.
+      responses:
+        "200":
+          description: The skipped scheduled transaction.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduledTransaction"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/upcoming-transactions:
+    get:
+      operationId: listUpcomingTransactions
+      tags: [schedules]
+      summary: What the schedules record next
+      description: |
+        The next times any of the user's schedules comes due, earliest
+        first, from each one's next occurrence. Paused and ended schedules
+        are left out.
+      parameters:
+        - name: count
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 5
+      responses:
+        "200":
+          description: The upcoming times.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UpcomingTransaction"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
 components:
   securitySchemes:
     cookieAuth:
@@ -2051,6 +2170,12 @@ components:
       required: true
       schema:
         $ref: "#/components/schemas/ScheduleId"
+    ScheduledTransactionId:
+      name: scheduledTransactionId
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/ScheduledTransactionId"
 
   responses:
     Error:
@@ -2394,7 +2519,7 @@ components:
           description: Made by the web app; unique in the layout.
         type:
           type: string
-          enum: [cycle, health, bucket_status, accounts, recent_transactions, in_out, graph]
+          enum: [cycle, health, bucket_status, accounts, recent_transactions, in_out, graph, scheduled]
         width:
           type: string
           enum: [half, full]
@@ -2420,6 +2545,8 @@ components:
           $ref: "#/components/schemas/InOutWidgetSettings"
         graph:
           $ref: "#/components/schemas/GraphWidgetSettings"
+        scheduled:
+          $ref: "#/components/schemas/ScheduledWidgetSettings"
 
     CycleWidgetSettings:
       type: object
@@ -2524,6 +2651,21 @@ components:
           description: |
             One account, whose transfers count as income and expenses. Null
             or missing means all accounts, without transfers.
+
+    ScheduledWidgetSettings:
+      type: object
+      additionalProperties: false
+      required: [show, count]
+      properties:
+        show:
+          type: string
+          enum: [both, queue, upcoming]
+          description: The approval queue, what's coming up, or both (the default).
+        count:
+          type: integer
+          minimum: 1
+          maximum: 20
+          description: How many of each it shows. 5 by default.
 
     RecentWidgetSettings:
       type: object
@@ -3804,7 +3946,7 @@ components:
           minimum: 0
           maximum: 60
           default: 3
-          description: How many days after it's queued an occurrence is due for approval.
+          description: For `approve`, how many days before its time an occurrence is queued for approval.
         start_date:
           type: string
           format: date
@@ -3942,7 +4084,7 @@ components:
     ScheduledTransaction:
       type: object
       additionalProperties: false
-      required: [id, schedule_id, scheduled_at, state, reason, detail, queued_at, due_at, transaction_id, resolved_at]
+      required: [id, schedule_id, scheduled_at, state, reason, detail, queued_at, due_at, overdue, transaction_id, resolved_at]
       properties:
         id:
           $ref: "#/components/schemas/ScheduledTransactionId"
@@ -3970,7 +4112,10 @@ components:
           type: string
           format: date-time
           nullable: true
-          description: When a queued one is due for approval.
+          description: When a queued one is due for approval, its scheduled time.
+        overdue:
+          type: boolean
+          description: A queued one past its due time.
         transaction_id:
           type: string
           allOf:
@@ -3982,6 +4127,27 @@ components:
           format: date-time
           nullable: true
           description: When it was applied or skipped.
+
+    ApprovedScheduledTransaction:
+      type: object
+      additionalProperties: false
+      required: [scheduled_transaction, transaction]
+      properties:
+        scheduled_transaction:
+          $ref: "#/components/schemas/ScheduledTransaction"
+        transaction:
+          $ref: "#/components/schemas/Transaction"
+
+    UpcomingTransaction:
+      type: object
+      additionalProperties: false
+      required: [schedule_id, at]
+      properties:
+        schedule_id:
+          $ref: "#/components/schemas/ScheduleId"
+        at:
+          type: string
+          format: date-time
 
     ScheduledTransactionPage:
       type: object

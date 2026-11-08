@@ -219,6 +219,30 @@ describe("Repeat in New transaction", () => {
     });
   });
 
+  it("records a first time that's now from New schedule too, asking first or not", async () => {
+    apiMock.on("POST /api/v1/schedules", {
+      status: 201,
+      body: schedule({ id: "1234560010", mode: "approve", next_index: 1 }),
+    });
+    renderRoute("/transactions/scheduled/new");
+    await userEvent.type(
+      await screen.findByRole("textbox", { name: "Amount" }, { timeout: 5000 }),
+      "9000",
+    );
+    await pick("Account", /^Main account/);
+    const repeat = within(screen.getByRole("region", { name: "Repeat" }));
+    await userEvent.click(repeat.getByRole("radio", { name: "Ask me first" }));
+    expect(repeat.getByRole("textbox", { name: "Ask days before" })).toHaveValue("3");
+    expect(await repeat.findByText(/The first, .*, is saved now/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(apiMock.calls("POST /api/v1/schedules")).toHaveLength(1);
+    });
+    const req = apiMock.calls("POST /api/v1/schedules")[0];
+    expect(req?.query.get("record_first")).toBe("true");
+    expect(req?.body).toMatchObject({ mode: "approve", due_days: 3 });
+  });
+
   it("checks the repeat before saving", async () => {
     renderRoute("/transactions/new");
     await userEvent.type(await screen.findByRole("textbox", { name: "Amount" }), "100");

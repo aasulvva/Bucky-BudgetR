@@ -6,6 +6,8 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 
 import type { Schedule, ScheduleInput, SchedulePreview } from "@/lib/schedules";
 
+import type { TransactionCreate } from "./transactions";
+
 import { useRefreshMoney } from "./accounts";
 import { api } from "./client";
 import { unwrap } from "./errors";
@@ -104,5 +106,136 @@ export function useDeleteSchedule(onDeleted?: () => void) {
       await refresh();
       onDeleted?.();
     },
+  });
+}
+
+const QUEUE_KEY = [...SCHEDULES_KEY, "queue"] as const;
+
+/**
+ * The approval queue: every queued scheduled transaction, newest first.
+ * Refetched every minute, since the scheduler adds to it.
+ */
+export function useQueue() {
+  return useQuery({
+    queryKey: QUEUE_KEY,
+    queryFn: () =>
+      unwrap(
+        api.GET("/api/v1/scheduled-transactions", {
+          params: { query: { state: "queued", limit: 200 } },
+        }),
+      ).then((page) => page.items),
+    refetchInterval: 60_000,
+  });
+}
+
+/** How many are queued, and whether any is overdue. */
+export function useQueueCount(): { count: number; overdue: boolean } {
+  const items = useQueue().data ?? [];
+  return { count: items.length, overdue: items.some((o) => o.overdue) };
+}
+
+export function useOccurrence(id: string) {
+  return useQuery({
+    queryKey: [...SCHEDULES_KEY, "occurrence", id],
+    queryFn: () =>
+      unwrap(
+        api.GET("/api/v1/scheduled-transactions/{scheduledTransactionId}", {
+          params: { path: { scheduledTransactionId: id } },
+        }),
+      ),
+  });
+}
+
+/** What the schedules record next, earliest first. */
+export function useUpcoming(count: number, enabled = true) {
+  return useQuery({
+    queryKey: [...SCHEDULES_KEY, "upcoming", count],
+    queryFn: () =>
+      unwrap(api.GET("/api/v1/upcoming-transactions", { params: { query: { count } } })),
+    enabled,
+  });
+}
+
+export interface Approve {
+  id: string;
+  /** The edited transaction; without it, the schedule's as it is. */
+  body?: TransactionCreate;
+}
+
+/** Approves a queued one: records it and marks it applied. */
+export function useApprove(onApproved?: (vars: Approve) => void | Promise<void>) {
+  const refresh = useRefreshSchedules();
+  return useMutation({
+    mutationFn: ({ id, body }: Approve) =>
+      unwrap(
+        api.POST("/api/v1/scheduled-transactions/{scheduledTransactionId}/approve", {
+          params: { path: { scheduledTransactionId: id } },
+          ...(body ? { body } : {}),
+        }),
+      ),
+    meta: { silentError: true },
+    onSuccess: async (_, vars) => {
+      await refresh();
+      await onApproved?.(vars);
+    },
+  });
+}
+
+/** Skips a queued one: it's never recorded. */
+export function useSkip(onSkipped?: (id: string) => void) {
+  const refresh = useRefreshSchedules();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(
+        api.POST("/api/v1/scheduled-transactions/{scheduledTransactionId}/skip", {
+          params: { path: { scheduledTransactionId: id } },
+        }),
+      ),
+    meta: { silentError: true },
+    onSuccess: async (_, id) => {
+      await refresh();
+      onSkipped?.(id);
+    },
+  });
+}
+
+export type BulkAction = "approve" | "skip";
+
+/** What approving or skipping several did: the ones done and the ones that failed. */
+export interface BulkResult {
+  done: string[];
+  failed: { id: string; error: unknown }[];
+}
+
+function resolveOne(action: BulkAction, id: string) {
+  const params = { path: { scheduledTransactionId: id } };
+  return action === "approve"
+    ? unwrap(
+        api.POST("/api/v1/scheduled-transactions/{scheduledTransactionId}/approve", { params }),
+      )
+    : unwrap(api.POST("/api/v1/scheduled-transactions/{scheduledTransactionId}/skip", { params }));
+}
+
+/**
+ * Approves or skips several as they are, one at a time so they're recorded
+ * in order, and refreshes once at the end. A failure doesn't stop the rest.
+ */
+export function useResolveMany() {
+  const refresh = useRefreshSchedules();
+  return useMutation({
+    mutationFn: async ({ action, ids }: { action: BulkAction; ids: string[] }) => {
+      const result: BulkResult = { done: [], failed: [] };
+      for (const id of ids) {
+        try {
+          await resolveOne(action, id);
+          result.done.push(id);
+        } catch (error) {
+          result.failed.push({ id, error });
+        }
+      }
+      return result;
+    },
+    meta: { silentError: true },
+    onSettled: () => refresh(),
   });
 }

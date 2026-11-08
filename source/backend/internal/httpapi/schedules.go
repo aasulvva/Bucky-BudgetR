@@ -171,6 +171,72 @@ func (s *server) ListScheduledTransactions(ctx context.Context, req api.ListSche
 	return out, nil
 }
 
+func (s *server) GetScheduledTransaction(ctx context.Context, req api.GetScheduledTransactionRequestObject) (api.GetScheduledTransactionResponseObject, error) {
+	svc, err := s.scheduleService()
+	if err != nil {
+		return nil, err
+	}
+	o, err := svc.GetOccurrence(ctx, sessionFrom(ctx).User.ID, req.ScheduledTransactionId)
+	if err != nil {
+		return nil, scheduleError(err)
+	}
+	return api.GetScheduledTransaction200JSONResponse(toAPIOccurrence(o)), nil
+}
+
+func (s *server) ApproveScheduledTransaction(ctx context.Context, req api.ApproveScheduledTransactionRequestObject) (api.ApproveScheduledTransactionResponseObject, error) {
+	svc, err := s.scheduleService()
+	if err != nil {
+		return nil, err
+	}
+	var override *transactions.New
+	if req.Body != nil {
+		n, err := fromAPITransactionCreate(*req.Body)
+		if err != nil {
+			return nil, err
+		}
+		override = &n
+	}
+	o, t, err := svc.Approve(ctx, sessionFrom(ctx).User.ID, req.ScheduledTransactionId, override)
+	if err != nil {
+		return nil, scheduleError(err)
+	}
+	return api.ApproveScheduledTransaction200JSONResponse{
+		ScheduledTransaction: toAPIOccurrence(o), Transaction: toAPITransaction(t),
+	}, nil
+}
+
+func (s *server) SkipScheduledTransaction(ctx context.Context, req api.SkipScheduledTransactionRequestObject) (api.SkipScheduledTransactionResponseObject, error) {
+	svc, err := s.scheduleService()
+	if err != nil {
+		return nil, err
+	}
+	o, err := svc.Skip(ctx, sessionFrom(ctx).User.ID, req.ScheduledTransactionId)
+	if err != nil {
+		return nil, scheduleError(err)
+	}
+	return api.SkipScheduledTransaction200JSONResponse(toAPIOccurrence(o)), nil
+}
+
+func (s *server) ListUpcomingTransactions(ctx context.Context, req api.ListUpcomingTransactionsRequestObject) (api.ListUpcomingTransactionsResponseObject, error) {
+	svc, err := s.scheduleService()
+	if err != nil {
+		return nil, err
+	}
+	count := 5
+	if req.Params.Count != nil {
+		count = *req.Params.Count
+	}
+	list, err := svc.UpcomingAll(ctx, sessionFrom(ctx).User.ID, count)
+	if err != nil {
+		return nil, scheduleError(err)
+	}
+	out := make(api.ListUpcomingTransactions200JSONResponse, len(list))
+	for i, u := range list {
+		out[i] = api.UpcomingTransaction{ScheduleId: u.ScheduleID, At: u.At.UTC()}
+	}
+	return out, nil
+}
+
 func (s *server) scheduleService() (*schedules.Service, error) {
 	if s.schedules == nil {
 		return nil, NewError(http.StatusServiceUnavailable, "schedules_unavailable", "")
@@ -184,6 +250,9 @@ func scheduleError(err error) error {
 	switch {
 	case errors.Is(err, schedules.ErrNotFound):
 		return &Error{Status: http.StatusNotFound, Code: "not_found", Detail: "Schedule not found.", Err: err}
+	case errors.Is(err, schedules.ErrResolved):
+		return &Error{Status: http.StatusConflict, Code: "already_resolved",
+			Detail: "It has been approved or skipped already.", Err: err}
 	case errors.Is(err, schedules.ErrInvalid):
 		return &Error{Status: http.StatusBadRequest, Code: "invalid_request", Detail: invalidDetail(err, schedules.ErrInvalid), Err: err}
 	}
@@ -279,7 +348,7 @@ func toAPISchedule(s schedules.Schedule) api.Schedule {
 func toAPIOccurrence(o schedules.Occurrence) api.ScheduledTransaction {
 	out := api.ScheduledTransaction{
 		Id: o.ID, ScheduleId: o.ScheduleID, ScheduledAt: o.ScheduledAt.UTC(), State: api.ScheduledTransactionState(o.State),
-		Detail: o.Detail, Reason: nullable.NewNullNullable[api.ScheduledTransactionReason](),
+		Detail: o.Detail, Overdue: o.Overdue, Reason: nullable.NewNullNullable[api.ScheduledTransactionReason](),
 		QueuedAt: nullable.NewNullNullable[time.Time](), DueAt: nullable.NewNullNullable[time.Time](),
 		TransactionId: nullable.NewNullNullable[api.TransactionId](), ResolvedAt: nullable.NewNullNullable[time.Time](),
 	}

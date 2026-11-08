@@ -55,28 +55,9 @@ func (s *server) CreateTransaction(ctx context.Context, req api.CreateTransactio
 	if err != nil {
 		return nil, err
 	}
-	b := req.Body
-	n := transactions.New{
-		Type: sqlc.TransactionType(b.Type), Counterparty: deref(b.Counterparty),
-		AccountID: b.AccountId, ToAccountID: deref(b.ToAccountId), TriggersRefill: b.TriggersRefill,
-	}
-	if b.At != nil {
-		n.At = *b.At
-	}
-	if b.Tags != nil {
-		n.Tags = *b.Tags
-	}
-	if n.Amount, err = parseAmount(b.Amount); err != nil {
+	n, err := fromAPITransactionCreate(*req.Body)
+	if err != nil {
 		return nil, err
-	}
-	if b.BucketLines != nil {
-		for _, l := range *b.BucketLines {
-			amount, err := parseAmount(l.Amount)
-			if err != nil {
-				return nil, err
-			}
-			n.Buckets = append(n.Buckets, transactions.BucketAmount{BucketID: l.BucketId, Amount: amount})
-		}
 	}
 	t, err := svc.Create(ctx, sessionFrom(ctx).User.ID, n)
 	if err != nil {
@@ -218,6 +199,34 @@ func (s *server) ListCounterparties(ctx context.Context, req api.ListCounterpart
 		}
 	}
 	return out, nil
+}
+
+// fromAPITransactionCreate converts a new transaction from the API.
+func fromAPITransactionCreate(b api.TransactionCreate) (transactions.New, error) {
+	n := transactions.New{
+		Type: sqlc.TransactionType(b.Type), Counterparty: deref(b.Counterparty),
+		AccountID: b.AccountId, ToAccountID: deref(b.ToAccountId), TriggersRefill: b.TriggersRefill,
+	}
+	if b.At != nil {
+		n.At = *b.At
+	}
+	if b.Tags != nil {
+		n.Tags = *b.Tags
+	}
+	var err error
+	if n.Amount, err = parseAmount(b.Amount); err != nil {
+		return transactions.New{}, err
+	}
+	if b.BucketLines != nil {
+		for _, l := range *b.BucketLines {
+			amount, err := parseAmount(l.Amount)
+			if err != nil {
+				return transactions.New{}, err
+			}
+			n.Buckets = append(n.Buckets, transactions.BucketAmount{BucketID: l.BucketId, Amount: amount})
+		}
+	}
+	return n, nil
 }
 
 func toAPITransaction(t transactions.Transaction) api.Transaction {
