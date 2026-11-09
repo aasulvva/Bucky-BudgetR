@@ -25,6 +25,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/schedules"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/testdb"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/transactions"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/userdata"
 )
 
 func at(s string) time.Time {
@@ -190,7 +191,7 @@ func (e env) read(t *testing.T, userID string) Data {
 	var data Data
 	err := pgx.BeginFunc(t.Context(), e.pool, func(tx pgx.Tx) error {
 		var err error
-		data, err = read(t.Context(), tx, userID)
+		data, err = userdata.Read(t.Context(), tx, userID)
 		return err
 	})
 	if err != nil {
@@ -430,7 +431,7 @@ func TestExportImport(t *testing.T) {
 	}
 
 	var back Export
-	if err := decode(raw, &back); err != nil {
+	if err := userdata.Decode(raw, &back); err != nil {
 		t.Fatal(err)
 	}
 	imported := must[Snapshot](t)(e.d.Import(ctx, back))
@@ -448,45 +449,6 @@ func TestExportImport(t *testing.T) {
 	}
 	if _, err := e.d.Import(ctx, Export{Format: 2}); !errors.Is(err, ErrInvalid) {
 		t.Errorf("unknown format: %v", err)
-	}
-}
-
-// TestIDColumns checks idColumns against the schema: every foreign key
-// column of a per-user table, and every id column, must be listed, and
-// every table must be in tables.
-func TestIDColumns(t *testing.T) {
-	pool := testdb.New(t)
-	rows, err := pool.Query(t.Context(), `
-		SELECT c.conrelid::regclass::text, a.attname
-		FROM pg_constraint c
-		JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY (c.conkey)
-		WHERE c.contype IN ('f', 'p') AND c.connamespace = 'public'::regnamespace`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cols, err := pgx.CollectRows(rows, pgx.RowToStructByPos[struct{ Table, Column string }])
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, c := range cols {
-		if !known(c.Table) {
-			continue
-		}
-		if _, ok := idColumns[c.Table][c.Column]; !ok {
-			t.Errorf("%s.%s holds an ID but isn't in idColumns", c.Table, c.Column)
-		}
-	}
-	var all []string
-	if err := pool.QueryRow(t.Context(), `
-		SELECT array_agg(DISTINCT table_name::text) FROM information_schema.columns
-		WHERE table_schema = 'public' AND column_name IN ('user_id', 'account_id', 'bucket_id', 'transaction_id')`).Scan(&all); err != nil {
-		t.Fatal(err)
-	}
-	for _, name := range all {
-		// Not budget data: logins, and the app's log (#93), which isn't a user's.
-		if !known(name) && !slices.Contains([]string{"sessions", "password_links", "log_entries"}, name) {
-			t.Errorf("table %s has user data but isn't in tables", name)
-		}
 	}
 }
 
@@ -545,4 +507,15 @@ func firstID(t *testing.T, pool *pgxpool.Pool, userID string) string {
 		t.Fatal(err)
 	}
 	return id
+}
+
+// keys returns the rows' values of col as text.
+func keys(rows []userdata.Row, col string) []string {
+	out := make([]string, 0, len(rows))
+	for _, r := range rows {
+		if v := r[col]; v != nil {
+			out = append(out, fmt.Sprint(v))
+		}
+	}
+	return out
 }

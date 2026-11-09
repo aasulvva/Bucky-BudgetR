@@ -13,8 +13,12 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/api"
 )
 
-// maxBodyBytes limits API request bodies.
-const maxBodyBytes = 1 << 20
+// maxBodyBytes limits API request bodies, unless an operation sets
+// x-max-body-bytes (the data import, #36).
+const (
+	maxBodyBytes    = 1 << 20
+	maxBodyBytesExt = "x-max-body-bytes"
+)
 
 // allowedBeforePasswordChange marks operations in the spec that a user who
 // must change their password may still call.
@@ -72,7 +76,7 @@ func Gate() (func(http.Handler) http.Handler, error) {
 				return
 			}
 
-			r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+			r.Body = http.MaxBytesReader(w, r.Body, bodyLimit(op))
 			err = openapi3filter.ValidateRequest(r.Context(), &openapi3filter.RequestValidationInput{
 				Request:    r,
 				PathParams: params,
@@ -125,4 +129,19 @@ func validationDetail(err error) string {
 		return fmt.Sprintf("%s: %v", where, reqErr.Err)
 	}
 	return fmt.Sprintf("%s: %s", where, reqErr.Reason)
+}
+
+// bodyLimit is the operation's x-max-body-bytes, or maxBodyBytes.
+func bodyLimit(op *openapi3.Operation) int64 {
+	switch v := op.Extensions[maxBodyBytesExt].(type) {
+	case float64:
+		if v > 0 {
+			return int64(v)
+		}
+	case int:
+		if v > 0 {
+			return int64(v)
+		}
+	}
+	return maxBodyBytes
 }

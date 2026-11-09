@@ -140,7 +140,30 @@
     "password": "Passord",
     "passwordChanged": "Passordet er byttet. De andre øktene dine ble logget ut.",
     "data": "Eksport og import av data",
-    "dataText": "Last ned alle dataene dine, eller ta dem med til en annen server (#36).",
+    "dataText": "Last ned alt du har i appen som én fil: kontoer, bøtter, sykluser, transaksjoner, tagger, planlagte transaksjoner, innstillingene dine og oversikten. Ta vare på den som sikkerhetskopi, eller importer den senere eller på en annen server.",
+    "dataTransfer": {
+      "download": "Last ned dataene mine",
+      "downloaded": "Dataene dine er lastet ned.",
+      "privacy": "Filen inneholder alle de økonomiske dataene dine i lesbar form. Oppbevar den trygt.",
+      "import": "Importer …",
+      "importHint": "Import erstatter alle dataene dine med dataene i filen.",
+      "invalid": "Denne filen er ikke en eksport fra Bucky BudgetR, eller den er skadet.",
+      "newer": "Denne eksporten er fra en nyere versjon av appen. Oppdater appen først.",
+      "confirmTitle": "Erstatte alle dataene dine?",
+      "fileFrom": "Eksportert av <b>{{username}}</b> {{when}}.",
+      "otherUser": "Den er fra en annen bruker eller server, så den importeres som en kopi med nye ID-er.",
+      "counts": {
+        "accounts": "Kontoer",
+        "buckets": "Bøtter",
+        "cycles": "Sykluser",
+        "transactions": "Transaksjoner",
+        "schedules": "Planlagte transaksjoner"
+      },
+      "replaceWarning": "Alt du har nå, slettes og erstattes med dataene i filen, også innstillingene og oversikten. Brukernavnet og passordet ditt beholdes. En kopi av dataene du har nå, lastes ned først.",
+      "typeUsername": "Skriv brukernavnet ditt, {{username}}, for å bekrefte",
+      "confirm": "Erstatt dataene mine",
+      "imported": "Importert: {{accounts}} kontoer og {{transactions}} transaksjoner."
+    },
     "serverStatus": "Serverstatus",
     "serverReachable": "API-et og databasen svarer.",
     "whatsNewPopup": "Vis Nytt i appen etter oppdateringer",
@@ -1336,7 +1359,9 @@
         "user_admin_granted": "Gjort til administrator",
         "user_admin_revoked": "Ikke lenger administrator",
         "user_password_reset": "Passord tilbakestilt",
-        "logs_settings_changed": "Lagringstid for logger endret"
+        "logs_settings_changed": "Lagringstid for logger endret",
+        "data_exported": "Data eksportert",
+        "data_imported": "Data importert"
       }
     }
   },
@@ -1375,8 +1400,10 @@
       "cycle_overdue": "Sluttdatoen for den aktive perioden er passert. Forleng eller avslutt perioden først.",
       "cycle_overlap": "Perioden ville overlappet en annen periode.",
       "database_unavailable": "Databasen svarer ikke.",
+      "export_too_new": "Denne eksporten er fra en nyere versjon av appen. Oppdater appen først.",
       "internal_error": "Serveren støtte på et problem.",
       "invalid_credentials": "Feil brukernavn eller passord.",
+      "invalid_export": "Denne filen er ikke en eksport fra Bucky BudgetR, eller den er skadet.",
       "invalid_link": "Denne lenken virker ikke. Be en administrator om en ny.",
       "last_admin": "Dette er den siste aktive administratoren. Gjør noen andre til administrator først.",
       "name_taken": "Det navnet er allerede i bruk.",

@@ -31,6 +31,9 @@ info:
     `password_change_required`. Operations marked `x-admin-only` need an
     admin; others get 403 `admin_only`.
 
+    Request bodies are limited to 1 MiB (413 `body_too_large`), except where
+    an operation sets `x-max-body-bytes`.
+
 servers:
   - url: /
 
@@ -291,6 +294,70 @@ paths:
         "400":
           $ref: "#/components/responses/Error"
         "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/me/export:
+    get:
+      operationId: exportMyData
+      tags: [auth]
+      summary: Export all of my data
+      description: |
+        Everything the user has, as of one moment, as a file to keep or to
+        import later or on another server (#36): accounts, cycles, buckets,
+        tags, transactions with their lines, refills, schedules with their
+        queue, dismissed notifications and the preferences (the dashboard
+        too). Not the username, password or sessions. The rows are the
+        database's, so numbers are exact; the file is readable financial
+        data. Logged as the event `data.exported`.
+      responses:
+        "200":
+          description: The export file.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserDataExport"
+        "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/me/import:
+    post:
+      operationId: importMyData
+      tags: [auth]
+      summary: Replace all of my data with an export
+      description: |
+        Replaces everything the user has with an export file's data, in one
+        step (#36). The body is the file as it was downloaded, sent as
+        `application/octet-stream` so that its numbers stay exact. The IDs
+        are kept when the file is the user's own and no other user has them;
+        otherwise everything gets new IDs. A file of a newer format is 409
+        `export_too_new`; anything else that isn't an export is 400
+        `invalid_export`. Logged as the event `data.imported`.
+      x-max-body-bytes: 67108864
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: What was imported.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportResult"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "413":
           $ref: "#/components/responses/Error"
         default:
           $ref: "#/components/responses/Error"
@@ -2575,6 +2642,60 @@ components:
           minimum: 1
           maximum: 3650
           description: How many days admin actions are kept.
+
+    UserDataExport:
+      type: object
+      required: [app, format, schema_version, exported_at, user_id, username, data]
+      properties:
+        app:
+          type: string
+          enum: [bucky-budgetr]
+        format:
+          type: integer
+          description: The file format. Bumped when a column is renamed or removed; older formats are converted on import.
+        schema_version:
+          type: integer
+          format: int64
+          description: The database schema version it was exported from, for information.
+        exported_at:
+          type: string
+          format: date-time
+        user_id:
+          $ref: "#/components/schemas/UserId"
+        username:
+          type: string
+        data:
+          type: object
+          required: [preferences, tables]
+          properties:
+            preferences:
+              type: object
+              additionalProperties: true
+            tables:
+              type: object
+              description: Each per-user table's rows, by column.
+              additionalProperties:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+
+    ImportResult:
+      type: object
+      additionalProperties: false
+      required: [accounts, buckets, cycles, transactions, schedules]
+      properties:
+        accounts:
+          type: integer
+        buckets:
+          type: integer
+        cycles:
+          type: integer
+        transactions:
+          type: integer
+          description: Transactions, not counting their corrections and reversals.
+        schedules:
+          type: integer
 
     UserCreate:
       type: object

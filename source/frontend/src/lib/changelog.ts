@@ -16,6 +16,29 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.08.00",
+    date: "2026-11-09",
+    title: {
+      en: "Export and import your data",
+      nb: "Eksporter og importer dataene dine",
+      nn: "Eksporter og importer dataa dine",
+    },
+    changes: {
+      en: [
+        "Settings → Data export and import: Download my data saves everything you have in the app as one file: accounts, buckets, cycles, transactions, tags, scheduled transactions, your settings and the dashboard. Keep it as a backup, or move to another server.",
+        "Import… replaces all your data with such a file, after you've checked what's in it and typed your username. A copy of your current data is downloaded first, so you can go back. A file from another user or server is imported as a copy.",
+      ],
+      nb: [
+        "Innstillinger → Eksport og import av data: Last ned dataene mine lagrer alt du har i appen som én fil: kontoer, bøtter, sykluser, transaksjoner, tagger, planlagte transaksjoner, innstillingene dine og oversikten. Ta vare på den som sikkerhetskopi, eller flytt til en annen server.",
+        "Importer … erstatter alle dataene dine med en slik fil, etter at du har sett hva den inneholder og skrevet brukernavnet ditt. En kopi av dataene du har nå, lastes ned først, så du kan gå tilbake. En fil fra en annen bruker eller server importeres som en kopi.",
+      ],
+      nn: [
+        "Innstillingar → Eksport og import av data: Last ned dataa mine lagrar alt du har i appen som éi fil: kontoar, bøtter, syklusar, transaksjonar, taggar, planlagde transaksjonar, innstillingane dine og oversikta. Ta vare på ho som tryggingskopi, eller flytt til ein annan tenar.",
+        "Importer … erstattar alle dataa dine med ei slik fil, etter at du har sett kva ho inneheld og skrive brukarnamnet ditt. Ein kopi av dataa du har no, vert lasta ned først, så du kan gå tilbake. Ei fil frå ein annan brukar eller tenar vert importert som ein kopi.",
+      ],
+    },
+  },
+  {
     version: "v2.07.00",
     date: "2026-11-09",
     title: {

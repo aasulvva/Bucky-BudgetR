@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { api } from "@/api/client";
 import { unwrap } from "@/api/errors";
 import { useSession, useUpdatePreferences, type Preferences } from "@/app/session";
+import { DataCard } from "@/components/DataCard";
 import { CycleRuleCard } from "@/components/cycles/CycleRuleCard";
 import { NotificationsCard } from "@/components/notifications/NotificationsCard";
 import { PasswordForm } from "@/components/PasswordForm";
@@ -120,23 +121,6 @@ function PasswordCard() {
           }}
         />
       </Stack>
-    </Card>
-  );
-}
-
-function DataCard() {
-  const { t } = useTranslation();
-  return (
-    <Card withBorder>
-      <Group gap="xs">
-        <Text fw={600}>{t("settings.data")}</Text>
-        <Badge variant="light" color="gray">
-          {t("common.later")}
-        </Badge>
-      </Group>
-      <Text size="sm" c="dimmed" mt="xs">
-        {t("settings.dataText")}
-      </Text>
     </Card>
   );
 }

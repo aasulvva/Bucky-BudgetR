@@ -140,7 +140,30 @@
     "password": "Password",
     "passwordChanged": "Password changed. Your other sessions were signed out.",
     "data": "Data export and import",
-    "dataText": "Download all your data, or bring it into another server (#36).",
+    "dataText": "Download everything you have in the app as one file: accounts, buckets, cycles, transactions, tags, schedules, your settings and the dashboard. Keep it as a backup, or import it later or on another server.",
+    "dataTransfer": {
+      "download": "Download my data",
+      "downloaded": "Your data is downloaded.",
+      "privacy": "The file holds all your financial data in readable form. Keep it somewhere safe.",
+      "import": "Import…",
+      "importHint": "Importing replaces all your data with the file's.",
+      "invalid": "This file isn't a Bucky BudgetR export, or it's damaged.",
+      "newer": "This export is from a newer version of the app. Update the app first.",
+      "confirmTitle": "Replace all your data?",
+      "fileFrom": "Exported by <b>{{username}}</b> on {{when}}.",
+      "otherUser": "It's from another user or server, so it's imported as a copy with new IDs.",
+      "counts": {
+        "accounts": "Accounts",
+        "buckets": "Buckets",
+        "cycles": "Cycles",
+        "transactions": "Transactions",
+        "schedules": "Scheduled transactions"
+      },
+      "replaceWarning": "Everything you have now is deleted and replaced with the file's data, settings and dashboard included. Your username and password stay. A copy of your current data is downloaded first.",
+      "typeUsername": "Type your username, {{username}}, to confirm",
+      "confirm": "Replace my data",
+      "imported": "Imported: {{accounts}} accounts and {{transactions}} transactions."
+    },
     "serverStatus": "Server status",
     "serverReachable": "API and database are reachable.",
     "whatsNewPopup": "Show What's New after updates",
@@ -1336,7 +1359,9 @@
         "user_admin_granted": "Admin granted",
         "user_admin_revoked": "Admin removed",
         "user_password_reset": "Password reset",
-        "logs_settings_changed": "Log retention changed"
+        "logs_settings_changed": "Log retention changed",
+        "data_exported": "Data exported",
+        "data_imported": "Data imported"
       }
     }
   },
@@ -1375,8 +1400,10 @@
       "cycle_overdue": "The active cycle's end date has passed. Extend or end the cycle first.",
       "cycle_overlap": "The cycle would overlap another cycle.",
       "database_unavailable": "The database is not reachable.",
+      "export_too_new": "This export is from a newer version of the app. Update the app first.",
       "internal_error": "The server ran into a problem.",
       "invalid_credentials": "Wrong username or password.",
+      "invalid_export": "This file isn't a Bucky BudgetR export, or it's damaged.",
       "invalid_link": "This link doesn't work. Ask an admin for a new one.",
       "last_admin": "This is the last active admin. Make someone else an admin first.",
       "name_taken": "That name is already in use.",

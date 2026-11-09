@@ -24,6 +24,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/refill"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/schedules"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/transactions"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/userdata"
 )
 
 // server implements the operations in api/openapi.yaml. Gate has already
@@ -39,6 +40,7 @@ type server struct {
 	schedules     *schedules.Service
 	notifications *notifications.Service
 	logs          *logging.Service
+	userData      *userdata.Service
 	logger        *slog.Logger
 }
 

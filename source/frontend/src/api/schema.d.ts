@@ -190,6 +190,58 @@ export interface paths {
         patch: operations["updatePreferences"];
         trace?: never;
     };
+    "/api/v1/me/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export all of my data
+         * @description Everything the user has, as of one moment, as a file to keep or to
+         *     import later or on another server (#36): accounts, cycles, buckets,
+         *     tags, transactions with their lines, refills, schedules with their
+         *     queue, dismissed notifications and the preferences (the dashboard
+         *     too). Not the username, password or sessions. The rows are the
+         *     database's, so numbers are exact; the file is readable financial
+         *     data. Logged as the event `data.exported`.
+         */
+        get: operations["exportMyData"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace all of my data with an export
+         * @description Replaces everything the user has with an export file's data, in one
+         *     step (#36). The body is the file as it was downloaded, sent as
+         *     `application/octet-stream` so that its numbers stay exact. The IDs
+         *     are kept when the file is the user's own and no other user has them;
+         *     otherwise everything gets new IDs. A file of a newer format is 409
+         *     `export_too_new`; anything else that isn't an export is 400
+         *     `invalid_export`. Logged as the event `data.imported`.
+         */
+        post: operations["importMyData"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/users": {
         parameters: {
             query?: never;
@@ -1522,6 +1574,40 @@ export interface components {
             error_days: number;
             /** @description How many days admin actions are kept. */
             audit_days: number;
+        };
+        UserDataExport: {
+            /** @enum {string} */
+            app: "bucky-budgetr";
+            /** @description The file format. Bumped when a column is renamed or removed; older formats are converted on import. */
+            format: number;
+            /**
+             * Format: int64
+             * @description The database schema version it was exported from, for information.
+             */
+            schema_version: number;
+            /** Format: date-time */
+            exported_at: string;
+            user_id: components["schemas"]["UserId"];
+            username: string;
+            data: {
+                preferences: {
+                    [key: string]: unknown;
+                };
+                /** @description Each per-user table's rows, by column. */
+                tables: {
+                    [key: string]: {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+        };
+        ImportResult: {
+            accounts: number;
+            buckets: number;
+            cycles: number;
+            /** @description Transactions, not counting their corrections and reversals. */
+            transactions: number;
+            schedules: number;
         };
         UserCreate: {
             username: components["schemas"]["Username"];
@@ -2978,6 +3064,57 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    exportMyData: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The export file. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserDataExport"];
+                };
+            };
+            401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    importMyData: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description What was imported. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportResult"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            413: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };

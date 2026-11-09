@@ -48,6 +48,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/refill"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/schedules"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/transactions"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/userdata"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/web"
 )
 
@@ -170,6 +171,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, out, lo
 		Schedules:      schedulesSvc,
 		Notifications:  notificationsSvc,
 		Logs:           logsSvc,
+		UserData:       userdata.NewService(pool, userdata.Options{Now: now}),
 		Docs:           cfg.Env == config.EnvDevelopment,
 		Web:            web.Handler(),
 		TrustedProxies: cfg.TrustedProxies,
