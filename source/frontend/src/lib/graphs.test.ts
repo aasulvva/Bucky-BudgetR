@@ -537,6 +537,33 @@ describe("pies", () => {
     );
   });
 
+  it("never give two slices the same name, even for lines that don't fit (#167)", () => {
+    // Bucket lines (no account) read as a balance pie, which is per account.
+    const result: StatsSeries = {
+      intervals: whole,
+      series: ["b1", "b2", "b3", "b4"].map((id) => ({
+        bucket_id: id,
+        currency: "NOK",
+        values: ["100.00"],
+      })),
+    };
+    const balance: GraphSettings = { ...pie, metric: "balance" };
+    const names = pieData(result, balance, "total", "NOK", [main], buckets).slices.map(
+      (x) => x.name,
+    );
+    expect(names).toHaveLength(4);
+    expect(new Set(names).size).toBe(4);
+    const series = graphData(
+      result,
+      { ...balance, kind: "bar" },
+      "total",
+      "NOK",
+      [main],
+      buckets,
+    ).series;
+    expect(new Set(series.map((x) => x.name)).size).toBe(4);
+  });
+
   it("slice per bucket or account over the whole period, or per interval when not split", () => {
     expect(pieSlicing(pie)).toBe("bucket");
     expect(pieSlicing({ ...pie, group_by: "account" })).toBe("account");

@@ -327,6 +327,83 @@ describe("Stats", () => {
     expect(screen.queryByRole("option", { name: "Whole period" })).not.toBeInTheDocument();
   });
 
+  it("keeps the previous graph, dimmed, while a changed one loads (#167)", async () => {
+    let release: () => void = () => undefined;
+    apiMock.on(stats, (req) => {
+      const intervals = [{ start: req.query.get("from") ?? "", end: req.query.get("to") ?? "" }];
+      if (req.query.get("group_by") === "account" && req.query.get("metric") !== "balance") {
+        return {
+          body: {
+            intervals,
+            series: [{ account_id: "1234", currency: "NOK", values: ["400.00"] }],
+          },
+        };
+      }
+      if (req.query.get("metric") !== "balance") {
+        // Per bucket: the lines have no account.
+        return {
+          body: {
+            intervals,
+            series: [
+              { bucket_id: "1000000001", currency: "NOK", values: ["300.00"] },
+              { bucket_id: null, currency: "NOK", values: ["100.00"] },
+            ],
+          },
+        };
+      }
+      return new Promise((resolve) => {
+        release = () => {
+          resolve({
+            body: {
+              intervals,
+              series: [{ account_id: "1234", currency: "NOK", values: ["500.00"] }],
+            },
+          });
+        };
+      });
+    });
+    renderRoute("/stats?kind=pie&metric=spending&period=current-month&res=day&group=bucket");
+    const rows = () =>
+      within(screen.getByTestId("pie-list"))
+        .getAllByRole("row")
+        .slice(1)
+        .map((r) => r.textContent);
+    const graph = () => screen.getByTestId("pie-list").closest("[data-loading], div[aria-busy]");
+    await screen.findByTestId("pie-list");
+    expect(rows()).toEqual([
+      expect.stringMatching(/^Food/),
+      expect.stringMatching(/^No bucket/),
+      expect.stringMatching(/^Total/),
+    ]);
+
+    await pick("Show", "Balance");
+    await waitFor(() => {
+      expect(lastQuery()?.get("metric")).toBe("balance");
+    });
+    // The spending pie as it was, not its bucket lines read per account.
+    expect(rows()).toEqual([
+      expect.stringMatching(/^Food/),
+      expect.stringMatching(/^No bucket/),
+      expect.stringMatching(/^Total/),
+    ]);
+    expect(graph()).toHaveAttribute("aria-busy", "true");
+
+    release();
+    await waitFor(() => {
+      expect(rows()).toEqual([expect.stringMatching(/^Main/), expect.stringMatching(/^Total/)]);
+    });
+    expect(graph()).toBeNull();
+
+    // And back (still per account, as a balance pie was): no rows left over.
+    await pick("Show", "Spending");
+    await waitFor(() => {
+      expect(rows()).toEqual([
+        expect.stringMatching(/^Main.*400/),
+        expect.stringMatching(/^Total/),
+      ]);
+    });
+  });
+
   it("shows balances per account in a pie, leaving out those below 0", async () => {
     apiMock.on(stats, (req) => ({
       body: {

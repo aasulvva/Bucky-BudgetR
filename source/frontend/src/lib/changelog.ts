@@ -16,6 +16,29 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.00.02",
+    date: "2026-11-09",
+    title: {
+      en: "Pie graphs without stray Total rows",
+      nb: "Kakediagrammer uten ekstra Totalt-rader",
+      nn: "Kakediagram utan ekstra Totalt-rader",
+    },
+    changes: {
+      en: [
+        "A pie per bucket no longer lists stray Total rows after switching Show to Balance, and they no longer stay when switching back.",
+        "While a changed graph loads, the previous one stays as it was, dimmed, instead of mixing the new settings with the old numbers.",
+      ],
+      nb: [
+        "Et kakediagram per bøtte viser ikke lenger ekstra Totalt-rader etter at Vis endres til Saldo, og de blir ikke lenger stående når du bytter tilbake.",
+        "Mens en endret graf lastes, blir den forrige stående som den var, nedtonet, i stedet for å blande de nye innstillingene med de gamle tallene.",
+      ],
+      nn: [
+        "Eit kakediagram per bøtte viser ikkje lenger ekstra Totalt-rader etter at Vis vert endra til Saldo, og dei vert ikkje lenger ståande når du byter tilbake.",
+        "Medan ein endra graf vert lasta, vert den førre ståande som han var, nedtona, i staden for å blande dei nye innstillingane med dei gamle tala.",
+      ],
+    },
+  },
+  {
     version: "v2.00.01",
     date: "2026-11-09",
     title: {
