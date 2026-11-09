@@ -216,6 +216,9 @@
     "empty": "Ingen kontoar enno. Opprett den første.",
     "editAccount": "Rediger konto",
     "name": "Namn",
+    "bank": "Bank",
+    "bankPlaceholder": "t.d. DNB",
+    "bankHint": "Valfritt. Vert brukt som motpart når du registrerer renter.",
     "type": "Type",
     "currency": "Valuta",
     "balance": "Saldo",
@@ -243,7 +246,17 @@
     "bucketsFunded_other": "{{count}} bøtter vert finansierte frå han. Vel ein ny kjeldekonto:",
     "noOtherForBuckets": "Det finst ingen annan konto i {{currency}} å flytte dei til. Opprett ein, eller slett bøttene i bøtteoppsettet først.",
     "deleteAccount": "Slett kontoen",
-    "deleted": "{{name}} er sletta."
+    "deleted": "{{name}} er sletta.",
+    "renameInterest": {
+      "title": "Tidlegare renter",
+      "body_one": "{{count}} tidlegare renteinntekt på {{account}} har motparten Renter eller den førre banken. Vil du endre ho til {{bank}}? Ho vert korrigert, så endringa vert ståande i historikken.",
+      "body_other": "{{count}} tidlegare renteinntekter på {{account}} har motparten Renter eller den førre banken. Vil du endre dei til {{bank}}? Kvar av dei vert korrigert, så endringa vert ståande i historikken.",
+      "update_one": "Oppdater ho",
+      "update_other": "Oppdater {{count}}",
+      "leave": "La dei vere",
+      "done_one": "{{count}} renteinntekt har no {{bank}} som motpart.",
+      "done_other": "{{count}} renteinntekter har no {{bank}} som motpart."
+    }
   },
   "dashboard": {
     "settings": "Innstillingar",

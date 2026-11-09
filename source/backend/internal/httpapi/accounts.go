@@ -45,6 +45,9 @@ func (s *server) CreateAccount(ctx context.Context, req api.CreateAccountRequest
 	if b.Currency != nil {
 		n.Currency = *b.Currency
 	}
+	if b.Bank != nil {
+		n.Bank = *b.Bank
+	}
 	if b.OpeningBalance != nil {
 		if n.OpeningBalance, err = parseAmount(*b.OpeningBalance); err != nil {
 			return nil, err
@@ -77,7 +80,7 @@ func (s *server) UpdateAccount(ctx context.Context, req api.UpdateAccountRequest
 	if err != nil {
 		return nil, err
 	}
-	c := accounts.Changes{Name: req.Body.Name}
+	c := accounts.Changes{Name: req.Body.Name, Bank: req.Body.Bank}
 	if req.Body.Type != nil {
 		t := sqlc.AccountType(*req.Body.Type)
 		c.Type = &t
@@ -221,6 +224,7 @@ func toAPIAccount(a accounts.Account) api.Account {
 		Name:           a.Name,
 		Type:           api.AccountType(a.Type),
 		Currency:       a.Currency,
+		Bank:           a.Bank,
 		Balance:        a.Balance.StringFixed(money.Places),
 		Unallocated:    a.Unallocated.StringFixed(money.Places),
 		ExpectedIncome: nullable.NewNullNullable[api.Amount](),

@@ -96,6 +96,85 @@ describe("Account setup", () => {
     expect(router.state.location.search).toBe("");
   });
 
+  it("sets a bank, suggesting the other accounts' banks, and lists it (#70)", async () => {
+    apiMock.on("GET /api/v1/accounts", { body: [buffer, euro, { ...main, bank: "DNB" }] });
+    apiMock.on("POST /api/v1/accounts", (req) => ({
+      status: 201,
+      body: account({ id: "4567", name: (req.body as { name: string }).name, bank: "DNB" }),
+    }));
+    renderRoute("/accounts/setup");
+    const row = within((await screen.findByText("Main account")).closest("tr") as HTMLElement);
+    expect(row.getByText("DNB")).toBeInTheDocument();
+
+    await userEvent.click(await screen.findByRole("button", { name: "New account" }));
+    const dialog = within(await screen.findByRole("dialog", { name: "New account" }));
+    await userEvent.type(dialog.getByRole("textbox", { name: /Name/ }), "Savings");
+    await userEvent.click(dialog.getByRole("combobox", { name: /Bank/ }));
+    await userEvent.click(await dialog.findByRole("option", { name: "DNB" }));
+    await userEvent.click(dialog.getByRole("button", { name: "Create account" }));
+
+    expect(await screen.findByText("Savings created.")).toBeInTheDocument();
+    expect(apiMock.calls("POST /api/v1/accounts")[0]?.body).toMatchObject({
+      name: "Savings",
+      bank: "DNB",
+    });
+  });
+
+  it("offers to give the earlier interest the new bank's name (#70)", async () => {
+    const dnb = { ...main, bank: "DNB" };
+    apiMock.on("GET /api/v1/accounts", { body: [buffer, euro, dnb] });
+    apiMock.on("PATCH /api/v1/accounts/1234", { body: { ...dnb, bank: "Sbanken" } });
+    apiMock.on("POST /api/v1/transactions/counterparty-rename", { body: { count: 2 } });
+    const { router } = renderRoute("/accounts/setup?edit=1234");
+    const dialog = within(await screen.findByRole("dialog", { name: "Edit account" }));
+    const bank = dialog.getByRole("combobox", { name: /Bank/ });
+    expect(bank).toHaveValue("DNB");
+    await userEvent.clear(bank);
+    await userEvent.type(bank, "Sbanken");
+    await userEvent.click(dialog.getByRole("button", { name: "Save" }));
+
+    expect(
+      await dialog.findByText(
+        "2 earlier interest incomes on Main account have the counterparty Interest or the old bank. Change them to Sbanken? Each one is corrected, so the change stays in its history.",
+      ),
+    ).toBeInTheDocument();
+    expect(apiMock.calls("PATCH /api/v1/accounts/1234")[0]?.body).toEqual({ bank: "Sbanken" });
+    const renames = () => apiMock.calls("POST /api/v1/transactions/counterparty-rename");
+    expect(renames()[0]?.body).toEqual({
+      account_id: "1234",
+      type: "INC",
+      tag: "interest",
+      from: ["Interest", "Renter", "DNB"],
+      to: "Sbanken",
+      apply: false,
+    });
+
+    await userEvent.click(dialog.getByRole("button", { name: "Update 2" }));
+    expect(
+      await screen.findByText("2 interest incomes now have Sbanken as their counterparty."),
+    ).toBeInTheDocument();
+    expect(renames()[1]?.body).toMatchObject({ apply: true, to: "Sbanken" });
+    expect(router.state.location.search).toBe("");
+  });
+
+  it.each([
+    [0, "closes without an offer when no earlier interest matches"],
+    [1, "closes when the offer is left"],
+  ])("with %i to rename, %s", async (count) => {
+    apiMock.on("PATCH /api/v1/accounts/2345", { body: { ...buffer, bank: "DNB" } });
+    apiMock.on("POST /api/v1/transactions/counterparty-rename", { body: { count } });
+    const { router } = renderRoute("/accounts/setup?edit=2345");
+    const dialog = within(await screen.findByRole("dialog", { name: "Edit account" }));
+    await userEvent.type(dialog.getByRole("combobox", { name: /Bank/ }), "DNB");
+    await userEvent.click(dialog.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("Buffer account saved.")).toBeInTheDocument();
+    if (count > 0) {
+      await userEvent.click(await dialog.findByRole("button", { name: "Leave as they are" }));
+    }
+    expect(router.state.location.search).toBe("");
+    expect(apiMock.calls("POST /api/v1/transactions/counterparty-rename")).toHaveLength(1);
+  });
+
   it("opens the edit dialog from the list", async () => {
     const { router } = renderRoute("/accounts/setup");
     await userEvent.click(await screen.findByRole("button", { name: "Edit Main account" }));

@@ -1,7 +1,7 @@
 -- name: CreateAccount :one
 -- Use with ids.Insert: a taken ID returns no row.
-INSERT INTO bank_accounts (id, user_id, name, currency, account_type)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO bank_accounts (id, user_id, name, currency, account_type, bank)
+VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (id) DO NOTHING
 RETURNING *;
 
@@ -17,7 +17,7 @@ SELECT * FROM bank_accounts WHERE id = $1 AND user_id = $2 AND NOT deleted;
 SELECT * FROM bank_accounts WHERE id = $1 AND user_id = $2 AND NOT deleted FOR UPDATE;
 
 -- name: UpdateAccount :one
-UPDATE bank_accounts SET name = $3, account_type = $4, expected_income = $5, modified_at = now()
+UPDATE bank_accounts SET name = $3, account_type = $4, expected_income = $5, bank = $6, modified_at = now()
 WHERE id = $1 AND user_id = $2 AND NOT deleted
 RETURNING *;
 

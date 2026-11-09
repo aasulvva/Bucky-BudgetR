@@ -683,6 +683,7 @@ type BankAccount struct {
 	ModifiedAt     time.Time
 	AccountType    AccountType
 	ExpectedIncome decimal.NullDecimal
+	Bank           string
 }
 
 type BankTransaction struct {

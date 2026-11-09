@@ -73,6 +73,9 @@ func (e *HasBucketsError) Unwrap() error { return ErrHasBuckets }
 // MaxName is the longest account name, in characters.
 const MaxName = 100
 
+// MaxBank is the longest bank name, in characters.
+const MaxBank = 100
+
 // DefaultCurrency is used when an account is created without one.
 const DefaultCurrency = "NOK"
 
@@ -82,7 +85,9 @@ type Account struct {
 	Name     string
 	Type     sqlc.AccountType
 	Currency string
-	Balance  decimal.Decimal
+	// Bank is the bank the account is in (#70), "" when not given.
+	Bank    string
+	Balance decimal.Decimal
 	// Unallocated is the part of the balance no bucket's CAF uses (spec §7).
 	Unallocated decimal.Decimal
 	// ExpectedIncome is the income expected per cycle, for Budget setup
@@ -98,6 +103,8 @@ type New struct {
 	Type sqlc.AccountType
 	// Currency defaults to DefaultCurrency. It can't be changed later.
 	Currency string
+	// Bank is optional.
+	Bank string
 	// OpeningBalance is recorded as an Opening Balance (OPB) transaction at
 	// OpeningAt (default now). Zero records nothing.
 	OpeningBalance decimal.Decimal
@@ -110,6 +117,8 @@ type Changes struct {
 	Type *sqlc.AccountType
 	// ExpectedIncome sets the expected income, or clears it when invalid.
 	ExpectedIncome *decimal.NullDecimal
+	// Bank sets the bank; "" clears it.
+	Bank *string
 }
 
 // Adjustment sets the balance to Target as of At (default now) with a
@@ -205,6 +214,10 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Account, er
 	if err != nil {
 		return Account{}, err
 	}
+	bank, err := checkBank(n.Bank)
+	if err != nil {
+		return Account{}, err
+	}
 	if n.Type == "" {
 		n.Type = sqlc.AccountTypeUsage
 	}
@@ -234,7 +247,7 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Account, er
 		_, err := ids.Insert(ctx, ids.Account, ids.NewAccount, func(ctx context.Context, id string) (bool, error) {
 			var err error
 			row, err = q.CreateAccount(ctx, sqlc.CreateAccountParams{
-				ID: id, UserID: userID, Name: name, Currency: n.Currency, AccountType: n.Type,
+				ID: id, UserID: userID, Name: name, Currency: n.Currency, AccountType: n.Type, Bank: bank,
 			})
 			return ids.Inserted(err)
 		})
@@ -258,7 +271,7 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Account, er
 	return out, nil
 }
 
-// Update changes an account's name, type or expected income.
+// Update changes an account's name, type, expected income or bank.
 func (s *Service) Update(ctx context.Context, userID, id string, c Changes) (Account, error) {
 	var out Account
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -271,7 +284,12 @@ func (s *Service) Update(ctx context.Context, userID, id string, c Changes) (Acc
 			return notFound(err, id)
 		}
 		params := sqlc.UpdateAccountParams{
-			ID: id, UserID: userID, Name: row.Name, AccountType: row.AccountType, ExpectedIncome: row.ExpectedIncome,
+			ID: id, UserID: userID, Name: row.Name, AccountType: row.AccountType, ExpectedIncome: row.ExpectedIncome, Bank: row.Bank,
+		}
+		if c.Bank != nil {
+			if params.Bank, err = checkBank(*c.Bank); err != nil {
+				return err
+			}
 		}
 		if c.Name != nil {
 			if params.Name, err = checkName(*c.Name); err != nil {
@@ -507,7 +525,7 @@ func (s *Service) get(ctx context.Context, db sqlc.DBTX, userID, id string) (Acc
 
 func toAccount(r sqlc.BankAccount, bal, allocated decimal.Decimal) Account {
 	return Account{
-		ID: r.ID, Name: r.Name, Type: r.AccountType, Currency: r.Currency,
+		ID: r.ID, Name: r.Name, Type: r.AccountType, Currency: r.Currency, Bank: r.Bank,
 		Balance: bal, Unallocated: bal.Sub(allocated), ExpectedIncome: r.ExpectedIncome, CreatedAt: r.CreatedAt,
 	}
 }
@@ -534,6 +552,15 @@ func checkName(name string) (string, error) {
 		return "", fmt.Errorf("%w: the name is longer than %d characters", ErrInvalid, MaxName)
 	}
 	return name, nil
+}
+
+// checkBank trims a bank name; "" is none.
+func checkBank(bank string) (string, error) {
+	bank = strings.TrimSpace(bank)
+	if utf8.RuneCountInString(bank) > MaxBank {
+		return "", fmt.Errorf("%w: the bank is longer than %d characters", ErrInvalid, MaxBank)
+	}
+	return bank, nil
 }
 
 func notFound(err error, id string) error {

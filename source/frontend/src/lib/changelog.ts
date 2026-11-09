@@ -16,6 +16,32 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.01.00",
+    date: "2026-11-09",
+    title: {
+      en: "Banks on accounts",
+      nb: "Bank på kontoer",
+      nn: "Bank på kontoar",
+    },
+    changes: {
+      en: [
+        "An account can have a bank, set in Account setup, which suggests the banks of your other accounts. Accounts and Account setup show it.",
+        "Register interest records the interest as an income from the account's bank, or with the counterparty Interest when it has none.",
+        "When you set or change an account's bank, you're offered to give its earlier interest the bank's name; each is corrected, so the change stays in its history.",
+      ],
+      nb: [
+        "En konto kan ha en bank, satt i Kontooppsett, som foreslår bankene til de andre kontoene dine. Kontoer og Kontooppsett viser den.",
+        "Registrer renter fører rentene som en inntekt fra kontoens bank, eller med motparten Renter når den ikke har noen.",
+        "Når du setter eller endrer banken til en konto, får du tilbud om å gi de tidligere rentene bankens navn; hver av dem korrigeres, så endringen blir stående i historikken.",
+      ],
+      nn: [
+        "Ein konto kan ha ein bank, sett i Kontooppsett, som føreslår bankane til dei andre kontoane dine. Kontoar og Kontooppsett viser han.",
+        "Registrer renter fører rentene som ei inntekt frå banken til kontoen, eller med motparten Renter når han ikkje har nokon.",
+        "Når du set eller endrar banken til ein konto, får du tilbod om å gje dei tidlegare rentene namnet til banken; kvar av dei vert korrigert, så endringa vert ståande i historikken.",
+      ],
+    },
+  },
+  {
     version: "v2.00.02",
     date: "2026-11-09",
     title: {

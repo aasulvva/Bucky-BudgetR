@@ -216,6 +216,9 @@
     "empty": "No accounts yet. Create your first one.",
     "editAccount": "Edit account",
     "name": "Name",
+    "bank": "Bank",
+    "bankPlaceholder": "e.g. DNB",
+    "bankHint": "Optional. Used as the counterparty when you register interest.",
     "type": "Type",
     "currency": "Currency",
     "balance": "Balance",
@@ -243,7 +246,17 @@
     "bucketsFunded_other": "{{count}} buckets are funded from it. Choose a new source account:",
     "noOtherForBuckets": "There's no other {{currency}} account to move them to. Create one, or delete the buckets in Bucket setup first.",
     "deleteAccount": "Delete account",
-    "deleted": "{{name}} deleted."
+    "deleted": "{{name}} deleted.",
+    "renameInterest": {
+      "title": "Earlier interest",
+      "body_one": "{{count}} earlier interest income on {{account}} has the counterparty Interest or the old bank. Change it to {{bank}}? It's corrected, so the change stays in its history.",
+      "body_other": "{{count}} earlier interest incomes on {{account}} have the counterparty Interest or the old bank. Change them to {{bank}}? Each one is corrected, so the change stays in its history.",
+      "update_one": "Update it",
+      "update_other": "Update {{count}}",
+      "leave": "Leave as they are",
+      "done_one": "{{count}} interest income now has {{bank}} as its counterparty.",
+      "done_other": "{{count}} interest incomes now have {{bank}} as their counterparty."
+    }
   },
   "dashboard": {
     "settings": "Settings",

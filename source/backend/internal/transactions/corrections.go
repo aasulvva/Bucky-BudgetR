@@ -67,72 +67,78 @@ func (s *Service) Correct(ctx context.Context, userID, id string, c Changes) (Tr
 		if err := ledger.LockUser(ctx, tx, userID); err != nil {
 			return err
 		}
-		cur, err := s.lock(ctx, tx, userID, id)
-		if err != nil {
-			return err
-		}
-		want, err := desired(cur, c)
-		if err != nil {
-			return err
-		}
-
-		if cur.isMove(want) {
-			if err := s.reverse(ctx, tx, userID, cur); err != nil {
-				return err
-			}
-			t, err := s.record(ctx, tx, userID, want, cur.ID)
-			if err != nil {
-				return correctionError(err)
-			}
-			outID = t.Header.ID
-			return nil
-		}
-
-		bank, buckets, err := diff(cur, want)
-		if err != nil {
-			return err
-		}
-		if len(bank) == 0 && len(buckets) == 0 && sameHeader(cur, want) {
-			return ErrNoChange
-		}
-		q := sqlc.New(tx)
-		if len(bank) > 0 {
-			if err := checkAccounts(ctx, q, userID, want); err != nil {
-				return err
-			}
-		}
-		// Buckets that keep or get a line must be funded from the account;
-		// removing a line needs no check beyond the ledger's.
-		changed := want
-		changed.Buckets = nil
-		for _, l := range buckets {
-			if slices.ContainsFunc(want.Buckets, func(b BucketAmount) bool { return b.BucketID == l.BucketID }) {
-				changed.Buckets = append(changed.Buckets, BucketAmount{BucketID: l.BucketID})
-			}
-		}
-		if err := checkBuckets(ctx, q, userID, changed); err != nil {
-			return err
-		}
-		if _, err := s.ledger.Record(ctx, tx, ledger.Entry{
-			UserID: userID, CreatedBy: userID, Type: cur.Type, Correction: sqlc.CorrectionTypeAdjustment,
-			ParentID: cur.ID, At: cur.At, Counterparty: want.Counterparty, Description: want.Description, Tags: want.Tags,
-			TriggersRefill: *want.TriggersRefill, BankLines: bank, BucketLines: buckets,
-		}); err != nil {
-			return correctionError(err)
-		}
-		outID = cur.ID
-		if s.refills == nil || *want.TriggersRefill == cur.TriggersRefill {
-			return nil
-		}
-		if *want.TriggersRefill {
-			return s.refills.OnIncome(ctx, tx, userID, cur.ID, want.AccountID, cur.At, true)
-		}
-		return s.refills.UndoIncome(ctx, tx, userID, cur.ID)
+		var err error
+		outID, err = s.correct(ctx, tx, userID, id, c)
+		return err
 	})
 	if err != nil {
 		return Transaction{}, err
 	}
 	return s.Get(ctx, userID, outID)
+}
+
+// correct does Correct's work in tx, with the user locked. It returns the ID
+// of the transaction that now stands for the corrected one.
+func (s *Service) correct(ctx context.Context, tx pgx.Tx, userID, id string, c Changes) (string, error) {
+	cur, err := s.lock(ctx, tx, userID, id)
+	if err != nil {
+		return "", err
+	}
+	want, err := desired(cur, c)
+	if err != nil {
+		return "", err
+	}
+
+	if cur.isMove(want) {
+		if err := s.reverse(ctx, tx, userID, cur); err != nil {
+			return "", err
+		}
+		t, err := s.record(ctx, tx, userID, want, cur.ID)
+		if err != nil {
+			return "", correctionError(err)
+		}
+		return t.Header.ID, nil
+	}
+
+	bank, buckets, err := diff(cur, want)
+	if err != nil {
+		return "", err
+	}
+	if len(bank) == 0 && len(buckets) == 0 && sameHeader(cur, want) {
+		return "", ErrNoChange
+	}
+	q := sqlc.New(tx)
+	if len(bank) > 0 {
+		if err := checkAccounts(ctx, q, userID, want); err != nil {
+			return "", err
+		}
+	}
+	// Buckets that keep or get a line must be funded from the account;
+	// removing a line needs no check beyond the ledger's.
+	changed := want
+	changed.Buckets = nil
+	for _, l := range buckets {
+		if slices.ContainsFunc(want.Buckets, func(b BucketAmount) bool { return b.BucketID == l.BucketID }) {
+			changed.Buckets = append(changed.Buckets, BucketAmount{BucketID: l.BucketID})
+		}
+	}
+	if err := checkBuckets(ctx, q, userID, changed); err != nil {
+		return "", err
+	}
+	if _, err := s.ledger.Record(ctx, tx, ledger.Entry{
+		UserID: userID, CreatedBy: userID, Type: cur.Type, Correction: sqlc.CorrectionTypeAdjustment,
+		ParentID: cur.ID, At: cur.At, Counterparty: want.Counterparty, Description: want.Description, Tags: want.Tags,
+		TriggersRefill: *want.TriggersRefill, BankLines: bank, BucketLines: buckets,
+	}); err != nil {
+		return "", correctionError(err)
+	}
+	if s.refills == nil || *want.TriggersRefill == cur.TriggersRefill {
+		return cur.ID, nil
+	}
+	if *want.TriggersRefill {
+		return cur.ID, s.refills.OnIncome(ctx, tx, userID, cur.ID, want.AccountID, cur.At, true)
+	}
+	return cur.ID, s.refills.UndoIncome(ctx, tx, userID, cur.ID)
 }
 
 // Reverse records a reversal that negates every effective line of the
