@@ -696,7 +696,13 @@
     },
     "noBuckets": "No buckets yet.",
     "creates_one": "Saving also creates {{count}} new bucket: {{names}}.",
-    "creates_other": "Saving also creates {{count}} new buckets: {{names}}."
+    "creates_other": "Saving also creates {{count}} new buckets: {{names}}.",
+    "deleteBucket": "Delete {{name}}",
+    "deletedBadge": "Deleted",
+    "undo": "Undo",
+    "undoDelete": "Undo deleting {{name}}",
+    "deletes_one": "Saving also deletes {{count}} bucket: {{names}}.",
+    "deletes_other": "Saving also deletes {{count}} buckets: {{names}}."
   },
   "newTransaction": {
     "type": "Type",

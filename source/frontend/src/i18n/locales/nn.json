@@ -696,7 +696,13 @@
     },
     "noBuckets": "Ingen bøtter enno.",
     "creates_one": "Lagringa opprettar òg {{count}} ny bøtte: {{names}}.",
-    "creates_other": "Lagringa opprettar òg {{count}} nye bøtter: {{names}}."
+    "creates_other": "Lagringa opprettar òg {{count}} nye bøtter: {{names}}.",
+    "deleteBucket": "Slett {{name}}",
+    "deletedBadge": "Vert sletta",
+    "undo": "Angre",
+    "undoDelete": "Angre slettinga av {{name}}",
+    "deletes_one": "Lagringa slettar òg {{count}} bøtte: {{names}}.",
+    "deletes_other": "Lagringa slettar òg {{count}} bøtter: {{names}}."
   },
   "newTransaction": {
     "type": "Type",

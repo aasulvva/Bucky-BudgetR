@@ -696,7 +696,13 @@
     },
     "noBuckets": "Ingen bøtter ennå.",
     "creates_one": "Lagringen oppretter også {{count}} ny bøtte: {{names}}.",
-    "creates_other": "Lagringen oppretter også {{count}} nye bøtter: {{names}}."
+    "creates_other": "Lagringen oppretter også {{count}} nye bøtter: {{names}}.",
+    "deleteBucket": "Slett {{name}}",
+    "deletedBadge": "Slettes",
+    "undo": "Angre",
+    "undoDelete": "Angre slettingen av {{name}}",
+    "deletes_one": "Lagringen sletter også {{count}} bøtte: {{names}}.",
+    "deletes_other": "Lagringen sletter også {{count}} bøtter: {{names}}."
   },
   "newTransaction": {
     "type": "Type",
