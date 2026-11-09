@@ -88,8 +88,10 @@ export function GraphControls({
   }, 400);
 
   // A balance pie is only per account. An unsplit pie is per interval.
+  // Balances have no buckets or counterparties (#170); a balance pie is per account.
   const groups = GROUP_BYS.filter(
-    (g) => !(balance && g === "bucket") && !(balance && pie && g === "none"),
+    (g) =>
+      !(balance && (g === "bucket" || g === "counterparty")) && !(balance && pie && g === "none"),
   );
   const groupLabel = (g: (typeof GROUP_BYS)[number]) =>
     pie && g === "none" ? t("stats.graphs.groups.interval") : t(`stats.graphs.groups.${g}`);

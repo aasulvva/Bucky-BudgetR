@@ -16,6 +16,32 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.02.00",
+    date: "2026-11-09",
+    title: {
+      en: "Graphs per counterparty",
+      nb: "Grafer per motpart",
+      nn: "Grafar per motpart",
+    },
+    changes: {
+      en: [
+        "Graphs of spending or income can be split per counterparty: who pays you, and where the money goes. Names that differ only in capitals or spaces count as one.",
+        "Income or spending without a counterparty has its own series, and with one account chosen, transfers are one Transfers series.",
+        "Clicking a counterparty opens exactly its transactions; Transactions shows that filter as a pill you can remove.",
+      ],
+      nb: [
+        "Grafer over utgifter eller inntekter kan deles opp per motpart: hvem som betaler deg, og hvor pengene går. Navn som bare skiller seg i store bokstaver eller mellomrom, telles som ett.",
+        "Inntekter eller utgifter uten motpart får sin egen serie, og med én konto valgt blir overføringer én serie, Overføringer.",
+        "Klikker du på en motpart, åpnes nøyaktig dens transaksjoner; Transaksjoner viser filteret som en knapp du kan fjerne.",
+      ],
+      nn: [
+        "Grafar over utgifter eller inntekter kan delast opp per motpart: kven som betaler deg, og kvar pengane går. Namn som berre skil seg i store bokstavar eller mellomrom, vert talde som eitt.",
+        "Inntekter eller utgifter utan motpart får eigen serie, og med éin konto vald vert overføringar éin serie, Overføringar.",
+        "Klikkar du på ein motpart, vert nøyaktig transaksjonane hans opna; Transaksjonar viser filteret som ein knapp du kan fjerne.",
+      ],
+    },
+  },
+  {
     version: "v2.01.00",
     date: "2026-11-09",
     title: {

@@ -203,6 +203,15 @@ function TransactionsTab() {
         <Group gap="xs" align="flex-end" wrap="wrap">
           <Search filter={filter} onChange={change} style={{ flex: "1 1 200px" }} />
           <FilterFields filter={filter} active={active} onChange={change} inline />
+          {filter.counterparty && (
+            // Only a graph sets it (#170), so it has no field: a pill shows it.
+            <FilterChip
+              label={t("transactions.filters.counterparty", { name: filter.counterparty })}
+              onClear={() => {
+                change({ counterparty: null });
+              }}
+            />
+          )}
         </Group>
       ) : (
         <Stack gap="xs">
@@ -489,6 +498,13 @@ function Chips({
     chips.push({ key: "type", label: t(`transactionTypes.${filter.type}`), clear: { type: null } });
   }
   if (filter.tag) chips.push({ key: "tag", label: filter.tag, clear: { tag: null } });
+  if (filter.counterparty) {
+    chips.push({
+      key: "counterparty",
+      label: t("transactions.filters.counterparty", { name: filter.counterparty }),
+      clear: { counterparty: null },
+    });
+  }
   if (filter.from && filter.to) {
     chips.push({
       key: "dates",
@@ -513,20 +529,13 @@ function Chips({
   return (
     <Group gap={8} wrap="nowrap" style={{ overflowX: "auto" }}>
       {chips.map((c) => (
-        <Button
+        <FilterChip
           key={c.key}
-          size="compact-sm"
-          radius="xl"
-          variant="light"
-          rightSection={<IconX size={12} />}
-          aria-label={t("transactions.filters.remove", { name: c.label })}
-          onClick={() => {
+          label={c.label}
+          onClear={() => {
             onChange(c.clear);
           }}
-          style={{ flex: "none" }}
-        >
-          {c.label}
-        </Button>
+        />
       ))}
       <Button
         size="compact-sm"
@@ -539,6 +548,24 @@ function Chips({
         {t("transactions.filters.more")}
       </Button>
     </Group>
+  );
+}
+
+/** An active filter as a pill that removes it. */
+function FilterChip({ label, onClear }: { label: string; onClear: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <Button
+      size="compact-sm"
+      radius="xl"
+      variant="light"
+      rightSection={<IconX size={12} />}
+      aria-label={t("transactions.filters.remove", { name: label })}
+      onClick={onClear}
+      style={{ flex: "none" }}
+    >
+      {label}
+    </Button>
   );
 }
 

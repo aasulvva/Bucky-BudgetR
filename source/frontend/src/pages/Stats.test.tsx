@@ -404,6 +404,51 @@ describe("Stats", () => {
     });
   });
 
+  it("splits spending and income per counterparty, opening exactly its transactions (#170)", async () => {
+    apiMock.on(stats, (req) => ({
+      body: {
+        intervals: [{ start: req.query.get("from") ?? "", end: req.query.get("to") ?? "" }],
+        series:
+          req.query.get("group_by") === "counterparty"
+            ? [
+                { counterparty: "Rema 1000", currency: "NOK", values: ["300.00"] },
+                { counterparty: null, currency: "NOK", values: ["100.00"] },
+              ]
+            : [{ currency: "NOK", values: ["400.00"] }],
+      },
+    }));
+    const { router } = renderRoute(
+      "/stats?kind=pie&metric=income&period=current-month&res=day&group=bucket",
+    );
+    await screen.findByTestId("pie-list");
+    await pick("Split", "Per counterparty");
+    await waitFor(() => {
+      expect(lastQuery()?.get("group_by")).toBe("counterparty");
+    });
+    const list = within(await screen.findByTestId("pie-list"));
+    expect(await list.findByRole("link", { name: "Rema 1000" })).toBeInTheDocument();
+    expect(list.getByText("No counterparty")).toBeInTheDocument();
+    expect(router.state.location.search).toContain("group=counterparty");
+
+    // Not for a balance.
+    await pick("Show", "Balance");
+    await userEvent.click(screen.getByRole("combobox", { name: "Split" }));
+    expect(screen.queryByRole("option", { name: "Per counterparty" })).not.toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    await pick("Show", "Income");
+    await pick("Split", "Per counterparty");
+
+    await userEvent.click(
+      await within(await screen.findByTestId("pie-list")).findByRole("link", { name: "Rema 1000" }),
+    );
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe("/transactions");
+    });
+    const q = new URLSearchParams(router.state.location.search);
+    expect(q.get("counterparty")).toBe("Rema 1000");
+    expect(q.get("type")).toBe("INC");
+  });
+
   it("shows balances per account in a pie, leaving out those below 0", async () => {
     apiMock.on(stats, (req) => ({
       body: {

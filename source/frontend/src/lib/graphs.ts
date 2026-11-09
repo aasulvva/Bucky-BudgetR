@@ -34,12 +34,12 @@ export type GraphMetric = GraphSettings["metric"];
 export type GroupBy = NonNullable<GraphSettings["group_by"]>;
 export type PieLabels = NonNullable<GraphSettings["pie_labels"]>;
 /** What a pie's slices are. */
-export type PieSlicing = "bucket" | "account" | "interval";
+export type PieSlicing = "bucket" | "account" | "counterparty" | "interval";
 
 export const GRAPH_KINDS: GraphKind[] = ["bar", "line", "pie"];
 export const PIE_LABELS: PieLabels[] = ["list", "slices", "both"];
 export const GRAPH_METRICS: GraphMetric[] = ["spending", "income", "balance"];
-export const GROUP_BYS: GroupBy[] = ["none", "account", "bucket"];
+export const GROUP_BYS: GroupBy[] = ["none", "account", "bucket", "counterparty"];
 /** Series with their own colour: the graph palette has 8. */
 export const MAX_TOP = 8;
 export const DEFAULT_TOP = 5;
@@ -55,10 +55,26 @@ interface CycleTimes {
 
 export function groupBy(s: GraphSettings): GroupBy {
   // Balances have no buckets: per bucket is per account. A balance pie is
-  // always per account, since balances over time don't add up.
+  // always per account, since balances over time don't add up. Nor have they
+  // counterparties (#170): overall.
   const g = s.group_by ?? "none";
   if (s.metric === "balance" && (g === "bucket" || s.kind === "pie")) return "account";
+  if (s.metric === "balance" && g === "counterparty") return "none";
   return g;
+}
+
+/**
+ * A counterparty series' name (#170), made safe for a chart's data key
+ * (Recharts reads a dot as a path). The server has already merged the
+ * spellings, so the label's own is kept, for the Transactions filter.
+ */
+export function counterpartySeries(counterparty: string): string {
+  return `c-${encodeURIComponent(counterparty.trim()).replace(/\./g, "%2E")}`;
+}
+
+/** The counterparty a series name stands for, or null. */
+export function seriesCounterparty(name: string): string | null {
+  return name.startsWith("c-") ? decodeURIComponent(name.slice(2)) : null;
 }
 
 /** A pie's slices: per bucket or account over the whole period, or per interval when not split. */
@@ -236,7 +252,10 @@ export interface GraphRow {
 }
 
 export interface GraphSeries {
-  /** The key in each row: "total", "a-1234", "b-<id>", "none" or "other". */
+  /**
+   * The key in each row: "total", "a-1234", "b-<id>", "none" (no bucket),
+   * "c-<counterparty>", "nc" (no counterparty), "trf" (transfers) or "other".
+   */
   name: string;
   label: string;
   color: string;
@@ -366,6 +385,17 @@ export function graphData(
         name = "none";
         label = i18n.t("stats.graphs.noBucket");
       }
+    } else if (group === "counterparty") {
+      if (l.transfers) {
+        name = "trf";
+        label = i18n.t("stats.graphs.transfers");
+      } else if (l.counterparty) {
+        name = counterpartySeries(l.counterparty);
+        label = l.counterparty;
+      } else {
+        name = "nc";
+        label = i18n.t("stats.graphs.noCounterparty");
+      }
     }
     const amounts = s.cumulative ? cumulative(l.values) : l.values;
     // Balances by their latest value; sums by the whole period's.
@@ -386,8 +416,10 @@ export function graphData(
   const ranked = [...named].sort((a, b) => compareAmounts(b.size, a.size));
   const kept = ranked.length > top ? ranked.slice(0, top) : ranked;
   const rest = ranked.length > top ? ranked.slice(top) : [];
+  // The parts without a bucket or counterparty, then transfers, go last.
+  const last = (name: string) => (name === "trf" ? 2 : name === "none" || name === "nc" ? 1 : 0);
   const byName = (a: { label: string; name: string }, b: { label: string; name: string }) =>
-    a.name === "none" ? 1 : b.name === "none" ? -1 : a.label.localeCompare(b.label, locale);
+    last(a.name) - last(b.name) || a.label.localeCompare(b.label, locale);
   const series: GraphSeries[] = [...kept].sort(byName).map((x, i) => ({
     name: x.name,
     label: x.label,
@@ -622,6 +654,11 @@ export function intervalLink(
       : undefined;
   if (account) params.set("account_id", account);
   if (bucket) params.set("bucket_id", bucket);
+  // Per counterparty (#170): exactly that one, or the transfers. The part
+  // with no counterparty can't be asked for, so it lists the type's all.
+  const counterparty = seriesCounterparty(seriesName);
+  if (counterparty) params.set("counterparty", counterparty);
+  if (seriesName === "trf") params.set("type", "TRF");
   if (s.tags?.length === 1 && s.tags[0]) params.set("tag", s.tags[0]);
   if (s.counterparty) params.set("q", s.counterparty);
   return `/transactions?${params.toString()}`;

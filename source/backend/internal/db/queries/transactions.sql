@@ -29,6 +29,9 @@ WHERE h.user_id = sqlc.arg(user_id) AND h.correction_type = 'none'
   -- counterparty or the description (#130).
   AND (sqlc.narg(counterparty)::text IS NULL OR latest.counterparty ILIKE sqlc.narg(counterparty)::text
            OR latest.description ILIKE sqlc.narg(counterparty)::text)
+  -- counterparty_is matches the whole counterparty, ignoring case and spaces at the ends (#170).
+  AND (sqlc.narg(counterparty_is)::text IS NULL
+       OR lower(btrim(latest.counterparty)) = lower(btrim(sqlc.narg(counterparty_is)::text)))
   -- reversed: only reversed ones (moved originals too), or only the others.
   AND (sqlc.narg(reversed)::boolean IS NULL OR EXISTS (
       SELECT 1 FROM transaction_headers r WHERE r.parent_id = h.id AND r.correction_type = 'reversal'

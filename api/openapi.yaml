@@ -556,10 +556,10 @@ paths:
             maximum: 7
         - name: group_by
           in: query
-          description: One series per currency (`none`, the default), per account, or per bucket.
+          description: One series per currency (`none`, the default), per account, per bucket, or per counterparty (#170; not for `balance`), where the case and spaces at the ends of a counterparty don't count.
           schema:
             type: string
-            enum: [none, account, bucket]
+            enum: [none, account, bucket, counterparty]
         - name: account_id
           in: query
           description: Only these accounts' lines (or their buckets' lines). Repeat for several.
@@ -1469,6 +1469,12 @@ paths:
         - name: counterparty
           in: query
           description: Only transactions whose counterparty or description contains this text, ignoring case.
+          schema:
+            type: string
+            maxLength: 200
+        - name: counterparty_is
+          in: query
+          description: Only transactions whose effective counterparty is exactly this, ignoring case and spaces at the ends (#170).
           schema:
             type: string
             maxLength: 200
@@ -3402,7 +3408,7 @@ components:
           enum: [hour, day, week, month, year, cycle, total]
         group_by:
           type: string
-          enum: [none, account, bucket]
+          enum: [none, account, bucket, counterparty]
         account_ids:
           type: array
           maxItems: 50
@@ -3489,6 +3495,13 @@ components:
           description: The bucket, when grouped by bucket; null for the part on no bucket.
           allOf:
             - $ref: "#/components/schemas/BucketId"
+        counterparty:
+          type: string
+          nullable: true
+          description: When grouped by counterparty, its name as the series' newest transaction spells it; null for the part with no counterparty.
+        transfers:
+          type: boolean
+          description: When grouped by counterparty, true for the series of transfers (counted with `transfers`).
         currency:
           $ref: "#/components/schemas/Currency"
         values:
