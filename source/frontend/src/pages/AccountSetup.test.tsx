@@ -191,7 +191,8 @@ describe("Account setup", () => {
 
     expect(await dialog.findByText(/still holds/)).toBeInTheDocument();
     await userEvent.click(dialog.getByRole("button", { name: "Delete account" }));
-    expect(dialog.getAllByText("Choose an account.")).toHaveLength(2);
+    expect(dialog.getByText("Choose an account.")).toBeInTheDocument();
+    expect(dialog.getByText("Choose an account, or delete it.")).toBeInTheDocument();
     expect(apiMock.calls("POST /api/v1/accounts/1234/delete")).toHaveLength(0);
 
     // Only accounts in the same currency are offered.
@@ -232,13 +233,122 @@ describe("Account setup", () => {
   });
 
   it("explains when buckets have nowhere to go", async () => {
+    // Funds left, no other EUR account, and no cycle to release them in.
+    apiMock.on("GET /api/v1/cycles/active", { body: { active: null, next: null } });
     apiMock.on("GET /api/v1/buckets", {
-      body: [bucket({ id: "1000000002", name: "Trip", source_account_id: euro.id })],
+      body: [
+        bucket({
+          id: "1000000002",
+          name: "Trip",
+          source_account_id: euro.id,
+          currency: "EUR",
+          target_funds: "40.00",
+        }),
+      ],
     });
     renderRoute("/accounts/setup?edit=3456");
     const dialog = within(await screen.findByRole("dialog", { name: "Edit account" }));
     await userEvent.click(dialog.getByRole("button", { name: "Delete…" }));
     expect(await dialog.findByText(/no other EUR account to move them to/)).toBeInTheDocument();
+    expect(dialog.getByText(/Releasing what's left needs an active cycle/)).toBeInTheDocument();
     expect(dialog.getByRole("button", { name: "Delete account" })).toBeDisabled();
+  });
+});
+
+describe("Account setup, deleting buckets with the account (#137)", () => {
+  const rent = bucket({
+    id: "1000000003",
+    name: "Rent",
+    source_account_id: main.id,
+    target_funds: "250.00",
+  });
+
+  async function openDelete() {
+    renderRoute("/accounts/setup?edit=1234");
+    const dialog = within(await screen.findByRole("dialog", { name: "Edit account" }));
+    await userEvent.click(dialog.getByRole("button", { name: "Delete…" }));
+    await dialog.findByText(/still holds/);
+    await userEvent.click(dialog.getByRole("radio", { name: /Adjust the balance to 0/ }));
+    return dialog;
+  }
+
+  it("deletes some buckets and moves others", async () => {
+    apiMock.on("GET /api/v1/buckets", { body: [groceries, rent] });
+    apiMock.on("POST /api/v1/accounts/1234/delete", { status: 204 });
+    const dialog = await openDelete();
+    await pick("Rent", "Delete the bucket");
+    expect(
+      dialog.getByText(/Its NOK\s250\.00 left goes back to the account first/),
+    ).toBeInTheDocument();
+    expect(
+      dialog.getByText("Deletes 1 bucket with the account: Rent. Its transactions are kept."),
+    ).toBeInTheDocument();
+    await pick("Groceries", "Buffer account");
+    await userEvent.click(dialog.getByRole("button", { name: "Delete account" }));
+
+    expect(await screen.findByText("Main account deleted.")).toBeInTheDocument();
+    expect(apiMock.calls("POST /api/v1/accounts/1234/delete")[0]?.body).toEqual({
+      remaining_funds: { action: "adjust" },
+      bucket_sources: { "1000000001": "2345" },
+      delete_buckets: ["1000000003"],
+    });
+  });
+
+  it("sets them all at once", async () => {
+    apiMock.on("GET /api/v1/buckets", { body: [groceries, rent] });
+    apiMock.on("POST /api/v1/accounts/1234/delete", { status: 204 });
+    const dialog = await openDelete();
+    await userEvent.click(dialog.getByRole("button", { name: "Delete them all" }));
+    expect(dialog.getByRole("combobox", { name: "Groceries" })).toHaveValue("Delete the bucket");
+    expect(dialog.getByRole("combobox", { name: "Rent" })).toHaveValue("Delete the bucket");
+
+    await pick("Move all to…", "Buffer account");
+    expect(dialog.getByRole("combobox", { name: "Groceries" })).toHaveValue("Buffer account");
+    expect(dialog.getByRole("combobox", { name: "Rent" })).toHaveValue("Buffer account");
+    await userEvent.click(dialog.getByRole("button", { name: "Delete account" }));
+    await screen.findByText("Main account deleted.");
+    expect(apiMock.calls("POST /api/v1/accounts/1234/delete")[0]?.body).toEqual({
+      remaining_funds: { action: "adjust" },
+      bucket_sources: { "1000000001": "2345", "1000000003": "2345" },
+    });
+  });
+
+  it("can't delete a bucket with funds left without a cycle, but one at 0", async () => {
+    apiMock.on("GET /api/v1/cycles/active", { body: { active: null, next: null } });
+    apiMock.on("GET /api/v1/buckets", { body: [groceries, rent] });
+    const dialog = await openDelete();
+    expect(dialog.getByText(/Releasing what's left needs an active cycle/)).toBeInTheDocument();
+    await userEvent.click(dialog.getByRole("combobox", { name: "Rent" }));
+    expect(await screen.findByRole("option", { name: "Delete the bucket" })).toHaveAttribute(
+      "data-combobox-disabled",
+      "true",
+    );
+    await userEvent.keyboard("{Escape}");
+    await pick("Groceries", "Delete the bucket");
+    expect(dialog.getByRole("combobox", { name: "Groceries" })).toHaveValue("Delete the bucket");
+  });
+
+  it("deletes the buckets when there's no other account to move them to", async () => {
+    apiMock.on("GET /api/v1/buckets", {
+      body: [
+        bucket({
+          id: "1000000002",
+          name: "Trip",
+          source_account_id: euro.id,
+          currency: "EUR",
+        }),
+      ],
+    });
+    apiMock.on("POST /api/v1/accounts/3456/delete", { status: 204 });
+    renderRoute("/accounts/setup?edit=3456");
+    const dialog = within(await screen.findByRole("dialog", { name: "Edit account" }));
+    await userEvent.click(dialog.getByRole("button", { name: "Delete…" }));
+    expect(dialog.queryByText(/no other EUR account/)).not.toBeInTheDocument();
+    await pick("Trip", "Delete the bucket");
+    await userEvent.click(dialog.getByRole("button", { name: "Delete account" }));
+    await screen.findByText("Euro account deleted.");
+    expect(apiMock.calls("POST /api/v1/accounts/3456/delete")[0]?.body).toEqual({
+      delete_buckets: ["1000000002"],
+    });
   });
 });

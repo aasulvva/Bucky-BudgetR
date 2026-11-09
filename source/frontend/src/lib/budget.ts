@@ -36,15 +36,6 @@ export interface BudgetDraft {
 
 export const EMPTY_DRAFT: BudgetDraft = { incomes: {}, ras: {}, created: [], deleted: [] };
 
-/**
- * Whether a bucket can be deleted: what's left in it is released to (or an
- * overspend settled from) the account's unallocated money, which needs a
- * usable active cycle unless TF is 0. As DeleteBucket in BucketForm.
- */
-export function canDelete(bucket: Bucket, usable: boolean): boolean {
-  return usable || compareAmounts(bucket.target_funds, "0") === 0;
-}
-
 /** The draft's new buckets on an account. */
 export function draftBucketsFor(draft: BudgetDraft, accountId: string): NewBucket[] {
   return draft.created.filter((n) => n.body.source_account_id === accountId);

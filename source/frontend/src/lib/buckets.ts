@@ -11,6 +11,16 @@ import { addAmounts, compareAmounts, formatMoney, percentOf, subtractAmounts } f
 const positive = (a: string) => compareAmounts(a, "0") > 0;
 
 /**
+ * Whether a bucket can be deleted: what's left in it is released to (or an
+ * overspend settled from) the account's unallocated money, which needs a
+ * usable active cycle unless TF is 0. As DeleteBucket in BucketForm; Budget setup
+ * (#174) and deleting an account (#137) use it too.
+ */
+export function canDelete(bucket: Bucket, usable: boolean): boolean {
+  return usable || compareAmounts(bucket.target_funds, "0") === 0;
+}
+
+/**
  * ok: fully covered; warn: not (yellow); alert: a priority bucket that isn't,
  * or an overspent one (red).
  */

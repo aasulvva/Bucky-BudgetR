@@ -144,6 +144,9 @@ func (s *server) DeleteAccount(ctx context.Context, req api.DeleteAccountRequest
 		if b.BucketSources != nil {
 			st.BucketSources = *b.BucketSources
 		}
+		if b.DeleteBuckets != nil {
+			st.DeleteBuckets = *b.DeleteBuckets
+		}
 		if r := b.RemainingFunds; r != nil {
 			st.Remaining = &accounts.Remaining{Adjust: r.Action == api.Adjust}
 			if r.Action == api.Transfer {
@@ -187,7 +190,7 @@ func accountError(err error) error {
 			what = "1 bucket uses"
 		}
 		return &Error{Status: http.StatusConflict, Code: "account_has_buckets",
-			Detail: capitalize(what) + " this account as their source. Choose a new source account for each, or delete them in Bucket setup."}
+			Detail: capitalize(what) + " this account as their source. Choose a new source account for each, or delete them with it."}
 	case errors.Is(err, accounts.ErrNoChange):
 		return &Error{Status: http.StatusBadRequest, Code: "no_change", Detail: "The balance is already this amount."}
 	case errors.Is(err, accounts.ErrCurrencyMismatch):

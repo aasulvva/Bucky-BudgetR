@@ -133,9 +133,12 @@ type Settlement struct {
 	// Remaining says what happens to money left in the account. It is only
 	// needed when the balance isn't zero.
 	Remaining *Remaining
-	// BucketSources gives every live bucket funded from the account a new
-	// source account: bucket ID → account ID.
+	// BucketSources gives live buckets funded from the account a new source
+	// account: bucket ID → account ID.
 	BucketSources map[string]string
+	// DeleteBuckets are live buckets funded from the account to delete with
+	// it (#137). Every such bucket is in exactly one of the two.
+	DeleteBuckets []string
 }
 
 // Remaining moves the remaining balance: a transfer (TRF) to TransferTo, or,
@@ -396,7 +399,8 @@ func (s *Service) Reallocate(ctx context.Context, userID, id string) (Account, e
 
 // Delete soft-deletes an account after settling it, all in one database
 // transaction: every live bucket funded from it moves to the source in
-// st.BucketSources, and remaining money is transferred or adjusted away as
+// st.BucketSources or is deleted (st.DeleteBuckets, its funds released
+// first), and remaining money is transferred or adjusted away as
 // st.Remaining says. Without those it returns *HasBucketsError or
 // *BalanceNotZeroError and changes nothing. The account's transactions stay.
 func (s *Service) Delete(ctx context.Context, userID, id string, st Settlement) error {
@@ -419,9 +423,17 @@ func (s *Service) Delete(ctx context.Context, userID, id string, st Settlement) 
 				return fmt.Errorf("%w: bucket %s isn't funded from account %s", ErrInvalid, b, id)
 			}
 		}
+		for _, b := range st.DeleteBuckets {
+			if !slices.Contains(buckets, b) {
+				return fmt.Errorf("%w: bucket %s isn't funded from account %s", ErrInvalid, b, id)
+			}
+			if _, ok := st.BucketSources[b]; ok {
+				return fmt.Errorf("%w: bucket %s can't be both moved and deleted", ErrInvalid, b)
+			}
+		}
 		var missing []string
 		for _, b := range buckets {
-			if _, ok := st.BucketSources[b]; !ok {
+			if _, ok := st.BucketSources[b]; !ok && !slices.Contains(st.DeleteBuckets, b) {
 				missing = append(missing, b)
 			}
 		}
@@ -436,6 +448,12 @@ func (s *Service) Delete(ctx context.Context, userID, id string, st Settlement) 
 			return err
 		}
 
+		// The deleted buckets go first, so the money they held is part of
+		// what's settled below.
+		if err := s.deleteBuckets(ctx, tx, userID, st.DeleteBuckets); err != nil {
+			return err
+		}
+
 		balances, err := balance.Accounts(ctx, tx, userID)
 		if err != nil {
 			return err
@@ -446,8 +464,8 @@ func (s *Service) Delete(ctx context.Context, userID, id string, st Settlement) 
 			}
 		}
 
-		for _, b := range buckets {
-			if err := q.SetBucketSource(ctx, sqlc.SetBucketSourceParams{ID: b, UserID: userID, SourceAccountID: st.BucketSources[b]}); err != nil {
+		for b, to := range st.BucketSources {
+			if err := q.SetBucketSource(ctx, sqlc.SetBucketSourceParams{ID: b, UserID: userID, SourceAccountID: to}); err != nil {
 				return err
 			}
 		}
@@ -458,6 +476,38 @@ func (s *Service) Delete(ctx context.Context, userID, id string, st Settlement) 
 		moved := slices.Sorted(maps.Values(st.BucketSources))
 		return allocation.Run(ctx, tx, userID, slices.Compact(moved), true)
 	})
+}
+
+// deleteBuckets deletes buckets with their account, as
+// buckets.Service.Delete does one: what's left (TF) is released with a
+// bucket adjustment (BUA) first, which the ledger refuses without a usable
+// active cycle, and the bucket's transactions stay. Bucket-only lines don't
+// change the account's balance.
+func (s *Service) deleteBuckets(ctx context.Context, tx pgx.Tx, userID string, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	tf, err := balance.Buckets(ctx, tx, userID)
+	if err != nil {
+		return err
+	}
+	q := sqlc.New(tx)
+	// Once each, even if the list repeats one.
+	for _, b := range slices.Compact(slices.Sorted(slices.Values(ids))) {
+		// Before the delete: the ledger refuses lines on deleted buckets.
+		if !tf[b].IsZero() {
+			if _, err := s.ledger.Record(ctx, tx, ledger.Entry{
+				UserID: userID, CreatedBy: userID, Type: sqlc.TransactionTypeBUA, At: s.now(),
+				BucketLines: []ledger.BucketLine{{BucketID: b, Amount: tf[b].Neg()}},
+			}); err != nil {
+				return fmt.Errorf("release target funds of bucket %s: %w", b, err)
+			}
+		}
+		if err := q.DeleteBucket(ctx, sqlc.DeleteBucketParams{ID: b, UserID: userID}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // checkTargets checks that money or buckets can move from acc to each target:

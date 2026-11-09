@@ -211,9 +211,9 @@
     "transferTo": "Overfør til",
     "adjustToZero": "Juster saldoen til 0",
     "adjustToZeroHint": "For penger som er borte, f.eks. et avsluttet fond.",
-    "bucketsFunded_one": "En bøtte finansieres fra den. Velg en ny kildekonto:",
-    "bucketsFunded_other": "{{count}} bøtter finansieres fra den. Velg en ny kildekonto:",
-    "noOtherForBuckets": "Det finnes ingen annen konto i {{currency}} å flytte dem til. Opprett en, eller slett bøttene i bøtteoppsettet først.",
+    "bucketsFunded_one": "En bøtte finansieres fra den. Flytt den til en annen konto, eller slett den:",
+    "bucketsFunded_other": "{{count}} bøtter finansieres fra den. Flytt hver til en annen konto, eller slett den:",
+    "noOtherForBuckets": "Det finnes ingen annen konto i {{currency}} å flytte dem til, og å slette en bøtte med midler igjen krever en aktiv periode. Opprett en konto, eller start eller forleng en periode først.",
     "deleteAccount": "Slett kontoen",
     "deleted": "{{name}} er slettet.",
     "renameInterest": {
@@ -225,7 +225,16 @@
       "leave": "La dem være",
       "done_one": "{{count}} renteinntekt har nå {{bank}} som motpart.",
       "done_other": "{{count}} renteinntekter har nå {{bank}} som motpart."
-    }
+    },
+    "deleteTheBucket": "Slett bøtta",
+    "deleteAll": "Slett alle",
+    "moveAllTo": "Flytt alle til …",
+    "bucketLeft": "De {{amount}} som er igjen, går tilbake til kontoen først",
+    "bucketOwes": "De {{amount}} som er overforbrukt, gjøres opp fra kontoen først",
+    "bucketEmpty": "Ingenting igjen i den",
+    "chooseFate": "Velg en konto, eller slett den.",
+    "deletesBuckets_one": "Sletter {{count}} bøtte sammen med kontoen: {{names}}. Transaksjonene beholdes.",
+    "deletesBuckets_other": "Sletter {{count}} bøtter sammen med kontoen: {{names}}. Transaksjonene beholdes."
   },
   "dashboard": {
     "settings": "Innstillinger",
