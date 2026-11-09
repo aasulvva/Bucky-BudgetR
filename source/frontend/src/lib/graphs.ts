@@ -261,6 +261,8 @@ export interface GraphSeries {
   color: string;
   /** The exact amounts per interval, for the tooltip. */
   amounts: string[];
+  /** The previous period's, beside the current one's (#125). */
+  previous?: boolean;
 }
 
 export interface GraphData {
@@ -346,22 +348,29 @@ function abs(a: string): string {
   return a.startsWith("-") ? a.slice(1) : a;
 }
 
-/**
- * The rows and series a chart draws: the series in the shown currency, the
- * largest `top` with their own colour and the rest added up as Other, named
- * after their account or bucket, in name order so a series keeps its
- * colour while the period changes.
- */
-export function graphData(
+/** How a graph shows the previous period (#125). */
+export type CompareMode = "both" | "difference";
+
+/** The suffix of a previous period's series name: "b-<id>-prev". */
+export const PREVIOUS_SUFFIX = "-prev";
+
+interface NamedLine {
+  name: string;
+  label: string;
+  /** The values per interval, as the API gave them. */
+  amounts: string[];
+  /** How big it is, for ranking. */
+  size: string;
+}
+
+/** The result's lines in the shown currency, named after their account, bucket or counterparty. */
+function namedLines(
   result: StatsSeries,
-  settings: GraphSettings,
-  resolution: Resolution,
+  s: GraphSettings,
   currency: string,
   accounts: Account[],
   buckets: Bucket[],
-  locale = getLocale(),
-): GraphData {
-  const s = cleanGraph(settings);
+): NamedLine[] {
   const group = groupBy(s);
   const lines = result.series.filter((l) => l.currency === currency);
   const accountName = (id: string) => accounts.find((a) => a.id === id)?.name ?? id;
@@ -397,11 +406,10 @@ export function graphData(
         label = i18n.t("stats.graphs.noCounterparty");
       }
     }
-    const amounts = s.cumulative ? cumulative(l.values) : l.values;
     // Balances by their latest value; sums by the whole period's.
     const size =
       s.metric === "balance" ? abs(l.values.at(-1) ?? "0") : abs(addAmounts("0", ...l.values));
-    return { name, label, amounts: l.values, shown: amounts, size };
+    return { name, label, amounts: l.values, size };
   });
   // Names are keys (rows, React): never the same twice, even for lines that
   // don't fit the grouping (#167).
@@ -411,6 +419,51 @@ export function graphData(
     seen.set(x.name, n);
     if (n > 1) x.name = `${x.name}-${String(n)}`;
   }
+  return named;
+}
+
+function sumAt(lines: NamedLine[], i: number): string {
+  return addAmounts("0", ...lines.map((r) => r.amounts[i] ?? "0"));
+}
+
+/**
+ * The rows and series a chart draws: the series in the shown currency, the
+ * largest `top` with their own colour and the rest added up as Other, named
+ * after their account or bucket, in name order so a series keeps its
+ * colour while the period changes.
+ */
+export function graphData(
+  result: StatsSeries,
+  settings: GraphSettings,
+  resolution: Resolution,
+  currency: string,
+  accounts: Account[],
+  buckets: Bucket[],
+  locale = getLocale(),
+): GraphData {
+  return compareGraphData(result, null, settings, resolution, currency, accounts, buckets, locale);
+}
+
+/**
+ * As graphData, with the previous period (#125) lined up by position (the
+ * first interval with the first): beside each series (`both`, named
+ * "<name>-prev") or taken from it (`difference`). The series shown and
+ * their colours are the current period's; the previous period's other
+ * series add up to its Other.
+ */
+export function compareGraphData(
+  result: StatsSeries,
+  previous: { result: StatsSeries; mode: CompareMode } | null,
+  settings: GraphSettings,
+  resolution: Resolution,
+  currency: string,
+  accounts: Account[],
+  buckets: Bucket[],
+  locale = getLocale(),
+): GraphData {
+  const s = cleanGraph(settings);
+  const named = namedLines(result, s, currency, accounts, buckets);
+  const before = previous ? namedLines(previous.result, s, currency, accounts, buckets) : [];
 
   const top = topOf(s);
   const ranked = [...named].sort((a, b) => compareAmounts(b.size, a.size));
@@ -420,27 +473,75 @@ export function graphData(
   const last = (name: string) => (name === "trf" ? 2 : name === "none" || name === "nc" ? 1 : 0);
   const byName = (a: { label: string; name: string }, b: { label: string; name: string }) =>
     last(a.name) - last(b.name) || a.label.localeCompare(b.label, locale);
-  const series: GraphSeries[] = [...kept].sort(byName).map((x, i) => ({
+  const keptNames = new Set(kept.map((x) => x.name));
+  const count = Math.max(result.intervals.length, previous?.result.intervals.length ?? 0);
+  const indexes = Array.from({ length: count }, (_, i) => i);
+
+  interface Raw {
+    name: string;
+    label: string;
+    color: string;
+    now: string[];
+    prev: string[];
+  }
+  const raws: Raw[] = [...kept].sort(byName).map((x, i) => ({
     name: x.name,
     label: x.label,
     color: seriesColor(i),
-    amounts: x.shown,
+    now: indexes.map((j) => x.amounts[j] ?? "0"),
+    prev: indexes.map((j) => before.find((b) => b.name === x.name)?.amounts[j] ?? "0"),
   }));
-  if (rest.length > 0) {
-    const sums = result.intervals.map((_, i) =>
-      addAmounts("0", ...rest.map((r) => r.amounts[i] ?? "0")),
-    );
-    series.push({
+  const beforeRest = before.filter((b) => !keptNames.has(b.name));
+  // The previous period's other series count too, even when all of this
+  // period's have their own colour.
+  if (rest.length > 0 || (previous !== null && beforeRest.length > 0)) {
+    raws.push({
       name: "other",
       label: i18n.t("stats.graphs.other"),
       color: seriesColor("other"),
-      amounts: s.cumulative ? cumulative(sums) : sums,
+      now: indexes.map((j) => sumAt(rest, j)),
+      prev: indexes.map((j) => sumAt(beforeRest, j)),
     });
   }
+  const shown = (a: string[]) => (s.cumulative ? cumulative(a) : a);
+  const negate = (a: string) => (a.startsWith("-") ? a.slice(1) : a === "0" ? a : `-${a}`);
 
-  const rows = result.intervals.map((interval, index) => {
+  const series: GraphSeries[] = [];
+  for (const x of raws) {
+    if (previous?.mode === "difference") {
+      const now = shown(x.now);
+      const prev = shown(x.prev);
+      series.push({
+        name: x.name,
+        label: x.label,
+        color: x.color,
+        amounts: now.map((a, j) => addAmounts(a, negate(prev[j] ?? "0"))),
+      });
+      continue;
+    }
+    series.push({ name: x.name, label: x.label, color: x.color, amounts: shown(x.now) });
+    if (previous) {
+      series.push({
+        name: `${x.name}${PREVIOUS_SUFFIX}`,
+        label: i18n.t("stats.reports.previousOf", { name: x.label }),
+        color: x.color,
+        amounts: shown(x.prev),
+        previous: true,
+      });
+    }
+  }
+
+  const rows = indexes.map((index) => {
+    const now = result.intervals[index];
+    const prev = previous?.result.intervals[index];
+    const cur = now && intervalLabel(now, resolution, result.intervals, locale);
+    const old = prev && intervalLabel(prev, resolution, previous.result.intervals, locale);
     const row: GraphRow = {
-      ...intervalLabel(interval, resolution, result.intervals, locale),
+      label: cur?.label ?? old?.label ?? "",
+      title:
+        cur && old
+          ? i18n.t("stats.reports.versus", { current: cur.title, previous: old.title })
+          : (cur?.title ?? old?.title ?? ""),
       index,
     };
     for (const x of series) row[x.name] = Number(x.amounts[index] ?? "0");

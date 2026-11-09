@@ -153,6 +153,9 @@ func (s *server) UpdatePreferences(ctx context.Context, req api.UpdatePreference
 	if err := checkSavedGraphs(*req.Body); err != nil {
 		return nil, err
 	}
+	if err := checkReportTemplates(*req.Body); err != nil {
+		return nil, err
+	}
 	patch, err := json.Marshal(req.Body)
 	if err != nil {
 		return nil, err
@@ -267,6 +270,37 @@ func checkSavedGraphs(patch api.Preferences) error {
 		seen[g.Id] = true
 		if strings.TrimSpace(g.Name) == "" {
 			return &Error{Status: http.StatusBadRequest, Code: "invalid_request", Detail: "Saved graph " + strconv.Quote(g.Id) + " has a blank name."}
+		}
+	}
+	return nil
+}
+
+// checkReportTemplates checks a preferences patch's report templates
+// (#125): template ids are unique, names aren't blank, and module ids are
+// unique within a template.
+func checkReportTemplates(patch api.Preferences) error {
+	templates, err := patch.ReportTemplates.Get()
+	if err != nil {
+		return nil // Not given, or null.
+	}
+	bad := func(detail string) error {
+		return &Error{Status: http.StatusBadRequest, Code: "invalid_request", Detail: detail}
+	}
+	seen := make(map[string]bool, len(templates))
+	for _, r := range templates {
+		if seen[r.Id] {
+			return bad("Report template id " + strconv.Quote(r.Id) + " is used more than once.")
+		}
+		seen[r.Id] = true
+		if strings.TrimSpace(r.Name) == "" {
+			return bad("Report template " + strconv.Quote(r.Id) + " has a blank name.")
+		}
+		modules := make(map[string]bool, len(r.Report.Modules))
+		for _, m := range r.Report.Modules {
+			if modules[m.Id] {
+				return bad("Report template " + strconv.Quote(r.Id) + " has module id " + strconv.Quote(m.Id) + " more than once.")
+			}
+			modules[m.Id] = true
 		}
 	}
 	return nil

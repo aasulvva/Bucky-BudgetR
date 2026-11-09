@@ -1109,7 +1109,85 @@
       "reports": "Reports"
     },
     "reports": {
-      "comingIn": "Reports are coming in <issue>#{{issue}}</issue>: modules, comparisons, templates and PDF export."
+      "asReport": "As the report",
+      "settings": "Report settings",
+      "noModules": "No modules yet. Add one to build the report.",
+      "partial": "partial",
+      "previousFailed": "The previous period couldn't be loaded.",
+      "previousOf": "{{name}} (previous)",
+      "versus": "{{current}} vs {{previous}}",
+      "starters": {
+        "yearly": "Yearly report",
+        "cycle": "Cycle summary"
+      },
+      "templates": {
+        "label": "Report",
+        "builtIn": "Built in",
+        "saved": "Saved",
+        "save": "Save report…",
+        "saveAsTitle": "Save report",
+        "renameTitle": "Rename report",
+        "deleteTitle": "Delete report",
+        "deleteText": "Delete the saved report \"{{name}}\"? The report stays on screen until you pick another."
+      },
+      "compareTo": {
+        "label": "Compare with",
+        "options": {
+          "previous": "The period before",
+          "last_year": "The same period last year"
+        },
+        "with": "Modules that compare show {{period}}.",
+        "custom": "Custom dates don't compare.",
+        "cycle": "A cycle compares with the cycle before."
+      },
+      "compare": {
+        "label": "Compare with the previous period",
+        "hint": "Both shows the previous period beside this one; Difference shows this period minus the previous one.",
+        "options": {
+          "off": "Off",
+          "both": "Both",
+          "difference": "Difference"
+        },
+        "comparedWith": "Compared with {{period}}.",
+        "differenceWith": "This period minus {{period}}.",
+        "unavailable": "There's no period before this one to compare with."
+      },
+      "breakdown": {
+        "label": "Breakdown",
+        "hint": "Also a small graph per month or cycle, for periods of at least {{days}} days.",
+        "options": {
+          "none": "None",
+          "month": "By month",
+          "cycle": "By cycle"
+        },
+        "title": {
+          "month": "By month",
+          "cycle": "By cycle"
+        },
+        "short": "A breakdown needs a period of at least {{days}} days.",
+        "many": "More than {{max}} parts. Choose a shorter period.",
+        "none": "No cycles in this period."
+      },
+      "module": {
+        "addButton": "Add module",
+        "addTitle": "Add module",
+        "editTitle": "Edit module",
+        "add": "Add",
+        "apply": "Apply",
+        "edit": "Edit",
+        "remove": "Remove",
+        "moveUp": "Move up",
+        "moveDown": "Move down",
+        "title": "Title",
+        "titleHint": "Optional. Without one, the module is named after what it shows.",
+        "max": "A report has at most {{max}} modules."
+      },
+      "ownFilters": {
+        "accounts": "Own accounts",
+        "buckets": "Own buckets",
+        "tags": "Own tags",
+        "counterparty": "Own counterparty"
+      }
     },
     "graphs": {
       "settings": "Graph settings",

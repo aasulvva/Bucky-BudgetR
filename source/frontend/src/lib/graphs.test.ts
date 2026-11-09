@@ -4,6 +4,7 @@ import { account, bucket } from "@/test/fixtures";
 import { endAtFor, formatDateRange, startAtFor } from "./cycles";
 import {
   cleanGraph,
+  compareGraphData,
   defaultGraph,
   fitResolution,
   graphData,
@@ -757,5 +758,79 @@ describe("statsLink", () => {
     expect(
       statsLink({ id: "g-3", name: "Pie", graph: { ...base, kind: "pie", group_by: "account" } }),
     ).toBe("/stats?kind=pie&metric=spending&period=current-month&res=day&group=account&saved=g-3");
+  });
+});
+
+describe("compareGraphData", () => {
+  const food = bucket({ id: "b1", name: "Food", source_account_id: "1234" });
+  const fun = bucket({ id: "b2", name: "Fun", source_account_id: "1234" });
+  const pets = bucket({ id: "b3", name: "Pets", source_account_id: "1234" });
+  const buckets = [food, fun, pets];
+  const october = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({
+      start: startAtFor(`2026-10-${String(i + 1).padStart(2, "0")}`),
+      end: endAtFor(`2026-10-${String(i + 1).padStart(2, "0")}`),
+    }));
+  const perBucket: GraphSettings = { ...base, group_by: "bucket", top: 1 };
+  const now: StatsSeries = {
+    intervals: days(2),
+    series: [
+      { currency: "NOK", bucket_id: "b1", values: ["10.00", "20.00"] },
+      { currency: "NOK", bucket_id: "b2", values: ["1.00", "2.00"] },
+    ],
+  };
+  // The previous period has a day more, and a bucket this one hasn't.
+  const before: StatsSeries = {
+    intervals: october(3),
+    series: [
+      { currency: "NOK", bucket_id: "b1", values: ["4.00", "5.00", "6.00"] },
+      { currency: "NOK", bucket_id: "b3", values: ["7.00", "0.00", "0.00"] },
+    ],
+  };
+
+  it("puts the previous period beside this one, by position", () => {
+    const data = compareGraphData(
+      now,
+      { result: before, mode: "both" },
+      perBucket,
+      "day",
+      "NOK",
+      [main],
+      buckets,
+      "en-GB",
+    );
+    // The largest of this period keeps its colour; the rest is Other, the
+    // previous period's Pets included.
+    expect(data.series.map((x) => [x.name, x.amounts, x.previous ?? false])).toEqual([
+      ["b-b1", ["10.00", "20.00", "0"], false],
+      ["b-b1-prev", ["4.00", "5.00", "6.00"], true],
+      ["other", ["1.00", "2.00", "0.00"], false],
+      ["other-prev", ["7.00", "0.00", "0.00"], true],
+    ]);
+    expect(data.series[1]).toMatchObject({ label: "Food (previous)", color: "var(--graph-1)" });
+    expect(data.rows).toHaveLength(3);
+    expect(data.rows[0]).toMatchObject({ label: "1 Nov", "b-b1": 10, "b-b1-prev": 4 });
+    expect(data.rows[0]?.title).toBe("Sun, 1 Nov 2026 vs Thu, 1 Oct 2026");
+    // Past this period's end, the previous one's day names the row.
+    expect(data.rows[2]).toMatchObject({ label: "3 Oct", "b-b1": 0, "b-b1-prev": 6 });
+    expect(data.other).toBe(1);
+  });
+
+  it("or shows this period minus the previous one", () => {
+    const data = compareGraphData(
+      now,
+      { result: before, mode: "difference" },
+      { ...perBucket, kind: "line", cumulative: true },
+      "day",
+      "NOK",
+      [main],
+      buckets,
+      "en-GB",
+    );
+    expect(data.series.map((x) => [x.name, x.amounts])).toEqual([
+      // Running totals 10, 30, 30 against 4, 9, 15.
+      ["b-b1", ["6.00", "21.00", "15.00"]],
+      ["other", ["-6.00", "-4.00", "-4.00"]],
+    ]);
   });
 });

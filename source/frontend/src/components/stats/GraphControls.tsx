@@ -1,16 +1,12 @@
 import {
   Input,
-  MultiSelect,
   NumberInput,
   SegmentedControl,
   Select,
   SimpleGrid,
   Stack,
   Switch,
-  TextInput,
 } from "@mantine/core";
-import { useDebouncedCallback } from "@mantine/hooks";
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { Account, Bucket } from "@/api/accounts";
@@ -28,8 +24,9 @@ import {
   type GraphKind,
   type GraphSettings,
 } from "@/lib/graphs";
-import { defaultPeriod, formatPeriod, parsePeriod } from "@/lib/periods";
+import { defaultPeriod, formatPeriod, parsePeriod, type PeriodChoice } from "@/lib/periods";
 
+import { FilterFields } from "./FilterFields";
 import { PeriodPicker } from "./PeriodPicker";
 import { ResolutionPicker } from "./ResolutionPicker";
 
@@ -42,6 +39,11 @@ interface GraphControlsProps {
   tags: string[];
   /** One column, for the mobile drawer. */
   narrow?: boolean;
+  /**
+   * A report module's graph (#125): the period is the report's and isn't
+   * shown, and an empty filter uses the report's.
+   */
+  reportPeriod?: PeriodChoice;
 }
 
 /** What a graph shows and how (#122, pies #123). Each change is a whole new value. */
@@ -53,6 +55,7 @@ export function GraphControls({
   buckets,
   tags,
   narrow = false,
+  reportPeriod,
 }: GraphControlsProps) {
   const { t } = useTranslation();
   // The drawer locks page scrolling and lets touches through only inside
@@ -75,17 +78,7 @@ export function GraphControls({
         : { kind },
     );
   };
-  const choice = parsePeriod(s.period) ?? defaultPeriod(cycles);
-  const [counterparty, setCounterparty] = useState(s.counterparty ?? "");
-  // Follow a counterparty set from elsewhere (a saved graph, Back).
-  const [shown, setShown] = useState(s.counterparty ?? "");
-  if ((s.counterparty ?? "") !== shown) {
-    setShown(s.counterparty ?? "");
-    if (counterparty.trim() !== (s.counterparty ?? "")) setCounterparty(s.counterparty ?? "");
-  }
-  const setCounterpartyLater = useDebouncedCallback((q: string) => {
-    set({ counterparty: q });
-  }, 400);
+  const choice = reportPeriod ?? parsePeriod(s.period) ?? defaultPeriod(cycles);
 
   // A balance pie is only per account. An unsplit pie is per interval.
   // Balances have no buckets or counterparties (#170); a balance pie is per account.
@@ -95,11 +88,6 @@ export function GraphControls({
   );
   const groupLabel = (g: (typeof GROUP_BYS)[number]) =>
     pie && g === "none" ? t("stats.graphs.groups.interval") : t(`stats.graphs.groups.${g}`);
-  const chosenAccounts = s.account_ids ?? [];
-  // Buckets of the chosen accounts, when any are chosen.
-  const bucketOptions = buckets
-    .filter((b) => chosenAccounts.length === 0 || chosenAccounts.includes(b.source_account_id))
-    .map((b) => ({ value: b.id, label: b.name }));
 
   return (
     <SimpleGrid
@@ -133,14 +121,16 @@ export function GraphControls({
           allowDeselect={false}
         />
       </Stack>
-      <PeriodPicker
-        inline={narrow}
-        value={choice}
-        cycles={cycles}
-        onChange={(choice) => {
-          set({ period: formatPeriod(choice) });
-        }}
-      />
+      {!reportPeriod && (
+        <PeriodPicker
+          inline={narrow}
+          value={choice}
+          cycles={cycles}
+          onChange={(choice) => {
+            set({ period: formatPeriod(choice) });
+          }}
+        />
+      )}
       <Stack gap="sm">
         {!whole && (
           <ResolutionPicker
@@ -252,59 +242,16 @@ export function GraphControls({
           />
         )}
       </Stack>
-      <Stack gap="sm">
-        <MultiSelect
-          comboboxProps={dropdown}
-          label={t("stats.graphs.accounts")}
-          placeholder={chosenAccounts.length === 0 ? t("stats.graphs.allAccounts") : undefined}
-          description={!balance ? t("stats.graphs.accountsHint") : undefined}
-          data={accounts.map((a) => ({ value: a.id, label: a.name }))}
-          value={chosenAccounts}
-          onChange={(ids) => {
-            set({ account_ids: ids });
-          }}
-          searchable
-          clearable
-        />
-        {!balance && (
-          <>
-            <MultiSelect
-              comboboxProps={dropdown}
-              label={t("stats.graphs.buckets")}
-              placeholder={
-                (s.bucket_ids ?? []).length === 0 ? t("stats.graphs.allBuckets") : undefined
-              }
-              data={bucketOptions}
-              value={s.bucket_ids ?? []}
-              onChange={(ids) => {
-                set({ bucket_ids: ids });
-              }}
-              searchable
-              clearable
-            />
-            <MultiSelect
-              comboboxProps={dropdown}
-              label={t("stats.graphs.tags")}
-              placeholder={(s.tags ?? []).length === 0 ? t("stats.graphs.anyTag") : undefined}
-              data={[...new Set([...tags, ...(s.tags ?? [])])]}
-              value={s.tags ?? []}
-              onChange={(chosen) => {
-                set({ tags: chosen });
-              }}
-              searchable
-              clearable
-            />
-            <TextInput
-              label={t("stats.graphs.counterparty")}
-              value={counterparty}
-              onChange={(e) => {
-                setCounterparty(e.currentTarget.value);
-                setCounterpartyLater(e.currentTarget.value);
-              }}
-            />
-          </>
-        )}
-      </Stack>
+      <FilterFields
+        value={s}
+        onChange={set}
+        accounts={accounts}
+        buckets={buckets}
+        tags={tags}
+        accountsOnly={balance}
+        inline={narrow}
+        inherits={reportPeriod !== undefined}
+      />
     </SimpleGrid>
   );
 }

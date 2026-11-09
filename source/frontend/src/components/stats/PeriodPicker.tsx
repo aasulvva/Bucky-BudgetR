@@ -29,6 +29,8 @@ interface PeriodPickerProps {
   cycles: Cycle[];
   /** Render dropdowns and calendars in place, not in a portal (inside a drawer). */
   inline?: boolean;
+  /** Only these units, and no Last N (reports, #125). */
+  only?: readonly SpecificUnit[];
 }
 
 type Kind = PeriodChoice["kind"];
@@ -48,7 +50,7 @@ function unitOf(choice: PeriodChoice): SpecificUnit | null {
  * Custom dates) and its unit, then what that needs (N, the one period with
  * arrows to step through them, or two dates), then the dates it covers.
  */
-export function PeriodPicker({ value, onChange, cycles, inline = false }: PeriodPickerProps) {
+export function PeriodPicker({ value, onChange, cycles, inline = false, only }: PeriodPickerProps) {
   const { t } = useTranslation();
   const dropdown = inline ? { withinPortal: false } : undefined;
   useClockVersion();
@@ -67,10 +69,10 @@ export function PeriodPicker({ value, onChange, cycles, inline = false }: Period
       }
       case "current":
       case "previous":
-        return { kind, unit: CALENDAR_UNITS.find((x) => x === unit) ?? "month" };
+        return { kind, unit: CALENDAR_UNITS.find((x) => x === unit && allowed(x)) ?? "month" };
       case "specific":
         return (
-          specificAt(unit ?? "month", period?.to ?? day, cycles) ??
+          specificAt(unit && allowed(unit) ? unit : "month", period?.to ?? day, cycles) ??
           specificAt("month", period?.to ?? day, cycles) ?? { kind, unit: "month", at: day }
         );
       case "custom":
@@ -78,14 +80,16 @@ export function PeriodPicker({ value, onChange, cycles, inline = false }: Period
     }
   };
 
+  const allowed = (u: SpecificUnit) => !only || only.includes(u);
+  const kinds = only ? KINDS.filter((k) => k !== "last") : KINDS;
   const units: string[] =
     value.kind === "last"
       ? LAST_UNITS
       : value.kind === "specific"
-        ? SPECIFIC_UNITS
+        ? SPECIFIC_UNITS.filter(allowed)
         : value.kind === "custom"
           ? []
-          : CALENDAR_UNITS;
+          : CALENDAR_UNITS.filter(allowed);
   const unitValue = value.kind === "custom" ? null : value.unit;
   const unitLabel = (u: string) =>
     value.kind === "last"
@@ -105,7 +109,7 @@ export function PeriodPicker({ value, onChange, cycles, inline = false }: Period
         <Select
           comboboxProps={dropdown}
           label={t("stats.period.label")}
-          data={KINDS.map((k) => ({ value: k, label: t(`stats.period.kinds.${k}`) }))}
+          data={kinds.map((k) => ({ value: k, label: t(`stats.period.kinds.${k}`) }))}
           value={value.kind}
           onChange={(k) => {
             if (!k || k === value.kind) return;

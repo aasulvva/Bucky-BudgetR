@@ -85,7 +85,9 @@ func (e env) scenario(t *testing.T, userID string) accounts.Account {
 	must[transactions.Transaction](t)(e.tx.Correct(ctx, userID, exp.ID, transactions.Changes{
 		Amount: &amount, SetBuckets: true, Buckets: []transactions.BucketAmount{{BucketID: food.ID, Amount: amount}},
 	}))
-	prefs := fmt.Sprintf(`{"locale":"nb-NO","dashboard":{"widgets":[{"id":"w1","type":"accounts","width":"half","accounts":{"mode":"account","account_id":%q}}]}}`, a.ID)
+	prefs := fmt.Sprintf(`{"locale":"nb-NO","dashboard":{"widgets":[{"id":"w1","type":"accounts","width":"half","accounts":{"mode":"account","account_id":%[1]q}}]},`+
+		`"report_templates":[{"id":"r1","name":"Cycle","report":{"period":"cycle-%[2]s","account_ids":[%[1]q],"modules":[{"id":"m1","type":"graph","graph":{"kind":"pie","metric":"spending","resolution":"total","bucket_ids":[%[3]q]}}]}}]}`,
+		a.ID, oct.ID, food.ID)
 	if _, err := e.pool.Exec(ctx, `UPDATE users SET preferences = $2 WHERE id = $1`, userID, prefs); err != nil {
 		t.Fatal(err)
 	}
@@ -155,6 +157,30 @@ func TestExportImport(t *testing.T) {
 		}
 		if !strings.Contains(string(got.Data.Preferences), fmt.Sprint(account["id"])) {
 			t.Errorf("the dashboard doesn't follow: %s", got.Data.Preferences)
+		}
+		// Report templates (#125) follow too: the period's cycle, the
+		// report's accounts and the modules' buckets.
+		var prefs struct {
+			ReportTemplates []struct {
+				Report struct {
+					Period     string   `json:"period"`
+					AccountIDs []string `json:"account_ids"`
+					Modules    []struct {
+						Graph struct {
+							BucketIDs []string `json:"bucket_ids"`
+						} `json:"graph"`
+					} `json:"modules"`
+				} `json:"report"`
+			} `json:"report_templates"`
+		}
+		if err := json.Unmarshal(got.Data.Preferences, &prefs); err != nil {
+			t.Fatal(err)
+		}
+		r := prefs.ReportTemplates[0].Report
+		if r.Period != "cycle-"+fmt.Sprint(got.Data.Tables["cycles"][0]["id"]) ||
+			r.AccountIDs[0] != account["id"] ||
+			r.Modules[0].Graph.BucketIDs[0] != got.Data.Tables["buckets"][0]["id"] {
+			t.Errorf("bob's report template %+v", r)
 		}
 		// Alice's data is untouched.
 		if mine, _ := e.file(t, alice.ID); asJSON(t, mine.Data) != asJSON(t, f.Data) {

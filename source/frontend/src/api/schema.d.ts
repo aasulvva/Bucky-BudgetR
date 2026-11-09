@@ -1738,6 +1738,14 @@ export interface components {
              *     Null means none.
              */
             saved_graphs?: components["schemas"]["SavedGraph"][] | null;
+            /**
+             * @description The report templates saved on Stats & reports (#125), in the
+             *     order the user sees them. Template ids are unique, names are not
+             *     blank and module ids are unique within a template (400
+             *     `invalid_request` otherwise). Replaced as a whole on update.
+             *     Null means none.
+             */
+            report_templates?: components["schemas"]["ReportTemplate"][] | null;
             /** @description Which notifications show (#57). Null means all, bills 3 days ahead. */
             notifications?: components["schemas"]["NotificationSettings"] | null;
         };
@@ -2185,16 +2193,8 @@ export interface components {
          *     not used.
          */
         GraphSettings: {
-            /**
-             * @description A pie grouped by `account` or `bucket` has a slice per series
-             *     over the whole period (`resolution` is kept for when the kind
-             *     changes). Ungrouped, it has a slice per interval of
-             *     `resolution`, at most 12. A balance pie is always per account.
-             * @enum {string}
-             */
-            kind: "line" | "bar" | "pie";
-            /** @enum {string} */
-            metric: "spending" | "income" | "balance";
+            kind: components["schemas"]["GraphKind"];
+            metric: components["schemas"]["GraphMetric"];
             /**
              * @description The period, relative to when the graph is shown:
              *     `last-<n>-days|weeks|cycles|months|quarters|half_years|years`,
@@ -2206,10 +2206,8 @@ export interface components {
              * @example last-30-days
              */
             period: string;
-            /** @enum {string} */
-            resolution: "hour" | "day" | "week" | "month" | "year" | "cycle" | "total";
-            /** @enum {string} */
-            group_by?: "none" | "account" | "bucket" | "counterparty";
+            resolution: components["schemas"]["GraphResolution"];
+            group_by?: components["schemas"]["GraphGroupBy"];
             account_ids?: components["schemas"]["AccountId"][];
             bucket_ids?: components["schemas"]["BucketId"][];
             tags?: string[];
@@ -2223,11 +2221,106 @@ export interface components {
             stepped?: boolean;
             /** @description Fit the Y axis to the values instead of including 0 (the default). */
             fit_y_axis?: boolean;
+            /** @description Pies only. A list of the slices beside the pie (`list`, the default), labels on the slices, or both. */
+            pie_labels?: components["schemas"]["PieLabels"];
+            /** @description How many series get their own colour (at most 8, the graph palette); the rest add up to Other. 5 by default. */
+            top?: number;
+        };
+        /**
+         * @description A pie grouped by `account` or `bucket` has a slice per series over
+         *     the whole period (`resolution` is kept for when the kind changes).
+         *     Ungrouped, it has a slice per interval of `resolution`, at most 12.
+         *     A balance pie is always per account.
+         * @enum {string}
+         */
+        GraphKind: "line" | "bar" | "pie";
+        /** @enum {string} */
+        GraphMetric: "spending" | "income" | "balance";
+        /** @enum {string} */
+        GraphResolution: "hour" | "day" | "week" | "month" | "year" | "cycle" | "total";
+        /** @enum {string} */
+        GraphGroupBy: "none" | "account" | "bucket" | "counterparty";
+        /** @enum {string} */
+        PieLabels: "list" | "slices" | "both";
+        ReportTemplate: {
+            id: string;
+            name: string;
+            report: components["schemas"]["ReportSettings"];
+        };
+        /**
+         * @description A report on Stats & reports (#125): a period, filters for the whole
+         *     report, and its modules in order.
+         */
+        ReportSettings: {
             /**
-             * @description Pies only. A list of the slices beside the pie (`list`, the default), labels on the slices, or both.
+             * @description As in `GraphSettings`, but only years, half-years, quarters,
+             *     months and cycles: `current-<unit>` or `previous-<unit>`, one
+             *     specific period, or `custom-<first day>-<last day>`.
+             * @example previous-year
+             */
+            period: string;
+            /**
+             * @description What a module compares with: the period right before (the
+             *     default), or the same period a year earlier. A cycle always
+             *     compares with the cycle before; a custom period doesn't compare.
              * @enum {string}
              */
-            pie_labels?: "list" | "slices" | "both";
+            compare_to?: "previous" | "last_year";
+            account_ids?: components["schemas"]["AccountId"][];
+            bucket_ids?: components["schemas"]["BucketId"][];
+            tags?: string[];
+            counterparty?: string;
+            modules: components["schemas"]["ReportModule"][];
+        };
+        ReportModule: {
+            id: string;
+            /**
+             * @description What the module shows. More types come with
+             * @enum {string}
+             */
+            type: "graph";
+            title?: string;
+            graph: components["schemas"]["ReportGraph"];
+            /**
+             * @description Lines and bars: the previous period beside this one (`both`) or
+             *     this period minus the previous (`difference`). Pies: `both` and
+             *     `difference` show the previous period's pie too. `off` by default.
+             * @enum {string}
+             */
+            compare?: "off" | "both" | "difference";
+            /**
+             * @description Also one small graph per month or per cycle, for periods of at
+             *     least 60 days. Months and cycles cut by the period's edges are
+             *     clipped. `none` by default.
+             * @enum {string}
+             */
+            breakdown?: "none" | "month" | "cycle";
+        };
+        /**
+         * @description A report module's graph: `GraphSettings` without the period, which
+         *     is the report's. A filter set here replaces the report's for that
+         *     field.
+         */
+        ReportGraph: {
+            kind: components["schemas"]["GraphKind"];
+            metric: components["schemas"]["GraphMetric"];
+            resolution: components["schemas"]["GraphResolution"];
+            group_by?: components["schemas"]["GraphGroupBy"];
+            account_ids?: components["schemas"]["AccountId"][];
+            bucket_ids?: components["schemas"]["BucketId"][];
+            tags?: string[];
+            /** @description Only transactions whose counterparty or description contains this text, ignoring case. */
+            counterparty?: string;
+            /** @description Lines only. Running totals from the start of the period. */
+            cumulative?: boolean;
+            /** @description Bars only. Series side by side instead of stacked. */
+            side_by_side?: boolean;
+            /** @description Lines only. Each interval's value is held until the next, instead of a straight line between points. */
+            stepped?: boolean;
+            /** @description Fit the Y axis to the values instead of including 0 (the default). */
+            fit_y_axis?: boolean;
+            /** @description Pies only. A list of the slices beside the pie (`list`, the default), labels on the slices, or both. */
+            pie_labels?: components["schemas"]["PieLabels"];
             /** @description How many series get their own colour (at most 8, the graph palette); the rest add up to Other. 5 by default. */
             top?: number;
         };

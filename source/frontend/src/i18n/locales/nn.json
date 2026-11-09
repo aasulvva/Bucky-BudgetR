@@ -1109,7 +1109,85 @@
       "reports": "Rapportar"
     },
     "reports": {
-      "comingIn": "Rapportar kjem i <issue>#{{issue}}</issue>: modular, samanlikningar, malar og PDF-eksport."
+      "asReport": "Som rapporten",
+      "settings": "Rapportinnstillingar",
+      "noModules": "Ingen modular enno. Legg til ein for å byggje rapporten.",
+      "partial": "delvis",
+      "previousFailed": "Førre periode kunne ikkje lastast.",
+      "previousOf": "{{name}} (førre)",
+      "versus": "{{current}} mot {{previous}}",
+      "starters": {
+        "yearly": "Årsrapport",
+        "cycle": "Syklusoppsummering"
+      },
+      "templates": {
+        "label": "Rapport",
+        "builtIn": "Innebygde",
+        "saved": "Lagra",
+        "save": "Lagre rapport …",
+        "saveAsTitle": "Lagre rapport",
+        "renameTitle": "Gje rapporten nytt namn",
+        "deleteTitle": "Slett rapport",
+        "deleteText": "Slette den lagra rapporten «{{name}}»? Rapporten vert verande på skjermen til du vel ein annan."
+      },
+      "compareTo": {
+        "label": "Samanlikn med",
+        "options": {
+          "previous": "Perioden før",
+          "last_year": "Same periode i fjor"
+        },
+        "with": "Modular som samanliknar, viser {{period}}.",
+        "custom": "Eigendefinerte datoar vert ikkje samanlikna.",
+        "cycle": "Ein syklus vert samanlikna med syklusen før."
+      },
+      "compare": {
+        "label": "Samanlikn med førre periode",
+        "hint": "Begge viser førre periode ved sida av denne; Differanse viser denne perioden minus førre.",
+        "options": {
+          "off": "Av",
+          "both": "Begge",
+          "difference": "Differanse"
+        },
+        "comparedWith": "Samanlikna med {{period}}.",
+        "differenceWith": "Denne perioden minus {{period}}.",
+        "unavailable": "Det finst ingen periode før denne å samanlikne med."
+      },
+      "breakdown": {
+        "label": "Oppdeling",
+        "hint": "Også ein liten graf per månad eller syklus, for periodar på minst {{days}} dagar.",
+        "options": {
+          "none": "Inga",
+          "month": "Per månad",
+          "cycle": "Per syklus"
+        },
+        "title": {
+          "month": "Per månad",
+          "cycle": "Per syklus"
+        },
+        "short": "Oppdeling krev ein periode på minst {{days}} dagar.",
+        "many": "Meir enn {{max}} delar. Vel ein kortare periode.",
+        "none": "Ingen syklusar i denne perioden."
+      },
+      "module": {
+        "addButton": "Legg til modul",
+        "addTitle": "Legg til modul",
+        "editTitle": "Rediger modul",
+        "add": "Legg til",
+        "apply": "Bruk",
+        "edit": "Rediger",
+        "remove": "Fjern",
+        "moveUp": "Flytt opp",
+        "moveDown": "Flytt ned",
+        "title": "Tittel",
+        "titleHint": "Valfritt. Utan tittel får modulen namn etter det han viser.",
+        "max": "Ein rapport har høgst {{max}} modular."
+      },
+      "ownFilters": {
+        "accounts": "Eigne kontoar",
+        "buckets": "Eigne bøtter",
+        "tags": "Eigne taggar",
+        "counterparty": "Eigen motpart"
+      }
     },
     "graphs": {
       "settings": "Grafinnstillingar",

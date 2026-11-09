@@ -419,6 +419,14 @@ func TestPreferences(t *testing.T) {
 	if w := patch(`{"saved_graphs":null}`); strings.TrimSpace(w.Body.String()) != `{}` {
 		t.Errorf("saved graphs reset: %d %s", w.Code, w.Body)
 	}
+	// Report templates (#125) too.
+	reports := `{"report_templates":[{"id":"r-1","name":"Year","report":{"bucket_ids":["1000000007"],"compare_to":"last_year","modules":[{"breakdown":"cycle","compare":"difference","graph":{"account_ids":["1234"],"group_by":"bucket","kind":"bar","metric":"spending","resolution":"month"},"id":"m-1","title":"Food","type":"graph"},{"compare":"off","graph":{"kind":"pie","metric":"spending","resolution":"total"},"id":"m-2","type":"graph"}],"period":"previous-year"}},{"id":"r-2","name":"Q3","report":{"modules":[],"period":"quarter-2026-q3"}}]}`
+	if w := patch(reports); w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != reports {
+		t.Errorf("report templates: %d %s", w.Code, w.Body)
+	}
+	if w := patch(`{"report_templates":null}`); strings.TrimSpace(w.Body.String()) != `{}` {
+		t.Errorf("report templates reset: %d %s", w.Code, w.Body)
+	}
 
 	for _, body := range []string{
 		`{"theme":"dark"}`, `{"locale":"not a locale!"}`, `{"locale":42}`, `{"language":"de"}`, `[]`,
@@ -461,6 +469,17 @@ func TestPreferences(t *testing.T) {
 		`{"saved_graphs":[{"id":"a","name":"A","graph":{"kind":"bar","metric":"spending","period":"current-month","resolution":"day","top":9}}]}`,
 		`{"saved_graphs":[{"id":"a","name":"A","graph":{"kind":"bar","metric":"spending","period":"current-month","resolution":"day","colour":"red"}}]}`,
 		`{"saved_graphs":[{"id":"a","name":"A"}]}`,
+		`{"report_templates":[{"id":"a","name":"A","report":{"period":"current-year","modules":[]}},{"id":"a","name":"B","report":{"period":"current-year","modules":[]}}]}`,
+		`{"report_templates":[{"id":"a","name":" ","report":{"period":"current-year","modules":[]}}]}`,
+		`{"report_templates":[{"id":"a","name":"A","report":{"period":"current-year","modules":[{"id":"m","type":"graph","graph":{"kind":"bar","metric":"spending","resolution":"day"}},{"id":"m","type":"graph","graph":{"kind":"bar","metric":"spending","resolution":"day"}}]}}]}`,
+		`{"report_templates":[{"id":"a","name":"A","report":{"period":"last-30-days","modules":[]}}]}`,
+		`{"report_templates":[{"id":"a","name":"A","report":{"period":"current-week","modules":[]}}]}`,
+		`{"report_templates":[{"id":"a","name":"A","report":{"period":"current-year"}}]}`,
+		`{"report_templates":[{"id":"a","name":"A","report":{"period":"current-year","compare_to":"next","modules":[]}}]}`,
+		`{"report_templates":[{"id":"a","name":"A","report":{"period":"current-year","modules":[{"id":"m","type":"table","graph":{"kind":"bar","metric":"spending","resolution":"day"}}]}}]}`,
+		`{"report_templates":[{"id":"a","name":"A","report":{"period":"current-year","modules":[{"id":"m","type":"graph","graph":{"kind":"bar","metric":"spending","resolution":"day","period":"current-year"}}]}}]}`,
+		`{"report_templates":[{"id":"a","name":"A","report":{"period":"current-year","modules":[{"id":"m","type":"graph","compare":"maybe","graph":{"kind":"bar","metric":"spending","resolution":"day"}}]}}]}`,
+		`{"report_templates":[{"id":"a","name":"A","report":{"period":"current-year","modules":[{"id":"m","type":"graph","breakdown":"week","graph":{"kind":"bar","metric":"spending","resolution":"day"}}]}}]}`,
 	} {
 		w := patch(body)
 		if w.Code != http.StatusBadRequest || deref(decodeProblem(t, w).Code) != "invalid_request" {
