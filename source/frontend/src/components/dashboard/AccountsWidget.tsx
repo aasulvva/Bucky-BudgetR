@@ -8,7 +8,7 @@ import { shownAccounts, type WidgetInstance } from "@/lib/dashboard";
 import { addAmounts, formatMoney } from "@/lib/money";
 
 import { WidgetFrame } from "./frame";
-import { BucketsSummary, MoneyState, NoBuckets, WidgetCard } from "./Widget";
+import { BucketsSummary, Gone, MoneyState, NoBuckets, WidgetCard } from "./Widget";
 
 /** The account balances: all of them with a total, or one account. */
 export function AccountsWidget({
@@ -29,7 +29,8 @@ export function AccountsWidget({
         {(accounts, buckets) => {
           if (accounts.length === 0) return <NoBuckets accounts={accounts} />;
           const shown = shownAccounts(widget.settings, accounts);
-          return shown.mode === "account" ? (
+          if (shown.mode === "account" && !shown.account) return <Gone what="account" />;
+          return shown.mode === "account" && shown.account ? (
             <OneAccount account={shown.account} buckets={buckets} />
           ) : (
             <AllAccounts accounts={accounts} buckets={buckets} />

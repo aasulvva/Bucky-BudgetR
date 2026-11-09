@@ -534,27 +534,27 @@ export function shownBucketStatus(
 ):
   | { mode: Exclude<BucketStatusMode, "bucket" | "account"> }
   | { mode: "account"; account: Account | null }
-  | { mode: "bucket"; bucket: Bucket } {
+  | { mode: "bucket"; bucket: Bucket | null } {
   const { mode, accountId, bucketId } = settings;
   if (mode === "account") {
     return { mode, account: accounts.find((a) => a.id === accountId) ?? null };
   }
   if (mode !== "bucket") return { mode };
-  const bucket = buckets.find((b) => b.id === bucketId);
-  return bucket ? { mode, bucket } : { mode: "attention" };
+  // A deleted bucket is null, for the widget to say it's gone (#135).
+  return { mode, bucket: buckets.find((b) => b.id === bucketId) ?? null };
 }
 
 /**
- * The accounts Account balances shows: all of them, or the chosen one.
- * Without it (none chosen, or it was deleted) the widget shows them all.
+ * The accounts Account balances shows: all of them, or the chosen one. A
+ * deleted account is null, for the widget to say it's gone (#135).
  */
 export function shownAccounts(
   settings: AccountsSettings,
   accounts: Account[],
-): { mode: "all" } | { mode: "account"; account: Account } {
+): { mode: "all" } | { mode: "account"; account: Account | null } {
   const { mode, accountId } = settings;
-  const account = accounts.find((a) => a.id === accountId);
-  return mode === "account" && account ? { mode, account } : { mode: "all" };
+  if (mode !== "account") return { mode: "all" };
+  return { mode, account: accounts.find((a) => a.id === accountId) ?? null };
 }
 
 export interface AccountHealth {

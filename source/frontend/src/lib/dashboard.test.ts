@@ -457,8 +457,12 @@ describe("shownAccounts", () => {
     expect(shownAccounts(settings, [main])).toEqual({ mode: "account", account: main });
   });
 
-  it("shows them all when it's gone", () => {
-    expect(shownAccounts(settings, [])).toEqual({ mode: "all" });
+  it("says when it's gone (#135)", () => {
+    expect(shownAccounts(settings, [])).toEqual({ mode: "account", account: null });
+  });
+
+  it("shows them all otherwise", () => {
+    expect(shownAccounts({ mode: "all", accountId: main.id }, [main])).toEqual({ mode: "all" });
   });
 });
 
@@ -472,8 +476,8 @@ describe("shownBucketStatus", () => {
     });
   });
 
-  it("falls back to Needs attention when the bucket is gone", () => {
-    expect(shownBucketStatus(settings, [main], [fine])).toEqual({ mode: "attention" });
+  it("says when the bucket is gone (#135)", () => {
+    expect(shownBucketStatus(settings, [main], [fine])).toEqual({ mode: "bucket", bucket: null });
   });
 
   it("shows the chosen account, or says it's gone", () => {

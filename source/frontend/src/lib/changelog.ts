@@ -16,6 +16,26 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.05.01",
+    date: "2026-11-09",
+    title: {
+      en: "Widgets say when what they showed is gone",
+      nb: "Moduler sier fra når det de viste, er borte",
+      nn: "Modular seier frå når det dei viste, er borte",
+    },
+    changes: {
+      en: [
+        "Account balances and Money in and out set to one account, and Bucket status set to one bucket, now say when that account or bucket has been deleted, with a button to choose another, instead of quietly showing something else.",
+      ],
+      nb: [
+        "Kontosaldoer og Inn og ut satt til én konto, og Bøttestatus satt til én bøtte, sier nå fra når kontoen eller bøtta er slettet, med en knapp for å velge en annen, i stedet for å vise noe annet uten å si fra.",
+      ],
+      nn: [
+        "Kontosaldoar og Inn og ut sette til éin konto, og Bøttestatus sett til éi bøtte, seier no frå når kontoen eller bøtta er sletta, med ein knapp for å velje ein annan, i staden for å vise noko anna utan å seie frå.",
+      ],
+    },
+  },
+  {
     version: "v2.05.00",
     date: "2026-11-09",
     title: {
