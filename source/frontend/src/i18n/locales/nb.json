@@ -107,39 +107,8 @@
     "locale": "Tall- og datoformat",
     "localeHint": "Hvordan beløp og datoer skrives.",
     "browserDefault": "Nettleserens standard",
-    "refillMode": "Standard påfyllingsmåte",
-    "refillModeHint": "Påfyllingsmåten nye bøtter starter med.",
-    "refillModes": {
-      "auto": "Automatisk, ved starten av hver periode",
-      "manual": "Manuelt",
-      "on_income": "Ved inntekt",
-      "fully_manual": "Helt manuelt, midler legges til og fjernes for hånd"
-    },
-    "negativeTf": "Overforbrukte bøtter med Behold midler",
-    "negativeTfHint": "Hva nye bøtter med Behold midler gjør ved påfyllingen etter et overforbruk.",
-    "negativeTfs": {
-      "debt": "Før det som gjeld",
-      "clear": "Nullstill det ved påfylling"
-    },
     "timeZone": "Tidssone",
     "timeZoneHint": "Perioder som planlegges fra perioderegelen, starter ved midnatt her.",
-    "rules": {
-      "title": "Inntektsregler",
-      "intro1": "Bøtter med påfyllingsmåten «Ved inntekt» fylles ikke på når en ny periode starter. De venter til inntekten din, for eksempel lønna, kommer, slik at du bare budsjetterer med penger du har.",
-      "intro2": "En inntekt som passer med en regel, fyller på «Ved inntekt»-bøttene som finansieres fra kontoen den betales inn på. For å passe må den komme fra motparten (store og små bokstaver spiller ingen rolle) og være minst minstebeløpet. Hver bøtte fylles på høyst én gang per periode, så en ny utbetaling i samme periode fyller den ikke på igjen.",
-      "intro3": "På hver inntekt kan du også krysse av for «Utløser påfyll» selv, eller fjerne krysset for å hoppe over en regel som passer.",
-      "empty": "Ingen regler ennå. Uten regler fylles «Ved inntekt»-bøtter bare på av en inntekt der du krysser av for «Utløser påfyll».",
-      "counterparty": "Motpart",
-      "counterpartyExample": "Arbeidsgiver AS",
-      "atLeast": "Minst",
-      "remove": "Fjern regel {{number}}",
-      "add": "Legg til regel",
-      "save": "Lagre reglene",
-      "saved": "Inntektsreglene er lagret.",
-      "enterCounterparty": "Skriv motparten.",
-      "enterAmount": "Skriv et beløp.",
-      "tooLarge": "Det er for stort."
-    },
     "cycleRule": {
       "title": "Perioderegel",
       "intro": "Holder de neste periodene dine planlagt, hver fra én startdato til den neste. Sett den til lønningsdagen din.",
@@ -634,7 +603,45 @@
     "capacityHintManual": "Det meste bøtta kan romme: du kan ikke legge til midler over dette.",
     "startZeroHintManual": "Legg til midler under Bøtter når du trenger dem.",
     "openingHintManual": "Det bøtta allerede har. Registreres som startmidler.",
-    "overCapacity": "Kapasiteten er {{amount}}."
+    "overCapacity": "Kapasiteten er {{amount}}.",
+    "settings": {
+      "open": "Bøtteinnstillinger",
+      "intro": "Standardvalg for nye bøtter, og inntektene som fyller på «Ved inntekt»-bøtter.",
+      "defaults": "Nye bøtter",
+      "refillMode": "Standard påfyllingsmåte",
+      "refillModeHint": "Påfyllingsmåten nye bøtter starter med.",
+      "refillModes": {
+        "auto": "Automatisk, ved starten av hver periode",
+        "manual": "Manuelt",
+        "on_income": "Ved inntekt",
+        "fully_manual": "Helt manuelt, midler legges til og fjernes for hånd"
+      },
+      "negativeTf": "Overforbrukte bøtter med Behold midler",
+      "negativeTfHint": "Hva nye bøtter med Behold midler gjør ved påfyllingen etter et overforbruk.",
+      "negativeTfs": {
+        "debt": "Før det som gjeld",
+        "clear": "Nullstill det ved påfylling"
+      },
+      "rules": {
+        "title": "Inntektsregler",
+        "intro1": "Bøtter med påfyllingsmåten «Ved inntekt» fylles ikke på når en ny periode starter. De venter til inntekten din, for eksempel lønna, kommer, slik at du bare budsjetterer med penger du har.",
+        "intro2": "En inntekt som passer med en regel, fyller på «Ved inntekt»-bøttene som finansieres fra kontoen den betales inn på. For å passe må den komme fra motparten (store og små bokstaver spiller ingen rolle) og være minst minstebeløpet. Hver bøtte fylles på høyst én gang per periode, så en ny utbetaling i samme periode fyller den ikke på igjen.",
+        "intro3": "På hver inntekt kan du også krysse av for «Utløser påfyll» selv, eller fjerne krysset for å hoppe over en regel som passer.",
+        "empty": "Ingen regler ennå. Uten regler fylles «Ved inntekt»-bøtter bare på av en inntekt der du krysser av for «Utløser påfyll».",
+        "counterparty": "Motpart",
+        "counterpartyExample": "Arbeidsgiver AS",
+        "atLeast": "Minst",
+        "remove": "Fjern regel {{number}}",
+        "add": "Legg til regel",
+        "save": "Lagre reglene",
+        "saved": "Inntektsreglene er lagret.",
+        "enterCounterparty": "Skriv motparten.",
+        "enterAmount": "Skriv et beløp.",
+        "tooLarge": "Det er for stort."
+      }
+    },
+    "defaultModeHint": "Nye bøtter starter som {{mode}}. <open>Endre standarden</open>",
+    "noIncomeRules": "Du har ingen inntektsregler ennå, så denne bøtta fylles bare på av en inntekt der du krysser av for «Utløser påfyll». <open>Sett opp inntektsregler</open>"
   },
   "budgetSetup": {
     "intro": "Planlegg påfyllene i hver periode mot inntekten du forventer på hver konto.",
@@ -673,7 +680,8 @@
       "apply": "Lagre og endre denne perioden"
     },
     "fullyManualSkipped_one": "{{count}} helt manuell bøtte er ikke med her: den har ikke noe påfyllingsbeløp.",
-    "fullyManualSkipped_other": "{{count}} helt manuelle bøtter er ikke med her: de har ikke noe påfyllingsbeløp."
+    "fullyManualSkipped_other": "{{count}} helt manuelle bøtter er ikke med her: de har ikke noe påfyllingsbeløp.",
+    "incomeRules": "Inntektsregler"
   },
   "newTransaction": {
     "type": "Type",
@@ -818,8 +826,8 @@
     "you": "deg",
     "system": "systemet",
     "user": "bruker {{id}}",
-    "movedTo": "Flyttet til en annen konto. <link>Åpne den nye transaksjonen</link>",
-    "movedFrom": "Flyttet hit fra en annen konto. <link>Åpne den gamle</link>",
+    "movedTo": "Flyttet til en annen konto. <open>Åpne den nye transaksjonen</open>",
+    "movedFrom": "Flyttet hit fra en annen konto. <open>Åpne den gamle</open>",
     "reversedLines": "Reversert: disse beløpene ble annullert.",
     "edit": "Rediger",
     "reverse": "Reverser",

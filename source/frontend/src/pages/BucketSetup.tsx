@@ -1,4 +1,5 @@
 import {
+  ActionIcon,
   Alert,
   Anchor,
   Box,
@@ -19,7 +20,7 @@ import {
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
-import { IconPlus } from "@tabler/icons-react";
+import { IconPlus, IconSettings } from "@tabler/icons-react";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
@@ -40,6 +41,7 @@ import { ApiError, unwrap } from "@/api/errors";
 import type { components } from "@/api/schema";
 import { useSession } from "@/app/session";
 import { AmountInput } from "@/components/AmountInput";
+import { BucketSettingsDrawer } from "@/components/BucketSettings";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { QueryState } from "@/components/QueryState";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
@@ -70,7 +72,8 @@ type Selection = string | null;
 /**
  * Bucket setup (spec §9, canvas "Bucket setup"): the buckets by source
  * account, and the selected one's form beside them (full screen on mobile).
- * `?edit=<id>` opens a bucket, as the cog on the Buckets screen does.
+ * `?edit=<id>` opens a bucket, as the cog on the Buckets screen does, and
+ * `?settings` the bucket settings (#102), over the form if one is open.
  */
 export default function BucketSetup() {
   const { t } = useTranslation();
@@ -80,6 +83,7 @@ export default function BucketSetup() {
   const buckets = useBuckets();
   const [params, setParams] = useSearchParams();
   const selection: Selection = params.has("new") ? "new" : params.get("edit");
+  const settingsOpen = params.has("settings");
 
   const select = (next: Selection) => {
     setParams(
@@ -93,20 +97,63 @@ export default function BucketSetup() {
     );
   };
 
+  /** Opens or closes the bucket settings, keeping the bucket that's open. */
+  const openSettings = (open: boolean) => {
+    setParams(
+      (prev) => {
+        const p = new URLSearchParams(prev);
+        if (open) p.set("settings", "");
+        else p.delete("settings");
+        return p;
+      },
+      { replace: !open },
+    );
+  };
+
   return (
     <Stack gap="lg">
       <Group justify="space-between">
         <Title order={2}>{t("nav.items.bucketSetup")}</Title>
-        <Button
-          leftSection={<IconPlus size={16} />}
-          disabled={accounts.data?.length === 0}
-          onClick={() => {
-            select("new");
-          }}
-        >
-          {t("bucketSetup.newBucket")}
-        </Button>
+        <Group gap="sm">
+          {isDesktop ? (
+            <Button
+              variant="default"
+              leftSection={<IconSettings size={16} />}
+              onClick={() => {
+                openSettings(true);
+              }}
+            >
+              {t("bucketSetup.settings.open")}
+            </Button>
+          ) : (
+            <ActionIcon
+              variant="default"
+              size={36}
+              aria-label={t("bucketSetup.settings.open")}
+              onClick={() => {
+                openSettings(true);
+              }}
+            >
+              <IconSettings size={18} />
+            </ActionIcon>
+          )}
+          <Button
+            leftSection={<IconPlus size={16} />}
+            disabled={accounts.data?.length === 0}
+            onClick={() => {
+              select("new");
+            }}
+          >
+            {t("bucketSetup.newBucket")}
+          </Button>
+        </Group>
       </Group>
+      <BucketSettingsDrawer
+        opened={settingsOpen}
+        onClose={() => {
+          openSettings(false);
+        }}
+      />
       <QueryState query={accounts}>
         {(accountList) => (
           <QueryState query={buckets}>
@@ -133,6 +180,9 @@ export default function BucketSetup() {
                   accounts={accountList}
                   onDone={(saved) => {
                     select(isDesktop ? saved : null);
+                  }}
+                  onOpenSettings={() => {
+                    openSettings(true);
                   }}
                 />
               );
@@ -320,11 +370,14 @@ function BucketForm({
   bucket,
   accounts,
   onDone,
+  onOpenSettings,
 }: {
   bucket: Bucket | undefined;
   accounts: Account[];
   /** After saving (with the bucket's ID), deleting or cancelling (null). */
   onDone: (saved: string | null) => void;
+  /** Opens the bucket settings, where the defaults and income rules are. */
+  onOpenSettings: () => void;
 }) {
   const { t } = useTranslation();
   const refresh = useRefreshMoney();
@@ -586,6 +639,33 @@ function BucketForm({
               ))}
             </Stack>
           </Radio.Group>
+          {bucket === undefined && (
+            <Text size="sm" c="dimmed">
+              <Trans
+                i18nKey="bucketSetup.defaultModeHint"
+                values={{ mode: refillModeLabel(preferences?.default_refill_mode ?? "auto") }}
+                components={{
+                  open: (
+                    <Anchor component="button" type="button" size="sm" onClick={onOpenSettings} />
+                  ),
+                }}
+              />
+            </Text>
+          )}
+          {refillMode === "on_income" &&
+            preferences !== undefined &&
+            (preferences.income_refill_rules ?? []).length === 0 && (
+              <Text size="sm" c="dimmed">
+                <Trans
+                  i18nKey="bucketSetup.noIncomeRules"
+                  components={{
+                    open: (
+                      <Anchor component="button" type="button" size="sm" onClick={onOpenSettings} />
+                    ),
+                  }}
+                />
+              </Text>
+            )}
           {!manual && (
             <AmountInput
               label={t("bucketSetup.refillAmount")}

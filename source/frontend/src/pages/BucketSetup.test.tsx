@@ -2,7 +2,7 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { formatMoney } from "@/lib/money";
-import { apiMock, problem, testUser } from "@/test/api";
+import { apiMock, problem, testUser, type MockRequest } from "@/test/api";
 import { account, bucket } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
@@ -390,5 +390,165 @@ describe("Bucket setup, Fully manual", () => {
     expect(list.getByRole("button", { name: /^Gifts \(#1000000003\)/ })).toHaveTextContent(
       "Fully manual",
     );
+  });
+});
+
+/** Answers a preferences PATCH as the API does: merged, null resets. */
+function patchPreferences(initial: Record<string, unknown>) {
+  let prefs = { ...testUser.preferences, ...initial };
+  return (req: MockRequest) => {
+    const merged = Object.entries({ ...prefs, ...(req.body as object) });
+    prefs = Object.fromEntries(merged.filter(([, v]) => v !== null));
+    return { body: prefs };
+  };
+}
+
+const employer = { counterparty: "Employer AS", min_amount: "20000" };
+
+/** Signs in with these preferences, which a PATCH then changes. */
+function withPreferences(prefs: Record<string, unknown>) {
+  apiMock.on("GET /api/v1/me", {
+    body: { ...testUser, preferences: { ...testUser.preferences, ...prefs } },
+  });
+  apiMock.on("PATCH /api/v1/me/preferences", patchPreferences(prefs));
+}
+
+describe("Bucket setup, Bucket settings (#102)", () => {
+  afterEach(() => {
+    viewport.touch = false;
+  });
+
+  it("opens from the header, and closes again", async () => {
+    const { router } = renderRoute("/buckets/setup?edit=1000000001");
+    await userEvent.click(await screen.findByRole("button", { name: "Bucket settings" }));
+    expect(router.state.location.search).toBe("?edit=1000000001&settings=");
+    const drawer = within(await screen.findByRole("dialog", { name: "Bucket settings" }));
+    expect(drawer.getByRole("combobox", { name: /Default refill mode/ })).toHaveValue(
+      "Automatic, at the start of each cycle",
+    );
+    await userEvent.click(drawer.getByRole("button", { name: "" }));
+    expect(router.state.location.search).toBe("?edit=1000000001");
+  });
+
+  it("can make new buckets Fully manual", async () => {
+    withPreferences({});
+    renderRoute("/buckets/setup?settings");
+    await userEvent.click(await screen.findByRole("combobox", { name: /Default refill mode/ }));
+    await userEvent.click(
+      await screen.findByRole("option", { name: "Fully manual, funds added and removed by hand" }),
+    );
+    expect(apiMock.calls("PATCH /api/v1/me/preferences")[0]?.body).toEqual({
+      default_refill_mode: "fully_manual",
+    });
+  });
+
+  it("sets what new Keep funds buckets do when overspent", async () => {
+    withPreferences({});
+    renderRoute("/buckets/setup?settings");
+    const select = await screen.findByRole("combobox", { name: /Overspent buckets/ });
+    expect(select).toHaveValue("Carry it as debt");
+    await userEvent.click(select);
+    await userEvent.click(await screen.findByRole("option", { name: "Clear it at the refill" }));
+    expect(apiMock.calls("PATCH /api/v1/me/preferences")[0]?.body).toEqual({
+      default_negative_tf: "clear",
+    });
+
+    await userEvent.click(screen.getByRole("combobox", { name: /Overspent buckets/ }));
+    await userEvent.click(await screen.findByRole("option", { name: "Carry it as debt" }));
+    expect(apiMock.calls("PATCH /api/v1/me/preferences")[1]?.body).toEqual({
+      default_negative_tf: null,
+    });
+  });
+
+  it("edits the income rules", async () => {
+    withPreferences({ income_refill_rules: [employer] });
+    renderRoute("/buckets/setup?settings");
+    expect(await screen.findByDisplayValue("Employer AS")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("20,000.00")).toBeInTheDocument();
+    const save = screen.getByRole("button", { name: "Save rules" });
+    expect(save).toBeDisabled();
+
+    // A new row must be filled in before it saves.
+    await userEvent.click(screen.getByRole("button", { name: "Add rule" }));
+    await userEvent.click(save);
+    expect(screen.getByText("Enter the counterparty.")).toBeInTheDocument();
+    expect(screen.getByText("Enter an amount.")).toBeInTheDocument();
+    expect(apiMock.calls("PATCH /api/v1/me/preferences")).toHaveLength(0);
+
+    // The new row's fields are the ones with the errors.
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Counterparty", description: /Enter the counterparty/ }),
+      " Side job ",
+    );
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "At least", description: /Enter an amount/ }),
+      "1500",
+    );
+    await userEvent.click(save);
+    expect(await screen.findByText("Income rules saved.")).toBeInTheDocument();
+    expect(apiMock.calls("PATCH /api/v1/me/preferences")[0]?.body).toEqual({
+      income_refill_rules: [employer, { counterparty: "Side job", min_amount: "1500.00" }],
+    });
+
+    // Removing them all clears the rules.
+    await userEvent.click(screen.getByRole("button", { name: "Remove rule 2" }));
+    await userEvent.click(screen.getByRole("button", { name: "Remove rule 1" }));
+    expect(screen.getByText(/No rules yet\./)).toBeInTheDocument();
+    await userEvent.click(save);
+    await screen.findByText(/No rules yet\./);
+    expect(apiMock.calls("PATCH /api/v1/me/preferences")[1]?.body).toEqual({
+      income_refill_rules: null,
+    });
+  });
+
+  it("opens from the new bucket's hint, over the form", async () => {
+    withPreferences({ default_refill_mode: "manual" });
+    const { router } = renderRoute("/buckets/setup?new");
+    const form = within(await screen.findByRole("form", { name: "New bucket" }));
+    expect(form.getByText(/New buckets start as Manual\./)).toBeInTheDocument();
+    await userEvent.click(form.getByRole("button", { name: "Change the default" }));
+    expect(router.state.location.search).toBe("?new=&settings=");
+    expect(await screen.findByRole("dialog", { name: "Bucket settings" })).toBeInTheDocument();
+    expect(screen.getByRole("form", { name: "New bucket" })).toBeInTheDocument();
+  });
+
+  it("doesn't show the default when editing a bucket", async () => {
+    renderRoute("/buckets/setup?edit=1000000001");
+    const form = within(await screen.findByRole("form", { name: "Groceries" }));
+    expect(form.queryByText(/New buckets start as/)).not.toBeInTheDocument();
+  });
+
+  it("says when On income has no income rules to trigger it", async () => {
+    withPreferences({});
+    renderRoute("/buckets/setup?new");
+    const form = within(await screen.findByRole("form", { name: "New bucket" }));
+    expect(form.queryByText(/no income rules yet/)).not.toBeInTheDocument();
+    await userEvent.click(form.getByRole("radio", { name: "On income" }));
+    expect(form.getByText(/You have no income rules yet/)).toBeInTheDocument();
+    await userEvent.click(form.getByRole("button", { name: "Set up income rules" }));
+    expect(await screen.findByRole("dialog", { name: "Bucket settings" })).toBeInTheDocument();
+  });
+
+  it("doesn't say so when there are income rules", async () => {
+    withPreferences({ income_refill_rules: [employer] });
+    renderRoute("/buckets/setup?new");
+    const form = within(await screen.findByRole("form", { name: "New bucket" }));
+    await userEvent.click(form.getByRole("radio", { name: "On income" }));
+    expect(form.queryByText(/no income rules yet/)).not.toBeInTheDocument();
+  });
+
+  it("opens full screen on mobile, where its selects work on touch", async () => {
+    viewport.width = 390;
+    viewport.touch = true;
+    withPreferences({});
+    renderRoute("/buckets/setup");
+    await userEvent.click(await screen.findByRole("button", { name: "Bucket settings" }));
+    const drawer = await screen.findByRole("dialog", { name: "Bucket settings" });
+    await userEvent.click(within(drawer).getByRole("combobox", { name: /Default refill mode/ }));
+    // The options open inside the drawer, not in a portal it would close on.
+    await userEvent.click(within(drawer).getByRole("option", { name: "Manual" }));
+    expect(apiMock.calls("PATCH /api/v1/me/preferences")[0]?.body).toEqual({
+      default_refill_mode: "manual",
+    });
   });
 });

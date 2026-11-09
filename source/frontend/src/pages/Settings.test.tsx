@@ -30,36 +30,6 @@ describe("Settings", () => {
     expect(apiMock.calls("PATCH /api/v1/me/preferences")[1]?.body).toEqual({ locale: null });
   });
 
-  it("can make new buckets Fully manual", async () => {
-    apiMock.on("PATCH /api/v1/me/preferences", patchPreferences({}));
-    renderRoute("/settings");
-    await userEvent.click(await screen.findByRole("combobox", { name: /Default refill mode/ }));
-    await userEvent.click(
-      await screen.findByRole("option", { name: "Fully manual, funds added and removed by hand" }),
-    );
-    expect(apiMock.calls("PATCH /api/v1/me/preferences")[0]?.body).toEqual({
-      default_refill_mode: "fully_manual",
-    });
-  });
-
-  it("sets what new Keep funds buckets do when overspent", async () => {
-    apiMock.on("PATCH /api/v1/me/preferences", patchPreferences({}));
-    renderRoute("/settings");
-    const select = await screen.findByRole("combobox", { name: /Overspent buckets/ });
-    expect(select).toHaveValue("Carry it as debt");
-    await userEvent.click(select);
-    await userEvent.click(await screen.findByRole("option", { name: "Clear it at the refill" }));
-    expect(apiMock.calls("PATCH /api/v1/me/preferences")[0]?.body).toEqual({
-      default_negative_tf: "clear",
-    });
-
-    await userEvent.click(screen.getByRole("combobox", { name: /Overspent buckets/ }));
-    await userEvent.click(await screen.findByRole("option", { name: "Carry it as debt" }));
-    expect(apiMock.calls("PATCH /api/v1/me/preferences")[1]?.body).toEqual({
-      default_negative_tf: null,
-    });
-  });
-
   it("turns the What's New popup off and on", async () => {
     apiMock.on("PATCH /api/v1/me/preferences", patchPreferences({}));
     renderRoute("/settings");
@@ -97,7 +67,7 @@ describe("Settings", () => {
     expect(apiMock.calls("PATCH /api/v1/me/preferences")[1]?.body).toEqual({ language: "nn" });
     expect(await screen.findByRole("heading", { level: 2, name: "Innstillingar" })).toBeVisible();
     expect(screen.getByRole("link", { name: "Periodar" })).toBeInTheDocument();
-    expect(screen.getByText("Inntektsreglar")).toBeInTheDocument();
+    expect(screen.getByText("Perioderegel")).toBeInTheDocument();
 
     // And back to following the locale.
     await userEvent.click(screen.getByRole("combobox", { name: /^Språk/ }));
@@ -108,72 +78,12 @@ describe("Settings", () => {
     expect(await screen.findByRole("heading", { level: 2, name: "Innstillinger" })).toBeVisible();
   });
 
-  it("edits the income rules", async () => {
-    apiMock.on("GET /api/v1/me", {
-      body: {
-        ...testUser,
-        preferences: {
-          ...testUser.preferences,
-          income_refill_rules: [{ counterparty: "Employer AS", min_amount: "20000" }],
-        },
-      },
-    });
-    apiMock.on(
-      "PATCH /api/v1/me/preferences",
-      patchPreferences({
-        income_refill_rules: [{ counterparty: "Employer AS", min_amount: "20000" }],
-      }),
-    );
+  it("leaves the bucket defaults and income rules to Bucket setup (#102)", async () => {
     renderRoute("/settings");
-    expect(await screen.findByDisplayValue("Employer AS")).toBeInTheDocument();
-    const save = screen.getByRole("button", { name: "Save rules" });
-    expect(save).toBeDisabled();
-
-    // A new row must be filled in before it saves.
-    await userEvent.click(screen.getByRole("button", { name: "Add rule" }));
-    await userEvent.click(save);
-    expect(screen.getByText("Enter the counterparty.")).toBeInTheDocument();
-    expect(screen.getByText("Enter an amount.")).toBeInTheDocument();
-    expect(apiMock.calls("PATCH /api/v1/me/preferences")).toHaveLength(0);
-
-    // The new row's fields are the ones with the errors.
-    await userEvent.type(
-      screen.getByRole("textbox", { name: "Counterparty", description: /Enter the counterparty/ }),
-      " Side job ",
-    );
-    await userEvent.type(
-      screen.getByRole("textbox", { name: "At least", description: /Enter an amount/ }),
-      "1500",
-    );
-    await userEvent.click(save);
-    expect(await screen.findByText("Income rules saved.")).toBeInTheDocument();
-    expect(apiMock.calls("PATCH /api/v1/me/preferences")[0]?.body).toEqual({
-      income_refill_rules: [
-        { counterparty: "Employer AS", min_amount: "20000" },
-        { counterparty: "Side job", min_amount: "1500.00" },
-      ],
-    });
-
-    // Removing them all clears the rules.
-    await userEvent.click(screen.getByRole("button", { name: "Remove rule 2" }));
-    await userEvent.click(screen.getByRole("button", { name: "Remove rule 1" }));
-    expect(screen.getByText(/No rules yet\./)).toBeInTheDocument();
-    await userEvent.click(save);
-    await screen.findByText(/No rules yet\./);
-    expect(apiMock.calls("PATCH /api/v1/me/preferences")[1]?.body).toEqual({
-      income_refill_rules: null,
-    });
-  });
-
-  it("formats amounts in the chosen locale at once", async () => {
-    const prefs = { income_refill_rules: [{ counterparty: "Employer AS", min_amount: "20000" }] };
-    apiMock.on("GET /api/v1/me", { body: { ...testUser, preferences: prefs } });
-    apiMock.on("PATCH /api/v1/me/preferences", patchPreferences(prefs));
-    renderRoute("/settings");
-    expect(await screen.findByDisplayValue("20,000.00")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("combobox", { name: /Number and date format/ }));
-    await userEvent.click(await screen.findByRole("option", { name: "Deutsch" }));
-    expect(await screen.findByDisplayValue("20.000,00")).toBeInTheDocument();
+    await screen.findByRole("combobox", { name: /Number and date format/ });
+    expect(screen.queryByRole("combobox", { name: /Default refill mode/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: /Overspent buckets/ })).not.toBeInTheDocument();
+    expect(screen.queryByText("Income rules")).not.toBeInTheDocument();
   });
 
   it("changes the password", async () => {

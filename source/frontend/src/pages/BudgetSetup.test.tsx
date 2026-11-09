@@ -271,6 +271,26 @@ describe("Budget setup", () => {
     );
   });
 
+  it("edits the income rules, planned with the refills (#102)", async () => {
+    apiMock.on("PATCH /api/v1/me/preferences", (req) => ({
+      body: { ...testUser.preferences, ...(req.body as object) },
+    }));
+    renderRoute("/budget");
+    await userEvent.click(await screen.findByRole("button", { name: "Income rules" }));
+    const dialog = within(await screen.findByRole("dialog", { name: "Income rules" }));
+    expect(dialog.getByText(/No rules yet\./)).toBeInTheDocument();
+    await userEvent.click(dialog.getByRole("button", { name: "Add rule" }));
+    await userEvent.type(dialog.getByRole("textbox", { name: "Counterparty" }), "Employer AS");
+    await userEvent.type(dialog.getByRole("textbox", { name: "At least" }), "20000");
+    await userEvent.click(dialog.getByRole("button", { name: "Save rules" }));
+    expect(await screen.findByText("Income rules saved.")).toBeInTheDocument();
+    expect(apiMock.calls("PATCH /api/v1/me/preferences")[0]?.body).toEqual({
+      income_refill_rules: [{ counterparty: "Employer AS", min_amount: "20000.00" }],
+    });
+    // The budget's own changes are untouched.
+    expect(saveBar()).not.toBeInTheDocument();
+  });
+
   it("speaks nynorsk", async () => {
     apiMock.on("GET /api/v1/me", {
       body: { ...testUser, preferences: { ...testUser.preferences, language: "nn" } },
