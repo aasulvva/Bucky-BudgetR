@@ -79,6 +79,8 @@ export default function BudgetSetup() {
   const accounts = useAccounts();
   const buckets = useBuckets();
   const preferences = useSession().data?.preferences;
+  const theme = useMantineTheme();
+  const isDesktop = useMediaQuery(`(min-width: ${theme.breakpoints.sm})`, true);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [draft, setDraft] = useState<BudgetDraft>(EMPTY_DRAFT);
@@ -95,14 +97,16 @@ export default function BudgetSetup() {
 
   return (
     <Stack gap="lg">
-      <Group justify="space-between" align="flex-start" wrap="nowrap">
+      {/* On a phone the buttons go below the title: side by side they'd make the
+          page, and so the full-screen dialogs, wider than the screen. */}
+      <Group justify="space-between" align="flex-start" wrap={isDesktop ? "nowrap" : "wrap"}>
         <Stack gap={4}>
           <Title order={2}>{t("nav.items.budgetSetup")}</Title>
           <Text size="sm" c="dimmed">
             {t("budgetSetup.intro")}
           </Text>
         </Stack>
-        <Group gap="sm" justify="flex-end" style={{ flexShrink: 0 }}>
+        <Group gap="sm" justify="flex-end" style={isDesktop ? { flexShrink: 0 } : undefined}>
           <Button
             variant="default"
             leftSection={<IconCoins size={16} />}
