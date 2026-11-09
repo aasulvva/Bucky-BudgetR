@@ -6,10 +6,10 @@
 -- family's net per account or bucket; Go puts them into intervals.
 
 -- name: StatsBankNets :many
--- Each family's net per bank account, for families of the given types in
--- [from_at, to_at).
+-- Each family's net per bank account, with its effective counterparty, for
+-- families of the given types in [from_at, to_at).
 WITH families AS (
-    SELECT h.id, h.transaction_type, h.transaction_at
+    SELECT h.id, h.transaction_type, h.transaction_at, latest.counterparty
     FROM transaction_headers h
     JOIN LATERAL (
         SELECT c.id, c.counterparty, c.description FROM transaction_headers c
@@ -28,13 +28,13 @@ WITH families AS (
       AND (sqlc.narg(counterparty)::text IS NULL OR latest.counterparty ILIKE sqlc.narg(counterparty)::text
            OR latest.description ILIKE sqlc.narg(counterparty)::text)
 )
-SELECT f.id, f.transaction_type, f.transaction_at, b.account_id, a.currency, SUM(b.amount)::numeric AS net
+SELECT f.id, f.transaction_type, f.transaction_at, f.counterparty, b.account_id, a.currency, SUM(b.amount)::numeric AS net
 FROM families f
 JOIN transaction_headers c ON c.id = f.id OR c.parent_id = f.id
 JOIN bank_transactions b ON b.transaction_id = c.id
 JOIN bank_accounts a ON a.id = b.account_id
 WHERE sqlc.narg(account_ids)::text[] IS NULL OR b.account_id = ANY(sqlc.narg(account_ids)::text[])
-GROUP BY f.id, f.transaction_type, f.transaction_at, b.account_id, a.currency
+GROUP BY f.id, f.transaction_type, f.transaction_at, f.counterparty, b.account_id, a.currency
 HAVING SUM(b.amount) <> 0
 ORDER BY f.transaction_at, f.id, b.account_id;
 
@@ -43,7 +43,7 @@ ORDER BY f.transaction_at, f.id, b.account_id;
 -- families of the given types in [from_at, to_at). The account filter
 -- matches the bucket's source account.
 WITH families AS (
-    SELECT h.id, h.transaction_type, h.transaction_at
+    SELECT h.id, h.transaction_type, h.transaction_at, latest.counterparty
     FROM transaction_headers h
     JOIN LATERAL (
         SELECT c.id, c.counterparty, c.description FROM transaction_headers c
@@ -60,7 +60,7 @@ WITH families AS (
       AND (sqlc.narg(counterparty)::text IS NULL OR latest.counterparty ILIKE sqlc.narg(counterparty)::text
            OR latest.description ILIKE sqlc.narg(counterparty)::text)
 )
-SELECT f.id, f.transaction_type, f.transaction_at, l.bucket_id, k.source_account_id AS account_id, a.currency,
+SELECT f.id, f.transaction_type, f.transaction_at, f.counterparty, l.bucket_id, k.source_account_id AS account_id, a.currency,
        SUM(l.amount)::numeric AS net
 FROM families f
 JOIN transaction_headers c ON c.id = f.id OR c.parent_id = f.id
@@ -69,7 +69,7 @@ JOIN buckets k ON k.id = l.bucket_id
 JOIN bank_accounts a ON a.id = k.source_account_id
 WHERE (sqlc.narg(account_ids)::text[] IS NULL OR k.source_account_id = ANY(sqlc.narg(account_ids)::text[]))
   AND (sqlc.narg(bucket_ids)::text[] IS NULL OR l.bucket_id = ANY(sqlc.narg(bucket_ids)::text[]))
-GROUP BY f.id, f.transaction_type, f.transaction_at, l.bucket_id, k.source_account_id, a.currency
+GROUP BY f.id, f.transaction_type, f.transaction_at, f.counterparty, l.bucket_id, k.source_account_id, a.currency
 HAVING SUM(l.amount) <> 0
 ORDER BY f.transaction_at, f.id, l.bucket_id;
 

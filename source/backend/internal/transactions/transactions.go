@@ -170,6 +170,9 @@ type Filter struct {
 	// Counterparty matches part of the counterparty or the description,
 	// ignoring case.
 	Counterparty string
+	// CounterpartyIs matches the whole effective counterparty, ignoring case
+	// and spaces at the ends (#170).
+	CounterpartyIs string
 	// Reversed, if set, lists only reversed transactions (moved originals
 	// too) when true, or only the others when false.
 	Reversed *bool
@@ -458,6 +461,9 @@ func (s *Service) List(ctx context.Context, userID string, f Filter) (Page, erro
 	p.BucketID = text(f.BucketID)
 	p.Tag = text(strings.TrimSpace(f.Tag))
 	p.Counterparty = likeContains(f.Counterparty)
+	if is := strings.TrimSpace(f.CounterpartyIs); is != "" {
+		p.CounterpartyIs = pgtype.Text{String: is, Valid: true}
+	}
 	if f.Reversed != nil {
 		p.Reversed = pgtype.Bool{Bool: *f.Reversed, Valid: true}
 	}

@@ -98,6 +98,15 @@ func (s *server) GetStatsSeries(ctx context.Context, req api.GetStatsSeriesReque
 		case l.BucketID != "":
 			line.BucketId = nullable.NewNullableWithValue(l.BucketID)
 		}
+		switch {
+		case l.NoCounterparty:
+			line.Counterparty = nullable.NewNullNullable[string]()
+		case l.Counterparty != "":
+			line.Counterparty = nullable.NewNullableWithValue(l.Counterparty)
+		}
+		if l.Transfers {
+			line.Transfers = &l.Transfers
+		}
 		out.Series[i] = line
 	}
 	return out, nil

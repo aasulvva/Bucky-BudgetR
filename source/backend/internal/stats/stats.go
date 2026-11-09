@@ -66,6 +66,10 @@ const (
 	// ByBucket gives one series per bucket, and one per currency for the
 	// part on no bucket.
 	ByBucket GroupBy = "bucket"
+	// ByCounterparty gives one series per effective counterparty, ignoring
+	// case and spaces at the ends (#170), one for the part with no
+	// counterparty, and one for transfers. Not for balances.
+	ByCounterparty GroupBy = "counterparty"
 )
 
 // Query is what to sum. Empty filters match everything.
@@ -101,12 +105,19 @@ type Line struct {
 	// bucket (NoBucket).
 	BucketID string
 	NoBucket bool
-	Currency string
-	Values   []decimal.Decimal
+	// Counterparty is set when grouped by counterparty: the spelling of the
+	// series' newest transaction. NoCounterparty is the part without one,
+	// and Transfers the transfers'.
+	Counterparty   string
+	NoCounterparty bool
+	Transfers      bool
+	Currency       string
+	Values         []decimal.Decimal
 }
 
-// Result is the intervals and the series, sorted by currency, then account
-// or bucket ID, with the series on no bucket last in its currency.
+// Result is the intervals and the series, sorted by currency, then account,
+// bucket ID or counterparty, with the series on no bucket last in its
+// currency, and per counterparty the one with none, then transfers, last.
 type Result struct {
 	Intervals []Interval
 	Series    []Line
@@ -122,7 +133,7 @@ func Series(ctx context.Context, db sqlc.DBTX, userID string, q Query) (Result, 
 	if err != nil {
 		return Result{}, err
 	}
-	s := &sums{intervals: intervals, lines: map[key]*Line{}}
+	s := &sums{intervals: intervals, lines: map[key]*Line{}, labelAt: map[key]time.Time{}}
 	if q.Metric == Balance {
 		err = s.balances(ctx, queries, userID, q)
 	} else {
@@ -147,14 +158,14 @@ func check(q *Query) error {
 	switch q.Metric {
 	case Spending, Income:
 	case Balance:
-		if q.GroupBy == ByBucket || len(q.BucketIDs) > 0 || len(q.Tags) > 0 || q.Counterparty != "" || q.Transfers {
-			return fmt.Errorf("%w: a balance can't be grouped or filtered by bucket, tag, counterparty or transfers", ErrInvalid)
+		if q.GroupBy == ByBucket || q.GroupBy == ByCounterparty || len(q.BucketIDs) > 0 || len(q.Tags) > 0 || q.Counterparty != "" || q.Transfers {
+			return fmt.Errorf("%w: a balance can't be grouped or filtered by bucket, counterparty, tag or transfers", ErrInvalid)
 		}
 	default:
 		return fmt.Errorf("%w: unknown metric %q", ErrInvalid, q.Metric)
 	}
 	switch q.GroupBy {
-	case ByNone, ByAccount, ByBucket:
+	case ByNone, ByAccount, ByBucket, ByCounterparty:
 	default:
 		return fmt.Errorf("%w: unknown grouping %q", ErrInvalid, q.GroupBy)
 	}
@@ -247,11 +258,16 @@ func steps(t time.Time, res Resolution, weekStart time.Weekday) (time.Time, func
 type key struct {
 	currency, account, bucket string
 	noBucket                  bool
+	// counterparty is lower-cased and trimmed.
+	counterparty              string
+	noCounterparty, transfers bool
 }
 
 type sums struct {
 	intervals []Interval
 	lines     map[key]*Line
+	// labelAt is when each counterparty series' label was last seen.
+	labelAt map[key]time.Time
 }
 
 func (s *sums) line(k key) *Line {
@@ -261,7 +277,10 @@ func (s *sums) line(k key) *Line {
 		for i := range values {
 			values[i] = decimal.Zero
 		}
-		l = &Line{AccountID: k.account, BucketID: k.bucket, NoBucket: k.noBucket, Currency: k.currency, Values: values}
+		l = &Line{
+			AccountID: k.account, BucketID: k.bucket, NoBucket: k.noBucket,
+			NoCounterparty: k.noCounterparty, Transfers: k.transfers, Currency: k.currency, Values: values,
+		}
 		s.lines[k] = l
 	}
 	return l
@@ -280,6 +299,38 @@ func (s *sums) add(k key, t time.Time, amount decimal.Decimal) {
 	if i := s.index(t); i >= 0 {
 		l := s.line(k)
 		l.Values[i] = l.Values[i].Add(amount)
+	}
+}
+
+// addFlow adds a family's amount to its series; per counterparty, the newest
+// transaction's spelling labels it.
+func (s *sums) addFlow(q Query, currency, account string, typ sqlc.TransactionType, counterparty string, t time.Time, amount decimal.Decimal) {
+	k := s.flowKey(q, currency, account, typ, counterparty)
+	if s.index(t) < 0 {
+		return
+	}
+	s.add(k, t, amount)
+	if k.counterparty != "" {
+		if at, ok := s.labelAt[k]; !ok || !t.Before(at) {
+			s.labelAt[k] = t
+			s.lines[k].Counterparty = strings.TrimSpace(counterparty)
+		}
+	}
+}
+
+// flowKey is the series a family's amount goes to, grouped by none, account
+// or counterparty.
+func (s *sums) flowKey(q Query, currency, account string, typ sqlc.TransactionType, counterparty string) key {
+	if q.GroupBy != ByCounterparty {
+		return s.keyFor(q, currency, account)
+	}
+	switch name := strings.ToLower(strings.TrimSpace(counterparty)); {
+	case typ == sqlc.TransactionTypeTRF:
+		return key{currency: currency, transfers: true}
+	case name == "":
+		return key{currency: currency, noCounterparty: true}
+	default:
+		return key{currency: currency, counterparty: name}
 	}
 }
 
@@ -324,7 +375,7 @@ func (s *sums) flows(ctx context.Context, queries *sqlc.Queries, userID string, 
 	if !byBucket {
 		for _, r := range bank {
 			if v, ok := value(r.TransactionType, r.Net); ok {
-				s.add(s.keyFor(q, r.Currency, r.AccountID), r.TransactionAt, v)
+				s.addFlow(q, r.Currency, r.AccountID, r.TransactionType, r.Counterparty, r.TransactionAt, v)
 			}
 		}
 		return nil
@@ -342,11 +393,11 @@ func (s *sums) flows(ctx context.Context, queries *sqlc.Queries, userID string, 
 	onBuckets := map[famAccount]decimal.Decimal{}
 	for _, r := range lines {
 		if v, ok := value(r.TransactionType, r.Net); ok {
-			k := key{currency: r.Currency, bucket: r.BucketID}
-			if q.GroupBy != ByBucket {
-				k = s.keyFor(q, r.Currency, r.AccountID)
+			if q.GroupBy == ByBucket {
+				s.add(key{currency: r.Currency, bucket: r.BucketID}, r.TransactionAt, v)
+			} else {
+				s.addFlow(q, r.Currency, r.AccountID, r.TransactionType, r.Counterparty, r.TransactionAt, v)
 			}
-			s.add(k, r.TransactionAt, v)
 		}
 		fa := famAccount{r.ID, r.AccountID}
 		onBuckets[fa] = onBuckets[fa].Add(r.Net)
@@ -375,8 +426,12 @@ func (s *sums) keyFor(q Query, currency, account string) key {
 }
 
 // empty adds the series that show even without sums (all 0): one per
-// account, bucket or currency of the accounts the query covers.
+// account, bucket or currency of the accounts the query covers. Counterparties
+// have no fixed set, so per counterparty there are none.
 func (s *sums) empty(ctx context.Context, queries *sqlc.Queries, userID string, q Query) error {
+	if q.GroupBy == ByCounterparty {
+		return nil
+	}
 	accounts := nilIfEmpty(q.AccountIDs)
 	if q.GroupBy == ByBucket || len(q.BucketIDs) > 0 {
 		rows, err := queries.StatsBuckets(ctx, sqlc.StatsBucketsParams{UserID: userID, AccountIds: accounts, BucketIds: nilIfEmpty(q.BucketIDs)})
@@ -480,8 +535,11 @@ func (s *sums) sorted() []Line {
 		return cmp.Or(
 			cmp.Compare(a.Currency, b.Currency),
 			compareBool(a.NoBucket, b.NoBucket),
+			compareBool(a.Transfers, b.Transfers),
+			compareBool(a.NoCounterparty, b.NoCounterparty),
 			cmp.Compare(a.AccountID, b.AccountID),
 			cmp.Compare(a.BucketID, b.BucketID),
+			cmp.Compare(strings.ToLower(a.Counterparty), strings.ToLower(b.Counterparty)),
 		)
 	})
 	return out

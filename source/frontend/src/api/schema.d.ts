@@ -2024,7 +2024,7 @@ export interface components {
             /** @enum {string} */
             resolution: "hour" | "day" | "week" | "month" | "year" | "cycle" | "total";
             /** @enum {string} */
-            group_by?: "none" | "account" | "bucket";
+            group_by?: "none" | "account" | "bucket" | "counterparty";
             account_ids?: components["schemas"]["AccountId"][];
             bucket_ids?: components["schemas"]["BucketId"][];
             tags?: string[];
@@ -2066,6 +2066,10 @@ export interface components {
             account_id?: components["schemas"]["AccountId"];
             /** @description The bucket, when grouped by bucket; null for the part on no bucket. */
             bucket_id?: (string & components["schemas"]["BucketId"]) | null;
+            /** @description When grouped by counterparty, its name as the series' newest transaction spells it; null for the part with no counterparty. */
+            counterparty?: string | null;
+            /** @description When grouped by counterparty, true for the series of transfers (counted with `transfers`). */
+            transfers?: boolean;
             currency: components["schemas"]["Currency"];
             /** @description One value per interval, in the same order. */
             values: components["schemas"]["Amount"][];
@@ -3035,8 +3039,8 @@ export interface operations {
                 time_zone?: string;
                 /** @description The first day of the week, 1 (Monday) to 7 (Sunday). Defaults to 1. */
                 week_start?: number;
-                /** @description One series per currency (`none`, the default), per account, or per bucket. */
-                group_by?: "none" | "account" | "bucket";
+                /** @description One series per currency (`none`, the default), per account, per bucket, or per counterparty (#170; not for `balance`), where the case and spaces at the ends of a counterparty don't count. */
+                group_by?: "none" | "account" | "bucket" | "counterparty";
                 /** @description Only these accounts' lines (or their buckets' lines). Repeat for several. */
                 account_id?: components["schemas"]["AccountId"][];
                 /** @description Only these buckets' lines. Repeat for several. Not for `balance`. */
@@ -3789,6 +3793,8 @@ export interface operations {
                 tag?: string;
                 /** @description Only transactions whose counterparty or description contains this text, ignoring case. */
                 counterparty?: string;
+                /** @description Only transactions whose effective counterparty is exactly this, ignoring case and spaces at the ends (#170). */
+                counterparty_is?: string;
                 /**
                  * @description `true` lists only reversed transactions (moved originals too, as
                  *     moving reverses the original), `false` only the others. Omitted,

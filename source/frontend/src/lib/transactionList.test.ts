@@ -38,6 +38,17 @@ describe("filters in the URL", () => {
     expect(next.get("open")).toBe("x");
   });
 
+  it("has an exact counterparty, from a graph (#170)", () => {
+    const filter = readFilter(new URLSearchParams("counterparty=Rema+1000&cycle_id=all"));
+    expect(filter.counterparty).toBe("Rema 1000");
+    expect(isFiltered({ ...filter, cycleId: null })).toBe(true);
+    expect(listQuery(filter, active)).toMatchObject({ counterparty_is: "Rema 1000" });
+    expect(listQuery(filter, active)).not.toHaveProperty("counterparty");
+    expect(
+      withFilter(new URLSearchParams("counterparty=x"), { counterparty: null }).has("counterparty"),
+    ).toBe(false);
+  });
+
   it("defaults to the active cycle, and all means every cycle", () => {
     expect(shownCycle(readFilter(new URLSearchParams()), active)).toBe(active.id);
     expect(shownCycle(readFilter(new URLSearchParams()), null)).toBeNull();

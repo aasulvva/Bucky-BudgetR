@@ -427,29 +427,33 @@ WHERE h.user_id = $1 AND h.correction_type = 'none'
   -- counterparty or the description (#130).
   AND ($8::text IS NULL OR latest.counterparty ILIKE $8::text
            OR latest.description ILIKE $8::text)
+  -- counterparty_is matches the whole counterparty, ignoring case and spaces at the ends (#170).
+  AND ($9::text IS NULL
+       OR lower(btrim(latest.counterparty)) = lower(btrim($9::text)))
   -- reversed: only reversed ones (moved originals too), or only the others.
-  AND ($9::boolean IS NULL OR EXISTS (
+  AND ($10::boolean IS NULL OR EXISTS (
       SELECT 1 FROM transaction_headers r WHERE r.parent_id = h.id AND r.correction_type = 'reversal'
-  ) = $9::boolean)
-  AND ($10::timestamptz IS NULL
-       OR (h.transaction_at, h.id) < ($10::timestamptz, $11::text))
+  ) = $10::boolean)
+  AND ($11::timestamptz IS NULL
+       OR (h.transaction_at, h.id) < ($11::timestamptz, $12::text))
 ORDER BY h.transaction_at DESC, h.id DESC
-LIMIT $12
+LIMIT $13
 `
 
 type ListTransactionsParams struct {
-	UserID       string
-	Types        []string
-	FromAt       pgtype.Timestamptz
-	ToAt         pgtype.Timestamptz
-	AccountID    pgtype.Text
-	BucketID     pgtype.Text
-	Tag          pgtype.Text
-	Counterparty pgtype.Text
-	Reversed     pgtype.Bool
-	BeforeAt     pgtype.Timestamptz
-	BeforeID     pgtype.Text
-	RowLimit     int32
+	UserID         string
+	Types          []string
+	FromAt         pgtype.Timestamptz
+	ToAt           pgtype.Timestamptz
+	AccountID      pgtype.Text
+	BucketID       pgtype.Text
+	Tag            pgtype.Text
+	Counterparty   pgtype.Text
+	CounterpartyIs pgtype.Text
+	Reversed       pgtype.Bool
+	BeforeAt       pgtype.Timestamptz
+	BeforeID       pgtype.Text
+	RowLimit       int32
 }
 
 // A page of the user's original transactions (not corrections), newest first.
@@ -468,6 +472,7 @@ func (q *Queries) ListTransactions(ctx context.Context, arg ListTransactionsPara
 		arg.BucketID,
 		arg.Tag,
 		arg.Counterparty,
+		arg.CounterpartyIs,
 		arg.Reversed,
 		arg.BeforeAt,
 		arg.BeforeID,

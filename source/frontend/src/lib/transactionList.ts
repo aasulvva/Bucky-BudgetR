@@ -25,6 +25,8 @@ const ALL_TYPES = [...USER_TYPES, ...SYSTEM_TYPES];
 export interface TransactionFilter {
   /** Counterparty text. */
   q: string;
+  /** Exactly this counterparty, ignoring case (#170): set by a graph's click-through. */
+  counterparty: string | null;
   accountId: string | null;
   bucketId: string | null;
   /** null: the active cycle (all when there is none); "all": every cycle. */
@@ -44,6 +46,7 @@ export const ALL_CYCLES = "all";
 
 const PARAMS: Record<keyof TransactionFilter, string> = {
   q: "q",
+  counterparty: "counterparty",
   accountId: "account_id",
   bucketId: "bucket_id",
   cycleId: "cycle_id",
@@ -95,6 +98,7 @@ export function readFilter(
   const type = get("type");
   return {
     q: get("q") ?? "",
+    counterparty: get("counterparty"),
     accountId: get("accountId"),
     bucketId: get("bucketId"),
     cycleId: get("cycleId"),
@@ -139,6 +143,7 @@ export function shownCycle(filter: TransactionFilter, active: Cycle | null): str
 export function isFiltered(filter: TransactionFilter): boolean {
   return (
     filter.q.trim() !== "" ||
+    filter.counterparty !== null ||
     filter.accountId !== null ||
     filter.bucketId !== null ||
     filter.cycleId !== null ||
@@ -163,6 +168,7 @@ export function listQuery(filter: TransactionFilter, active: Cycle | null): Tran
     ...(filter.to ? { to: endAtFor(filter.to) } : {}),
     ...(filter.tag ? { tag: filter.tag } : {}),
     ...(q ? { counterparty: q } : {}),
+    ...(filter.counterparty ? { counterparty_is: filter.counterparty } : {}),
     ...(filter.reversed ? {} : { reversed: false }),
   };
 }

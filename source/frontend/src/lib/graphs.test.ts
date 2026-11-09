@@ -10,6 +10,7 @@ import {
   graphFromSearch,
   graphSummary,
   graphToSearch,
+  groupBy,
   intervalLabel,
   intervalLink,
   newGraphId,
@@ -477,6 +478,56 @@ describe("fitting the width", () => {
     expect(showDots(30, 600)).toBe(true);
     expect(showDots(366, 600)).toBe(false);
     expect(showDots(0, 600)).toBe(false);
+  });
+});
+
+describe("per counterparty (#170)", () => {
+  const intervals = days(1);
+  const result: StatsSeries = {
+    intervals,
+    series: [
+      { counterparty: "Rema 1000", currency: "NOK", values: ["300.00"] },
+      { counterparty: "Coop Extra A.S.", currency: "NOK", values: ["50.00"] },
+      { counterparty: null, currency: "NOK", values: ["7.00"] },
+      { transfers: true, currency: "NOK", values: ["900.00"] },
+    ],
+  };
+  const settings: GraphSettings = { ...base, group_by: "counterparty" };
+  const [day] = intervals;
+  if (!day) throw new Error("no day");
+
+  it("names the series by counterparty, safe as chart keys, with the rest last", () => {
+    const data = graphData(result, settings, "day", "NOK", [main], [], "en-GB");
+    expect(data.series.map((x) => [x.name, x.label])).toEqual([
+      ["c-Coop%20Extra%20A%2ES%2E", "Coop Extra A.S."],
+      ["c-Rema%201000", "Rema 1000"],
+      ["nc", "No counterparty"],
+      ["trf", "Transfers"],
+    ]);
+    expect(data.series.every((x) => !x.name.includes("."))).toBe(true);
+    expect(data.rows[0]?.["c-Rema%201000"]).toBe(300);
+  });
+
+  it("opens exactly that counterparty's transactions, or the transfers", () => {
+    expect(intervalLink(settings, "c-Coop%20Extra%20A%2ES%2E", day)).toBe(
+      "/transactions?cycle_id=all&from=2026-11-01&to=2026-11-01&type=EXP&counterparty=Coop+Extra+A.S.",
+    );
+    expect(intervalLink(settings, "trf", day)).toBe(
+      "/transactions?cycle_id=all&from=2026-11-01&to=2026-11-01&type=TRF",
+    );
+    expect(intervalLink(settings, "nc", day)).toBe(
+      "/transactions?cycle_id=all&from=2026-11-01&to=2026-11-01&type=EXP",
+    );
+  });
+
+  it("is kept in the URL for spending and income, but a balance is overall", () => {
+    expect(graphFromSearch(graphToSearch(cleanGraph(settings)), base)).toEqual(
+      cleanGraph(settings),
+    );
+    expect(groupBy({ ...settings, metric: "income" })).toBe("counterparty");
+    expect(groupBy({ ...settings, metric: "balance" })).toBe("none");
+    expect(groupBy({ ...settings, metric: "balance", kind: "pie" })).toBe("account");
+    expect(pieSlicing({ ...settings, kind: "pie" })).toBe("counterparty");
   });
 });
 

@@ -335,6 +335,26 @@ describe("Transactions", () => {
     expect(await screen.findByRole("dialog", { name: "Transaction" })).toBeInTheDocument();
   });
 
+  it.each([1280, 390])(
+    "shows an exact counterparty from a graph as a removable pill, at %ipx (#170)",
+    async (width) => {
+      viewport.width = width;
+      renderRoute("/transactions?counterparty=Rema+1000&cycle_id=all");
+      await screen.findByRole("link", { name: /Rema 1000/ });
+      expect(listQueries().at(-1)?.get("counterparty_is")).toBe("Rema 1000");
+      expect(listQueries().at(-1)?.has("counterparty")).toBe(false);
+      await userEvent.click(
+        screen.getByRole("button", { name: "Remove filter Counterparty: Rema 1000" }),
+      );
+      await waitFor(() => {
+        expect(listQueries().at(-1)?.has("counterparty_is")).toBe(false);
+      });
+      expect(
+        screen.queryByRole("button", { name: "Remove filter Counterparty: Rema 1000" }),
+      ).not.toBeInTheDocument();
+    },
+  );
+
   it("shows Show reversed as a chip on mobile (#91)", async () => {
     viewport.width = 390;
     localStorage.setItem("bucky.showReversed", "1");
