@@ -16,6 +16,26 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.00.01",
+    date: "2026-11-09",
+    title: {
+      en: "Typing a time on a phone",
+      nb: "Skrive inn klokkeslett på mobil",
+      nn: "Skrive inn klokkeslett på mobil",
+    },
+    changes: {
+      en: [
+        "On a phone, the date and time picker opens as a dialog, so a whole time like 17:00 can be typed in one go instead of one digit at a time.",
+      ],
+      nb: [
+        "På mobil åpnes velgeren for dato og klokkeslett som en dialog, så et helt klokkeslett som 17:00 kan skrives inn i ett strekk i stedet for ett siffer om gangen.",
+      ],
+      nn: [
+        "På mobil vert veljaren for dato og klokkeslett opna som ein dialog, så eit heilt klokkeslett som 17:00 kan skrivast inn i eitt strekk i staden for eitt siffer om gongen.",
+      ],
+    },
+  },
+  {
     version: "v2.00.00",
     date: "2026-11-08",
     title: {
