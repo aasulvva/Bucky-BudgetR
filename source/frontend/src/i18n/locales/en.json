@@ -211,9 +211,9 @@
     "transferTo": "Transfer to",
     "adjustToZero": "Adjust the balance to 0",
     "adjustToZeroHint": "For money that's gone, e.g. a closed fund.",
-    "bucketsFunded_one": "A bucket is funded from it. Choose a new source account:",
-    "bucketsFunded_other": "{{count}} buckets are funded from it. Choose a new source account:",
-    "noOtherForBuckets": "There's no other {{currency}} account to move them to. Create one, or delete the buckets in Bucket setup first.",
+    "bucketsFunded_one": "A bucket is funded from it. Move it to another account, or delete it:",
+    "bucketsFunded_other": "{{count}} buckets are funded from it. Move each to another account, or delete it:",
+    "noOtherForBuckets": "There's no other {{currency}} account to move them to, and deleting a bucket with funds left needs an active cycle. Create an account, or start or extend a cycle first.",
     "deleteAccount": "Delete account",
     "deleted": "{{name}} deleted.",
     "renameInterest": {
@@ -225,7 +225,16 @@
       "leave": "Leave as they are",
       "done_one": "{{count}} interest income now has {{bank}} as its counterparty.",
       "done_other": "{{count}} interest incomes now have {{bank}} as their counterparty."
-    }
+    },
+    "deleteTheBucket": "Delete the bucket",
+    "deleteAll": "Delete them all",
+    "moveAllTo": "Move all to…",
+    "bucketLeft": "Its {{amount}} left goes back to the account first",
+    "bucketOwes": "Its {{amount}} overspent is settled from the account first",
+    "bucketEmpty": "Nothing left in it",
+    "chooseFate": "Choose an account, or delete it.",
+    "deletesBuckets_one": "Deletes {{count}} bucket with the account: {{names}}. Its transactions are kept.",
+    "deletesBuckets_other": "Deletes {{count}} buckets with the account: {{names}}. Their transactions are kept."
   },
   "dashboard": {
     "settings": "Settings",

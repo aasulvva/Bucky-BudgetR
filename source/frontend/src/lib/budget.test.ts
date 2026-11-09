@@ -6,7 +6,6 @@ import {
   EMPTY_DRAFT,
   accountBudget,
   budgetChanges,
-  canDelete,
   capacityAfter,
   cycleChanges,
   draftIncome,
@@ -316,15 +315,5 @@ describe("deleted buckets in the draft (#174)", () => {
     expect(changes.count).toBe(2);
     expect(changes.invalid).toBe(false);
     expect(changes.ras).toEqual([{ bucket_id: food.id, refill_amount: "9000.00" }]);
-  });
-
-  it("needs a usable cycle to release what's left, unless nothing is", () => {
-    const left = { ...food, target_funds: "250.00" };
-    const owed = { ...food, target_funds: "-50.00" };
-    const empty = { ...food, target_funds: "0.00" };
-    expect(canDelete(left, true)).toBe(true);
-    expect(canDelete(left, false)).toBe(false);
-    expect(canDelete(owed, false)).toBe(false);
-    expect(canDelete(empty, false)).toBe(true);
   });
 });

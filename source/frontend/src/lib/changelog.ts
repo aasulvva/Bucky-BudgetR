@@ -16,6 +16,29 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.06.00",
+    date: "2026-11-09",
+    title: {
+      en: "Delete an account's buckets with it",
+      nb: "Slett bøttene til en konto sammen med den",
+      nn: "Slett bøttene til ein konto saman med han",
+    },
+    changes: {
+      en: [
+        "When you delete an account, each of its buckets can now be deleted with it instead of moved to another account, or all of them at once with Delete them all. What's left in a deleted bucket goes back to the account first, so it's part of the money you transfer or adjust.",
+        "An account with no other account in its currency can now be deleted too, together with its buckets.",
+      ],
+      nb: [
+        "Når du sletter en konto, kan hver av bøttene nå slettes sammen med den i stedet for å flyttes til en annen konto, eller alle på en gang med Slett alle. Det som er igjen i en slettet bøtte, går først tilbake til kontoen, så det blir med i pengene du overfører eller justerer.",
+        "En konto uten noen annen konto i samme valuta kan nå også slettes, sammen med bøttene.",
+      ],
+      nn: [
+        "Når du slettar ein konto, kan kvar av bøttene no slettast saman med han i staden for å flyttast til ein annan konto, eller alle på ein gong med Slett alle. Det som er att i ei sletta bøtte, går først tilbake til kontoen, så det blir med i pengane du overfører eller justerer.",
+        "Ein konto utan nokon annan konto i same valuta kan no òg slettast, saman med bøttene.",
+      ],
+    },
+  },
+  {
     version: "v2.05.01",
     date: "2026-11-09",
     title: {

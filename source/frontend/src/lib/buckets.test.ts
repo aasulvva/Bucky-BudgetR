@@ -4,6 +4,7 @@ import {
   accountSummary,
   breakdown,
   breakdownText,
+  canDelete,
   coverage,
   refillOf,
   usageColor,
@@ -164,5 +165,17 @@ describe("refillOf", () => {
     const clear = { ...keep, negative_tf: "clear" as const };
     expect(refillOf(clear, "-200.00")).toEqual({ amount: "1200.00", overflow: "0.00" });
     expect(refillOf(clear, "800.00")).toEqual({ amount: "1000.00", overflow: "300.00" });
+  });
+});
+
+describe("canDelete", () => {
+  it("needs a usable cycle to release what's left, unless nothing is", () => {
+    const left = bucket({ ...base, id: "1", name: "A", target_funds: "250.00" });
+    const owed = bucket({ ...base, id: "1", name: "A", target_funds: "-50.00" });
+    const empty = bucket({ ...base, id: "1", name: "A", target_funds: "0.00" });
+    expect(canDelete(left, true)).toBe(true);
+    expect(canDelete(left, false)).toBe(false);
+    expect(canDelete(owed, false)).toBe(false);
+    expect(canDelete(empty, false)).toBe(true);
   });
 });

@@ -46,7 +46,6 @@ import {
   EMPTY_DRAFT,
   accountBudget,
   budgetChanges,
-  canDelete,
   capacityAfter,
   cycleChanges,
   draftBucketsFor,
@@ -61,7 +60,7 @@ import {
   type CycleAccount,
   type NewBucket,
 } from "@/lib/budget";
-import { isFullyManual } from "@/lib/buckets";
+import { canDelete, isFullyManual } from "@/lib/buckets";
 import { isOverdue } from "@/lib/cycles";
 import { getLocale } from "@/lib/locale";
 import { compareAmounts, formatMoney, subtractAmounts } from "@/lib/money";

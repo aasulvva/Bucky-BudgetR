@@ -31,6 +31,7 @@ import {
   type Bucket,
 } from "@/api/accounts";
 import { api } from "@/api/client";
+import { useCurrentCycles } from "@/api/cycles";
 import { ApiError, unwrap } from "@/api/errors";
 import type { components } from "@/api/schema";
 import { AmountInput } from "@/components/AmountInput";
@@ -39,11 +40,13 @@ import { ErrorAlert } from "@/components/ErrorAlert";
 import { QueryState } from "@/components/QueryState";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
 import i18n from "@/i18n";
+import { canDelete } from "@/lib/buckets";
+import { isOverdue } from "@/lib/cycles";
 import { CURRENCY } from "@/lib/locale";
 import { INTEREST_TAG } from "@/lib/interest";
 import { LANGUAGES } from "@/lib/language";
 import { checkName } from "@/lib/names";
-import { compareAmounts, currencyOptions, formatMoney } from "@/lib/money";
+import { compareAmounts, currencyOptions, formatMoney, subtractAmounts } from "@/lib/money";
 import { autofocusField } from "@/lib/device";
 
 type AccountDelete = components["schemas"]["AccountDelete"];
@@ -583,6 +586,25 @@ function RenameInterest({
  * it is transferred or adjusted to 0, and its buckets move to another
  * account. Only the questions that apply are asked.
  */
+/** The bucket-select value that deletes the bucket with its account (#137). */
+const DELETE_BUCKET = "__delete";
+
+/**
+ * Why a bucket can't be deleted yet, or, once Delete is chosen, what that
+ * does with what's left in it.
+ */
+function bucketFate(bucket: Bucket, deletable: boolean, chosen: boolean): string | undefined {
+  if (!deletable) return i18n.t("bucketSetup.deleteNeedsCycle");
+  if (!chosen) return undefined;
+  const tf = compareAmounts(bucket.target_funds, "0");
+  if (tf === 0) return i18n.t("accountSetup.bucketEmpty");
+  const amount = formatMoney(
+    tf < 0 ? subtractAmounts("0", bucket.target_funds) : bucket.target_funds,
+    bucket.currency,
+  );
+  return i18n.t(tf > 0 ? "accountSetup.bucketLeft" : "accountSetup.bucketOwes", { amount });
+}
+
 function DeleteAccount({
   account,
   accounts,
@@ -601,6 +623,9 @@ function DeleteAccount({
     .filter((a) => a.id !== account.id && a.currency === account.currency)
     .map((a) => ({ value: a.id, label: a.name }));
   const hasMoney = compareAmounts(account.balance, "0") !== 0;
+  const active = useCurrentCycles().data?.active ?? null;
+  // Deleting a bucket with funds left releases them, which needs this (#137).
+  const usable = active !== null && !isOverdue(active);
 
   const [funds, setFunds] = useState<"transfer" | "adjust">(
     others.length > 0 ? "transfer" : "adjust",
@@ -632,7 +657,10 @@ function DeleteAccount({
     <QueryState query={buckets}>
       {(all) => {
         const own: Bucket[] = all.filter((b) => b.source_account_id === account.id);
-        const blocked = own.length > 0 && others.length === 0;
+        const deletable = (b: Bucket) => canDelete(b, usable);
+        // A bucket that can neither move nor go yet.
+        const blocked = own.some((b) => others.length === 0 && !deletable(b));
+        const deleted = own.filter((b) => sources[b.id] === DELETE_BUCKET);
         const submit = () => {
           setValidate(true);
           if (blocked) return;
@@ -645,9 +673,11 @@ function DeleteAccount({
                 ? { action: "transfer", to_account_id: fundsTo }
                 : { action: "adjust" };
           }
-          if (own.length > 0) {
-            body.bucket_sources = Object.fromEntries(own.map((b) => [b.id, sources[b.id] ?? ""]));
+          const moved = own.filter((b) => sources[b.id] !== DELETE_BUCKET);
+          if (moved.length > 0) {
+            body.bucket_sources = Object.fromEntries(moved.map((b) => [b.id, sources[b.id] ?? ""]));
           }
+          if (deleted.length > 0) body.delete_buckets = deleted.map((b) => b.id);
           remove.mutate(Object.keys(body).length > 0 ? body : undefined);
         };
 
@@ -711,23 +741,69 @@ function DeleteAccount({
                   <Text size="sm" fw={500}>
                     {t("accountSetup.bucketsFunded", { count: own.length })}
                   </Text>
-                  {blocked ? (
+                  {blocked && (
                     <Alert color="orange">
                       {t("accountSetup.noOtherForBuckets", { currency: account.currency })}
                     </Alert>
-                  ) : (
-                    own.map((b) => (
-                      <Select
-                        key={b.id}
-                        label={b.name}
-                        data={others}
-                        value={sources[b.id] ?? null}
-                        onChange={(v) => {
-                          setSources((s) => ({ ...s, [b.id]: v }));
+                  )}
+                  {own.length > 1 && (
+                    <Group gap="xs" align="flex-end">
+                      <Button
+                        variant="default"
+                        size="xs"
+                        disabled={!own.some(deletable)}
+                        onClick={() => {
+                          setSources((s) => ({
+                            ...s,
+                            ...Object.fromEntries(
+                              own.filter(deletable).map((b) => [b.id, DELETE_BUCKET]),
+                            ),
+                          }));
                         }}
-                        error={validate && !sources[b.id] ? t("common.chooseAccount") : undefined}
-                      />
-                    ))
+                      >
+                        {t("accountSetup.deleteAll")}
+                      </Button>
+                      {others.length > 0 && (
+                        <Select
+                          size="xs"
+                          aria-label={t("accountSetup.moveAllTo")}
+                          placeholder={t("accountSetup.moveAllTo")}
+                          data={others}
+                          value={null}
+                          onChange={(v) => {
+                            if (v) setSources(Object.fromEntries(own.map((b) => [b.id, v])));
+                          }}
+                        />
+                      )}
+                    </Group>
+                  )}
+                  {own.map((b) => (
+                    <Select
+                      key={b.id}
+                      label={b.name}
+                      description={bucketFate(b, deletable(b), sources[b.id] === DELETE_BUCKET)}
+                      data={[
+                        {
+                          value: DELETE_BUCKET,
+                          label: t("accountSetup.deleteTheBucket"),
+                          disabled: !deletable(b),
+                        },
+                        ...others,
+                      ]}
+                      value={sources[b.id] ?? null}
+                      onChange={(v) => {
+                        setSources((s) => ({ ...s, [b.id]: v }));
+                      }}
+                      error={validate && !sources[b.id] ? t("accountSetup.chooseFate") : undefined}
+                    />
+                  ))}
+                  {deleted.length > 0 && (
+                    <Text size="sm">
+                      {t("accountSetup.deletesBuckets", {
+                        count: deleted.length,
+                        names: deleted.map((b) => b.name).join(", "),
+                      })}
+                    </Text>
                   )}
                 </Stack>
               )}

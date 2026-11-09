@@ -458,12 +458,19 @@ export interface paths {
         /**
          * Delete an account
          * @description Deletes the account after settling it, all at once:
-         *     - every bucket funded from it moves to the account given in
-         *       `bucket_sources`, otherwise 409 `account_has_buckets`;
+         *     - every bucket funded from it either moves to the account given in
+         *       `bucket_sources` or is deleted with it (`delete_buckets`, #137),
+         *       otherwise 409 `account_has_buckets`. A bucket in both, or one not
+         *       funded from the account, is 400 `invalid_request`;
+         *     - a deleted bucket's remaining funds are released first, with a
+         *       bucket adjustment (BUA), as `DELETE /buckets/{bucketId}` does; that
+         *       needs a usable active cycle unless they're 0 (409
+         *       `no_active_cycle` or `cycle_overdue`). The money they held is then
+         *       part of the account's balance below;
          *     - money left in it is transferred (TRF) or adjusted away (BLA) as
          *       `remaining_funds` says, otherwise 409 `balance_not_zero`.
          *
-         *     If either is refused, nothing changes. Money and buckets can only move
+         *     If any step is refused, nothing changes. Money and buckets can only move
          *     to another account in the same currency (400 `currency_mismatch`).
          *     The account's transactions are kept.
          *
@@ -1832,6 +1839,8 @@ export interface components {
             bucket_sources?: {
                 [key: string]: components["schemas"]["AccountId"];
             };
+            /** @description Buckets funded from this account to delete with it. What's left in each is released to the account first. */
+            delete_buckets?: components["schemas"]["BucketId"][];
         };
         /**
          * @description 12-digit cycle ID (the owner's user ID, then 6 digits).
