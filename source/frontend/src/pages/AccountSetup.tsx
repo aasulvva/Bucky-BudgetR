@@ -1,6 +1,7 @@
 import {
   ActionIcon,
   Alert,
+  Autocomplete,
   Button,
   Card,
   Group,
@@ -39,6 +40,8 @@ import { QueryState } from "@/components/QueryState";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
 import i18n from "@/i18n";
 import { CURRENCY } from "@/lib/locale";
+import { INTEREST_TAG } from "@/lib/interest";
+import { LANGUAGES } from "@/lib/language";
 import { checkName } from "@/lib/names";
 import { compareAmounts, currencyOptions, formatMoney } from "@/lib/money";
 import { autofocusField } from "@/lib/device";
@@ -121,6 +124,7 @@ export default function AccountSetup() {
         }}
       >
         <CreateAccount
+          accounts={accounts.data ?? []}
           onDone={() => {
             setCreating(false);
           }}
@@ -139,6 +143,7 @@ function AccountTable({ accounts, onEdit }: { accounts: Account[]; onEdit: (id: 
           <Table.Thead>
             <Table.Tr>
               <Table.Th>{t("accountSetup.name")}</Table.Th>
+              <Table.Th>{t("accountSetup.bank")}</Table.Th>
               <Table.Th>{t("accountSetup.type")}</Table.Th>
               <Table.Th>{t("accountSetup.currency")}</Table.Th>
               <Table.Th ta="right">{t("accountSetup.balance")}</Table.Th>
@@ -158,6 +163,7 @@ function AccountTable({ accounts, onEdit }: { accounts: Account[]; onEdit: (id: 
                     (#{a.id})
                   </Text>
                 </Table.Td>
+                <Table.Td c={a.bank ? undefined : "dimmed"}>{a.bank || "—"}</Table.Td>
                 <Table.Td>{accountTypeLabel(a.type)}</Table.Td>
                 <Table.Td>{a.currency}</Table.Td>
                 <Table.Td ta="right" style={{ whiteSpace: "nowrap" }}>
@@ -193,11 +199,45 @@ function nameProblem(error: unknown): string | undefined {
   return undefined;
 }
 
-function CreateAccount({ onDone }: { onDone: () => void }) {
+/** The banks of the user's other accounts, to suggest (#70). */
+function bankOptions(accounts: Account[], current = ""): string[] {
+  const banks = new Set(accounts.map((a) => a.bank).filter((b) => b !== "" && b !== current));
+  return [...banks].sort((a, b) => a.localeCompare(b));
+}
+
+function BankInput({
+  value,
+  onChange,
+  accounts,
+  current,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  accounts: Account[];
+  current?: string;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Autocomplete
+      label={t("accountSetup.bank")}
+      description={t("accountSetup.bankHint")}
+      placeholder={t("accountSetup.bankPlaceholder")}
+      data={bankOptions(accounts, current)}
+      value={value}
+      maxLength={100}
+      onChange={onChange}
+      // Rendered in place: the dialog is a drawer on phones.
+      comboboxProps={{ withinPortal: false }}
+    />
+  );
+}
+
+function CreateAccount({ accounts, onDone }: { accounts: Account[]; onDone: () => void }) {
   const { t } = useTranslation();
   const refresh = useRefreshMoney();
   const currencies = useMemo(() => currencyOptions(), []);
   const [name, setName] = useState("");
+  const [bank, setBank] = useState("");
   const [type, setType] = useState<AccountType>("usage");
   const [currency, setCurrency] = useState(CURRENCY);
   const [opening, setOpening] = useState<string | null>(null);
@@ -210,6 +250,7 @@ function CreateAccount({ onDone }: { onDone: () => void }) {
         api.POST("/api/v1/accounts", {
           body: {
             name: name.trim(),
+            ...(bank.trim() ? { bank: bank.trim() } : {}),
             type,
             currency,
             ...(opening !== null && compareAmounts(opening, "0") !== 0
@@ -258,6 +299,7 @@ function CreateAccount({ onDone }: { onDone: () => void }) {
           required
           {...autofocusField()}
         />
+        <BankInput value={bank} onChange={setBank} accounts={accounts} />
         <Select
           label={t("accountSetup.type")}
           data={accountTypeOptions()}
@@ -320,36 +362,66 @@ function EditAccount({
   const refresh = useRefreshMoney();
   const [deleting, setDeleting] = useState(false);
   const [name, setName] = useState(account.name);
+  const [bank, setBank] = useState(account.bank);
   const [type, setType] = useState<AccountType>(account.type);
   const [errors, setErrors] = useState<{ name?: string }>({});
+  const [offer, setOffer] = useState<{ updated: Account; count: number; body: RenameBody } | null>(
+    null,
+  );
 
   const changes = {
     ...(name.trim() !== account.name ? { name: name.trim() } : {}),
+    ...(bank.trim() !== account.bank ? { bank: bank.trim() } : {}),
     ...(type !== account.type ? { type } : {}),
   };
   const changed = Object.keys(changes).length > 0;
 
   const update = useMutation({
-    mutationFn: () =>
-      unwrap(
+    mutationFn: async () => {
+      const updated = await unwrap(
         api.PATCH("/api/v1/accounts/{accountId}", {
           params: { path: { accountId: account.id } },
           body: changes,
         }),
-      ),
+      );
+      // A new bank: count the earlier interest that could take its name.
+      if (updated.bank === "" || updated.bank === account.bank) return { updated, count: 0 };
+      const body = renameInterestBody(account, updated.bank);
+      try {
+        const { count } = await unwrap(
+          api.POST("/api/v1/transactions/counterparty-rename", { body }),
+        );
+        return { updated, count, body };
+      } catch {
+        // The account is saved; the offer is only a convenience.
+        return { updated, count: 0 };
+      }
+    },
     meta: { silentError: true },
-    onSuccess: async (updated) => {
+    onSuccess: async ({ updated, count, body }) => {
       notifications.show({
         color: "green",
         message: t("accountSetup.saved", { name: updated.name }),
       });
-      onDone();
+      if (count > 0 && body) setOffer({ updated, count, body });
+      else onDone();
       await refresh();
     },
     onError: (err) => {
       setErrors({ name: nameProblem(err) });
     },
   });
+
+  if (offer) {
+    return (
+      <RenameInterest
+        account={offer.updated}
+        count={offer.count}
+        body={offer.body}
+        onDone={onDone}
+      />
+    );
+  }
 
   if (deleting) {
     return (
@@ -385,6 +457,7 @@ function EditAccount({
           error={errors.name}
           required
         />
+        <BankInput value={bank} onChange={setBank} accounts={accounts} current={account.bank} />
         <Select
           label={t("accountSetup.type")}
           data={accountTypeOptions()}
@@ -423,6 +496,85 @@ function EditAccount({
         </Group>
       </Stack>
     </form>
+  );
+}
+
+type RenameBody = components["schemas"]["CounterpartyRename"];
+
+/**
+ * Renames an account's earlier interest to its new bank (#70): incomes
+ * tagged interest whose counterparty is the default word, in any of the
+ * app's languages, or the old bank.
+ */
+function renameInterestBody(account: Account, bank: string): RenameBody {
+  const words = LANGUAGES.map(({ value }) =>
+    i18n.t("accounts.interestCounterparty", { lng: value }),
+  );
+  if (account.bank) words.push(account.bank);
+  return {
+    account_id: account.id,
+    type: "INC",
+    tag: INTEREST_TAG,
+    from: [...new Set(words)],
+    to: bank,
+    apply: false,
+  };
+}
+
+/** Offers to rename the earlier interest after the bank was set or changed. */
+function RenameInterest({
+  account,
+  count,
+  body,
+  onDone,
+}: {
+  account: Account;
+  count: number;
+  body: RenameBody;
+  onDone: () => void;
+}) {
+  const { t } = useTranslation();
+  const refresh = useRefreshMoney();
+  const rename = useMutation({
+    mutationFn: () =>
+      unwrap(
+        api.POST("/api/v1/transactions/counterparty-rename", { body: { ...body, apply: true } }),
+      ),
+    meta: { silentError: true },
+    onSuccess: async ({ count: done }) => {
+      notifications.show({
+        color: "green",
+        message: t("accountSetup.renameInterest.done", { count: done, bank: account.bank }),
+      });
+      onDone();
+      await refresh();
+    },
+  });
+  return (
+    <Stack gap="md">
+      <Text fw={600}>{t("accountSetup.renameInterest.title")}</Text>
+      <Text>
+        {t("accountSetup.renameInterest.body", {
+          count,
+          account: account.name,
+          bank: account.bank,
+        })}
+      </Text>
+      {rename.error && <ErrorAlert error={rename.error} />}
+      <Group justify="flex-end" gap="xs">
+        <Button variant="default" onClick={onDone}>
+          {t("accountSetup.renameInterest.leave")}
+        </Button>
+        <Button
+          loading={rename.isPending}
+          onClick={() => {
+            rename.mutate();
+          }}
+        >
+          {t("accountSetup.renameInterest.update", { count })}
+        </Button>
+      </Group>
+    </Stack>
   );
 }
 

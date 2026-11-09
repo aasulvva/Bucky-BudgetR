@@ -125,6 +125,26 @@ func (s *server) ReverseTransaction(ctx context.Context, req api.ReverseTransact
 	return api.ReverseTransaction200JSONResponse(toAPITransaction(t)), nil
 }
 
+func (s *server) RenameCounterparty(ctx context.Context, req api.RenameCounterpartyRequestObject) (api.RenameCounterpartyResponseObject, error) {
+	svc, err := s.transactionService()
+	if err != nil {
+		return nil, err
+	}
+	b := req.Body
+	r := transactions.Rename{AccountID: b.AccountId, From: b.From, To: b.To, Apply: b.Apply != nil && *b.Apply}
+	if b.Type != nil {
+		r.Type = sqlc.TransactionType(*b.Type)
+	}
+	if b.Tag != nil {
+		r.Tag = *b.Tag
+	}
+	n, err := svc.RenameCounterparty(ctx, sessionFrom(ctx).User.ID, r)
+	if err != nil {
+		return nil, transactionError(err)
+	}
+	return api.RenameCounterparty200JSONResponse{Count: n}, nil
+}
+
 func (s *server) transactionService() (*transactions.Service, error) {
 	if s.transactions == nil {
 		return nil, NewError(http.StatusServiceUnavailable, "transactions_unavailable", "")

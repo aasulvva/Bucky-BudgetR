@@ -169,6 +169,24 @@ describe("Accounts", () => {
     });
   });
 
+  it("registers interest from the account's bank, and shows the bank (#70)", async () => {
+    apiMock.on("GET /api/v1/accounts", { body: [{ ...buffer, bank: "DNB" }, euro, main] });
+    apiMock.on("POST /api/v1/transactions", { status: 201, body: {} });
+    renderRoute("/accounts");
+    const buf = await card("Buffer account");
+    expect(buf.getByText("DNB")).toBeInTheDocument();
+    await userEvent.click(buf.getByRole("button", { name: "Register interest" }));
+    const panel = within(screen.getByRole("region", { name: "Register interest" }));
+    expect(panel.getByText("DNB")).toBeInTheDocument();
+    await userEvent.type(panel.getByRole("textbox", { name: "Interest amount" }), "10");
+    await userEvent.click(panel.getByRole("button", { name: "Register interest" }));
+    expect(await screen.findByText("Interest on Buffer account registered.")).toBeInTheDocument();
+    expect(apiMock.calls("POST /api/v1/transactions")[0]?.body).toMatchObject({
+      counterparty: "DNB",
+      tags: ["interest"],
+    });
+  });
+
   it("has the actions in a menu on mobile", async () => {
     viewport.width = 390;
     renderRoute("/accounts");

@@ -40,6 +40,7 @@ import { ErrorAlert } from "@/components/ErrorAlert";
 import { QueryState } from "@/components/QueryState";
 import i18n from "@/i18n";
 import { autofocusField } from "@/lib/device";
+import { INTEREST_TAG, interestCounterparty } from "@/lib/interest";
 import {
   addAmounts,
   canonicalAmount,
@@ -268,6 +269,11 @@ function AccountCard({
           </Badge>
           <SetupLink account={account} size={32} />
         </Group>
+        {account.bank && (
+          <Text size="sm" c="dimmed" mt={-8}>
+            {account.bank}
+          </Text>
+        )}
         <Text fz={24} fw={600}>
           {formatMoney(account.balance, account.currency)}
         </Text>
@@ -325,8 +331,8 @@ function AccountRow({ account, onAdjust, onInterest }: ActionsProps & { account:
             <Text fw={600} truncate>
               {account.name}
             </Text>
-            <Text size="sm" c="dimmed">
-              {accountTypeLabel(account.type)}
+            <Text size="sm" c="dimmed" truncate>
+              {[accountTypeLabel(account.type), account.bank].filter(Boolean).join(" · ")}
             </Text>
           </div>
           <Text fw={600} style={{ whiteSpace: "nowrap" }}>
@@ -501,13 +507,10 @@ function AdjustForm({ account, onDone }: { account: Account; onDone: () => void 
   );
 }
 
-/** The tag on interest incomes; a fixed word, so it's the same in every language. */
-const INTEREST_TAG = "interest";
-
 /**
- * Registers interest as an income (INC) with counterparty "Interest" (in the
- * user's language) and the tag "interest". It never triggers a refill. (The
- * counterparty becomes the account's bank with #70.)
+ * Registers interest as an income (INC) from the account's bank, or with the
+ * counterparty "Interest" (in the user's language) without one (#70), and the
+ * tag "interest". It never triggers a refill.
  */
 function InterestForm({ account, onDone }: { account: Account; onDone: () => void }) {
   const { t } = useTranslation();
@@ -524,7 +527,7 @@ function InterestForm({ account, onDone }: { account: Account; onDone: () => voi
             type: "INC",
             account_id: account.id,
             amount: value,
-            counterparty: t("accounts.interestCounterparty"),
+            counterparty: interestCounterparty(account),
             tags: [INTEREST_TAG],
             triggers_refill: false,
             ...(at ? { at } : {}),
@@ -571,7 +574,7 @@ function InterestForm({ account, onDone }: { account: Account; onDone: () => voi
         <Alert color="gray" variant="light">
           <Trans
             i18nKey="accounts.interestNote"
-            values={{ counterparty: t("accounts.interestCounterparty"), tag: INTEREST_TAG }}
+            values={{ counterparty: interestCounterparty(account), tag: INTEREST_TAG }}
             components={{ b: <strong /> }}
           />
         </Alert>

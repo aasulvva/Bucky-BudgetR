@@ -216,6 +216,9 @@
     "empty": "Ingen kontoer ennå. Opprett din første.",
     "editAccount": "Rediger konto",
     "name": "Navn",
+    "bank": "Bank",
+    "bankPlaceholder": "f.eks. DNB",
+    "bankHint": "Valgfritt. Brukes som motpart når du registrerer renter.",
     "type": "Type",
     "currency": "Valuta",
     "balance": "Saldo",
@@ -243,7 +246,17 @@
     "bucketsFunded_other": "{{count}} bøtter finansieres fra den. Velg en ny kildekonto:",
     "noOtherForBuckets": "Det finnes ingen annen konto i {{currency}} å flytte dem til. Opprett en, eller slett bøttene i bøtteoppsettet først.",
     "deleteAccount": "Slett kontoen",
-    "deleted": "{{name}} er slettet."
+    "deleted": "{{name}} er slettet.",
+    "renameInterest": {
+      "title": "Tidligere renter",
+      "body_one": "{{count}} tidligere renteinntekt på {{account}} har motparten Renter eller den forrige banken. Vil du endre den til {{bank}}? Den korrigeres, så endringen blir stående i historikken.",
+      "body_other": "{{count}} tidligere renteinntekter på {{account}} har motparten Renter eller den forrige banken. Vil du endre dem til {{bank}}? Hver av dem korrigeres, så endringen blir stående i historikken.",
+      "update_one": "Oppdater den",
+      "update_other": "Oppdater {{count}}",
+      "leave": "La dem være",
+      "done_one": "{{count}} renteinntekt har nå {{bank}} som motpart.",
+      "done_other": "{{count}} renteinntekter har nå {{bank}} som motpart."
+    }
   },
   "dashboard": {
     "settings": "Innstillinger",

@@ -9,6 +9,7 @@ export function account(overrides: Partial<Account> & Pick<Account, "id" | "name
   return {
     type: "usage",
     currency: "NOK",
+    bank: "",
     balance: "0.00",
     unallocated: "0.00",
     expected_income: null,

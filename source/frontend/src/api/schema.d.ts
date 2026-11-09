@@ -1016,6 +1016,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/transactions/counterparty-rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rename a counterparty on several transactions
+         * @description Changes the counterparty of an account's transactions whose effective
+         *     counterparty is one of `from` (trimmed, ignoring case) to `to`, each by
+         *     a correction (an adjustment with no amounts), so the change shows in
+         *     its history. Only transactions that aren't reversed count, and only
+         *     those of `type` and with `tag` when given. Used when an account gets a
+         *     bank (#70): its earlier interest, registered as "Interest" or under the
+         *     old bank, can take the bank's name.
+         *
+         *     Without `apply` nothing changes, and `count` says how many would. With
+         *     it, all of them are corrected together and `count` says how many
+         *     were. Another user's account matches nothing.
+         */
+        post: operations["renameCounterparty"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tags": {
         parameters: {
             query?: never;
@@ -1717,6 +1747,11 @@ export interface components {
          */
         Currency: string;
         /**
+         * @description The bank the account is in (#70), trimmed; "" when not given, and "" clears it. Register interest uses it as the counterparty.
+         * @example DNB
+         */
+        AccountBank: string;
+        /**
          * @description 1 to 100 characters after trimming. Unique among the user's accounts, ignoring case.
          * @example Main account
          */
@@ -1728,6 +1763,7 @@ export interface components {
             name: string;
             type: components["schemas"]["AccountType"];
             currency: components["schemas"]["Currency"];
+            bank: components["schemas"]["AccountBank"];
             balance: components["schemas"]["Amount"];
             /** @description The part of the balance that backs no bucket, balance − Σ CAF of its buckets (spec §7). Negative when the account is overdrawn. */
             unallocated: components["schemas"]["Amount"];
@@ -1736,10 +1772,25 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
+        CounterpartyRename: {
+            account_id: components["schemas"]["AccountId"];
+            type?: components["schemas"]["TransactionType"];
+            /** @description Only transactions with this tag, ignoring case. */
+            tag?: string;
+            /** @description The counterparties to rename, trimmed and ignoring case. */
+            from: string[];
+            to: string;
+            /**
+             * @description Make the corrections; without it, only count them.
+             * @default false
+             */
+            apply: boolean;
+        };
         AccountCreate: {
             name: components["schemas"]["AccountName"];
             type?: components["schemas"]["AccountType"];
             currency?: components["schemas"]["Currency"];
+            bank?: components["schemas"]["AccountBank"];
             opening_balance?: components["schemas"]["Amount"];
             /**
              * Format: date-time
@@ -1752,6 +1803,7 @@ export interface components {
             type?: components["schemas"]["AccountType"];
             /** @description The income expected per cycle, at least 0. Null clears it. */
             expected_income?: (string & components["schemas"]["Amount"]) | null;
+            bank?: components["schemas"]["AccountBank"];
         };
         BalanceAdjustment: {
             target_balance: components["schemas"]["Amount"];
@@ -3875,6 +3927,36 @@ export interface operations {
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    renameCounterparty: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CounterpartyRename"];
+            };
+        };
+        responses: {
+            /** @description How many transactions match, or were corrected. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
             409: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };

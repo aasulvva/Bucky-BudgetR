@@ -12,10 +12,10 @@ import (
 )
 
 const createAccount = `-- name: CreateAccount :one
-INSERT INTO bank_accounts (id, user_id, name, currency, account_type)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO bank_accounts (id, user_id, name, currency, account_type, bank)
+VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (id) DO NOTHING
-RETURNING id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income
+RETURNING id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income, bank
 `
 
 type CreateAccountParams struct {
@@ -24,6 +24,7 @@ type CreateAccountParams struct {
 	Name        string
 	Currency    string
 	AccountType AccountType
+	Bank        string
 }
 
 // Use with ids.Insert: a taken ID returns no row.
@@ -34,6 +35,7 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (B
 		arg.Name,
 		arg.Currency,
 		arg.AccountType,
+		arg.Bank,
 	)
 	var i BankAccount
 	err := row.Scan(
@@ -46,6 +48,7 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (B
 		&i.ModifiedAt,
 		&i.AccountType,
 		&i.ExpectedIncome,
+		&i.Bank,
 	)
 	return i, err
 }
@@ -65,7 +68,7 @@ func (q *Queries) DeleteAccount(ctx context.Context, arg DeleteAccountParams) er
 }
 
 const getAccount = `-- name: GetAccount :one
-SELECT id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income FROM bank_accounts WHERE id = $1 AND user_id = $2 AND NOT deleted
+SELECT id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income, bank FROM bank_accounts WHERE id = $1 AND user_id = $2 AND NOT deleted
 `
 
 type GetAccountParams struct {
@@ -86,12 +89,13 @@ func (q *Queries) GetAccount(ctx context.Context, arg GetAccountParams) (BankAcc
 		&i.ModifiedAt,
 		&i.AccountType,
 		&i.ExpectedIncome,
+		&i.Bank,
 	)
 	return i, err
 }
 
 const getAccountForUpdate = `-- name: GetAccountForUpdate :one
-SELECT id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income FROM bank_accounts WHERE id = $1 AND user_id = $2 AND NOT deleted FOR UPDATE
+SELECT id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income, bank FROM bank_accounts WHERE id = $1 AND user_id = $2 AND NOT deleted FOR UPDATE
 `
 
 type GetAccountForUpdateParams struct {
@@ -114,12 +118,13 @@ func (q *Queries) GetAccountForUpdate(ctx context.Context, arg GetAccountForUpda
 		&i.ModifiedAt,
 		&i.AccountType,
 		&i.ExpectedIncome,
+		&i.Bank,
 	)
 	return i, err
 }
 
 const listAccounts = `-- name: ListAccounts :many
-SELECT id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income FROM bank_accounts WHERE user_id = $1 AND NOT deleted ORDER BY lower(name), id
+SELECT id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income, bank FROM bank_accounts WHERE user_id = $1 AND NOT deleted ORDER BY lower(name), id
 `
 
 func (q *Queries) ListAccounts(ctx context.Context, userID string) ([]BankAccount, error) {
@@ -141,6 +146,7 @@ func (q *Queries) ListAccounts(ctx context.Context, userID string) ([]BankAccoun
 			&i.ModifiedAt,
 			&i.AccountType,
 			&i.ExpectedIncome,
+			&i.Bank,
 		); err != nil {
 			return nil, err
 		}
@@ -199,9 +205,9 @@ func (q *Queries) SetBucketSource(ctx context.Context, arg SetBucketSourceParams
 }
 
 const updateAccount = `-- name: UpdateAccount :one
-UPDATE bank_accounts SET name = $3, account_type = $4, expected_income = $5, modified_at = now()
+UPDATE bank_accounts SET name = $3, account_type = $4, expected_income = $5, bank = $6, modified_at = now()
 WHERE id = $1 AND user_id = $2 AND NOT deleted
-RETURNING id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income
+RETURNING id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income, bank
 `
 
 type UpdateAccountParams struct {
@@ -210,6 +216,7 @@ type UpdateAccountParams struct {
 	Name           string
 	AccountType    AccountType
 	ExpectedIncome decimal.NullDecimal
+	Bank           string
 }
 
 func (q *Queries) UpdateAccount(ctx context.Context, arg UpdateAccountParams) (BankAccount, error) {
@@ -219,6 +226,7 @@ func (q *Queries) UpdateAccount(ctx context.Context, arg UpdateAccountParams) (B
 		arg.Name,
 		arg.AccountType,
 		arg.ExpectedIncome,
+		arg.Bank,
 	)
 	var i BankAccount
 	err := row.Scan(
@@ -231,6 +239,7 @@ func (q *Queries) UpdateAccount(ctx context.Context, arg UpdateAccountParams) (B
 		&i.ModifiedAt,
 		&i.AccountType,
 		&i.ExpectedIncome,
+		&i.Bank,
 	)
 	return i, err
 }
