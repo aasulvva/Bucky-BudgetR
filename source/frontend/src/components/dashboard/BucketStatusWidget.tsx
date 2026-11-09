@@ -1,4 +1,4 @@
-import { Anchor, Button, Group, Progress, Stack, Text } from "@mantine/core";
+import { Anchor, Group, Progress, Stack, Text } from "@mantine/core";
 import { useContext, type ReactNode } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { Link } from "react-router";
@@ -17,7 +17,7 @@ import {
 import { compareAmounts, formatMoney, subtractAmounts } from "@/lib/money";
 
 import { WidgetFrame } from "./frame";
-import { BucketsSummary, MoneyState, NoBuckets, WidgetCard } from "./Widget";
+import { BucketsSummary, Gone, MoneyState, NoBuckets, WidgetCard } from "./Widget";
 
 /**
  * The buckets that need attention, all of them, the most used, those of one
@@ -43,7 +43,8 @@ export function BucketStatusWidget({
       <MoneyState>
         {(accounts, buckets) => {
           const shown = shownBucketStatus(widget.settings, accounts, buckets);
-          if (shown.mode === "account" && !shown.account) return <AccountGone />;
+          if (shown.mode === "account" && !shown.account) return <Gone what="account" />;
+          if (shown.mode === "bucket" && !shown.bucket) return <Gone what="bucket" />;
           if (buckets.length === 0) return <NoBuckets accounts={accounts} />;
           return (
             <>
@@ -62,7 +63,7 @@ export function BucketStatusWidget({
               {shown.mode === "most_used" && (
                 <MostUsed buckets={buckets} figures={byId} active={active} />
               )}
-              {shown.mode === "bucket" && (
+              {shown.mode === "bucket" && shown.bucket && (
                 <OneBucket
                   bucket={shown.bucket}
                   figures={byId.get(shown.bucket.id)}
@@ -206,24 +207,6 @@ function OneAccount({ account, buckets, figures }: FiguresProps & { account: Acc
     <Stack gap="sm">
       <BucketsSummary account={account} buckets={buckets} />
       <AccountBuckets account={account} buckets={buckets} figures={figures} named={!titled} />
-    </Stack>
-  );
-}
-
-/** One account whose account was deleted: offers to choose another. */
-function AccountGone() {
-  const { t } = useTranslation();
-  const { openSettings, editing } = useContext(WidgetFrame);
-  return (
-    <Stack gap="xs" align="flex-start">
-      <Text size="sm" c="dimmed">
-        {t("dashboard.bucketStatus.accountGone")}
-      </Text>
-      {openSettings && !editing && (
-        <Button variant="light" size="xs" onClick={openSettings}>
-          {t("dashboard.bucketStatus.chooseAccount")}
-        </Button>
-      )}
     </Stack>
   );
 }

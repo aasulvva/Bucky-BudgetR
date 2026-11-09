@@ -261,8 +261,6 @@
       },
       "bucket": "Bucket",
       "pickBucket": "Choose a bucket.",
-      "accountGone": "The account this widget showed has been deleted.",
-      "chooseAccount": "Choose another account",
       "noAccountBuckets": "{{name}} has no buckets yet. <setup>Create one in Bucket setup</setup>.",
       "allFine": "All buckets are fine: fully covered, and none more than 90% used.",
       "overspentBy": "Overspent by {{amount}}",
@@ -383,6 +381,12 @@
         "upcoming": "Coming up"
       },
       "count": "Rows in each part"
+    },
+    "gone": {
+      "account": "The account this widget showed has been deleted.",
+      "chooseAccount": "Choose another account",
+      "bucket": "The bucket this widget showed has been deleted.",
+      "chooseBucket": "Choose another bucket"
     }
   },
   "buckets": {

@@ -246,7 +246,7 @@ describe("Dashboard", () => {
     ]);
   });
 
-  it("shows the chosen bucket, or falls back when it's gone", async () => {
+  it("shows the chosen bucket, or says when it's gone (#135)", async () => {
     withPreferences({ dashboard: { bucket_status: { mode: "bucket", bucket_id: fun.id } } });
     const { unmount } = renderRoute("/");
     const status = await widget("Bucket status");
@@ -257,7 +257,17 @@ describe("Dashboard", () => {
 
     withPreferences({ dashboard: { bucket_status: { mode: "bucket", bucket_id: "1999999999" } } });
     renderRoute("/");
-    expect(await (await widget("Bucket status")).findByText("Needs attention")).toBeInTheDocument();
+    // Titled by its type, with no bucket name to use.
+    const gone = await widget("Bucket status");
+    expect(
+      await gone.findByText("The bucket this widget showed has been deleted."),
+    ).toBeInTheDocument();
+    expect(gone.queryByText("Needs attention")).not.toBeInTheDocument();
+    expect(gone.queryByText("One bucket")).not.toBeInTheDocument();
+    await userEvent.click(gone.getByRole("button", { name: "Choose another bucket" }));
+    expect(
+      await screen.findByRole("dialog", { name: "Bucket status settings" }),
+    ).toBeInTheDocument();
   });
 
   it("saves the Bucket status settings", async () => {
@@ -430,6 +440,20 @@ describe("Dashboard", () => {
     expect(apiMock.calls("PATCH /api/v1/me/preferences").map((c) => c.body)).toEqual([
       savedLayout({ cycle: { show_next: false } }),
     ]);
+  });
+
+  it("says when One account's account is gone (#135)", async () => {
+    withPreferences({ dashboard: { accounts: { mode: "account", account_id: "9999" } } });
+    renderRoute("/");
+    const accounts = await widget("Account balances");
+    expect(
+      await accounts.findByText("The account this widget showed has been deleted."),
+    ).toBeInTheDocument();
+    expect(accounts.queryByRole("link", { name: "Main account" })).not.toBeInTheDocument();
+    await userEvent.click(accounts.getByRole("button", { name: "Choose another account" }));
+    expect(
+      await screen.findByRole("dialog", { name: "Account balances settings" }),
+    ).toBeInTheDocument();
   });
 
   it("shows one account", async () => {
@@ -937,6 +961,20 @@ describe("In/out widget", () => {
         },
       ],
     });
+  });
+
+  it("says when its account is gone, instead of showing all accounts (#135)", async () => {
+    inOut({ figures: ["income", "expenses", "balance"], period: "month", account_id: "9999" });
+    renderRoute("/");
+    const box = await widget("Money in and out");
+    expect(
+      await box.findByText("The account this widget showed has been deleted."),
+    ).toBeInTheDocument();
+    expect(box.queryByRole("link", { name: /Income:/ })).not.toBeInTheDocument();
+    await userEvent.click(box.getByRole("button", { name: "Choose another account" }));
+    expect(
+      await screen.findByRole("dialog", { name: "Money in and out settings" }),
+    ).toBeInTheDocument();
   });
 
   it("sums this month on all accounts in the app's currency, linking each figure", async () => {

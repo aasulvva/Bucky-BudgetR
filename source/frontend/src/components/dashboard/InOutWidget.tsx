@@ -12,7 +12,7 @@ import type { WidgetInstance } from "@/lib/dashboard";
 import { flowLink, flowTotals, periodSpan, type DateSpan, type FlowFigure } from "@/lib/flows";
 import { compareAmounts, formatMoney } from "@/lib/money";
 
-import { NoBuckets, WidgetCard } from "./Widget";
+import { Gone, NoBuckets, WidgetCard } from "./Widget";
 
 /**
  * Income, expenses and their balance over a period (#90), on one account
@@ -41,6 +41,11 @@ export function InOutWidget({
       <QueryState query={accounts}>
         {(list) => {
           if (list.length === 0) return <NoBuckets accounts={list} />;
+          // Its account was deleted (#135): say so rather than show them all.
+          const { accountId } = widget.settings;
+          if (accountId !== null && !list.some((a) => a.id === accountId)) {
+            return <Gone what="account" />;
+          }
           if (!span) {
             return (
               <Text size="sm" c="dimmed">

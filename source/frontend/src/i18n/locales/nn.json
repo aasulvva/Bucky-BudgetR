@@ -261,8 +261,6 @@
       },
       "bucket": "Bøtte",
       "pickBucket": "Vel ei bøtte.",
-      "accountGone": "Kontoen denne modulen viste, er sletta.",
-      "chooseAccount": "Vel ein annan konto",
       "noAccountBuckets": "{{name}} har ingen bøtter enno. <setup>Opprett ei i bøtteoppsettet</setup>.",
       "allFine": "Alle bøttene er i orden: heilt dekte, og ingen over 90 % brukt.",
       "overspentBy": "Overforbrukt med {{amount}}",
@@ -383,6 +381,12 @@
         "upcoming": "Kjem"
       },
       "count": "Rader i kvar del"
+    },
+    "gone": {
+      "account": "Kontoen denne modulen viste, er sletta.",
+      "chooseAccount": "Vel ein annan konto",
+      "bucket": "Bøtta denne modulen viste, er sletta.",
+      "chooseBucket": "Vel ei anna bøtte"
     }
   },
   "buckets": {

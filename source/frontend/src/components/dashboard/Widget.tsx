@@ -1,4 +1,4 @@
-import { ActionIcon, Anchor, Box, Card, Group, Stack, Text, Title } from "@mantine/core";
+import { ActionIcon, Anchor, Box, Button, Card, Group, Stack, Text, Title } from "@mantine/core";
 import { IconSettings } from "@tabler/icons-react";
 import { useContext, type ReactNode } from "react";
 import { Trans, useTranslation } from "react-i18next";
@@ -121,6 +121,27 @@ export function BucketsSummary({ account, buckets }: { account: Account; buckets
 }
 
 /** Points to Bucket setup (or Account setup) while there are no buckets. */
+/**
+ * A widget pinned to an account or bucket that has been deleted (#89, #135):
+ * says so and offers to choose another in its settings.
+ */
+export function Gone({ what }: { what: "account" | "bucket" }) {
+  const { t } = useTranslation();
+  const { openSettings, editing } = useContext(WidgetFrame);
+  return (
+    <Stack gap="xs" align="flex-start">
+      <Text size="sm" c="dimmed">
+        {t(what === "account" ? "dashboard.gone.account" : "dashboard.gone.bucket")}
+      </Text>
+      {openSettings && !editing && (
+        <Button variant="light" size="xs" onClick={openSettings}>
+          {t(what === "account" ? "dashboard.gone.chooseAccount" : "dashboard.gone.chooseBucket")}
+        </Button>
+      )}
+    </Stack>
+  );
+}
+
 export function NoBuckets({ accounts }: { accounts: Account[] }) {
   return (
     <Text size="sm" c="dimmed">
