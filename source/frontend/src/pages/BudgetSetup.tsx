@@ -15,6 +15,7 @@ import {
 } from "@mantine/core";
 import { useMediaQuery, useWindowEvent } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
+import { IconCoins } from "@tabler/icons-react";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
@@ -30,7 +31,9 @@ import {
 import { api } from "@/api/client";
 import { useCurrentCycles } from "@/api/cycles";
 import { unwrap } from "@/api/errors";
+import { useSession } from "@/app/session";
 import { AmountInput } from "@/components/AmountInput";
+import { IncomeRules } from "@/components/BucketSettings";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { QueryState } from "@/components/QueryState";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
@@ -66,14 +69,40 @@ export default function BudgetSetup() {
   const { t } = useTranslation();
   const accounts = useAccounts();
   const buckets = useBuckets();
+  const preferences = useSession().data?.preferences;
+  const [rulesOpen, setRulesOpen] = useState(false);
   return (
     <Stack gap="lg">
-      <Stack gap={4}>
-        <Title order={2}>{t("nav.items.budgetSetup")}</Title>
-        <Text size="sm" c="dimmed">
-          {t("budgetSetup.intro")}
-        </Text>
-      </Stack>
+      <Group justify="space-between" align="flex-start" wrap="nowrap">
+        <Stack gap={4}>
+          <Title order={2}>{t("nav.items.budgetSetup")}</Title>
+          <Text size="sm" c="dimmed">
+            {t("budgetSetup.intro")}
+          </Text>
+        </Stack>
+        <Button
+          variant="default"
+          leftSection={<IconCoins size={16} />}
+          style={{ flexShrink: 0 }}
+          onClick={() => {
+            setRulesOpen(true);
+          }}
+        >
+          {t("budgetSetup.incomeRules")}
+        </Button>
+      </Group>
+      {/* The incomes that refill "On income" buckets, planned with the refills (#102). */}
+      <ResponsiveModal
+        opened={rulesOpen}
+        title={<Text fw={600}>{t("budgetSetup.incomeRules")}</Text>}
+        onClose={() => {
+          setRulesOpen(false);
+        }}
+      >
+        {preferences && (
+          <IncomeRules rules={preferences.income_refill_rules ?? []} titled={false} />
+        )}
+      </ResponsiveModal>
       <QueryState query={accounts}>
         {(accountList) => (
           <QueryState query={buckets}>

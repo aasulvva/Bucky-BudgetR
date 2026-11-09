@@ -1,47 +1,23 @@
-import {
-  ActionIcon,
-  Badge,
-  Button,
-  Card,
-  Group,
-  Select,
-  Stack,
-  Switch,
-  Text,
-  TextInput,
-  Title,
-} from "@mantine/core";
+import { Badge, Card, Group, Select, Stack, Switch, Text, Title } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { IconPlus, IconTrash } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { api } from "@/api/client";
 import { unwrap } from "@/api/errors";
-import type { components } from "@/api/schema";
 import { useSession, useUpdatePreferences, type Preferences } from "@/app/session";
-import { AmountInput } from "@/components/AmountInput";
 import { CycleRuleCard } from "@/components/cycles/CycleRuleCard";
-import { ErrorAlert } from "@/components/ErrorAlert";
 import { NotificationsCard } from "@/components/notifications/NotificationsCard";
 import { PasswordForm } from "@/components/PasswordForm";
 import { QueryState } from "@/components/QueryState";
-import i18n from "@/i18n";
 import { browserTimeZone } from "@/lib/cycleRule";
 import { LANGUAGES } from "@/lib/language";
 import { LOCALE_OPTIONS } from "@/lib/locale";
-import { parseAmount } from "@/lib/money";
-
-type RefillMode = components["schemas"]["RefillMode"];
-type NegativeTf = components["schemas"]["NegativeTf"];
-
-/** The API's limit on income rules. */
-const MAX_RULES = 20;
 
 /**
- * Settings (spec §9, canvas): preferences, the cycle rule, income rules,
- * notifications, password, status.
+ * Settings (spec §9, canvas): preferences, the cycle rule, notifications,
+ * password, status. The bucket defaults and income rules are on Bucket setup
+ * (#102).
  */
 export default function Settings() {
   const { t } = useTranslation();
@@ -53,7 +29,6 @@ export default function Settings() {
         <>
           <PreferencesCard preferences={user.preferences} />
           <CycleRuleCard preferences={user.preferences} />
-          <IncomeRulesCard rules={user.preferences.income_refill_rules ?? []} />
           <NotificationsCard preferences={user.preferences} />
         </>
       )}
@@ -68,9 +43,6 @@ export default function Settings() {
 const BROWSER = "browser";
 /** The value the language select uses for "follow the locale". */
 const FOLLOW = "follow";
-
-const REFILL_MODES: RefillMode[] = ["auto", "manual", "on_income", "fully_manual"];
-const NEGATIVE_TFS: NegativeTf[] = ["debt", "clear"];
 
 /** The time zones to pick from, with the user's own even if it isn't listed. */
 function timeZones(current: string): string[] {
@@ -121,32 +93,6 @@ function PreferencesCard({ preferences }: { preferences: Preferences }) {
             if (value) update.mutate({ time_zone: value });
           }}
         />
-        <Select
-          label={t("settings.refillMode")}
-          description={t("settings.refillModeHint")}
-          data={REFILL_MODES.map((mode) => ({
-            value: mode,
-            label: t(`settings.refillModes.${mode}`),
-          }))}
-          value={preferences.default_refill_mode ?? "auto"}
-          allowDeselect={false}
-          disabled={update.isPending}
-          onChange={(value) => {
-            update.mutate({ default_refill_mode: value === "auto" ? null : value });
-          }}
-        />
-        <Select
-          label={t("settings.negativeTf")}
-          description={t("settings.negativeTfHint")}
-          data={NEGATIVE_TFS.map((n) => ({ value: n, label: t(`settings.negativeTfs.${n}`) }))}
-          value={preferences.default_negative_tf ?? "debt"}
-          allowDeselect={false}
-          disabled={update.isPending}
-          onChange={(value) => {
-            const next = NEGATIVE_TFS.find((n) => n === value);
-            if (next) update.mutate({ default_negative_tf: next === "debt" ? null : next });
-          }}
-        />
         <Switch
           label={t("settings.whatsNewPopup")}
           description={t("settings.whatsNewPopupHint")}
@@ -157,159 +103,6 @@ function PreferencesCard({ preferences }: { preferences: Preferences }) {
             update.mutate({ whats_new_popup: e.currentTarget.checked ? null : false });
           }}
         />
-      </Stack>
-    </Card>
-  );
-}
-
-interface RuleRow {
-  key: number;
-  counterparty: string;
-  minAmount: string | null;
-}
-
-let nextKey = 0;
-
-function toRows(rules: components["schemas"]["IncomeRefillRule"][]): RuleRow[] {
-  return rules.map((r) => ({
-    key: nextKey++,
-    counterparty: r.counterparty,
-    minAmount: r.min_amount,
-  }));
-}
-
-/** What a row says, to tell whether the rules have changed. */
-function ruleKey(row: RuleRow): [string, string | null] {
-  return [row.counterparty, row.minAmount === null ? null : parseAmount(row.minAmount, ".")];
-}
-
-function ruleErrors(row: RuleRow): { counterparty?: string; minAmount?: string } {
-  const errors: { counterparty?: string; minAmount?: string } = {};
-  if (row.counterparty.trim() === "")
-    errors.counterparty = i18n.t("settings.rules.enterCounterparty");
-  else if (row.counterparty.length > 200) {
-    errors.counterparty = i18n.t("common.maxChars", { count: 200 });
-  }
-  if (row.minAmount === null) errors.minAmount = i18n.t("settings.rules.enterAmount");
-  else if (row.minAmount.startsWith("-")) errors.minAmount = i18n.t("common.notNegative");
-  else if (!/^\d{1,12}(\.|$)/.test(row.minAmount)) {
-    errors.minAmount = i18n.t("settings.rules.tooLarge");
-  }
-  return errors;
-}
-
-/**
- * Income rules (spec §6): an income from the counterparty of at least the
- * minimum refills the account's "on income" buckets.
- */
-function IncomeRulesCard({ rules }: { rules: components["schemas"]["IncomeRefillRule"][] }) {
-  const { t } = useTranslation();
-  const update = useUpdatePreferences();
-  const [rows, setRows] = useState(() => toRows(rules));
-  const [validate, setValidate] = useState(false);
-
-  const valid = rows.every((r) => Object.keys(ruleErrors(r)).length === 0);
-  const saved = JSON.stringify(toRows(rules).map(ruleKey));
-  const dirty = JSON.stringify(rows.map(ruleKey)) !== saved;
-
-  const change = (key: number, patch: Partial<RuleRow>) => {
-    setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));
-  };
-
-  const save = () => {
-    setValidate(true);
-    if (!valid) return;
-    const body = rows.map((r) => ({
-      counterparty: r.counterparty.trim(),
-      min_amount: r.minAmount ?? "0",
-    }));
-    update.mutate(
-      { income_refill_rules: body.length > 0 ? body : null },
-      {
-        onSuccess: (prefs) => {
-          setRows(toRows(prefs.income_refill_rules ?? []));
-          setValidate(false);
-          notifications.show({ color: "green", message: t("settings.rules.saved") });
-        },
-      },
-    );
-  };
-
-  return (
-    <Card withBorder>
-      <Stack gap="md">
-        <Stack gap={6}>
-          <Text fw={600}>{t("settings.rules.title")}</Text>
-          <Text size="sm" c="dimmed">
-            {t("settings.rules.intro1")}
-          </Text>
-          <Text size="sm" c="dimmed">
-            {t("settings.rules.intro2")}
-          </Text>
-          <Text size="sm" c="dimmed">
-            {t("settings.rules.intro3")}
-          </Text>
-        </Stack>
-        {rows.length === 0 && (
-          <Text size="sm" c="dimmed">
-            {t("settings.rules.empty")}
-          </Text>
-        )}
-        {rows.map((row, i) => {
-          const errors = validate ? ruleErrors(row) : {};
-          return (
-            <Group key={row.key} align="flex-start" wrap="nowrap" gap="sm">
-              <TextInput
-                label={t("settings.rules.counterparty")}
-                placeholder={t("settings.rules.counterpartyExample")}
-                style={{ flex: 2 }}
-                value={row.counterparty}
-                maxLength={200}
-                onChange={(e) => {
-                  change(row.key, { counterparty: e.currentTarget.value });
-                }}
-                error={errors.counterparty}
-              />
-              <AmountInput
-                label={t("settings.rules.atLeast")}
-                style={{ flex: 1 }}
-                value={row.minAmount}
-                onChange={(minAmount) => {
-                  change(row.key, { minAmount });
-                }}
-                error={errors.minAmount}
-              />
-              <ActionIcon
-                variant="subtle"
-                color="red"
-                size={36}
-                mt={25}
-                aria-label={t("settings.rules.remove", { number: i + 1 })}
-                onClick={() => {
-                  setRows((rs) => rs.filter((r) => r.key !== row.key));
-                }}
-              >
-                <IconTrash size={18} />
-              </ActionIcon>
-            </Group>
-          );
-        })}
-        {update.error && <ErrorAlert error={update.error} />}
-        <Group gap="sm">
-          <Button
-            variant="default"
-            leftSection={<IconPlus size={16} />}
-            disabled={rows.length >= MAX_RULES}
-            onClick={() => {
-              setRows((rs) => [...rs, { key: nextKey++, counterparty: "", minAmount: null }]);
-            }}
-          >
-            {t("settings.rules.add")}
-          </Button>
-          <Button onClick={save} disabled={!dirty} loading={update.isPending}>
-            {t("settings.rules.save")}
-          </Button>
-        </Group>
       </Stack>
     </Card>
   );

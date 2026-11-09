@@ -54,8 +54,8 @@ describe("the session guard", () => {
     // The session expires; the next request says so.
     apiMock.on("GET /api/v1/me", loggedOut);
     apiMock.on("PATCH /api/v1/me/preferences", loggedOut);
-    await userEvent.click(screen.getByRole("combobox", { name: /Default refill mode/ }));
-    await userEvent.click(await screen.findByRole("option", { name: "Manual" }));
+    await userEvent.click(screen.getByRole("combobox", { name: /Number and date format/ }));
+    await userEvent.click(await screen.findByRole("option", { name: "Deutsch" }));
 
     expect(await screen.findByText("Your session has ended. Log in again.")).toBeInTheDocument();
     expect(router.state.location.search).toBe("?next=%2Fsettings");

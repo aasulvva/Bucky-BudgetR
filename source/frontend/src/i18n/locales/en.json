@@ -107,39 +107,8 @@
     "locale": "Number and date format",
     "localeHint": "How amounts and dates are written.",
     "browserDefault": "Browser default",
-    "refillMode": "Default refill mode",
-    "refillModeHint": "The refill mode new buckets start with.",
-    "refillModes": {
-      "auto": "Automatic, at the start of each cycle",
-      "manual": "Manual",
-      "on_income": "On income",
-      "fully_manual": "Fully manual, funds added and removed by hand"
-    },
-    "negativeTf": "Overspent buckets with Keep funds",
-    "negativeTfHint": "What new buckets with Keep funds do at the refill after an overspend.",
-    "negativeTfs": {
-      "debt": "Carry it as debt",
-      "clear": "Clear it at the refill"
-    },
     "timeZone": "Time zone",
     "timeZoneHint": "Cycles planned from the cycle rule start at midnight here.",
-    "rules": {
-      "title": "Income rules",
-      "intro1": "Buckets with the refill mode “On income” aren't refilled when a new cycle starts. They wait until your income, such as your salary, arrives, so you only budget money you have.",
-      "intro2": "An income that matches a rule refills the “On income” buckets funded from the account it's paid into. To match, it must come from the counterparty (case doesn't matter) and be at least the minimum. Each bucket is refilled at most once per cycle, so a second payment in the same cycle doesn't refill it again.",
-      "intro3": "On each income you can also tick “Triggers refill” yourself, or untick it to skip a rule that matches.",
-      "empty": "No rules yet. Without rules, “On income” buckets are only refilled by an income where you tick “Triggers refill”.",
-      "counterparty": "Counterparty",
-      "counterpartyExample": "Employer AS",
-      "atLeast": "At least",
-      "remove": "Remove rule {{number}}",
-      "add": "Add rule",
-      "save": "Save rules",
-      "saved": "Income rules saved.",
-      "enterCounterparty": "Enter the counterparty.",
-      "enterAmount": "Enter an amount.",
-      "tooLarge": "That's too large."
-    },
     "cycleRule": {
       "title": "Cycle rule",
       "intro": "Keeps your next cycles planned, each from one start date to the next. Set it to your payday.",
@@ -634,7 +603,45 @@
     "capacityHintManual": "The most the bucket holds: adding funds can't take it above this.",
     "startZeroHintManual": "Add funds on Buckets when you need them.",
     "openingHintManual": "What the bucket already holds. Recorded as opening funds.",
-    "overCapacity": "The capacity is {{amount}}."
+    "overCapacity": "The capacity is {{amount}}.",
+    "settings": {
+      "open": "Bucket settings",
+      "intro": "Defaults for new buckets, and the incomes that refill “On income” buckets.",
+      "defaults": "New buckets",
+      "refillMode": "Default refill mode",
+      "refillModeHint": "The refill mode new buckets start with.",
+      "refillModes": {
+        "auto": "Automatic, at the start of each cycle",
+        "manual": "Manual",
+        "on_income": "On income",
+        "fully_manual": "Fully manual, funds added and removed by hand"
+      },
+      "negativeTf": "Overspent buckets with Keep funds",
+      "negativeTfHint": "What new buckets with Keep funds do at the refill after an overspend.",
+      "negativeTfs": {
+        "debt": "Carry it as debt",
+        "clear": "Clear it at the refill"
+      },
+      "rules": {
+        "title": "Income rules",
+        "intro1": "Buckets with the refill mode “On income” aren't refilled when a new cycle starts. They wait until your income, such as your salary, arrives, so you only budget money you have.",
+        "intro2": "An income that matches a rule refills the “On income” buckets funded from the account it's paid into. To match, it must come from the counterparty (case doesn't matter) and be at least the minimum. Each bucket is refilled at most once per cycle, so a second payment in the same cycle doesn't refill it again.",
+        "intro3": "On each income you can also tick “Triggers refill” yourself, or untick it to skip a rule that matches.",
+        "empty": "No rules yet. Without rules, “On income” buckets are only refilled by an income where you tick “Triggers refill”.",
+        "counterparty": "Counterparty",
+        "counterpartyExample": "Employer AS",
+        "atLeast": "At least",
+        "remove": "Remove rule {{number}}",
+        "add": "Add rule",
+        "save": "Save rules",
+        "saved": "Income rules saved.",
+        "enterCounterparty": "Enter the counterparty.",
+        "enterAmount": "Enter an amount.",
+        "tooLarge": "That's too large."
+      }
+    },
+    "defaultModeHint": "New buckets start as {{mode}}. <open>Change the default</open>",
+    "noIncomeRules": "You have no income rules yet, so this bucket is only refilled by an income where you tick “Triggers refill”. <open>Set up income rules</open>"
   },
   "budgetSetup": {
     "intro": "Plan each cycle's refills against the income you expect on each account.",
@@ -673,7 +680,8 @@
       "apply": "Save and change this cycle"
     },
     "fullyManualSkipped_one": "{{count}} fully manual bucket isn't budgeted here: it has no refill amount.",
-    "fullyManualSkipped_other": "{{count}} fully manual buckets aren't budgeted here: they have no refill amount."
+    "fullyManualSkipped_other": "{{count}} fully manual buckets aren't budgeted here: they have no refill amount.",
+    "incomeRules": "Income rules"
   },
   "newTransaction": {
     "type": "Type",
@@ -818,8 +826,8 @@
     "you": "you",
     "system": "the system",
     "user": "user {{id}}",
-    "movedTo": "Moved to another account. <link>Open the new transaction</link>",
-    "movedFrom": "Moved here from another account. <link>Open the old one</link>",
+    "movedTo": "Moved to another account. <open>Open the new transaction</open>",
+    "movedFrom": "Moved here from another account. <open>Open the old one</open>",
     "reversedLines": "Reversed: these amounts were cancelled.",
     "edit": "Edit",
     "reverse": "Reverse",

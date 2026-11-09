@@ -16,6 +16,32 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.03.00",
+    date: "2026-11-09",
+    title: {
+      en: "Bucket settings on Bucket setup",
+      nb: "Bøtteinnstillinger i Bøtteoppsett",
+      nn: "Bøtteinnstillingar i Bøtteoppsett",
+    },
+    changes: {
+      en: [
+        "What new buckets start with (the refill mode, and what a Keep funds bucket does when overspent) and the income rules have moved from Settings to Bucket setup, under Bucket settings.",
+        "A new bucket's form says which refill mode new buckets start as, and choosing On income without any income rules tells you, with a link to set them up.",
+        "The income rules can also be edited from Budget setup.",
+      ],
+      nb: [
+        "Hva nye bøtter starter med (påfyllingsmåten, og hva en bøtte med Behold midler gjør når den er overforbrukt) og inntektsreglene er flyttet fra Innstillinger til Bøtteoppsett, under Bøtteinnstillinger.",
+        "Skjemaet for en ny bøtte sier hvilken påfyllingsmåte nye bøtter starter med, og velger du Ved inntekt uten noen inntektsregler, får du beskjed, med en lenke for å sette dem opp.",
+        "Inntektsreglene kan også endres fra Budsjettoppsett.",
+      ],
+      nn: [
+        "Kva nye bøtter startar med (påfyllingsmåten, og kva ei bøtte med Behald midlar gjer når ho er overforbrukt) og inntektsreglane er flytte frå Innstillingar til Bøtteoppsett, under Bøtteinnstillingar.",
+        "Skjemaet for ei ny bøtte seier kva påfyllingsmåte nye bøtter startar med, og vel du Ved inntekt utan nokon inntektsreglar, får du beskjed, med ei lenkje for å setje dei opp.",
+        "Inntektsreglane kan òg endrast frå Budsjettoppsett.",
+      ],
+    },
+  },
+  {
     version: "v2.02.00",
     date: "2026-11-09",
     title: {
