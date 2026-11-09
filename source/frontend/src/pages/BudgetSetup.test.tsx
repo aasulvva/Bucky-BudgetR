@@ -62,7 +62,9 @@ describe("Budget setup", () => {
     // No income: no share yet.
     const bufferSection = await section("Buffer account");
     expect(bufferSection.getByText(/Enter the expected income/)).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Empty account" })).not.toBeInTheDocument();
+    // An account without buckets comes last (#112).
+    const sections = screen.getAllByRole("region").map((r) => r.getAttribute("aria-label"));
+    expect(sections.slice(-1)).toEqual(["Empty account"]);
 
     await userEvent.clear(refill("Rent"));
     await userEvent.type(refill("Rent"), "14000");
@@ -262,13 +264,29 @@ describe("Budget setup", () => {
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 
-  it("points to Bucket setup without buckets", async () => {
+  it("starts a budget from accounts without buckets (#112)", async () => {
     apiMock.on("GET /api/v1/buckets", { body: [] });
     renderRoute("/budget");
-    expect(await screen.findByRole("link", { name: "Create one in Bucket setup" })).toHaveAttribute(
+    const mainSection = await section("Main account");
+    expect(mainSection.getByText("No buckets yet.")).toBeInTheDocument();
+    expect(
+      mainSection.getByRole("textbox", { name: "Expected income per cycle" }),
+    ).toBeInTheDocument();
+    expect(
+      mainSection.getByRole("button", { name: "New bucket on Main account" }),
+    ).toBeInTheDocument();
+    expect(await section("Buffer account")).toBeTruthy();
+  });
+
+  it("points to Account setup without accounts", async () => {
+    apiMock.on("GET /api/v1/accounts", { body: [] });
+    apiMock.on("GET /api/v1/buckets", { body: [] });
+    renderRoute("/budget");
+    expect(await screen.findByRole("link", { name: /Account setup/ })).toHaveAttribute(
       "href",
-      "/buckets/setup",
+      "/accounts/setup",
     );
+    expect(screen.getByRole("button", { name: "New bucket" })).toBeDisabled();
   });
 
   it("edits the income rules, planned with the refills (#102)", async () => {
@@ -301,5 +319,187 @@ describe("Budget setup", () => {
       mainSection.getByRole("textbox", { name: "Venta inntekt per periode" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Påfyllingsbeløp for Rent" })).toBeInTheDocument();
+  });
+});
+
+describe("Budget setup, new buckets (#112)", () => {
+  /** Opens the form from an account's section and fills in a bucket. */
+  async function addBucket(account: string, name: string, ra: string) {
+    const s = await section(account);
+    await userEvent.click(s.getByRole("button", { name: `New bucket on ${account}` }));
+    const form = within(await screen.findByRole("form", { name: "New bucket" }));
+    await userEvent.type(form.getByRole("textbox", { name: /Name/ }), name);
+    await userEvent.clear(form.getByRole("textbox", { name: /Refill amount/ }));
+    await userEvent.type(form.getByRole("textbox", { name: /Refill amount/ }), ra);
+    return form;
+  }
+
+  const created = (req: { body: unknown }) => ({
+    status: 201,
+    body: bucket({
+      id: "1000000009",
+      name: "Gifts",
+      source_account_id: main.id,
+      ...(req.body as object),
+    }),
+  });
+
+  it("adds a bucket to the draft from an account's section, counted at once", async () => {
+    renderRoute("/budget");
+    const form = await addBucket("Main account", "Gifts", "2000");
+    // The account is preset.
+    expect(form.getByRole("combobox", { name: /Source account/ })).toHaveValue("Main account");
+    await userEvent.click(form.getByRole("button", { name: "Add to budget" }));
+
+    const mainSection = await section("Main account");
+    expect(mainSection.getByText("Gifts")).toBeInTheDocument();
+    expect(mainSection.getByText("New")).toBeInTheDocument();
+    expect(mainSection.getByText(`${m("20000.00")} (62.5%)`)).toBeInTheDocument();
+    // Refill now is the default in a running cycle.
+    expect(mainSection.getByText("Refilled when saved")).toBeInTheDocument();
+    expect(within(saveBar() ?? document.body).getByText("1 change")).toBeInTheDocument();
+    expect(apiMock.calls("POST /api/v1/buckets")).toHaveLength(0);
+  });
+
+  it("creates the new buckets first on Save, with the other changes", async () => {
+    apiMock.on("POST /api/v1/buckets", created);
+    apiMock.on("POST /api/v1/buckets/refill-amounts", { body: { items: [] } });
+    renderRoute("/budget");
+    await section("Main account");
+    await userEvent.clear(refill("Rent"));
+    await userEvent.type(refill("Rent"), "11000");
+    const form = await addBucket("Main account", "Gifts", "2000");
+    await userEvent.click(form.getByRole("button", { name: "Add to budget" }));
+    expect(within(saveBar() ?? document.body).getByText("2 changes")).toBeInTheDocument();
+
+    apiMock.on("GET /api/v1/buckets", {
+      body: [
+        fun,
+        food,
+        rent,
+        bucket({ id: "1000000009", name: "Gifts", source_account_id: main.id }),
+      ],
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("Budget saved.")).toBeInTheDocument();
+    expect(apiMock.calls("POST /api/v1/buckets").map((c) => c.body)).toEqual([
+      expect.objectContaining({
+        name: "Gifts",
+        source_account_id: main.id,
+        refill_amount: "2000.00",
+        refill: true,
+      }),
+    ]);
+    expect(apiMock.calls("POST /api/v1/buckets/refill-amounts")).toHaveLength(1);
+    expect(saveBar()).not.toBeInTheDocument();
+    expect((await section("Main account")).queryByText("New")).not.toBeInTheDocument();
+  });
+
+  it("edits and removes a bucket in the draft", async () => {
+    renderRoute("/budget");
+    const form = await addBucket("Main account", "Gifts", "2000");
+    await userEvent.click(form.getByRole("button", { name: "Add to budget" }));
+
+    await userEvent.click(await screen.findByRole("button", { name: "Edit Gifts" }));
+    const edit = within(await screen.findByRole("form", { name: "New bucket" }));
+    expect(edit.getByRole("textbox", { name: /Name/ })).toHaveValue("Gifts");
+    await userEvent.clear(edit.getByRole("textbox", { name: /Refill amount/ }));
+    await userEvent.type(edit.getByRole("textbox", { name: /Refill amount/ }), "4000");
+    await userEvent.click(edit.getByRole("radio", { name: "Start at 0" }));
+    await userEvent.click(edit.getByRole("button", { name: "Update" }));
+    const mainSection = await section("Main account");
+    expect(mainSection.getByText(`${m("22000.00")} (68.7%)`)).toBeInTheDocument();
+    expect(mainSection.getByText("Starts at 0")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Edit Gifts" }));
+    const again = within(await screen.findByRole("form", { name: "New bucket" }));
+    await userEvent.click(again.getByRole("button", { name: "Remove" }));
+    await vi.waitFor(() => {
+      expect(mainSection.queryByText("Gifts")).not.toBeInTheDocument();
+    });
+    expect(saveBar()).not.toBeInTheDocument();
+  });
+
+  it("won't take a name a saved or a new bucket has", async () => {
+    renderRoute("/budget");
+    const form = await addBucket("Main account", "rent", "100");
+    await userEvent.click(form.getByRole("button", { name: "Add to budget" }));
+    expect(form.getByText("You already have a bucket with this name.")).toBeInTheDocument();
+    await userEvent.clear(form.getByRole("textbox", { name: /Name/ }));
+    await userEvent.type(form.getByRole("textbox", { name: /Name/ }), "Gifts");
+    await userEvent.click(form.getByRole("button", { name: "Add to budget" }));
+
+    const next = await addBucket("Buffer account", "GIFTS", "100");
+    await userEvent.click(next.getByRole("button", { name: "Add to budget" }));
+    expect(next.getByText("You already have a bucket with this name.")).toBeInTheDocument();
+  });
+
+  it("discards new buckets, and asks before leaving with only one", async () => {
+    const { router } = renderRoute("/budget");
+    const form = await addBucket("Main account", "Gifts", "2000");
+    await userEvent.click(form.getByRole("button", { name: "Add to budget" }));
+    await userEvent.click(
+      within(screen.getByRole("navigation")).getByRole("link", { name: "Buckets" }),
+    );
+    expect(
+      await screen.findByText("You have changes that aren't saved. Leave without saving?"),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Stay" }));
+    expect(router.state.location.pathname).toBe("/budget");
+
+    await userEvent.click(
+      within(saveBar() ?? document.body).getByRole("button", { name: "Discard" }),
+    );
+    expect((await section("Main account")).queryByText("Gifts")).not.toBeInTheDocument();
+    expect(saveBar()).not.toBeInTheDocument();
+  });
+
+  it("doesn't create a bucket twice when a later step fails", async () => {
+    apiMock.on("POST /api/v1/buckets", created);
+    apiMock.on(
+      "POST /api/v1/buckets/refill-amounts",
+      problem(500, "internal", "Something went wrong."),
+    );
+    renderRoute("/budget");
+    await section("Main account");
+    await userEvent.clear(refill("Rent"));
+    await userEvent.type(refill("Rent"), "11000");
+    const form = await addBucket("Main account", "Gifts", "2000");
+    await userEvent.click(form.getByRole("button", { name: "Add to budget" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await vi.waitFor(() => {
+      expect(within(saveBar() ?? document.body).getByText("1 change")).toBeInTheDocument();
+    });
+    expect((await section("Main account")).queryByText("New")).not.toBeInTheDocument();
+
+    apiMock.on("POST /api/v1/buckets/refill-amounts", { body: { items: [] } });
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("Budget saved.")).toBeInTheDocument();
+    expect(apiMock.calls("POST /api/v1/buckets")).toHaveLength(1);
+  });
+
+  it("opens from the header, with the account to choose", async () => {
+    renderRoute("/budget");
+    await section("Main account");
+    await userEvent.click(screen.getByRole("button", { name: "New bucket" }));
+    const form = within(await screen.findByRole("form", { name: "New bucket" }));
+    expect(form.getByRole("combobox", { name: /Source account/ })).toHaveValue("");
+    await userEvent.type(form.getByRole("textbox", { name: /Name/ }), "Gifts");
+    await userEvent.click(form.getByRole("combobox", { name: /Source account/ }));
+    await userEvent.click(await screen.findByRole("option", { name: "Empty account" }));
+    await userEvent.click(form.getByRole("button", { name: "Add to budget" }));
+    const emptySection = await section("Empty account");
+    expect(emptySection.getByText("Gifts")).toBeInTheDocument();
+    expect(emptySection.queryByText("No buckets yet.")).not.toBeInTheDocument();
+  });
+
+  it("shows new buckets as cards on mobile", async () => {
+    viewport.width = 390;
+    renderRoute("/budget");
+    const form = await addBucket("Main account", "Gifts", "2000");
+    await userEvent.click(form.getByRole("button", { name: "Add to budget" }));
+    const card = within(await screen.findByRole("article", { name: "Gifts" }));
+    expect(card.getByText("New")).toBeInTheDocument();
+    expect(card.getByText("Refilled when saved")).toBeInTheDocument();
   });
 });

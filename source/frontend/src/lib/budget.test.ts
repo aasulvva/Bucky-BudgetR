@@ -10,7 +10,9 @@ import {
   cycleChanges,
   draftIncome,
   draftRefill,
+  newCapacity,
   shareOf,
+  type BucketCreate,
 } from "./budget";
 
 const main = account({ id: "1234", name: "Main", expected_income: "32000" });
@@ -45,7 +47,7 @@ describe("draft values", () => {
     expect(draftIncome(EMPTY_DRAFT, main)).toBe("32000.00");
     expect(draftIncome(EMPTY_DRAFT, buffer)).toBeNull();
     expect(draftRefill(EMPTY_DRAFT, rent)).toBe("12000.00");
-    const draft = { incomes: { [main.id]: null }, ras: { [rent.id]: "100.00" } };
+    const draft = { incomes: { [main.id]: null }, ras: { [rent.id]: "100.00" }, created: [] };
     expect(draftIncome(draft, main)).toBeNull();
     expect(draftRefill(draft, rent)).toBe("100.00");
   });
@@ -70,13 +72,13 @@ describe("accountBudget", () => {
   });
 
   it("follows the draft, and counts an empty field as 0", () => {
-    const draft = { incomes: { [main.id]: "15000.00" }, ras: { [food.id]: null } };
+    const draft = { incomes: { [main.id]: "15000.00" }, ras: { [food.id]: null }, created: [] };
     expect(accountBudget(draft, main, all)).toMatchObject({
       allocated: "12000.00",
       percent: 80,
       remainder: "3000.00",
     });
-    const over = { incomes: { [main.id]: "10000.00" }, ras: {} };
+    const over = { incomes: { [main.id]: "10000.00" }, ras: {}, created: [] };
     expect(accountBudget(over, main, all)).toMatchObject({
       percent: 180,
       remainder: "-8000.00",
@@ -93,7 +95,7 @@ describe("accountBudget", () => {
       over: false,
     });
     expect(
-      accountBudget({ incomes: { [main.id]: "-5.00" }, ras: {} }, main, all).percent,
+      accountBudget({ incomes: { [main.id]: "-5.00" }, ras: {}, created: [] }, main, all).percent,
     ).toBeNull();
   });
 });
@@ -121,8 +123,10 @@ describe("budgetChanges", () => {
     const draft = {
       incomes: { [main.id]: "32000.00", [buffer.id]: "5000.00" },
       ras: { [food.id]: "6000.00", [rent.id]: "11000.00" },
+      created: [],
     };
     expect(budgetChanges(draft, [main, buffer], all)).toEqual({
+      created: [],
       incomes: [{ account_id: buffer.id, expected_income: "5000.00" }],
       ras: [{ bucket_id: rent.id, refill_amount: "11000.00" }],
       count: 2,
@@ -131,13 +135,17 @@ describe("budgetChanges", () => {
   });
 
   it("clears an income, and blocks an empty or negative refill amount", () => {
-    expect(budgetChanges({ incomes: { [main.id]: null }, ras: {} }, [main], all)).toMatchObject({
+    expect(
+      budgetChanges({ incomes: { [main.id]: null }, ras: {}, created: [] }, [main], all),
+    ).toMatchObject({
       incomes: [{ account_id: main.id, expected_income: null }],
       count: 1,
       invalid: false,
     });
     for (const ra of [null, "-1.00"]) {
-      expect(budgetChanges({ incomes: {}, ras: { [food.id]: ra } }, [main], all)).toMatchObject({
+      expect(
+        budgetChanges({ incomes: {}, ras: { [food.id]: ra }, created: [] }, [main], all),
+      ).toMatchObject({
         ras: [],
         count: 1,
         invalid: true,
@@ -172,7 +180,7 @@ describe("cycleChanges", () => {
   const all = [refilled, waiting, other];
   const save = (...ras: [string, string][]) =>
     cycleChanges(
-      budgetChanges({ incomes: {}, ras: Object.fromEntries(ras) }, [account1], all),
+      budgetChanges({ incomes: {}, ras: Object.fromEntries(ras), created: [] }, [account1], all),
       [account1],
       all,
     );
@@ -206,5 +214,55 @@ describe("cycleChanges", () => {
 
   it("leaves out accounts without changes", () => {
     expect(save()).toEqual([]);
+  });
+});
+
+describe("new buckets in the draft (#112)", () => {
+  const gifts: BucketCreate = {
+    name: "Gifts",
+    source_account_id: main.id,
+    importance: 5,
+    refill_amount: "2000.00",
+    cap_mode: "multiplier",
+    cap_multiplier: "1.5",
+  };
+  const manual: BucketCreate = {
+    name: "Savings",
+    source_account_id: main.id,
+    importance: 5,
+    refill_amount: "0.00",
+    refill_mode: "fully_manual",
+    cap_mode: "none",
+  };
+  const draft = {
+    incomes: {},
+    ras: {},
+    created: [
+      { key: "1", body: gifts },
+      { key: "2", body: manual },
+      { key: "3", body: { ...gifts, name: "Fuel", source_account_id: buffer.id } },
+    ],
+  };
+
+  it("counts what they take of their account's income, except Fully manual ones", () => {
+    expect(accountBudget(draft, main, all)).toMatchObject({
+      allocated: "20000.00",
+      percent: 62.5,
+      remainder: "12000.00",
+    });
+  });
+
+  it("creates them on Save, each counted as a change", () => {
+    const changes = budgetChanges(draft, [main, buffer], all);
+    expect(changes.count).toBe(3);
+    expect(changes.created.map((n) => n.body.name)).toEqual(["Gifts", "Savings", "Fuel"]);
+    expect(changes.invalid).toBe(false);
+  });
+
+  it("works out their capacity as the server does", () => {
+    expect(newCapacity(gifts)).toBe("3000.00");
+    expect(newCapacity({ ...gifts, cap_mode: "fixed", cap_amount: "1500.00" })).toBe("2000.00");
+    expect(newCapacity({ ...gifts, cap_mode: "fixed", cap_amount: "2500" })).toBe("2500.00");
+    expect(newCapacity(manual)).toBeNull();
   });
 });

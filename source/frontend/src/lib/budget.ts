@@ -2,6 +2,7 @@
 // edited, what they add up to per account, and what saving them sends.
 
 import type { Account, Bucket } from "@/api/accounts";
+import type { components } from "@/api/schema";
 
 import {
   addAmounts,
@@ -12,17 +13,36 @@ import {
   subtractAmounts,
 } from "./money";
 
+export type BucketCreate = components["schemas"]["BucketCreate"];
+
+/** A bucket added in Budget setup (#112), created on Save; the key tells drafts apart. */
+export interface NewBucket {
+  key: string;
+  body: BucketCreate;
+}
+
 /**
  * The values edited and not saved yet, by account and bucket ID. A value is
  * canonical, or null when the field is empty or invalid. What isn't here
- * shows the saved value.
+ * shows the saved value. `created` are new buckets, in the order added.
  */
 export interface BudgetDraft {
   incomes: Partial<Record<string, string | null>>;
   ras: Partial<Record<string, string | null>>;
+  created: NewBucket[];
 }
 
-export const EMPTY_DRAFT: BudgetDraft = { incomes: {}, ras: {} };
+export const EMPTY_DRAFT: BudgetDraft = { incomes: {}, ras: {}, created: [] };
+
+/** The draft's new buckets on an account. */
+export function draftBucketsFor(draft: BudgetDraft, accountId: string): NewBucket[] {
+  return draft.created.filter((n) => n.body.source_account_id === accountId);
+}
+
+/** Whether a new bucket has a refill amount to budget: not Fully manual (#76). */
+export function budgeted(body: BucketCreate): boolean {
+  return body.refill_mode !== "fully_manual";
+}
 
 // Undefined too: a list fetched from an older server lacks expected_income.
 const saved = (amount: string | null | undefined) =>
@@ -69,7 +89,7 @@ export interface AccountBudget {
   over: boolean;
 }
 
-/** What an account's buckets take of its expected income, as edited. */
+/** What an account's buckets take of its expected income, as edited, new ones included. */
 export function accountBudget(
   draft: BudgetDraft,
   account: Account,
@@ -80,6 +100,9 @@ export function accountBudget(
     ...buckets
       .filter((b) => b.source_account_id === account.id)
       .map((b) => draftRefill(draft, b) ?? "0"),
+    ...draftBucketsFor(draft, account.id)
+      .filter((n) => budgeted(n.body))
+      .map((n) => n.body.refill_amount ?? "0"),
   );
   const valid = expected !== null && incomeProblem(expected) === null;
   const remainder = valid ? subtractAmounts(expected, allocated) : null;
@@ -107,10 +130,27 @@ export function capacityAfter(bucket: Bucket, ra: string): { capacity: string; r
     : { capacity: canonicalAmount(fixed), raised: false };
 }
 
+/** A new bucket's capacity, as the server works it out (see capacityAfter); null for no cap. */
+export function newCapacity(body: BucketCreate): string | null {
+  const ra = body.refill_amount ?? "0";
+  switch (body.cap_mode ?? "multiplier") {
+    case "multiplier":
+      return multiplyAmount(ra, body.cap_multiplier ?? "1");
+    case "fixed": {
+      const fixed = body.cap_amount ?? "0";
+      return canonicalAmount(compareAmounts(ra, fixed) > 0 ? ra : fixed);
+    }
+    case "none":
+      return null;
+  }
+}
+
 export interface BudgetChanges {
+  /** New buckets to create first, in the order added (#112). */
+  created: NewBucket[];
   incomes: { account_id: string; expected_income: string | null }[];
   ras: { bucket_id: string; refill_amount: string }[];
-  /** How many fields differ from what's saved. */
+  /** How many fields differ from what's saved, and new buckets. */
   count: number;
   /** Some edited field can't be saved. */
   invalid: boolean;
@@ -124,7 +164,13 @@ export function budgetChanges(
 ): BudgetChanges {
   const same = (a: string | null, b: string | null) =>
     a === null || b === null ? a === b : compareAmounts(a, b) === 0;
-  const out: BudgetChanges = { incomes: [], ras: [], count: 0, invalid: false };
+  const out: BudgetChanges = {
+    created: draft.created,
+    incomes: [],
+    ras: [],
+    count: draft.created.length,
+    invalid: false,
+  };
   for (const a of accounts) {
     if (!(a.id in draft.incomes)) continue;
     const value = draftIncome(draft, a);
