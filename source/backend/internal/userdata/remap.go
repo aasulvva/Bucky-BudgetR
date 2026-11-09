@@ -1,4 +1,4 @@
-package debug
+package userdata
 
 import (
 	"context"
@@ -209,7 +209,7 @@ func newTagIDs(ctx context.Context, tx pgx.Tx, old []string) (map[string]string,
 // snapshot is left as it is; the dashboard ignores unknown IDs.
 func remapPreferences(raw json.RawMessage, m map[kind]map[string]string) (json.RawMessage, error) {
 	var prefs map[string]any
-	if err := decode(raw, &prefs); err != nil {
+	if err := Decode(raw, &prefs); err != nil {
 		return nil, fmt.Errorf("%w: preferences: %w", ErrInvalid, err)
 	}
 	dashboard, _ := prefs["dashboard"].(map[string]any)

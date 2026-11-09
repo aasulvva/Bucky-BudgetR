@@ -118,6 +118,8 @@ export const KNOWN_EVENTS = [
   "user.admin_revoked",
   "user.password_reset",
   "logs.settings_changed",
+  "data.exported",
+  "data.imported",
 ] as const;
 type KnownEvent = (typeof KNOWN_EVENTS)[number];
 

@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-import { apiMock, testUser, type MockRequest } from "@/test/api";
+import { apiMock, problem, testUser, type MockRequest } from "@/test/api";
 import { renderRoute } from "@/test/render";
 
 /** Answers a preferences PATCH as the API does: merged, null resets. */
@@ -143,5 +143,109 @@ describe("Settings", () => {
   it("shows the server status", async () => {
     renderRoute("/settings");
     expect(await screen.findByText("API and database are reachable.")).toBeInTheDocument();
+  });
+
+  describe("data export and import", () => {
+    const exported = {
+      app: "bucky-budgetr",
+      format: 1,
+      user_id: testUser.id,
+      username: "kari",
+      exported_at: "2026-11-09T10:00:00Z",
+      data: { tables: { bank_accounts: [{ id: "a1", opening: 1000.1 }], cycles: [{ id: "c1" }] } },
+    };
+    let downloads: string[];
+    beforeEach(() => {
+      downloads = [];
+      URL.createObjectURL = vi.fn(() => "blob:export");
+      URL.revokeObjectURL = vi.fn();
+      vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
+        this: HTMLAnchorElement,
+      ) {
+        downloads.push(this.download);
+      });
+      apiMock.on("GET /api/v1/me/export", { body: exported });
+    });
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    const fileInput = () => {
+      const input = document.querySelector<HTMLInputElement>('input[type="file"]');
+      if (!input) throw new Error("no file input");
+      return input;
+    };
+    const today = () => {
+      const d = new Date();
+      const pad = (n: number) => String(n).padStart(2, "0");
+      return `${String(d.getFullYear())}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    };
+
+    it("downloads the user's data", async () => {
+      renderRoute("/settings");
+      await userEvent.click(await screen.findByRole("button", { name: "Download my data" }));
+      expect(await screen.findByText("Your data is downloaded.")).toBeInTheDocument();
+      expect(downloads).toEqual([`bucky-budgetr-kari-${today()}.json`]);
+    });
+
+    it("replaces the data after a typed confirmation, downloading it first", async () => {
+      apiMock.on("POST /api/v1/me/import", () => {
+        // The current data is already saved.
+        expect(downloads).toHaveLength(1);
+        return { body: { accounts: 1, buckets: 0, cycles: 1, transactions: 0, schedules: 0 } };
+      });
+      renderRoute("/settings");
+      await screen.findByRole("button", { name: "Download my data" });
+      const text = JSON.stringify({ ...exported, username: "ola", user_id: "other" });
+      await userEvent.upload(
+        fileInput(),
+        new File([text], "backup.json", { type: "application/json" }),
+      );
+
+      const dialog = await screen.findByRole("dialog", { name: "Replace all your data?" });
+      expect(within(dialog).getByText("ola")).toBeInTheDocument();
+      expect(within(dialog).getByText(/imported as a copy with new IDs/)).toBeInTheDocument();
+      expect(within(dialog).getByRole("row", { name: "Accounts 1" })).toBeInTheDocument();
+      const confirm = within(dialog).getByRole("button", { name: "Replace my data" });
+      expect(confirm).toBeDisabled();
+      await userEvent.type(within(dialog).getByLabelText(/Type your username/), "kari");
+      await userEvent.click(confirm);
+
+      expect(
+        await screen.findByText("Imported: 1 accounts and 0 transactions."),
+      ).toBeInTheDocument();
+      expect(apiMock.calls("POST /api/v1/me/import")[0]?.body).toEqual(JSON.parse(text));
+      expect(apiMock.requests.map((r) => `${r.method} ${r.path}`)).toContain(
+        "GET /api/v1/me/export",
+      );
+      await waitFor(() => {
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      });
+    });
+
+    it("refuses a file that isn't an export", async () => {
+      renderRoute("/settings");
+      await screen.findByRole("button", { name: "Download my data" });
+      await userEvent.upload(fileInput(), new File(["{}"], "x.json", { type: "application/json" }));
+      expect(await screen.findByText(/isn't a Bucky BudgetR export/)).toBeInTheDocument();
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("shows the server's answer when the import fails", async () => {
+      apiMock.on("POST /api/v1/me/import", problem(409, "export_too_new", "Too new."));
+      renderRoute("/settings");
+      await screen.findByRole("button", { name: "Download my data" });
+      await userEvent.upload(
+        fileInput(),
+        new File([JSON.stringify(exported)], "x.json", { type: "application/json" }),
+      );
+      const dialog = await screen.findByRole("dialog");
+      expect(within(dialog).queryByText(/new IDs/)).not.toBeInTheDocument();
+      await userEvent.type(within(dialog).getByLabelText(/Type your username/), "kari");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Replace my data" }));
+      expect(
+        await within(dialog).findByText(/This export is from a newer version/),
+      ).toBeInTheDocument();
+    });
   });
 });

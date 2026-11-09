@@ -1,7 +1,6 @@
 package debug
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,57 +9,26 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/userdata"
 )
 
-// A snapshot holds everything that belongs to one user: their rows in the
-// tables below and their preferences. Restoring it replaces that user's data
-// with the snapshot's, keeping the IDs when the snapshot is the user's own,
-// or with new IDs when it's someone else's (a clone).
+// A snapshot holds everything that belongs to one user (userdata.Read).
+// Restoring it replaces that user's data with the snapshot's, keeping the
+// IDs when the snapshot is the user's own, or with new IDs when it's someone
+// else's (a clone).
 
 var (
 	ErrNotFound = errors.New("snapshot not found")
 	// ErrSchema means the snapshot was taken at another schema version.
 	ErrSchema = errors.New("snapshot from another schema version")
 	// ErrInvalid means an imported snapshot isn't one.
-	ErrInvalid = errors.New("invalid snapshot")
+	ErrInvalid = userdata.ErrInvalid
 )
 
-// table is a per-user table and how to find the user's rows in it.
-type table struct {
-	name  string
-	where string // with $1 = the user ID
-	order string
-}
-
-// tables are the per-user tables, parents first: the order to insert in, and
-// reversed, to delete in.
-var tables = []table{
-	{"bank_accounts", "user_id = $1", "id"},
-	{"cycles", "user_id = $1", "id"},
-	{"buckets", "user_id = $1", "id"},
-	{"tags", "user_id = $1", "id"},
-	{"transaction_headers", "user_id = $1", "id"},
-	{"bank_transactions", "account_id IN (SELECT id FROM bank_accounts WHERE user_id = $1)", "id"},
-	{"bucket_transactions", "bucket_id IN (SELECT id FROM buckets WHERE user_id = $1)", "id"},
-	{"transaction_tags", "user_id = $1", "transaction_id, tag_id"},
-	{"refills", "user_id = $1", "bucket_id, cycle_id"},
-	{"schedules", "user_id = $1", "id"},
-	{"schedule_bucket_lines", "user_id = $1", "schedule_id, bucket_id"},
-	{"schedule_occurrences", "user_id = $1", "id"},
-	// The keys aren't remapped (see kKept).
-	{"notification_dismissals", "user_id = $1", "key"},
-}
-
-type row = map[string]any
-
 // Data is a snapshot's content.
-type Data struct {
-	Preferences json.RawMessage  `json:"preferences"`
-	Tables      map[string][]row `json:"tables"`
-}
+type Data = userdata.Data
 
 // Snapshot is a saved snapshot without its data.
 type Snapshot struct {
@@ -89,12 +57,7 @@ const exportFormat = 1
 func schemaVersion(ctx context.Context, q interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }) (int64, error) {
-	var v int64
-	err := q.QueryRow(ctx, `SELECT coalesce(max(version_id), 0) FROM goose_db_version WHERE is_applied`).Scan(&v)
-	if err != nil {
-		return 0, fmt.Errorf("schema version: %w", err)
-	}
-	return v, nil
+	return userdata.SchemaVersion(ctx, q)
 }
 
 // Save takes a snapshot of the user's data, at the clock's time.
@@ -104,7 +67,7 @@ func (d *Debug) Save(ctx context.Context, userID, name string) (Snapshot, error)
 		if err := ledger.LockUser(ctx, tx, userID); err != nil {
 			return err
 		}
-		data, err := read(ctx, tx, userID)
+		data, err := userdata.Read(ctx, tx, userID)
 		if err != nil {
 			return err
 		}
@@ -120,34 +83,6 @@ func (d *Debug) Save(ctx context.Context, userID, name string) (Snapshot, error)
 		return err
 	})
 	return s, err
-}
-
-// read returns the user's data.
-func read(ctx context.Context, tx pgx.Tx, userID string) (Data, error) {
-	data := Data{Tables: map[string][]row{}}
-	if err := tx.QueryRow(ctx, `SELECT preferences FROM users WHERE id = $1`, userID).Scan(&data.Preferences); err != nil {
-		return Data{}, fmt.Errorf("read preferences: %w", err)
-	}
-	for _, t := range tables {
-		var raw []byte
-		q := fmt.Sprintf(`SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY %s), '[]') FROM %s t WHERE %s`, t.order, t.name, t.where)
-		if err := tx.QueryRow(ctx, q, userID).Scan(&raw); err != nil {
-			return Data{}, fmt.Errorf("read %s: %w", t.name, err)
-		}
-		var rows []row
-		if err := decode(raw, &rows); err != nil {
-			return Data{}, fmt.Errorf("read %s: %w", t.name, err)
-		}
-		data.Tables[t.name] = rows
-	}
-	return data, nil
-}
-
-// decode unmarshals JSON keeping numbers exact (amounts are numeric).
-func decode(raw []byte, v any) error {
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.UseNumber()
-	return dec.Decode(v)
 }
 
 func insertSnapshot(ctx context.Context, tx pgx.Tx, userID, name string, takenAt time.Time, version int64, data Data) (int64, error) {
@@ -226,7 +161,7 @@ func (d *Debug) Export(ctx context.Context, id int64) (Export, error) {
 	if err != nil {
 		return Export{}, err
 	}
-	if err := decode(raw, &e.Data); err != nil {
+	if err := userdata.Decode(raw, &e.Data); err != nil {
 		return Export{}, err
 	}
 	return e, nil
@@ -238,7 +173,7 @@ func (d *Debug) Import(ctx context.Context, e Export) (Snapshot, error) {
 		return Snapshot{}, ErrInvalid
 	}
 	for name := range e.Data.Tables {
-		if !known(name) {
+		if !userdata.Known(name) {
 			return Snapshot{}, fmt.Errorf("%w: unknown table %q", ErrInvalid, name)
 		}
 	}
@@ -255,15 +190,6 @@ func (d *Debug) Import(ctx context.Context, e Export) (Snapshot, error) {
 		return err
 	})
 	return s, err
-}
-
-func known(name string) bool {
-	for _, t := range tables {
-		if t.name == name {
-			return true
-		}
-	}
-	return false
 }
 
 // Restore replaces userID's data with the snapshot's. With setClock, the
@@ -285,7 +211,7 @@ func (d *Debug) Restore(ctx context.Context, id int64, userID string, setClock b
 		return time.Time{}, err
 	}
 	var data Data
-	if err := decode(raw, &data); err != nil {
+	if err := userdata.Decode(raw, &data); err != nil {
 		return time.Time{}, err
 	}
 
@@ -300,29 +226,8 @@ func (d *Debug) Restore(ctx context.Context, id int64, userID string, setClock b
 		if err := ledger.LockUser(ctx, tx, userID); err != nil {
 			return err
 		}
-		// The ledger is immutable (ledger_immutable triggers), so switch
-		// triggers off for this transaction: in replica mode Postgres skips
-		// ordinary triggers, foreign key checks included. It needs a
-		// superuser, which the development database's role is.
-		if _, err := tx.Exec(ctx, `SET LOCAL session_replication_role = replica`); err != nil {
-			var pgErr *pgconn.PgError
-			if errors.As(err, &pgErr) && pgErr.Code == "42501" {
-				return errors.New("restoring a snapshot needs a superuser database role")
-			}
-			return err
-		}
-		keep := owner == userID
-		if keep {
-			if keep, err = idsFree(ctx, tx, userID, data); err != nil {
-				return err
-			}
-		}
-		if !keep {
-			if data, err = remap(ctx, tx, userID, data); err != nil {
-				return err
-			}
-		}
-		return write(ctx, tx, userID, data)
+		_, err = userdata.Replace(ctx, tx, userID, owner, data)
+		return err
 	})
 	if err != nil {
 		return time.Time{}, err
@@ -334,71 +239,4 @@ func (d *Debug) Restore(ctx context.Context, id int64, userID string, setClock b
 		}
 	}
 	return takenAt, nil
-}
-
-// idsFree reports whether none of the snapshot's IDs belong to another user
-// now, so it can be restored as it is. IDs are unique across users.
-func idsFree(ctx context.Context, tx pgx.Tx, userID string, data Data) (bool, error) {
-	for _, t := range []string{"bank_accounts", "cycles", "buckets", "tags", "transaction_headers", "schedules"} {
-		var taken bool
-		err := tx.QueryRow(ctx, fmt.Sprintf(`
-			SELECT EXISTS (SELECT 1 FROM %s WHERE id::text = ANY($1) AND user_id <> $2)`, t),
-			keys(data.Tables[t], "id"), userID).Scan(&taken)
-		if err != nil {
-			return false, err
-		}
-		if taken {
-			return false, nil
-		}
-	}
-	return true, nil
-}
-
-// keys returns the rows' values of col as text.
-func keys(rows []row, col string) []string {
-	out := make([]string, 0, len(rows))
-	for _, r := range rows {
-		if v := r[col]; v != nil {
-			out = append(out, fmt.Sprint(v))
-		}
-	}
-	return out
-}
-
-// write deletes the user's data and inserts data instead.
-func write(ctx context.Context, tx pgx.Tx, userID string, data Data) error {
-	for i := len(tables) - 1; i >= 0; i-- {
-		t := tables[i]
-		if _, err := tx.Exec(ctx, fmt.Sprintf(`DELETE FROM %s WHERE %s`, t.name, t.where), userID); err != nil {
-			return fmt.Errorf("delete %s: %w", t.name, err)
-		}
-	}
-	for _, t := range tables {
-		rows := data.Tables[t.name]
-		if len(rows) == 0 {
-			continue
-		}
-		raw, err := json.Marshal(rows)
-		if err != nil {
-			return err
-		}
-		overriding := ""
-		if t.name == "tags" {
-			overriding = "OVERRIDING SYSTEM VALUE"
-		}
-		q := fmt.Sprintf(`INSERT INTO %[1]s %[2]s SELECT * FROM jsonb_populate_recordset(null::%[1]s, $1)`, t.name, overriding)
-		if _, err := tx.Exec(ctx, q, raw); err != nil {
-			return fmt.Errorf("insert %s: %w", t.name, err)
-		}
-	}
-	// Tags restored from another database can be ahead of the sequence.
-	if _, err := tx.Exec(ctx, `
-		SELECT setval(s, greatest((SELECT max(id) FROM tags), coalesce(pg_sequence_last_value(s::regclass), 1)))
-		FROM pg_get_serial_sequence('tags', 'id') s`); err != nil {
-		return fmt.Errorf("tag sequence: %w", err)
-	}
-	if _, err := tx.Exec(ctx, `UPDATE users SET preferences = $2, modified_at = now() WHERE id = $1`, userID, []byte(data.Preferences)); err != nil {
-		return fmt.Errorf("preferences: %w", err)
-	}
-	return nil
 }

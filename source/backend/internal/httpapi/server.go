@@ -21,6 +21,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/refill"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/schedules"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/transactions"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/userdata"
 )
 
 // Pinger reports whether a dependency is reachable. *pgxpool.Pool implements it.
@@ -53,6 +54,9 @@ type Options struct {
 	// Logs reads the kept log entries for the Logs screen (#93). Nil
 	// answers its endpoints with 503.
 	Logs *logging.Service
+	// UserData exports and imports a user's data (#36). Nil answers its
+	// endpoints with 503.
+	UserData *userdata.Service
 	// Docs serves the interactive API docs at /api/docs and the spec at
 	// /api/openapi.json. Meant for development only.
 	Docs bool
@@ -71,7 +75,7 @@ type Options struct {
 func NewHandler(logger *slog.Logger, db Pinger, opts Options) (http.Handler, error) {
 	mux := http.NewServeMux()
 
-	strict := api.NewStrictHandlerWithOptions(&server{db: db, auth: opts.Auth, accounts: opts.Accounts, cycles: opts.Cycles, buckets: opts.Buckets, transactions: opts.Transactions, refills: opts.Refills, schedules: opts.Schedules, notifications: opts.Notifications, logs: opts.Logs, logger: logger}, nil, api.StrictHTTPServerOptions{
+	strict := api.NewStrictHandlerWithOptions(&server{db: db, auth: opts.Auth, accounts: opts.Accounts, cycles: opts.Cycles, buckets: opts.Buckets, transactions: opts.Transactions, refills: opts.Refills, schedules: opts.Schedules, notifications: opts.Notifications, logs: opts.Logs, userData: opts.UserData, logger: logger}, nil, api.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc:  badRequest,
 		ResponseErrorHandlerFunc: responseError(logger),
 	})
