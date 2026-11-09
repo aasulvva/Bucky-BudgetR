@@ -23,7 +23,8 @@ export interface MockRequest {
   body: unknown;
 }
 
-type Handler = MockResponse | ((req: MockRequest) => MockResponse);
+// A function may answer later, to test what shows while a request loads.
+type Handler = MockResponse | ((req: MockRequest) => MockResponse | Promise<MockResponse>);
 
 export const testUser: User = {
   id: "00000000-0000-0000-0000-000000000001",
@@ -91,7 +92,7 @@ export async function fakeFetch(input: Request): Promise<Response> {
   const handler = handlers.get(`${req.method} ${req.path}`);
   const res =
     typeof handler === "function"
-      ? handler(req)
+      ? await handler(req)
       : (handler ?? problem(404, "not_found", `No fake for ${req.method} ${req.path}.`));
   const status = res.status ?? 200;
   return new Response(status === 204 ? null : JSON.stringify(res.body), {

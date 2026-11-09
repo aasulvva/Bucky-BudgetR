@@ -1,12 +1,13 @@
 import { BarChart, LineChart } from "@mantine/charts";
 import { Box, Stack, Text } from "@mantine/core";
 import { useElementSize } from "@mantine/hooks";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 
 import type { Account, Bucket } from "@/api/accounts";
 import type { Cycle } from "@/api/cycles";
-import { useStatsSeries } from "@/api/stats";
+import { useStatsSeries, type StatsSeries } from "@/api/stats";
 import { QueryState } from "@/components/QueryState";
 import {
   cleanGraph,
@@ -27,7 +28,7 @@ import {
 } from "@/lib/graphs";
 import { getLocale } from "@/lib/locale";
 import { formatMoney } from "@/lib/money";
-import type { Period } from "@/lib/periods";
+import type { Period, Resolution } from "@/lib/periods";
 
 import { PieView } from "./PieView";
 
@@ -76,73 +77,99 @@ export function GraphView({
       : { resolution: s.resolution, coarsened: null };
   const resolution = queryResolution(s, fitted.resolution);
   const query = useStatsSeries(period ? statsQuery(s, period, resolution) : null);
-  const { currency, leftOut } = shownCurrency(s, accounts);
+  const view: View = { s, fitted, resolution, ...shownCurrency(s, accounts) };
+
+  // While a changed graph loads, the previous numbers are kept (#167). They
+  // are drawn as they were, with the settings they were fetched for: the new
+  // settings on the old numbers mixed them up (bucket lines read per account
+  // all became Total). Remembered in state, not a ref, as React allows.
+  const [settled, setSettled] = useState<{ data: StatsSeries; view: View } | null>(null);
+  if (query.data && !query.isPlaceholderData && settled?.data !== query.data) {
+    setSettled({ data: query.data, view });
+  }
+  const waiting = query.isPlaceholderData && settled !== null;
+
+  const render = (result: StatsSeries, { s, fitted, resolution, currency, leftOut }: View) => {
+    const coarsened = fitted.coarsened && {
+      why: fitted.coarsened,
+      resolution: t(`stats.resolution.options.${fitted.resolution}`),
+      max: maxIntervals(s.kind),
+      kind: s.kind,
+    };
+    if (s.kind === "pie") {
+      const pie = pieData(result, s, resolution, currency, accounts, buckets);
+      return (
+        <Stack gap="xs">
+          {pie.slices.length === 0 ? (
+            <Text c="dimmed">{t("stats.graphs.empty")}</Text>
+          ) : (
+            <PieView
+              data={pie}
+              settings={s}
+              currency={currency}
+              width={width}
+              linkOf={
+                clickThrough
+                  ? (slice) => {
+                      const interval = result.intervals[slice.index] ?? result.intervals[0];
+                      const series = slice.name.startsWith("i-") ? "total" : slice.name;
+                      return interval ? intervalLink(s, series, interval) : "/transactions";
+                    }
+                  : undefined
+              }
+            />
+          )}
+          <Notes
+            other={pie.other}
+            belowZero={pie.belowZero}
+            leftOut={leftOut}
+            coarsened={coarsened}
+          />
+        </Stack>
+      );
+    }
+    const data = graphData(result, s, fitted.resolution, currency, accounts, buckets);
+    return (
+      <Stack gap="xs">
+        <Chart
+          data={data}
+          settings={s}
+          currency={currency}
+          height={height}
+          dots={showDots(data.rows.length, plot)}
+          intervals={result.intervals}
+          clickThrough={clickThrough}
+        />
+        <Notes other={data.other} leftOut={leftOut} coarsened={coarsened} />
+      </Stack>
+    );
+  };
 
   return (
-    <Box ref={ref}>
+    <Box
+      ref={ref}
+      aria-busy={waiting || undefined}
+      data-loading={waiting || undefined}
+      style={{ opacity: waiting ? 0.5 : 1, transition: "opacity 150ms" }}
+    >
       {period === null ? (
         <Text c="dimmed">{t("stats.graphs.noPeriod")}</Text>
       ) : (
         <QueryState query={query}>
-          {(result) => {
-            const coarsened = fitted.coarsened && {
-              why: fitted.coarsened,
-              resolution: t(`stats.resolution.options.${fitted.resolution}`),
-              max: maxIntervals(s.kind),
-              kind: s.kind,
-            };
-            if (s.kind === "pie") {
-              const pie = pieData(result, s, resolution, currency, accounts, buckets);
-              return (
-                <Stack gap="xs">
-                  {pie.slices.length === 0 ? (
-                    <Text c="dimmed">{t("stats.graphs.empty")}</Text>
-                  ) : (
-                    <PieView
-                      data={pie}
-                      settings={s}
-                      currency={currency}
-                      width={width}
-                      linkOf={
-                        clickThrough
-                          ? (slice) => {
-                              const interval = result.intervals[slice.index] ?? result.intervals[0];
-                              const series = slice.name.startsWith("i-") ? "total" : slice.name;
-                              return interval ? intervalLink(s, series, interval) : "/transactions";
-                            }
-                          : undefined
-                      }
-                    />
-                  )}
-                  <Notes
-                    other={pie.other}
-                    belowZero={pie.belowZero}
-                    leftOut={leftOut}
-                    coarsened={coarsened}
-                  />
-                </Stack>
-              );
-            }
-            const data = graphData(result, s, fitted.resolution, currency, accounts, buckets);
-            return (
-              <Stack gap="xs">
-                <Chart
-                  data={data}
-                  settings={s}
-                  currency={currency}
-                  height={height}
-                  dots={showDots(data.rows.length, plot)}
-                  intervals={result.intervals}
-                  clickThrough={clickThrough}
-                />
-                <Notes other={data.other} leftOut={leftOut} coarsened={coarsened} />
-              </Stack>
-            );
-          }}
+          {(result) => (waiting ? render(settled.data, settled.view) : render(result, view))}
         </QueryState>
       )}
     </Box>
   );
+}
+
+/** What a graph is drawn with, besides its numbers. */
+interface View {
+  s: GraphSettings;
+  fitted: ReturnType<typeof fitResolution>;
+  resolution: Resolution;
+  currency: string;
+  leftOut: number;
 }
 
 interface ChartProps {

@@ -373,6 +373,14 @@ export function graphData(
       s.metric === "balance" ? abs(l.values.at(-1) ?? "0") : abs(addAmounts("0", ...l.values));
     return { name, label, amounts: l.values, shown: amounts, size };
   });
+  // Names are keys (rows, React): never the same twice, even for lines that
+  // don't fit the grouping (#167).
+  const seen = new Map<string, number>();
+  for (const x of named) {
+    const n = (seen.get(x.name) ?? 0) + 1;
+    seen.set(x.name, n);
+    if (n > 1) x.name = `${x.name}-${String(n)}`;
+  }
 
   const top = topOf(s);
   const ranked = [...named].sort((a, b) => compareAmounts(b.size, a.size));
