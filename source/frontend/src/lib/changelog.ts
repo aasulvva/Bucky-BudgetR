@@ -16,6 +16,32 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.04.00",
+    date: "2026-11-09",
+    title: {
+      en: "New buckets from Budget setup",
+      nb: "Nye bøtter fra Budsjettoppsett",
+      nn: "Nye bøtter frå Budsjettoppsett",
+    },
+    changes: {
+      en: [
+        "Budget setup can add buckets: New bucket in the header, or at the end of an account's buckets, opens the same form as Bucket setup.",
+        "A new bucket counts in the budget at once, shown as New, and is created when you save, together with your other changes. Until then you can change or remove it.",
+        "Accounts without buckets now show on Budget setup too, so you can start a budget there.",
+      ],
+      nb: [
+        "Budsjettoppsett kan legge til bøtter: Ny bøtte øverst, eller etter en kontos bøtter, åpner det samme skjemaet som Bøtteoppsett.",
+        "En ny bøtte telles med i budsjettet med en gang, merket Ny, og opprettes når du lagrer, sammen med de andre endringene. Til da kan du endre eller fjerne den.",
+        "Kontoer uten bøtter vises nå også i Budsjettoppsett, så du kan starte et budsjett der.",
+      ],
+      nn: [
+        "Budsjettoppsett kan leggje til bøtter: Ny bøtte øvst, eller etter bøttene til ein konto, opnar det same skjemaet som Bøtteoppsett.",
+        "Ei ny bøtte vert talt med i budsjettet med ein gong, merkt Ny, og vert oppretta når du lagrar, saman med dei andre endringane. Til då kan du endre eller fjerne ho.",
+        "Kontoar utan bøtter vert no òg viste i Budsjettoppsett, så du kan starte eit budsjett der.",
+      ],
+    },
+  },
+  {
     version: "v2.03.00",
     date: "2026-11-09",
     title: {

@@ -681,7 +681,22 @@
     },
     "fullyManualSkipped_one": "{{count}} helt manuell bøtte er ikke med her: den har ikke noe påfyllingsbeløp.",
     "fullyManualSkipped_other": "{{count}} helt manuelle bøtter er ikke med her: de har ikke noe påfyllingsbeløp.",
-    "incomeRules": "Inntektsregler"
+    "incomeRules": "Inntektsregler",
+    "newBucket": "Ny bøtte",
+    "newBucketFor": "Ny bøtte på {{account}}",
+    "newBadge": "Ny",
+    "addToBudget": "Legg til i budsjettet",
+    "updateNew": "Oppdater",
+    "removeNew": "Fjern",
+    "editNew": "Endre {{name}}",
+    "starts": {
+      "refill": "Fylles på ved lagring",
+      "amount": "Starter med {{amount}}",
+      "zero": "Starter på 0"
+    },
+    "noBuckets": "Ingen bøtter ennå.",
+    "creates_one": "Lagringen oppretter også {{count}} ny bøtte: {{names}}.",
+    "creates_other": "Lagringen oppretter også {{count}} nye bøtter: {{names}}."
   },
   "newTransaction": {
     "type": "Type",

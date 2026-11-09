@@ -681,7 +681,22 @@
     },
     "fullyManualSkipped_one": "{{count}} fully manual bucket isn't budgeted here: it has no refill amount.",
     "fullyManualSkipped_other": "{{count}} fully manual buckets aren't budgeted here: they have no refill amount.",
-    "incomeRules": "Income rules"
+    "incomeRules": "Income rules",
+    "newBucket": "New bucket",
+    "newBucketFor": "New bucket on {{account}}",
+    "newBadge": "New",
+    "addToBudget": "Add to budget",
+    "updateNew": "Update",
+    "removeNew": "Remove",
+    "editNew": "Edit {{name}}",
+    "starts": {
+      "refill": "Refilled when saved",
+      "amount": "Starts with {{amount}}",
+      "zero": "Starts at 0"
+    },
+    "noBuckets": "No buckets yet.",
+    "creates_one": "Saving also creates {{count}} new bucket: {{names}}.",
+    "creates_other": "Saving also creates {{count}} new buckets: {{names}}."
   },
   "newTransaction": {
     "type": "Type",
