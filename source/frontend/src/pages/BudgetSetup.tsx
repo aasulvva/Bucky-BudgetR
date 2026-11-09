@@ -12,11 +12,12 @@ import {
   Table,
   Text,
   Title,
+  Tooltip,
   useMantineTheme,
 } from "@mantine/core";
 import { useMediaQuery, useWindowEvent } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
-import { IconCoins, IconPencil, IconPlus } from "@tabler/icons-react";
+import { IconArrowBackUp, IconCoins, IconPencil, IconPlus, IconTrash } from "@tabler/icons-react";
 import { useMutation } from "@tanstack/react-query";
 import { useState, type Dispatch, type SetStateAction } from "react";
 import { Trans, useTranslation } from "react-i18next";
@@ -45,6 +46,7 @@ import {
   EMPTY_DRAFT,
   accountBudget,
   budgetChanges,
+  canDelete,
   capacityAfter,
   cycleChanges,
   draftBucketsFor,
@@ -150,7 +152,10 @@ export default function BudgetSetup() {
             initial={editing?.body}
             source={form.source}
             takenNames={[
-              ...(buckets.data ?? []).map((b) => b.name),
+              // A deleted bucket's name is free: deletes run first on Save.
+              ...(buckets.data ?? [])
+                .filter((b) => !draft.deleted.includes(b.id))
+                .map((b) => b.name),
               ...draft.created.filter((n) => n.key !== form.key).map((n) => n.body.name),
             ]}
             onDraft={(body) => {
@@ -268,8 +273,15 @@ function Budget({
 
   const save = useMutation({
     mutationFn: async ({ c, thisCycle }: { c: BudgetChanges; thisCycle: boolean }) => {
-      // New buckets first; each leaves the draft once it's created, so a
-      // retry after a later error doesn't create it twice.
+      // Deletes first, which frees their names, then new buckets; each leaves
+      // the draft once it's done, so a retry after a later error doesn't
+      // repeat it.
+      for (const b of c.deleted) {
+        await unwrap(
+          api.DELETE("/api/v1/buckets/{bucketId}", { params: { path: { bucketId: b.id } } }),
+        );
+        setDraft((d) => ({ ...d, deleted: d.deleted.filter((id) => id !== b.id) }));
+      }
       for (const n of c.created) {
         await unwrap(api.POST("/api/v1/buckets", { body: n.body }));
         setDraft((d) => ({ ...d, created: d.created.filter((x) => x.key !== n.key) }));
@@ -324,6 +336,12 @@ function Budget({
   const edit: Edit = (kind, id, value) => {
     setDraft((d) => ({ ...d, [kind]: { ...d[kind], [id]: value } }));
   };
+  const markDeleted = (id: string, on: boolean) => {
+    setDraft((d) => ({
+      ...d,
+      deleted: on ? [...d.deleted, id] : d.deleted.filter((x) => x !== id),
+    }));
+  };
 
   // Accounts with buckets first, then the rest, so a budget can start there
   // (#112). A new bucket in the draft doesn't move its account.
@@ -339,6 +357,8 @@ function Budget({
           buckets={buckets.filter((b) => b.source_account_id === a.id)}
           draft={draft}
           onEdit={edit}
+          onDelete={markDeleted}
+          usable={canChangeCycle}
           onNew={() => {
             onNew(a.id);
           }}
@@ -420,6 +440,14 @@ function Budget({
       >
         <Stack gap="md">
           <Text size="sm">{t("budgetSetup.confirm.intro")}</Text>
+          {changes.deleted.length > 0 && (
+            <Text size="sm">
+              {t("budgetSetup.deletes", {
+                count: changes.deleted.length,
+                names: changes.deleted.map((b) => b.name).join(", "),
+              })}
+            </Text>
+          )}
           {changes.created.length > 0 && (
             <Text size="sm">
               {t("budgetSetup.creates", {
@@ -518,6 +546,8 @@ function AccountSection({
   buckets: all,
   draft,
   onEdit,
+  onDelete,
+  usable,
   onNew,
   onEditNew,
   isDesktop,
@@ -526,6 +556,10 @@ function AccountSection({
   buckets: Bucket[];
   draft: BudgetDraft;
   onEdit: Edit;
+  /** Marks a saved bucket deleted in the draft, or undoes that (#174). */
+  onDelete: (id: string, deleted: boolean) => void;
+  /** Whether there's a usable active cycle to release a bucket's funds in. */
+  usable: boolean;
   /** A new bucket on this account. */
   onNew: () => void;
   /** Opens a new bucket in the draft. */
@@ -630,9 +664,12 @@ function AccountSection({
                   <BucketRow
                     key={b.id}
                     bucket={b}
+                    account={account}
                     draft={draft}
                     expected={budget.percent === null ? null : budget.expected}
                     onEdit={onEdit}
+                    onDelete={onDelete}
+                    usable={usable}
                   />
                 ))}
                 {created.map((n) => (
@@ -659,9 +696,12 @@ function AccountSection({
             <BucketCard
               key={b.id}
               bucket={b}
+              account={account}
               draft={draft}
               expected={budget.percent === null ? null : budget.expected}
               onEdit={onEdit}
+              onDelete={onDelete}
+              usable={usable}
             />
           ))}
           {created.map((n) => (
@@ -698,22 +738,49 @@ function Figure({ label, value, color }: { label: string; value: string; color?:
 
 interface BucketProps {
   bucket: Bucket;
+  account: Account;
   draft: BudgetDraft;
   /** The account's expected income, when there is a valid one. */
   expected: string | null;
   onEdit: Edit;
+  onDelete: (id: string, deleted: boolean) => void;
+  usable: boolean;
 }
 
 /** What a bucket's row shows besides its name and refill amount field. */
-function useBucketValues({ bucket, draft, expected }: Omit<BucketProps, "onEdit">) {
+function useBucketValues({ bucket, account, draft, expected }: BucketProps) {
   const { t } = useTranslation();
   const money = (amount: string) => formatMoney(amount, bucket.currency);
+  const deleted = draft.deleted.includes(bucket.id);
   const ra = draftRefill(draft, bucket);
+  const tf = compareAmounts(bucket.target_funds, "0");
+  // What deleting does with what's left (spec §4), as Bucket setup says it.
+  const released = {
+    amount: money(tf < 0 ? subtractAmounts("0", bucket.target_funds) : bucket.target_funds),
+    account: account.name,
+  };
+  if (deleted) {
+    return {
+      deleted,
+      ra,
+      error: undefined,
+      share: "–",
+      capacity: "–",
+      raised: null,
+      left:
+        tf > 0
+          ? t("bucketSetup.deleteReleases", released)
+          : tf < 0
+            ? t("bucketSetup.deleteSettles", released)
+            : money(bucket.target_funds),
+    };
+  }
   const problem = bucket.id in draft.ras ? refillProblem(ra) : null;
   const usable = ra !== null && problem === null ? ra : bucket.refill_amount;
   const share = shareOf(usable, expected);
   const after = capacityAfter(bucket, usable);
   return {
+    deleted,
     ra,
     error:
       problem === "empty"
@@ -733,15 +800,68 @@ function useBucketValues({ bucket, draft, expected }: Omit<BucketProps, "onEdit"
   };
 }
 
-function BucketName({ bucket }: { bucket: Bucket }) {
+function BucketName({
+  bucket,
+  deleted,
+  usable,
+  onDelete,
+}: {
+  bucket: Bucket;
+  deleted: boolean;
+  usable: boolean;
+  onDelete: (id: string, deleted: boolean) => void;
+}) {
   const { t } = useTranslation();
+  const allowed = canDelete(bucket, usable);
   return (
     <Group gap={6} wrap="wrap" style={{ minWidth: 0 }}>
-      <Text fw={600}>{bucket.name}</Text>
-      {bucket.priority && (
+      <Text fw={600} td={deleted ? "line-through" : undefined} c={deleted ? "dimmed" : undefined}>
+        {bucket.name}
+      </Text>
+      {deleted && (
+        <Badge size="sm" variant="light" color="red" radius="sm">
+          {t("budgetSetup.deletedBadge")}
+        </Badge>
+      )}
+      {bucket.priority && !deleted && (
         <Badge size="sm" variant="light" radius="sm">
           {t("buckets.priority")}
         </Badge>
+      )}
+      {deleted ? (
+        <Button
+          variant="subtle"
+          size="compact-xs"
+          leftSection={<IconArrowBackUp size={14} />}
+          aria-label={t("budgetSetup.undoDelete", { name: bucket.name })}
+          onClick={() => {
+            onDelete(bucket.id, false);
+          }}
+        >
+          {t("budgetSetup.undo")}
+        </Button>
+      ) : (
+        // Releasing what's left needs a usable cycle (as in Bucket setup).
+        <Tooltip label={t("bucketSetup.deleteNeedsCycle")} disabled={allowed} multiline w={240}>
+          <ActionIcon
+            variant="subtle"
+            color="red"
+            size="sm"
+            aria-label={t("budgetSetup.deleteBucket", { name: bucket.name })}
+            aria-description={allowed ? undefined : t("bucketSetup.deleteNeedsCycle")}
+            data-disabled={allowed ? undefined : true}
+            aria-disabled={allowed ? undefined : true}
+            onClick={(e) => {
+              if (!allowed) {
+                e.preventDefault();
+                return;
+              }
+              onDelete(bucket.id, true);
+            }}
+          >
+            <IconTrash size={14} />
+          </ActionIcon>
+        </Tooltip>
       )}
     </Group>
   );
@@ -772,16 +892,34 @@ function RefillInput({
   );
 }
 
+/** A deleted bucket's refill amount: shown, not edited, until Undo. */
+function DeletedRefill({ bucket, ra }: { bucket: Bucket; ra: string | null }) {
+  return (
+    <Text size="sm" c="dimmed" td="line-through">
+      {formatMoney(ra ?? bucket.refill_amount, bucket.currency)}
+    </Text>
+  );
+}
+
 function BucketRow(props: BucketProps) {
   const { bucket, onEdit } = props;
   const v = useBucketValues(props);
   return (
     <Table.Tr>
       <Table.Td>
-        <BucketName bucket={bucket} />
+        <BucketName
+          bucket={bucket}
+          deleted={v.deleted}
+          usable={props.usable}
+          onDelete={props.onDelete}
+        />
       </Table.Td>
       <Table.Td>
-        <RefillInput bucket={bucket} ra={v.ra} error={v.error} onEdit={onEdit} />
+        {v.deleted ? (
+          <DeletedRefill bucket={bucket} ra={v.ra} />
+        ) : (
+          <RefillInput bucket={bucket} ra={v.ra} error={v.error} onEdit={onEdit} />
+        )}
       </Table.Td>
       <Table.Td>
         <Text size="sm">{v.share}</Text>
@@ -810,8 +948,17 @@ function BucketCard(props: BucketProps) {
   return (
     <Card withBorder component="article" aria-label={bucket.name}>
       <Stack gap="xs">
-        <BucketName bucket={bucket} />
-        <RefillInput bucket={bucket} ra={v.ra} error={v.error} onEdit={onEdit} />
+        <BucketName
+          bucket={bucket}
+          deleted={v.deleted}
+          usable={props.usable}
+          onDelete={props.onDelete}
+        />
+        {v.deleted ? (
+          <DeletedRefill bucket={bucket} ra={v.ra} />
+        ) : (
+          <RefillInput bucket={bucket} ra={v.ra} error={v.error} onEdit={onEdit} />
+        )}
         <Group gap="lg" wrap="wrap">
           <Figure label={t("budgetSetup.share")} value={v.share} />
           <Figure label={t("bucketSetup.capacity")} value={v.capacity} />

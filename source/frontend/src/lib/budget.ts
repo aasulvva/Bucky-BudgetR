@@ -24,15 +24,26 @@ export interface NewBucket {
 /**
  * The values edited and not saved yet, by account and bucket ID. A value is
  * canonical, or null when the field is empty or invalid. What isn't here
- * shows the saved value. `created` are new buckets, in the order added.
+ * shows the saved value. `created` are new buckets, in the order added, and
+ * `deleted` the IDs of saved buckets to delete (#174).
  */
 export interface BudgetDraft {
   incomes: Partial<Record<string, string | null>>;
   ras: Partial<Record<string, string | null>>;
   created: NewBucket[];
+  deleted: string[];
 }
 
-export const EMPTY_DRAFT: BudgetDraft = { incomes: {}, ras: {}, created: [] };
+export const EMPTY_DRAFT: BudgetDraft = { incomes: {}, ras: {}, created: [], deleted: [] };
+
+/**
+ * Whether a bucket can be deleted: what's left in it is released to (or an
+ * overspend settled from) the account's unallocated money, which needs a
+ * usable active cycle unless TF is 0. As DeleteBucket in BucketForm.
+ */
+export function canDelete(bucket: Bucket, usable: boolean): boolean {
+  return usable || compareAmounts(bucket.target_funds, "0") === 0;
+}
 
 /** The draft's new buckets on an account. */
 export function draftBucketsFor(draft: BudgetDraft, accountId: string): NewBucket[] {
@@ -89,7 +100,10 @@ export interface AccountBudget {
   over: boolean;
 }
 
-/** What an account's buckets take of its expected income, as edited, new ones included. */
+/**
+ * What an account's buckets take of its expected income, as edited: new ones
+ * included, deleted ones left out.
+ */
 export function accountBudget(
   draft: BudgetDraft,
   account: Account,
@@ -98,7 +112,7 @@ export function accountBudget(
   const expected = draftIncome(draft, account);
   const allocated = addAmounts(
     ...buckets
-      .filter((b) => b.source_account_id === account.id)
+      .filter((b) => b.source_account_id === account.id && !draft.deleted.includes(b.id))
       .map((b) => draftRefill(draft, b) ?? "0"),
     ...draftBucketsFor(draft, account.id)
       .filter((n) => budgeted(n.body))
@@ -146,7 +160,9 @@ export function newCapacity(body: BucketCreate): string | null {
 }
 
 export interface BudgetChanges {
-  /** New buckets to create first, in the order added (#112). */
+  /** Saved buckets to delete first, in list order (#174). */
+  deleted: Bucket[];
+  /** New buckets to create next, in the order added (#112). */
   created: NewBucket[];
   incomes: { account_id: string; expected_income: string | null }[];
   ras: { bucket_id: string; refill_amount: string }[];
@@ -164,11 +180,13 @@ export function budgetChanges(
 ): BudgetChanges {
   const same = (a: string | null, b: string | null) =>
     a === null || b === null ? a === b : compareAmounts(a, b) === 0;
+  const deleted = buckets.filter((b) => draft.deleted.includes(b.id));
   const out: BudgetChanges = {
+    deleted,
     created: draft.created,
     incomes: [],
     ras: [],
-    count: draft.created.length,
+    count: deleted.length + draft.created.length,
     invalid: false,
   };
   for (const a of accounts) {
@@ -180,7 +198,8 @@ export function budgetChanges(
     else out.incomes.push({ account_id: a.id, expected_income: value });
   }
   for (const b of buckets) {
-    if (!(b.id in draft.ras)) continue;
+    // A deleted bucket's RA edit waits in the draft, for Undo.
+    if (!(b.id in draft.ras) || draft.deleted.includes(b.id)) continue;
     const value = draftRefill(draft, b);
     if (same(value, saved(b.refill_amount))) continue;
     out.count++;

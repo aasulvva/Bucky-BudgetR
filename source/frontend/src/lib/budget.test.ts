@@ -6,6 +6,7 @@ import {
   EMPTY_DRAFT,
   accountBudget,
   budgetChanges,
+  canDelete,
   capacityAfter,
   cycleChanges,
   draftIncome,
@@ -47,7 +48,12 @@ describe("draft values", () => {
     expect(draftIncome(EMPTY_DRAFT, main)).toBe("32000.00");
     expect(draftIncome(EMPTY_DRAFT, buffer)).toBeNull();
     expect(draftRefill(EMPTY_DRAFT, rent)).toBe("12000.00");
-    const draft = { incomes: { [main.id]: null }, ras: { [rent.id]: "100.00" }, created: [] };
+    const draft = {
+      incomes: { [main.id]: null },
+      ras: { [rent.id]: "100.00" },
+      created: [],
+      deleted: [],
+    };
     expect(draftIncome(draft, main)).toBeNull();
     expect(draftRefill(draft, rent)).toBe("100.00");
   });
@@ -72,13 +78,18 @@ describe("accountBudget", () => {
   });
 
   it("follows the draft, and counts an empty field as 0", () => {
-    const draft = { incomes: { [main.id]: "15000.00" }, ras: { [food.id]: null }, created: [] };
+    const draft = {
+      incomes: { [main.id]: "15000.00" },
+      ras: { [food.id]: null },
+      created: [],
+      deleted: [],
+    };
     expect(accountBudget(draft, main, all)).toMatchObject({
       allocated: "12000.00",
       percent: 80,
       remainder: "3000.00",
     });
-    const over = { incomes: { [main.id]: "10000.00" }, ras: {}, created: [] };
+    const over = { incomes: { [main.id]: "10000.00" }, ras: {}, created: [], deleted: [] };
     expect(accountBudget(over, main, all)).toMatchObject({
       percent: 180,
       remainder: "-8000.00",
@@ -95,7 +106,11 @@ describe("accountBudget", () => {
       over: false,
     });
     expect(
-      accountBudget({ incomes: { [main.id]: "-5.00" }, ras: {}, created: [] }, main, all).percent,
+      accountBudget(
+        { incomes: { [main.id]: "-5.00" }, ras: {}, created: [], deleted: [] },
+        main,
+        all,
+      ).percent,
     ).toBeNull();
   });
 });
@@ -124,8 +139,10 @@ describe("budgetChanges", () => {
       incomes: { [main.id]: "32000.00", [buffer.id]: "5000.00" },
       ras: { [food.id]: "6000.00", [rent.id]: "11000.00" },
       created: [],
+      deleted: [],
     };
     expect(budgetChanges(draft, [main, buffer], all)).toEqual({
+      deleted: [],
       created: [],
       incomes: [{ account_id: buffer.id, expected_income: "5000.00" }],
       ras: [{ bucket_id: rent.id, refill_amount: "11000.00" }],
@@ -136,7 +153,11 @@ describe("budgetChanges", () => {
 
   it("clears an income, and blocks an empty or negative refill amount", () => {
     expect(
-      budgetChanges({ incomes: { [main.id]: null }, ras: {}, created: [] }, [main], all),
+      budgetChanges(
+        { incomes: { [main.id]: null }, ras: {}, created: [], deleted: [] },
+        [main],
+        all,
+      ),
     ).toMatchObject({
       incomes: [{ account_id: main.id, expected_income: null }],
       count: 1,
@@ -144,7 +165,11 @@ describe("budgetChanges", () => {
     });
     for (const ra of [null, "-1.00"]) {
       expect(
-        budgetChanges({ incomes: {}, ras: { [food.id]: ra }, created: [] }, [main], all),
+        budgetChanges(
+          { incomes: {}, ras: { [food.id]: ra }, created: [], deleted: [] },
+          [main],
+          all,
+        ),
       ).toMatchObject({
         ras: [],
         count: 1,
@@ -180,7 +205,11 @@ describe("cycleChanges", () => {
   const all = [refilled, waiting, other];
   const save = (...ras: [string, string][]) =>
     cycleChanges(
-      budgetChanges({ incomes: {}, ras: Object.fromEntries(ras), created: [] }, [account1], all),
+      budgetChanges(
+        { incomes: {}, ras: Object.fromEntries(ras), created: [], deleted: [] },
+        [account1],
+        all,
+      ),
       [account1],
       all,
     );
@@ -237,6 +266,7 @@ describe("new buckets in the draft (#112)", () => {
   const draft = {
     incomes: {},
     ras: {},
+    deleted: [],
     created: [
       { key: "1", body: gifts },
       { key: "2", body: manual },
@@ -264,5 +294,37 @@ describe("new buckets in the draft (#112)", () => {
     expect(newCapacity({ ...gifts, cap_mode: "fixed", cap_amount: "1500.00" })).toBe("2000.00");
     expect(newCapacity({ ...gifts, cap_mode: "fixed", cap_amount: "2500" })).toBe("2500.00");
     expect(newCapacity(manual)).toBeNull();
+  });
+});
+
+describe("deleted buckets in the draft (#174)", () => {
+  const draft = {
+    incomes: {},
+    ras: { [food.id]: "9000.00", [rent.id]: "-1" },
+    created: [],
+    deleted: [rent.id],
+  };
+
+  it("leaves them out of what's allocated", () => {
+    expect(accountBudget(draft, main, all).allocated).toBe("9000.00");
+  });
+
+  it("deletes them on Save, without their refill amount edits", () => {
+    const changes = budgetChanges(draft, [main], all);
+    expect(changes.deleted.map((b) => b.id)).toEqual([rent.id]);
+    // Food's RA and the delete; Rent's invalid edit doesn't count.
+    expect(changes.count).toBe(2);
+    expect(changes.invalid).toBe(false);
+    expect(changes.ras).toEqual([{ bucket_id: food.id, refill_amount: "9000.00" }]);
+  });
+
+  it("needs a usable cycle to release what's left, unless nothing is", () => {
+    const left = { ...food, target_funds: "250.00" };
+    const owed = { ...food, target_funds: "-50.00" };
+    const empty = { ...food, target_funds: "0.00" };
+    expect(canDelete(left, true)).toBe(true);
+    expect(canDelete(left, false)).toBe(false);
+    expect(canDelete(owed, false)).toBe(false);
+    expect(canDelete(empty, false)).toBe(true);
   });
 });

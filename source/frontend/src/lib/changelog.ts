@@ -16,6 +16,32 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.05.00",
+    date: "2026-11-09",
+    title: {
+      en: "Delete buckets from Budget setup",
+      nb: "Slett bøtter fra Budsjettoppsett",
+      nn: "Slett bøtter frå Budsjettoppsett",
+    },
+    changes: {
+      en: [
+        "Budget setup can delete buckets: the bin on a bucket marks it Deleted, it stops counting in the budget, and Undo brings it back.",
+        "It's deleted when you save, together with your other changes, and what's left in it goes back to the account's unallocated money.",
+        "Without a running cycle, a bucket with money left can't be deleted; the button says why.",
+      ],
+      nb: [
+        "Budsjettoppsett kan slette bøtter: søppelbøtta på en bøtte merker den Slettes, den telles ikke lenger i budsjettet, og Angre henter den tilbake.",
+        "Den slettes når du lagrer, sammen med de andre endringene, og det som er igjen i den, går tilbake til de ufordelte pengene på kontoen.",
+        "Uten en aktiv periode kan ikke en bøtte med penger igjen slettes; knappen sier hvorfor.",
+      ],
+      nn: [
+        "Budsjettoppsett kan slette bøtter: søppelbøtta på ei bøtte merkjer ho Vert sletta, ho vert ikkje lenger talt i budsjettet, og Angre hentar ho tilbake.",
+        "Ho vert sletta når du lagrar, saman med dei andre endringane, og det som er att i ho, går tilbake til dei ufordelte pengane på kontoen.",
+        "Utan ein aktiv periode kan ikkje ei bøtte med pengar att slettast; knappen seier kvifor.",
+      ],
+    },
+  },
+  {
     version: "v2.04.00",
     date: "2026-11-09",
     title: {

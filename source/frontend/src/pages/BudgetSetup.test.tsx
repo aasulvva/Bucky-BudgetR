@@ -503,3 +503,132 @@ describe("Budget setup, new buckets (#112)", () => {
     expect(card.getByText("Refilled when saved")).toBeInTheDocument();
   });
 });
+
+describe("Budget setup, deleting buckets (#174)", () => {
+  const groceriesRow = () => section("Main account");
+
+  it("marks a bucket deleted in the draft, and Undo brings it back", async () => {
+    renderRoute("/budget");
+    const mainSection = await groceriesRow();
+    // An RA edit before the delete comes back with Undo.
+    await userEvent.clear(refill("Groceries"));
+    await userEvent.type(refill("Groceries"), "7000");
+    await userEvent.click(mainSection.getByRole("button", { name: "Delete Groceries" }));
+
+    expect(mainSection.getByText("Deleted")).toBeInTheDocument();
+    expect(
+      mainSection.queryByRole("textbox", { name: "Refill amount for Groceries" }),
+    ).not.toBeInTheDocument();
+    expect(mainSection.getByText(`${m("12000.00")} (37.5%)`)).toBeInTheDocument();
+    expect(
+      mainSection.getByText(`Its ${m("2500.00")} left goes back to unallocated in Main account.`),
+    ).toBeInTheDocument();
+    // Only the delete counts; the RA edit waits.
+    expect(within(saveBar() ?? document.body).getByText("1 change")).toBeInTheDocument();
+    expect(apiMock.calls("DELETE /api/v1/buckets/1000000001")).toHaveLength(0);
+
+    await userEvent.click(mainSection.getByRole("button", { name: "Undo deleting Groceries" }));
+    expect(mainSection.queryByText("Deleted")).not.toBeInTheDocument();
+    expect(refill("Groceries")).toHaveValue("7,000.00");
+    expect(within(saveBar() ?? document.body).getByText("1 change")).toBeInTheDocument();
+  });
+
+  it("deletes first on Save, so a new bucket can take the name", async () => {
+    const order: string[] = [];
+    apiMock.on("DELETE /api/v1/buckets/1000000001", () => {
+      order.push("delete");
+      return { status: 204 };
+    });
+    apiMock.on("POST /api/v1/buckets", (req) => {
+      order.push("create");
+      return {
+        status: 201,
+        body: bucket({
+          id: "1000000009",
+          name: "Groceries",
+          source_account_id: main.id,
+          ...(req.body as object),
+        }),
+      };
+    });
+    apiMock.on("POST /api/v1/buckets/refill-amounts", () => {
+      order.push("refill amounts");
+      return { body: { items: [] } };
+    });
+    renderRoute("/budget");
+    const mainSection = await groceriesRow();
+    await userEvent.click(mainSection.getByRole("button", { name: "Delete Groceries" }));
+    await userEvent.clear(refill("Rent"));
+    await userEvent.type(refill("Rent"), "11000");
+    await userEvent.click(mainSection.getByRole("button", { name: "New bucket on Main account" }));
+    const form = within(await screen.findByRole("form", { name: "New bucket" }));
+    await userEvent.type(form.getByRole("textbox", { name: /Name/ }), "Groceries");
+    await userEvent.click(form.getByRole("button", { name: "Add to budget" }));
+    expect(within(saveBar() ?? document.body).getByText("3 changes")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("Budget saved.")).toBeInTheDocument();
+    expect(order).toEqual(["delete", "create", "refill amounts"]);
+    expect(saveBar()).not.toBeInTheDocument();
+  });
+
+  it("brings deleted buckets back on Discard", async () => {
+    renderRoute("/budget");
+    const mainSection = await groceriesRow();
+    await userEvent.click(mainSection.getByRole("button", { name: "Delete Groceries" }));
+    await userEvent.click(
+      within(saveBar() ?? document.body).getByRole("button", { name: "Discard" }),
+    );
+    expect(mainSection.queryByText("Deleted")).not.toBeInTheDocument();
+    expect(refill("Groceries")).toBeInTheDocument();
+  });
+
+  it("can't release funds without a running cycle, but deletes an empty bucket", async () => {
+    apiMock.on("GET /api/v1/cycles/active", { body: { active: null, next: null } });
+    renderRoute("/budget");
+    const mainSection = await groceriesRow();
+    const groceries = mainSection.getByRole("button", { name: "Delete Groceries" });
+    expect(groceries).toHaveAttribute("aria-disabled", "true");
+    await userEvent.click(groceries);
+    expect(mainSection.queryByText("Deleted")).not.toBeInTheDocument();
+    await userEvent.hover(groceries);
+    expect(
+      await screen.findByText(/Releasing what's left needs an active cycle/),
+    ).toBeInTheDocument();
+
+    // Rent has nothing left (TF 0).
+    await userEvent.click(mainSection.getByRole("button", { name: "Delete Rent" }));
+    expect(mainSection.getByText("Deleted")).toBeInTheDocument();
+  });
+
+  it("doesn't delete twice when a later step fails", async () => {
+    apiMock.on("DELETE /api/v1/buckets/1000000001", { status: 204 });
+    apiMock.on(
+      "POST /api/v1/buckets/refill-amounts",
+      problem(500, "internal", "Something went wrong."),
+    );
+    renderRoute("/budget");
+    const mainSection = await groceriesRow();
+    await userEvent.click(mainSection.getByRole("button", { name: "Delete Groceries" }));
+    await userEvent.clear(refill("Rent"));
+    await userEvent.type(refill("Rent"), "11000");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await vi.waitFor(() => {
+      expect(within(saveBar() ?? document.body).getByText("1 change")).toBeInTheDocument();
+    });
+
+    apiMock.on("POST /api/v1/buckets/refill-amounts", { body: { items: [] } });
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("Budget saved.")).toBeInTheDocument();
+    expect(apiMock.calls("DELETE /api/v1/buckets/1000000001")).toHaveLength(1);
+  });
+
+  it("deletes from the card on mobile", async () => {
+    viewport.width = 390;
+    renderRoute("/budget");
+    const card = within(await screen.findByRole("article", { name: "Groceries" }));
+    await userEvent.click(card.getByRole("button", { name: "Delete Groceries" }));
+    expect(card.getByText("Deleted")).toBeInTheDocument();
+    expect(card.getByRole("button", { name: "Undo deleting Groceries" })).toBeInTheDocument();
+  });
+});
