@@ -8,7 +8,11 @@
     "retry": "Retry",
     "later": "Later",
     "extend": "Extend",
-    "requestId": "Request ID",
+    "reference": "Reference",
+    "referenceHint": "Quote it when you report the problem.",
+    "copyReference": "Copy the reference",
+    "copied": "Copied",
+    "openInLogs": "Open in Logs",
     "now": "Now",
     "dateTime": "Date and time",
     "emptyMeansNow": "Empty means now.",
@@ -47,7 +51,7 @@
     },
     "descriptions": {
       "settings": "Password, preferences, data",
-      "admin": "Users, password resets"
+      "admin": "Users, password resets, logs"
     },
     "profile": "Profile",
     "profileAndSettings": "Profile & settings",
@@ -1189,6 +1193,10 @@
   },
   "admin": {
     "intro": "Everyone who can log in. Users are never deleted: deactivate them instead, which keeps their data. Admins manage users, but don't see other users' money.",
+    "tabs": {
+      "users": "Users",
+      "logs": "Logs"
+    },
     "adminsOnly": "Admins only",
     "adminsOnlyDetail": "Only admins can manage users.",
     "newUser": "New user",
@@ -1247,6 +1255,89 @@
       "intro": "Send this link to <b>{{name}}</b>. They open it, choose their own password and are logged in.",
       "copy": "Copy the link",
       "onceOnly": "It works once, until {{when}}. This is the only time it's shown; a new link or password voids it."
+    },
+    "logs": {
+      "intro": "Warnings, errors, app events (startup, migrations, cycles, scheduled transactions) and admin actions. Ordinary requests are only in the server's own log. Paste an error's reference to see everything about that request.",
+      "show": "Show",
+      "shows": {
+        "all": "Everything",
+        "warn": "Warnings and errors",
+        "error": "Errors only",
+        "event": "Events",
+        "audit": "Admin actions"
+      },
+      "period": "Period",
+      "periods": {
+        "day": "Last 24 hours",
+        "week": "Last 7 days",
+        "month": "Last 30 days",
+        "all": "All time",
+        "custom": "Custom"
+      },
+      "from": "From",
+      "to": "To",
+      "user": "User",
+      "anyUser": "Any user",
+      "reference": "Reference",
+      "referencePlaceholder": "Paste a reference",
+      "search": "Search",
+      "searchPlaceholder": "Message, path, error…",
+      "filters": "Filters",
+      "clear": "Clear filters",
+      "empty": "Nothing matches these filters.",
+      "loadMore": "Load more",
+      "time": "Time",
+      "level": "Level",
+      "message": "Message",
+      "levels": {
+        "debug": "Debug",
+        "info": "Info",
+        "warn": "Warning",
+        "error": "Error"
+      },
+      "kinds": {
+        "event": "Event",
+        "audit": "Admin action"
+      },
+      "system": "System",
+      "details": "Details",
+      "showDetails": "Show details",
+      "hideDetails": "Hide details",
+      "stack": "Stack trace",
+      "noDetails": "No more details.",
+      "rawEvent": "Event name",
+      "showRequest": "Show everything for request {{id}}",
+      "target": "for {{name}}",
+      "retention": {
+        "open": "Retention",
+        "title": "How long entries are kept",
+        "intro": "Older entries are deleted within the hour. Admin actions are usually kept the longest.",
+        "events": "App events",
+        "errors": "Warnings and errors",
+        "audit": "Admin actions",
+        "days": "days",
+        "invalid": "Use 1–3650 days.",
+        "saved": "Retention saved."
+      },
+      "events": {
+        "server_starting": "Server starting",
+        "server_listening": "Server ready",
+        "server_stopping": "Server shutting down",
+        "server_stopped": "Server stopped",
+        "migration_applied": "Database migration applied",
+        "admin_initial_created": "Initial admin created",
+        "cycle_started": "Cycle started",
+        "cycle_ended": "Cycle ended",
+        "schedule_recorded": "Scheduled transactions recorded",
+        "schedule_queued": "Scheduled transactions waiting for approval",
+        "user_created": "User created",
+        "user_activated": "User activated",
+        "user_deactivated": "User deactivated",
+        "user_admin_granted": "Admin granted",
+        "user_admin_revoked": "Admin removed",
+        "user_password_reset": "Password reset",
+        "logs_settings_changed": "Log retention changed"
+      }
     }
   },
   "errors": {

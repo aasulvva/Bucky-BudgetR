@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/auth"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/logging"
 )
 
 const (
@@ -58,6 +59,7 @@ func Sessions(svc *auth.Service, logger *slog.Logger) func(http.Handler) http.Ha
 				switch {
 				case err == nil:
 					ctx = context.WithValue(ctx, sessionKey{}, sess)
+					logging.SetUser(ctx, sess.User.ID)
 				case errors.Is(err, auth.ErrNoSession):
 					http.SetCookie(w, clearedSessionCookie())
 				default:

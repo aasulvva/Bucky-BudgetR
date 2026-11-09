@@ -68,7 +68,7 @@ func TestNotificationsAPI(t *testing.T) {
 		t.Fatalf("list = %+v", got)
 	}
 	n := got[0]
-	if n.Kind != api.UpcomingBill || n.Severity != api.Info || n.ScheduleId.MustGet() != id || n.AccountId.MustGet() != main ||
+	if n.Kind != api.UpcomingBill || n.Severity != api.NotificationSeverityInfo || n.ScheduleId.MustGet() != id || n.AccountId.MustGet() != main ||
 		n.Amount.MustGet() != "250.50" || n.Currency.MustGet() != "NOK" || !n.At.MustGet().Equal(time.Date(2026, 11, 9, 8, 0, 0, 0, time.UTC)) ||
 		!n.Count.IsNull() || !n.BucketId.IsNull() || !n.CycleId.IsNull() {
 		t.Errorf("bill = %+v", n)

@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -33,6 +34,8 @@ func (s *server) CreateUser(ctx context.Context, req api.CreateUserRequestObject
 	if err != nil {
 		return nil, adminError(err)
 	}
+	s.audit(ctx, "user created", "user.created", targetUser(u.ID, u.Username),
+		slog.Bool("admin", admin), slog.String("credential", string(credential(req.Body.Credential))))
 	out := toAPICredential(cred)
 	return api.CreateUser201JSONResponse{User: toAPIAdminUser(u), TemporaryPassword: out.TemporaryPassword, Link: out.Link}, nil
 }
@@ -42,6 +45,20 @@ func (s *server) UpdateUser(ctx context.Context, req api.UpdateUserRequestObject
 	u, err := s.auth.UpdateUser(ctx, sessionFrom(ctx).User.ID, req.UserId, c)
 	if err != nil {
 		return nil, adminError(err)
+	}
+	if c.Active != nil {
+		if *c.Active {
+			s.audit(ctx, "user activated", "user.activated", targetUser(u.ID, u.Username))
+		} else {
+			s.audit(ctx, "user deactivated", "user.deactivated", targetUser(u.ID, u.Username))
+		}
+	}
+	if c.Admin != nil {
+		if *c.Admin {
+			s.audit(ctx, "admin granted", "user.admin_granted", targetUser(u.ID, u.Username))
+		} else {
+			s.audit(ctx, "admin revoked", "user.admin_revoked", targetUser(u.ID, u.Username))
+		}
 	}
 	return api.UpdateUser200JSONResponse(toAPIAdminUser(u)), nil
 }
@@ -55,7 +72,15 @@ func (s *server) ResetUserPassword(ctx context.Context, req api.ResetUserPasswor
 	if err != nil {
 		return nil, adminError(err)
 	}
+	// Only how they get back in; never the password or the link.
+	s.audit(ctx, "password reset", "user.password_reset", slog.Group("target", slog.String("user_id", req.UserId)),
+		slog.String("credential", string(credential(c))))
 	return api.ResetUserPassword200JSONResponse(toAPICredential(cred)), nil
+}
+
+// targetUser names the user an admin action was done to.
+func targetUser(id, username string) slog.Attr {
+	return slog.Group("target", slog.String("user_id", id), slog.String("username", username))
 }
 
 // credential is the credential asked for; a temporary password by default.

@@ -36,6 +36,7 @@ const extraPages: [string, () => PageModule][] = [
   ["/transactions/scheduled/:id/edit", () => import("@/pages/EditSchedule")],
   ["/transactions/scheduled/queue/:id/approve", () => import("@/pages/ApproveScheduled")],
   ["/stats/reports", () => import("@/pages/Stats")],
+  ["/admin/logs", () => import("@/pages/Admin")],
 ];
 
 /** The paths whose screen is built, rather than a placeholder. */

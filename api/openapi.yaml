@@ -431,6 +431,140 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/v1/admin/logs:
+    get:
+      operationId: listLogEntries
+      x-admin-only: true
+      tags: [admin]
+      summary: List the kept log entries
+      description: |
+        The Logs screen (#93). The app keeps warnings and errors (kind
+        `log`), app events such as startup, migrations, cycle starts and
+        scheduled transactions (`event`), and admin actions (`audit`), each
+        for as long as the log settings say. Ordinary requests are only in
+        the server's stdout log. Newest first; filters combine with AND. Pass
+        `next_before` as `before` to get the next page. An error's
+        `request_id` (its reference) finds every entry for that request.
+      parameters:
+        - name: kind
+          in: query
+          schema:
+            $ref: "#/components/schemas/LogKind"
+        - name: min_level
+          in: query
+          description: Only entries at this level or above.
+          schema:
+            type: string
+            enum: [warn, error]
+        - name: from
+          in: query
+          description: Only entries at or after this moment.
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: Only entries before this moment.
+          schema:
+            type: string
+            format: date-time
+        - name: user_id
+          in: query
+          description: Only entries of this user (the one who made the request, or the routine's user).
+          schema:
+            $ref: "#/components/schemas/UserId"
+        - name: request_id
+          in: query
+          description: Only entries for this request (an error's reference).
+          schema:
+            type: string
+            pattern: "^[A-Za-z0-9._-]{1,64}$"
+        - name: q
+          in: query
+          description: Only entries whose message, event or attributes contain this text, ignoring case.
+          schema:
+            type: string
+            maxLength: 200
+        - name: before
+          in: query
+          description: Only entries before this one (the previous page's `next_before`).
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+        - name: limit
+          in: query
+          description: The page size.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        "200":
+          description: A page of entries.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogPage"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/admin/log-settings:
+    get:
+      operationId: getLogSettings
+      x-admin-only: true
+      tags: [admin]
+      summary: How long log entries are kept
+      responses:
+        "200":
+          description: The retention.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogSettings"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+    put:
+      operationId: updateLogSettings
+      x-admin-only: true
+      tags: [admin]
+      summary: Set how long log entries are kept
+      description: |
+        Older entries are deleted within the hour. The change is recorded
+        as an audit entry (`logs.settings_changed`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogSettings"
+      responses:
+        "200":
+          description: The new retention.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogSettings"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
   /api/v1/reports/flows:
     get:
       operationId: listAccountFlows
@@ -2367,6 +2501,80 @@ components:
           format: date-time
           nullable: true
           description: When the user last used the app, to the minute; null if they never logged in. Kept when their sessions end.
+
+    LogKind:
+      type: string
+      enum: [log, event, audit]
+      description: "`log` is a warning or error, `event` an app event, `audit` an admin action."
+
+    LogEntry:
+      type: object
+      additionalProperties: false
+      required: [id, at, level, kind, message, attrs]
+      properties:
+        id:
+          type: integer
+          format: int64
+        at:
+          type: string
+          format: date-time
+        level:
+          type: string
+          enum: [debug, info, warn, error]
+        kind:
+          $ref: "#/components/schemas/LogKind"
+        message:
+          type: string
+        event:
+          type: string
+          description: The event or admin action, e.g. `cycle.started` or `user.created`.
+        request_id:
+          type: string
+          description: The request it belongs to, the reference an error shows.
+        user_id:
+          $ref: "#/components/schemas/UserId"
+        username:
+          type: string
+          description: The user's name, when the user exists.
+        attrs:
+          type: object
+          additionalProperties: true
+          description: The rest of the record (method, path, status, error, stack, …). Never passwords, tokens or amounts.
+
+    LogPage:
+      type: object
+      additionalProperties: false
+      required: [entries]
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/LogEntry"
+        next_before:
+          type: integer
+          format: int64
+          description: Pass as `before` for the next page; absent on the last page.
+
+    LogSettings:
+      type: object
+      additionalProperties: false
+      required: [event_days, error_days, audit_days]
+      properties:
+        event_days:
+          type: integer
+          minimum: 1
+          maximum: 3650
+          description: How many days app events are kept.
+        error_days:
+          type: integer
+          minimum: 1
+          maximum: 3650
+          description: How many days warnings and errors are kept.
+        audit_days:
+          type: integer
+          minimum: 1
+          maximum: 3650
+          description: How many days admin actions are kept.
 
     UserCreate:
       type: object

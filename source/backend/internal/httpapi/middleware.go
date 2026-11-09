@@ -11,12 +11,12 @@ import (
 	"runtime/debug"
 	"strings"
 	"time"
+
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/logging"
 )
 
 // RequestIDHeader carries the request ID in both directions.
 const RequestIDHeader = "X-Request-ID"
-
-type requestIDKey struct{}
 
 var validRequestID = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
 
@@ -30,14 +30,16 @@ func RequestID(next http.Handler) http.Handler {
 			id = rand.Text()
 		}
 		w.Header().Set(RequestIDHeader, id)
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), requestIDKey{}, id)))
+		next.ServeHTTP(w, r.WithContext(logging.WithRequest(r.Context(), id)))
 	})
 }
 
 // RequestIDFromContext returns the ID set by RequestID, or "".
 func RequestIDFromContext(ctx context.Context) string {
-	id, _ := ctx.Value(requestIDKey{}).(string)
-	return id
+	if req := logging.RequestFrom(ctx); req != nil {
+		return req.ID
+	}
+	return ""
 }
 
 type clientIPKey struct{}
@@ -120,6 +122,7 @@ func AccessLog(logger *slog.Logger) func(http.Handler) http.Handler {
 				slog.Duration("duration", time.Since(start)),
 				slog.String("client_ip", ClientIPFromContext(r.Context())),
 				slog.String("request_id", RequestIDFromContext(r.Context())),
+				slog.String("user_id", logging.RequestFrom(r.Context()).UserID()),
 			)
 		})
 	}

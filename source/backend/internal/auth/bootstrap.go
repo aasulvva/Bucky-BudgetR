@@ -11,6 +11,7 @@ import (
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ids"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/logging"
 )
 
 const (
@@ -65,7 +66,7 @@ func EnsureInitialAdmin(ctx context.Context, pool *pgxpool.Pool, password string
 		return fmt.Errorf("create initial admin: %w", err)
 	}
 	if created != "" {
-		logger.InfoContext(ctx, "created initial admin account",
+		logger.InfoContext(ctx, "created initial admin account", slog.String(logging.EventKey, "admin.initial_created"),
 			slog.String("username", InitialAdminUsername), slog.String("user_id", created))
 		if isDefault {
 			logger.WarnContext(ctx, "the admin account uses the default password; change it at first login")

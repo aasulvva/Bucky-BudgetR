@@ -31,6 +31,9 @@ func TestAdminOnly(t *testing.T) {
 		{http.MethodPost, "/api/v1/admin/users"},
 		{http.MethodPatch, "/api/v1/admin/users/" + alice.ID},
 		{http.MethodPost, "/api/v1/admin/users/" + alice.ID + "/reset-password"},
+		{http.MethodGet, "/api/v1/admin/logs"},
+		{http.MethodGet, "/api/v1/admin/log-settings"},
+		{http.MethodPut, "/api/v1/admin/log-settings"},
 	} {
 		var body any
 		switch r.method {
@@ -38,6 +41,8 @@ func TestAdminOnly(t *testing.T) {
 			body = map[string]any{"username": "mallory"}
 		case http.MethodPatch:
 			body = map[string]any{"admin": true}
+		case http.MethodPut:
+			body = map[string]any{"event_days": 1, "error_days": 1, "audit_days": 1}
 		}
 		w := authtest.Do(t, e.h, r.method, r.path, body, c)
 		if w.Code != http.StatusForbidden || deref(decodeProblem(t, w).Code) != "admin_only" {

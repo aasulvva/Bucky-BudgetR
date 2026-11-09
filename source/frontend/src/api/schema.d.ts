@@ -269,6 +269,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the kept log entries
+         * @description The Logs screen (#93). The app keeps warnings and errors (kind
+         *     `log`), app events such as startup, migrations, cycle starts and
+         *     scheduled transactions (`event`), and admin actions (`audit`), each
+         *     for as long as the log settings say. Ordinary requests are only in
+         *     the server's stdout log. Newest first; filters combine with AND. Pass
+         *     `next_before` as `before` to get the next page. An error's
+         *     `request_id` (its reference) finds every entry for that request.
+         */
+        get: operations["listLogEntries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/log-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How long log entries are kept */
+        get: operations["getLogSettings"];
+        /**
+         * Set how long log entries are kept
+         * @description Older entries are deleted within the hour. The change is recorded
+         *     as an audit entry (`logs.settings_changed`).
+         */
+        put: operations["updateLogSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reports/flows": {
         parameters: {
             query?: never;
@@ -1432,6 +1480,48 @@ export interface components {
              * @description When the user last used the app, to the minute; null if they never logged in. Kept when their sessions end.
              */
             last_seen_at: string | null;
+        };
+        /**
+         * @description `log` is a warning or error, `event` an app event, `audit` an admin action.
+         * @enum {string}
+         */
+        LogKind: "log" | "event" | "audit";
+        LogEntry: {
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            at: string;
+            /** @enum {string} */
+            level: "debug" | "info" | "warn" | "error";
+            kind: components["schemas"]["LogKind"];
+            message: string;
+            /** @description The event or admin action, e.g. `cycle.started` or `user.created`. */
+            event?: string;
+            /** @description The request it belongs to, the reference an error shows. */
+            request_id?: string;
+            user_id?: components["schemas"]["UserId"];
+            /** @description The user's name, when the user exists. */
+            username?: string;
+            /** @description The rest of the record (method, path, status, error, stack, …). Never passwords, tokens or amounts. */
+            attrs: {
+                [key: string]: unknown;
+            };
+        };
+        LogPage: {
+            entries: components["schemas"]["LogEntry"][];
+            /**
+             * Format: int64
+             * @description Pass as `before` for the next page; absent on the last page.
+             */
+            next_before?: number;
+        };
+        LogSettings: {
+            /** @description How many days app events are kept. */
+            event_days: number;
+            /** @description How many days warnings and errors are kept. */
+            error_days: number;
+            /** @description How many days admin actions are kept. */
+            audit_days: number;
         };
         UserCreate: {
             username: components["schemas"]["Username"];
@@ -3004,6 +3094,99 @@ export interface operations {
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listLogEntries: {
+        parameters: {
+            query?: {
+                kind?: components["schemas"]["LogKind"];
+                /** @description Only entries at this level or above. */
+                min_level?: "warn" | "error";
+                /** @description Only entries at or after this moment. */
+                from?: string;
+                /** @description Only entries before this moment. */
+                to?: string;
+                /** @description Only entries of this user (the one who made the request, or the routine's user). */
+                user_id?: components["schemas"]["UserId"];
+                /** @description Only entries for this request (an error's reference). */
+                request_id?: string;
+                /** @description Only entries whose message, event or attributes contain this text, ignoring case. */
+                q?: string;
+                /** @description Only entries before this one (the previous page's `next_before`). */
+                before?: number;
+                /** @description The page size. */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of entries. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogPage"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getLogSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The retention. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogSettings"];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    updateLogSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LogSettings"];
+            };
+        };
+        responses: {
+            /** @description The new retention. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogSettings"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };

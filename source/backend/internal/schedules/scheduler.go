@@ -13,6 +13,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ids"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/logging"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/refill"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/transactions"
 )
@@ -48,21 +49,34 @@ func (s *Service) RunDue(ctx context.Context, logger *slog.Logger) error {
 		return err
 	}
 	for _, id := range users {
-		if err := s.runUser(ctx, id, now); err != nil {
+		var n handled
+		if err := s.runUser(ctx, id, now, &n); err != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
 			logger.WarnContext(ctx, "scheduled transactions failed", slog.String("user_id", id), slog.Any("error", err))
+			continue
+		}
+		if n.recorded > 0 {
+			logger.InfoContext(ctx, "recorded scheduled transactions", slog.String(logging.EventKey, "schedule.recorded"),
+				slog.String("user_id", id), slog.Int("count", n.recorded))
+		}
+		if n.queued > 0 {
+			logger.InfoContext(ctx, "queued scheduled transactions for approval", slog.String(logging.EventKey, "schedule.queued"),
+				slog.String("user_id", id), slog.Int("count", n.queued))
 		}
 	}
 	return nil
 }
 
+// handled counts a run's occurrences, for the log (#93).
+type handled struct{ recorded, queued int }
+
 // runUser handles one user's due occurrences in one database transaction,
 // under the user's lock. Each occurrence is checked against the ones already
 // handled, so a run that repeats (after a crash, or on a second server)
 // handles nothing twice.
-func (s *Service) runUser(ctx context.Context, userID string, now time.Time) error {
+func (s *Service) runUser(ctx context.Context, userID string, now time.Time, n *handled) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if err := ledger.LockUser(ctx, tx, userID); err != nil {
 			return err
@@ -77,7 +91,7 @@ func (s *Service) runUser(ctx context.Context, userID string, now time.Time) err
 			return err
 		}
 		for _, sch := range list {
-			if err := s.runSchedule(ctx, tx, userID, sch, now); err != nil {
+			if err := s.runSchedule(ctx, tx, userID, sch, now, n); err != nil {
 				return fmt.Errorf("schedule %s: %w", sch.ID, err)
 			}
 		}
@@ -85,7 +99,7 @@ func (s *Service) runUser(ctx context.Context, userID string, now time.Time) err
 	})
 }
 
-func (s *Service) runSchedule(ctx context.Context, tx pgx.Tx, userID string, sch Schedule, now time.Time) error {
+func (s *Service) runSchedule(ctx context.Context, tx pgx.Tx, userID string, sch Schedule, now time.Time, n *handled) error {
 	q := sqlc.New(tx)
 	rule, err := sch.Rule()
 	if err != nil {
@@ -96,7 +110,7 @@ func (s *Service) runSchedule(ctx context.Context, tx pgx.Tx, userID string, sch
 		if !ok || handleFrom(sch, at).After(now) {
 			break
 		}
-		if err := s.handle(ctx, tx, userID, sch, at, now); err != nil {
+		if err := s.handle(ctx, tx, userID, sch, at, now, n); err != nil {
 			return err
 		}
 		k++
@@ -110,7 +124,7 @@ func (s *Service) runSchedule(ctx context.Context, tx pgx.Tx, userID string, sch
 }
 
 // handle records or queues the occurrence at at, unless it has been handled.
-func (s *Service) handle(ctx context.Context, tx pgx.Tx, userID string, sch Schedule, at, now time.Time) error {
+func (s *Service) handle(ctx context.Context, tx pgx.Tx, userID string, sch Schedule, at, now time.Time, n *handled) error {
 	q := sqlc.New(tx)
 	done, err := q.OccurrenceExists(ctx, sqlc.OccurrenceExistsParams{ScheduleID: sch.ID, ScheduledAt: at})
 	if err != nil || done {
@@ -142,6 +156,13 @@ func (s *Service) handle(ctx context.Context, tx pgx.Tx, userID string, sch Sche
 		_, err := q.CreateOccurrence(ctx, p)
 		return ids.Inserted(err)
 	})
+	if err == nil {
+		if p.State == sqlc.OccurrenceStateApplied {
+			n.recorded++
+		} else {
+			n.queued++
+		}
+	}
 	return err
 }
 
