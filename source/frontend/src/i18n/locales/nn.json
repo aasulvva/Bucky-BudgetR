@@ -8,7 +8,11 @@
     "retry": "Prøv igjen",
     "later": "Seinare",
     "extend": "Forleng",
-    "requestId": "Førespurnads-ID",
+    "reference": "Referanse",
+    "referenceHint": "Oppgje han når du melder frå om problemet.",
+    "copyReference": "Kopier referansen",
+    "copied": "Kopiert",
+    "openInLogs": "Opne i Loggar",
     "now": "No",
     "dateTime": "Dato og klokkeslett",
     "emptyMeansNow": "Tomt tyder no.",
@@ -47,7 +51,7 @@
     },
     "descriptions": {
       "settings": "Passord, innstillingar, data",
-      "admin": "Brukarar, tilbakestilling av passord"
+      "admin": "Brukarar, tilbakestilling av passord, loggar"
     },
     "profile": "Profil",
     "profileAndSettings": "Profil og innstillingar",
@@ -1189,6 +1193,10 @@
   },
   "admin": {
     "intro": "Alle som kan logge inn. Brukarar vert aldri sletta: deaktiver dei i staden, så vert dataa deira tekne vare på. Administratorar styrer brukarane, men ser ikkje pengane til andre.",
+    "tabs": {
+      "users": "Brukarar",
+      "logs": "Loggar"
+    },
     "adminsOnly": "Berre for administratorar",
     "adminsOnlyDetail": "Berre administratorar kan styre brukarar.",
     "newUser": "Ny brukar",
@@ -1247,6 +1255,89 @@
       "intro": "Send denne lenkja til <b>{{name}}</b>. Brukaren opnar ho, vel sitt eige passord og vert logga inn.",
       "copy": "Kopier lenkja",
       "onceOnly": "Ho verkar éin gong, til {{when}}. Ho vert berre vist denne eine gongen; ei ny lenkje eller eit nytt passord gjer ho ugyldig."
+    },
+    "logs": {
+      "intro": "Åtvaringar, feil, hendingar i appen (oppstart, migreringar, syklusar, planlagde transaksjonar) og handlingar utførte av administratorar. Vanlege førespurnader finst berre i serveren sin eigen logg. Lim inn referansen frå ein feil for å sjå alt om den førespurnaden.",
+      "show": "Vis",
+      "shows": {
+        "all": "Alt",
+        "warn": "Åtvaringar og feil",
+        "error": "Berre feil",
+        "event": "Hendingar",
+        "audit": "Administratorhandlingar"
+      },
+      "period": "Periode",
+      "periods": {
+        "day": "Siste 24 timar",
+        "week": "Siste 7 dagar",
+        "month": "Siste 30 dagar",
+        "all": "Heile tida",
+        "custom": "Eigendefinert"
+      },
+      "from": "Frå",
+      "to": "Til",
+      "user": "Brukar",
+      "anyUser": "Alle brukarar",
+      "reference": "Referanse",
+      "referencePlaceholder": "Lim inn ein referanse",
+      "search": "Søk",
+      "searchPlaceholder": "Melding, sti, feil …",
+      "filters": "Filter",
+      "clear": "Fjern filter",
+      "empty": "Ingenting passar med desse filtera.",
+      "loadMore": "Last inn fleire",
+      "time": "Tid",
+      "level": "Nivå",
+      "message": "Melding",
+      "levels": {
+        "debug": "Feilsøking",
+        "info": "Info",
+        "warn": "Åtvaring",
+        "error": "Feil"
+      },
+      "kinds": {
+        "event": "Hending",
+        "audit": "Administratorhandling"
+      },
+      "system": "System",
+      "details": "Detaljar",
+      "showDetails": "Vis detaljar",
+      "hideDetails": "Skjul detaljar",
+      "stack": "Stakkspor",
+      "noDetails": "Ingen fleire detaljar.",
+      "rawEvent": "Hendingsnamn",
+      "showRequest": "Vis alt for førespurnad {{id}}",
+      "target": "for {{name}}",
+      "retention": {
+        "open": "Lagringstid",
+        "title": "Kor lenge oppføringar vert lagra",
+        "intro": "Eldre oppføringar vert sletta innan ein time. Administratorhandlingar vert vanlegvis lagra lengst.",
+        "events": "Hendingar i appen",
+        "errors": "Åtvaringar og feil",
+        "audit": "Administratorhandlingar",
+        "days": "dagar",
+        "invalid": "Bruk 1–3650 dagar.",
+        "saved": "Lagringstida er lagra."
+      },
+      "events": {
+        "server_starting": "Serveren startar",
+        "server_listening": "Serveren er klar",
+        "server_stopping": "Serveren avsluttar",
+        "server_stopped": "Serveren er stoppa",
+        "migration_applied": "Databasemigrering utført",
+        "admin_initial_created": "Første administrator oppretta",
+        "cycle_started": "Syklus starta",
+        "cycle_ended": "Syklus avslutta",
+        "schedule_recorded": "Planlagde transaksjonar registrerte",
+        "schedule_queued": "Planlagde transaksjonar ventar på godkjenning",
+        "user_created": "Brukar oppretta",
+        "user_activated": "Brukar aktivert",
+        "user_deactivated": "Brukar deaktivert",
+        "user_admin_granted": "Gjord til administrator",
+        "user_admin_revoked": "Ikkje lenger administrator",
+        "user_password_reset": "Passord tilbakestilt",
+        "logs_settings_changed": "Lagringstid for loggar endra"
+      }
     }
   },
   "errors": {

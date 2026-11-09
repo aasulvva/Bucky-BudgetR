@@ -10,6 +10,7 @@ import {
   Radio,
   Stack,
   Table,
+  Tabs,
   Text,
   TextInput,
   Title,
@@ -30,6 +31,7 @@ import {
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
+import { useLocation, useNavigate } from "react-router";
 
 import {
   USERNAME_PATTERN,
@@ -42,6 +44,7 @@ import {
 import { api } from "@/api/client";
 import { ApiError, unwrap } from "@/api/errors";
 import { useSession } from "@/app/session";
+import { AdminLogs } from "@/components/admin/AdminLogs";
 import { NewCredentialView } from "@/components/admin/NewCredential";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { QueryState } from "@/components/QueryState";
@@ -56,25 +59,19 @@ type Dialog =
   | { kind: "credential"; username: string; credential: NewCredential }
   | null;
 
+const LOGS_PATH = "/admin/logs";
+
 /**
- * Admin (spec §1, §9): the users; create them, activate and deactivate them,
- * grant and revoke admin, and reset passwords. Users are never deleted.
- * Admins don't change their own account here, and the last active admin
- * stays one (the API refuses both).
+ * Admin (spec §1, §9), in two tabs: Users and Logs (#93, `/admin/logs`).
  */
 export default function Admin() {
   const { t } = useTranslation();
-  const theme = useMantineTheme();
-  const isDesktop = useMediaQuery(`(min-width: ${theme.breakpoints.sm})`, true);
+  const location = useLocation();
+  const navigate = useNavigate();
   const me = useSession().data;
-  const isAdmin = me?.admin === true;
-  const users = useAdminUsers(isAdmin);
-  const [dialog, setDialog] = useState<Dialog>(null);
-  const close = () => {
-    setDialog(null);
-  };
+  const tab = location.pathname === LOGS_PATH ? "logs" : "users";
 
-  if (!isAdmin) {
+  if (me?.admin !== true) {
     return (
       <Stack gap="lg">
         <Title order={2}>{t("nav.items.admin")}</Title>
@@ -84,6 +81,41 @@ export default function Admin() {
       </Stack>
     );
   }
+
+  return (
+    <Stack gap="lg">
+      <Title order={2}>{t("nav.items.admin")}</Title>
+      <Tabs
+        value={tab}
+        onChange={(v) => {
+          void navigate(v === "logs" ? LOGS_PATH : "/admin");
+        }}
+      >
+        <Tabs.List>
+          <Tabs.Tab value="users">{t("admin.tabs.users")}</Tabs.Tab>
+          <Tabs.Tab value="logs">{t("admin.tabs.logs")}</Tabs.Tab>
+        </Tabs.List>
+      </Tabs>
+      {tab === "logs" ? <AdminLogs /> : <Users meId={me.id} />}
+    </Stack>
+  );
+}
+
+/**
+ * The users: create them, activate and deactivate them, grant and revoke
+ * admin, and reset passwords. Users are never deleted. Admins don't change
+ * their own account here, and the last active admin stays one (the API
+ * refuses both).
+ */
+function Users({ meId }: { meId: string }) {
+  const { t } = useTranslation();
+  const theme = useMantineTheme();
+  const isDesktop = useMediaQuery(`(min-width: ${theme.breakpoints.sm})`, true);
+  const users = useAdminUsers(true);
+  const [dialog, setDialog] = useState<Dialog>(null);
+  const close = () => {
+    setDialog(null);
+  };
 
   const actions = {
     onDeactivate: (user: AdminUser) => {
@@ -96,9 +128,10 @@ export default function Admin() {
 
   return (
     <Stack gap="lg">
-      <Group justify="space-between">
-        <Title order={2}>{t("nav.items.admin")}</Title>
+      <Group justify="space-between" align="flex-start" wrap="nowrap">
+        <Text c="dimmed">{t("admin.intro")}</Text>
         <Button
+          style={{ flexShrink: 0 }}
           leftSection={<IconPlus size={16} />}
           onClick={() => {
             setDialog({ kind: "create" });
@@ -107,15 +140,14 @@ export default function Admin() {
           {t("admin.newUser")}
         </Button>
       </Group>
-      <Text c="dimmed">{t("admin.intro")}</Text>
       <QueryState query={users}>
         {(list) =>
           isDesktop ? (
-            <UserTable users={list} meId={me.id} {...actions} />
+            <UserTable users={list} meId={meId} {...actions} />
           ) : (
             <Card withBorder padding={0}>
               {list.map((u) => (
-                <UserRow key={u.id} user={u} isMe={u.id === me.id} {...actions} />
+                <UserRow key={u.id} user={u} isMe={u.id === meId} {...actions} />
               ))}
             </Card>
           )

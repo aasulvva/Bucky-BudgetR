@@ -740,6 +740,25 @@ type Cycle struct {
 	Generated  bool
 }
 
+type LogEntry struct {
+	ID        int64
+	At        time.Time
+	Level     int16
+	Kind      string
+	Message   string
+	Event     pgtype.Text
+	RequestID pgtype.Text
+	UserID    pgtype.Text
+	Attrs     []byte
+}
+
+type LogSetting struct {
+	ID        bool
+	EventDays int32
+	ErrorDays int32
+	AuditDays int32
+}
+
 type NotificationDismissal struct {
 	UserID      string
 	Key         string

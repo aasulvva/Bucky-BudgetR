@@ -37,7 +37,7 @@ export function createQueryClient(): QueryClient {
         notifications.show({
           color: "red",
           title,
-          message: [detail, requestId && `${i18n.t("common.requestId")}: ${requestId}`]
+          message: [detail, requestId && `${i18n.t("common.reference")}: ${requestId}`]
             .filter(Boolean)
             .join(" · "),
         });

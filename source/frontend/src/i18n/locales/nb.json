@@ -8,7 +8,11 @@
     "retry": "Prøv igjen",
     "later": "Senere",
     "extend": "Forleng",
-    "requestId": "Forespørsels-ID",
+    "reference": "Referanse",
+    "referenceHint": "Oppgi den når du melder fra om problemet.",
+    "copyReference": "Kopier referansen",
+    "copied": "Kopiert",
+    "openInLogs": "Åpne i Logger",
     "now": "Nå",
     "dateTime": "Dato og klokkeslett",
     "emptyMeansNow": "Tomt betyr nå.",
@@ -47,7 +51,7 @@
     },
     "descriptions": {
       "settings": "Passord, innstillinger, data",
-      "admin": "Brukere, tilbakestilling av passord"
+      "admin": "Brukere, tilbakestilling av passord, logger"
     },
     "profile": "Profil",
     "profileAndSettings": "Profil og innstillinger",
@@ -1189,6 +1193,10 @@
   },
   "admin": {
     "intro": "Alle som kan logge inn. Brukere slettes aldri: deaktiver dem i stedet, så beholdes dataene deres. Administratorer styrer brukerne, men ser ikke andres penger.",
+    "tabs": {
+      "users": "Brukere",
+      "logs": "Logger"
+    },
     "adminsOnly": "Bare for administratorer",
     "adminsOnlyDetail": "Bare administratorer kan styre brukere.",
     "newUser": "Ny bruker",
@@ -1247,6 +1255,89 @@
       "intro": "Send denne lenken til <b>{{name}}</b>. Brukeren åpner den, velger sitt eget passord og blir logget inn.",
       "copy": "Kopier lenken",
       "onceOnly": "Den virker én gang, til {{when}}. Den vises bare denne ene gangen; en ny lenke eller et nytt passord gjør den ugyldig."
+    },
+    "logs": {
+      "intro": "Advarsler, feil, hendelser i appen (oppstart, migreringer, sykluser, planlagte transaksjoner) og handlinger utført av administratorer. Vanlige forespørsler finnes bare i serverens egen logg. Lim inn referansen fra en feil for å se alt om den forespørselen.",
+      "show": "Vis",
+      "shows": {
+        "all": "Alt",
+        "warn": "Advarsler og feil",
+        "error": "Bare feil",
+        "event": "Hendelser",
+        "audit": "Administratorhandlinger"
+      },
+      "period": "Periode",
+      "periods": {
+        "day": "Siste 24 timer",
+        "week": "Siste 7 dager",
+        "month": "Siste 30 dager",
+        "all": "Hele tiden",
+        "custom": "Egendefinert"
+      },
+      "from": "Fra",
+      "to": "Til",
+      "user": "Bruker",
+      "anyUser": "Alle brukere",
+      "reference": "Referanse",
+      "referencePlaceholder": "Lim inn en referanse",
+      "search": "Søk",
+      "searchPlaceholder": "Melding, sti, feil …",
+      "filters": "Filtre",
+      "clear": "Fjern filtre",
+      "empty": "Ingenting passer med disse filtrene.",
+      "loadMore": "Last inn flere",
+      "time": "Tid",
+      "level": "Nivå",
+      "message": "Melding",
+      "levels": {
+        "debug": "Feilsøking",
+        "info": "Info",
+        "warn": "Advarsel",
+        "error": "Feil"
+      },
+      "kinds": {
+        "event": "Hendelse",
+        "audit": "Administratorhandling"
+      },
+      "system": "System",
+      "details": "Detaljer",
+      "showDetails": "Vis detaljer",
+      "hideDetails": "Skjul detaljer",
+      "stack": "Stakkspor",
+      "noDetails": "Ingen flere detaljer.",
+      "rawEvent": "Hendelsesnavn",
+      "showRequest": "Vis alt for forespørsel {{id}}",
+      "target": "for {{name}}",
+      "retention": {
+        "open": "Lagringstid",
+        "title": "Hvor lenge oppføringer lagres",
+        "intro": "Eldre oppføringer slettes innen en time. Administratorhandlinger lagres vanligvis lengst.",
+        "events": "Hendelser i appen",
+        "errors": "Advarsler og feil",
+        "audit": "Administratorhandlinger",
+        "days": "dager",
+        "invalid": "Bruk 1–3650 dager.",
+        "saved": "Lagringstiden er lagret."
+      },
+      "events": {
+        "server_starting": "Serveren starter",
+        "server_listening": "Serveren er klar",
+        "server_stopping": "Serveren avslutter",
+        "server_stopped": "Serveren er stoppet",
+        "migration_applied": "Databasemigrering utført",
+        "admin_initial_created": "Første administrator opprettet",
+        "cycle_started": "Syklus startet",
+        "cycle_ended": "Syklus avsluttet",
+        "schedule_recorded": "Planlagte transaksjoner registrert",
+        "schedule_queued": "Planlagte transaksjoner venter på godkjenning",
+        "user_created": "Bruker opprettet",
+        "user_activated": "Bruker aktivert",
+        "user_deactivated": "Bruker deaktivert",
+        "user_admin_granted": "Gjort til administrator",
+        "user_admin_revoked": "Ikke lenger administrator",
+        "user_password_reset": "Passord tilbakestilt",
+        "logs_settings_changed": "Lagringstid for logger endret"
+      }
     }
   },
   "errors": {

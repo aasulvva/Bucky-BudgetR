@@ -11,6 +11,8 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"github.com/pressly/goose/v3/lock"
+
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/logging"
 )
 
 //go:embed migrations/*.sql
@@ -38,6 +40,7 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger) error
 	results, err := provider.Up(ctx)
 	for _, r := range results {
 		logger.InfoContext(ctx, "applied migration",
+			slog.String(logging.EventKey, "migration.applied"),
 			slog.Int64("version", r.Source.Version),
 			slog.String("file", r.Source.Path),
 			slog.Duration("duration", r.Duration))

@@ -483,7 +483,8 @@ func TestIDColumns(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, name := range all {
-		if !known(name) && !slices.Contains([]string{"sessions", "password_links"}, name) {
+		// Not budget data: logins, and the app's log (#93), which isn't a user's.
+		if !known(name) && !slices.Contains([]string{"sessions", "password_links", "log_entries"}, name) {
 			t.Errorf("table %s has user data but isn't in tables", name)
 		}
 	}

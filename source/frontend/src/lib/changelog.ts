@@ -16,6 +16,32 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.07.00",
+    date: "2026-11-09",
+    title: {
+      en: "Logs for admins",
+      nb: "Logger for administratorer",
+      nn: "Loggar for administratorar",
+    },
+    changes: {
+      en: [
+        "Admin has a new Logs tab: warnings and errors, app events such as startup, cycle starts and scheduled transactions, and admin actions such as users created or passwords reset. Filter by type, period, user or reference, search, and open an entry for its details.",
+        "Admins choose how long each kind of entry is kept, with Retention on the Logs tab.",
+        "An error now shows a reference you can copy and pass on. For admins, it opens everything logged for that request.",
+      ],
+      nb: [
+        "Administrasjon har en ny fane, Logger: advarsler og feil, hendelser i appen som oppstart, syklusstart og planlagte transaksjoner, og administratorhandlinger som nye brukere eller tilbakestilte passord. Filtrer på type, periode, bruker eller referanse, søk, og åpne en oppføring for detaljer.",
+        "Administratorer velger hvor lenge hver type oppføring lagres, med Lagringstid på Logger-fanen.",
+        "En feil viser nå en referanse du kan kopiere og gi videre. For administratorer åpner den alt som er logget for den forespørselen.",
+      ],
+      nn: [
+        "Administrasjon har ei ny fane, Loggar: åtvaringar og feil, hendingar i appen som oppstart, syklusstart og planlagde transaksjonar, og administratorhandlingar som nye brukarar eller tilbakestilte passord. Filtrer på type, periode, brukar eller referanse, søk, og opne ei oppføring for detaljar.",
+        "Administratorar vel kor lenge kvar type oppføring vert lagra, med Lagringstid på Loggar-fana.",
+        "Ein feil viser no ein referanse du kan kopiere og gje vidare. For administratorar opnar han alt som er logga for den førespurnaden.",
+      ],
+    },
+  },
+  {
     version: "v2.06.00",
     date: "2026-11-09",
     title: {

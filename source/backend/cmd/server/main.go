@@ -40,6 +40,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/config"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/cycles"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/httpapi"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/logging"
@@ -94,8 +95,17 @@ func run(ctx context.Context, args []string, getenv func(string) string, out, lo
 		return err
 	}
 	logger := logging.New(cfg, logOut)
+	// Serving and migrating also keep warnings, errors and events in the
+	// database for the Logs screen (#93), from Start on (after the
+	// migrations, which create the table) until Close, before the pool closes.
+	var store *logging.Store
+	if cmd == "serve" || cmd == "migrate" {
+		store = logging.NewStore(logger.Handler())
+		logger = store.Logger()
+	}
 	if cmd == "serve" {
-		logger.InfoContext(ctx, "starting", slog.String("commit", commit), slog.String("env", string(cfg.Env)))
+		logger.InfoContext(ctx, "starting", slog.String(logging.EventKey, "server.starting"),
+			slog.String("commit", commit), slog.String("env", string(cfg.Env)))
 	}
 
 	pool, err := db.Open(ctx, cfg.DatabaseURL)
@@ -108,6 +118,14 @@ func run(ctx context.Context, args []string, getenv func(string) string, out, lo
 		if err := db.Migrate(ctx, pool, logger); err != nil {
 			return err
 		}
+	}
+	if store != nil {
+		store.Start(sqlc.New(pool))
+		defer func() {
+			closeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = store.Close(closeCtx)
+		}()
 	}
 	switch cmd {
 	case "migrate":
@@ -124,6 +142,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, out, lo
 		MaxAge:      cfg.SessionMaxAge,
 	})
 	go authSvc.CleanupLoop(ctx, time.Hour)
+	logsSvc := logging.NewService(pool, logger)
+	go logsSvc.CleanupLoop(ctx, time.Hour)
 
 	// now is the business services' clock: the real one, or in development
 	// the debug clock. Auth always keeps the real time.
@@ -133,7 +153,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, out, lo
 	}
 	ledgerSvc := ledger.New(ledger.Options{AfterRecord: allocation.AfterRecord})
 	refills := refill.NewService(pool, ledgerSvc, refill.Options{Now: now})
-	cyclesSvc := cycles.NewService(pool, cycles.Options{Now: now, OnEnd: refills.OnEnd, OnStart: refills.OnStart})
+	cyclesSvc := cycles.NewService(pool, cycles.Options{Now: now, OnEnd: refills.OnEnd, OnStart: refills.OnStart, Logger: logger})
 	go cyclesSvc.PlanLoop(ctx, time.Hour, logger)
 	transactionsSvc := transactions.NewService(pool, ledgerSvc, transactions.Options{Now: now, Refills: refills})
 	schedulesSvc := schedules.NewService(pool, schedules.Options{Now: now, Transactions: transactionsSvc})
@@ -149,6 +169,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, out, lo
 		Refills:        refills,
 		Schedules:      schedulesSvc,
 		Notifications:  notificationsSvc,
+		Logs:           logsSvc,
 		Docs:           cfg.Env == config.EnvDevelopment,
 		Web:            web.Handler(),
 		TrustedProxies: cfg.TrustedProxies,
@@ -221,7 +242,7 @@ func serve(ctx context.Context, srv *http.Server, timeout time.Duration, logger 
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
 	}
-	logger.InfoContext(ctx, "listening", slog.String("addr", ln.Addr().String()))
+	logger.InfoContext(ctx, "listening", slog.String(logging.EventKey, "server.listening"), slog.String("addr", ln.Addr().String()))
 
 	errc := make(chan error, 1)
 	go func() { errc <- srv.Serve(ln) }()
@@ -232,7 +253,7 @@ func serve(ctx context.Context, srv *http.Server, timeout time.Duration, logger 
 	case <-ctx.Done():
 	}
 
-	logger.Info("shutting down", slog.Duration("timeout", timeout))
+	logger.Info("shutting down", slog.String(logging.EventKey, "server.stopping"), slog.Duration("timeout", timeout))
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
@@ -241,6 +262,6 @@ func serve(ctx context.Context, srv *http.Server, timeout time.Duration, logger 
 	if err := <-errc; !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("serve: %w", err)
 	}
-	logger.Info("stopped")
+	logger.Info("stopped", slog.String(logging.EventKey, "server.stopped"))
 	return nil
 }

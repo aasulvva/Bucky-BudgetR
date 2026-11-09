@@ -16,6 +16,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"time"
 
@@ -26,6 +27,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ids"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/logging"
 )
 
 // Errors returned by the service. They may wrap a message saying more.
@@ -61,6 +63,9 @@ type Options struct {
 	OnEnd Hook
 	// OnStart runs after a cycle has become active.
 	OnStart Hook
+	// Logger gets an event when a cycle starts or ends (#93). Defaults to
+	// discarding them.
+	Logger *slog.Logger
 }
 
 // Service manages cycles.
@@ -73,6 +78,9 @@ type Service struct {
 func NewService(pool *pgxpool.Pool, opts Options) *Service {
 	if opts.Now == nil {
 		opts.Now = time.Now
+	}
+	if opts.Logger == nil {
+		opts.Logger = slog.New(slog.DiscardHandler)
 	}
 	return &Service{pool: pool, opts: opts}
 }
@@ -306,6 +314,7 @@ func (s *Service) Start(ctx context.Context, userID, id string) (sqlc.Cycle, err
 	if err != nil {
 		return sqlc.Cycle{}, err
 	}
+	s.logStarted(ctx, out)
 	return out, nil
 }
 
@@ -376,7 +385,18 @@ func (s *Service) End(ctx context.Context, userID, id string, startNext bool) (E
 	if err != nil {
 		return Ended{}, err
 	}
+	s.opts.Logger.InfoContext(ctx, "cycle ended", slog.String(logging.EventKey, "cycle.ended"),
+		slog.String("user_id", out.Ended.UserID), slog.String("cycle_id", out.Ended.ID))
+	if out.Started != nil {
+		s.logStarted(ctx, *out.Started)
+	}
 	return out, nil
+}
+
+// logStarted records that a cycle started, with its start routine (refills).
+func (s *Service) logStarted(ctx context.Context, c sqlc.Cycle) {
+	s.opts.Logger.InfoContext(ctx, "cycle started", slog.String(logging.EventKey, "cycle.started"),
+		slog.String("user_id", c.UserID), slog.String("cycle_id", c.ID))
 }
 
 // activate makes c the active cycle and runs OnStart.
