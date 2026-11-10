@@ -1184,7 +1184,8 @@
         "type": "Type",
         "types": {
           "graph": "Graph",
-          "transactions": "Transactions"
+          "transactions": "Transactions",
+          "flows": "In/out/balance"
         }
       },
       "ownFilters": {
@@ -1214,6 +1215,50 @@
             "oldest": "Oldest first"
           }
         }
+      },
+      "flows": {
+        "title": "In, out and balance",
+        "buckets": "Buckets",
+        "accounts": "Accounts",
+        "bucket": "Bucket",
+        "account": "Account",
+        "total": "Total",
+        "totalIn": "Total ({{currency}})",
+        "empty": "Nothing happened in this period.",
+        "filtersNote": "The report's tags and counterparty don't apply to this module.",
+        "columns": {
+          "start": "Start",
+          "refills": "Refills",
+          "income": "Income",
+          "opening_funds": "Opening funds",
+          "adjustments_in": "Adjusted in",
+          "transfers_in": "Moved in",
+          "in": "In",
+          "spent": "Spent",
+          "overflow": "Overflow",
+          "adjustments_out": "Adjusted out",
+          "transfers_out": "Moved out",
+          "out": "Out",
+          "end": "End",
+          "expenses": "Expenses",
+          "net": "Net"
+        },
+        "accountColumns": {
+          "transfers_in": "Transfers in",
+          "transfers_out": "Transfers out"
+        },
+        "show": {
+          "label": "Show",
+          "options": {
+            "buckets": "Buckets",
+            "accounts": "Accounts",
+            "both": "Both"
+          }
+        },
+        "transfers": "Count transfers between accounts",
+        "details": "Show details",
+        "detailsHint": "Split in and out into refills, income, adjustments, transfers, spent and overflow.",
+        "breakdownHint": "Also a table per month or cycle, for periods of at least {{days}} days."
       }
     },
     "graphs": {

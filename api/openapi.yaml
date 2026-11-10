@@ -817,6 +817,92 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/v1/stats/flows:
+    get:
+      operationId: getStatsFlows
+      tags: [stats]
+      summary: Money in and out of each bucket and account, per interval
+      description: |
+        For the In/out/balance report module (#126): `from`…`to` cut into
+        intervals of `resolution` as `/stats/series` cuts them, with each
+        bucket's and each account's money in and out per interval.
+
+        - **Buckets:** the bucket lines by type: refills (REF), income
+          (INC), opening funds (OPF), adjustments (BUA) and transfers (BAT)
+          in or out by sign, spent (EXP) and overflow (OVF). `start` is the
+          bucket's TF when the interval begins and `end` when it ends, so
+          `start` + `in` − `out` = `end`.
+        - **Accounts:** income (INC), expenses (EXP) and transfers (TRF) in
+          and out.
+        - A transaction counts on its original's date with its
+          corrections, as the transaction list shows it, so a reversed one
+          adds up to 0. Amounts other than `start` and `end` are positive.
+        - **Rows:** every bucket and account that isn't deleted, or the
+          filtered ones (`account_id` matches a bucket's source account),
+          with zeros when nothing happened. Sorted by ID.
+
+        `from` must be before `to` (400 `invalid_request`).
+      parameters:
+        - name: from
+          in: query
+          required: true
+          description: The start of the period (inclusive).
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: true
+          description: The end of the period (exclusive).
+          schema:
+            type: string
+            format: date-time
+        - name: resolution
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [month, cycle, total]
+        - name: time_zone
+          in: query
+          description: The IANA time zone the intervals are cut in. Defaults to the user's `time_zone` preference, else UTC.
+          schema:
+            type: string
+            maxLength: 64
+        - name: account_id
+          in: query
+          description: Only these accounts, and the buckets funded from them. Repeat for several.
+          schema:
+            type: array
+            maxItems: 50
+            items:
+              $ref: "#/components/schemas/AccountId"
+          style: form
+          explode: true
+        - name: bucket_id
+          in: query
+          description: Only these buckets. Repeat for several.
+          schema:
+            type: array
+            maxItems: 100
+            items:
+              $ref: "#/components/schemas/BucketId"
+          style: form
+          explode: true
+      responses:
+        "200":
+          description: The intervals, and the buckets' and accounts' flows.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatsFlows"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
   /api/v1/accounts:
     get:
       operationId: listAccounts
@@ -3918,7 +4004,8 @@ components:
       description: |
         A module of a report. Its `type` says which settings it has: a
         `graph` module has `graph`, a `transactions` module (#126) has
-        `transactions`, and not the other (400 `invalid_request`).
+        `transactions`, a `flows` module (#126) has `flows`, and none of the
+        others (400 `invalid_request`).
       required: [id, type]
       properties:
         id:
@@ -3927,7 +4014,7 @@ components:
           maxLength: 40
         type:
           type: string
-          enum: [graph, transactions]
+          enum: [graph, transactions, flows]
           description: What the module shows.
         title:
           type: string
@@ -3936,6 +4023,8 @@ components:
           $ref: "#/components/schemas/ReportGraph"
         transactions:
           $ref: "#/components/schemas/ReportTransactions"
+        flows:
+          $ref: "#/components/schemas/ReportFlows"
         compare:
           type: string
           enum: ["off", both, difference]
@@ -3951,6 +4040,40 @@ components:
             Graphs only. Also one small graph per month or per cycle, for
             periods of at least 60 days. Months and cycles cut by the
             period's edges are clipped. `none` by default.
+
+    ReportFlows:
+      type: object
+      additionalProperties: false
+      description: |
+        An In/out/balance module (#126): each bucket's money in and out with
+        its TF at the start and end, and each account's income and
+        expenses. Only the account and bucket filters apply; set here, they
+        replace the report's.
+      properties:
+        account_ids:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/AccountId"
+        bucket_ids:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/BucketId"
+        show:
+          type: string
+          enum: [buckets, accounts, both]
+          description: The buckets' table (the default), the accounts', or both.
+        transfers:
+          type: boolean
+          description: Count the accounts' transfers as money in and out.
+        details:
+          type: boolean
+          description: Split in and out into their parts.
+        breakdown:
+          type: string
+          enum: [none, month, cycle]
+          description: Also a table per month or cycle, for periods of at least 60 days. `none` by default.
 
     ReportTransactions:
       type: object
@@ -4075,6 +4198,112 @@ components:
           description: Sorted by currency, then account or bucket ID (the series without a bucket last).
           items:
             $ref: "#/components/schemas/StatsSeriesLine"
+
+    StatsFlows:
+      type: object
+      additionalProperties: false
+      required: [intervals, buckets, accounts]
+      properties:
+        intervals:
+          type: array
+          items:
+            $ref: "#/components/schemas/StatsInterval"
+        buckets:
+          type: array
+          items:
+            $ref: "#/components/schemas/BucketFlow"
+        accounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/AccountFlowSeries"
+
+    BucketFlow:
+      type: object
+      additionalProperties: false
+      required: [bucket_id, account_id, currency, values]
+      properties:
+        bucket_id:
+          $ref: "#/components/schemas/BucketId"
+        account_id:
+          description: The bucket's source account.
+          allOf:
+            - $ref: "#/components/schemas/AccountId"
+        currency:
+          $ref: "#/components/schemas/Currency"
+        values:
+          type: array
+          description: One per interval, in the same order.
+          items:
+            $ref: "#/components/schemas/BucketFlowValues"
+
+    BucketFlowValues:
+      type: object
+      additionalProperties: false
+      required: [start, refills, income, opening_funds, adjustments_in, adjustments_out, transfers_in, transfers_out, spent, overflow, in, out, end]
+      properties:
+        start:
+          description: TF when the interval begins.
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+        refills:
+          $ref: "#/components/schemas/Amount"
+        income:
+          $ref: "#/components/schemas/Amount"
+        opening_funds:
+          $ref: "#/components/schemas/Amount"
+        adjustments_in:
+          $ref: "#/components/schemas/Amount"
+        adjustments_out:
+          $ref: "#/components/schemas/Amount"
+        transfers_in:
+          $ref: "#/components/schemas/Amount"
+        transfers_out:
+          $ref: "#/components/schemas/Amount"
+        spent:
+          $ref: "#/components/schemas/Amount"
+        overflow:
+          $ref: "#/components/schemas/Amount"
+        in:
+          description: refills + income + opening funds + adjustments in + transfers in.
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+        out:
+          description: spent + overflow + adjustments out + transfers out.
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+        end:
+          description: TF when the interval ends.
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+
+    AccountFlowSeries:
+      type: object
+      additionalProperties: false
+      required: [account_id, currency, values]
+      properties:
+        account_id:
+          $ref: "#/components/schemas/AccountId"
+        currency:
+          $ref: "#/components/schemas/Currency"
+        values:
+          type: array
+          description: One per interval, in the same order.
+          items:
+            $ref: "#/components/schemas/AccountFlowValues"
+
+    AccountFlowValues:
+      type: object
+      additionalProperties: false
+      required: [income, expenses, transfers_in, transfers_out]
+      properties:
+        income:
+          $ref: "#/components/schemas/Amount"
+        expenses:
+          $ref: "#/components/schemas/Amount"
+        transfers_in:
+          $ref: "#/components/schemas/Amount"
+        transfers_out:
+          $ref: "#/components/schemas/Amount"
 
     StatsInterval:
       type: object

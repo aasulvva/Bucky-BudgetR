@@ -313,6 +313,61 @@ func (q *Queries) StatsBucketNets(ctx context.Context, arg StatsBucketNetsParams
 	return items, nil
 }
 
+const statsBucketStarts = `-- name: StatsBucketStarts :many
+SELECT k.id AS bucket_id,
+       COALESCE(SUM(l.amount) FILTER (WHERE o.transaction_at < $1), 0)::numeric AS start
+FROM buckets k
+LEFT JOIN bucket_transactions l ON l.bucket_id = k.id
+LEFT JOIN transaction_headers c ON c.id = l.transaction_id
+LEFT JOIN transaction_headers o ON o.id = COALESCE(c.parent_id, c.id)
+WHERE k.user_id = $2 AND NOT k.deleted
+  AND ($3::text[] IS NULL OR k.source_account_id = ANY($3::text[]))
+  AND ($4::text[] IS NULL OR k.id = ANY($4::text[]))
+GROUP BY k.id
+ORDER BY k.id
+`
+
+type StatsBucketStartsParams struct {
+	FromAt     time.Time
+	UserID     string
+	AccountIds []string
+	BucketIds  []string
+}
+
+type StatsBucketStartsRow struct {
+	BucketID string
+	Start    decimal.Decimal
+}
+
+// For the In/out/balance module (#126): each bucket's TF at from_at, the sum
+// of its lines whose family's original is dated before it (the dating of
+// StatsBucketNets, so start + nets = end). Every filtered bucket that isn't
+// deleted gets a row.
+func (q *Queries) StatsBucketStarts(ctx context.Context, arg StatsBucketStartsParams) ([]StatsBucketStartsRow, error) {
+	rows, err := q.db.Query(ctx, statsBucketStarts,
+		arg.FromAt,
+		arg.UserID,
+		arg.AccountIds,
+		arg.BucketIds,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []StatsBucketStartsRow{}
+	for rows.Next() {
+		var i StatsBucketStartsRow
+		if err := rows.Scan(&i.BucketID, &i.Start); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const statsBuckets = `-- name: StatsBuckets :many
 SELECT k.id, k.source_account_id AS account_id, a.currency FROM buckets k
 JOIN bank_accounts a ON a.id = k.source_account_id

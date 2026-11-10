@@ -446,6 +446,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/stats/flows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Money in and out of each bucket and account, per interval
+         * @description For the In/out/balance report module (#126): `from`…`to` cut into
+         *     intervals of `resolution` as `/stats/series` cuts them, with each
+         *     bucket's and each account's money in and out per interval.
+         *
+         *     - **Buckets:** the bucket lines by type: refills (REF), income
+         *       (INC), opening funds (OPF), adjustments (BUA) and transfers (BAT)
+         *       in or out by sign, spent (EXP) and overflow (OVF). `start` is the
+         *       bucket's TF when the interval begins and `end` when it ends, so
+         *       `start` + `in` − `out` = `end`.
+         *     - **Accounts:** income (INC), expenses (EXP) and transfers (TRF) in
+         *       and out.
+         *     - A transaction counts on its original's date with its
+         *       corrections, as the transaction list shows it, so a reversed one
+         *       adds up to 0. Amounts other than `start` and `end` are positive.
+         *     - **Rows:** every bucket and account that isn't deleted, or the
+         *       filtered ones (`account_id` matches a bucket's source account),
+         *       with zeros when nothing happened. Sorted by ID.
+         *
+         *     `from` must be before `to` (400 `invalid_request`).
+         */
+        get: operations["getStatsFlows"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/accounts": {
         parameters: {
             query?: never;
@@ -2277,7 +2315,8 @@ export interface components {
         /**
          * @description A module of a report. Its `type` says which settings it has: a
          *     `graph` module has `graph`, a `transactions` module (#126) has
-         *     `transactions`, and not the other (400 `invalid_request`).
+         *     `transactions`, a `flows` module (#126) has `flows`, and none of the
+         *     others (400 `invalid_request`).
          */
         ReportModule: {
             id: string;
@@ -2285,10 +2324,11 @@ export interface components {
              * @description What the module shows.
              * @enum {string}
              */
-            type: "graph" | "transactions";
+            type: "graph" | "transactions" | "flows";
             title?: string;
             graph?: components["schemas"]["ReportGraph"];
             transactions?: components["schemas"]["ReportTransactions"];
+            flows?: components["schemas"]["ReportFlows"];
             /**
              * @description Graphs only. Lines and bars: the previous period beside this one
              *     (`both`) or this period minus the previous (`difference`). Pies:
@@ -2301,6 +2341,30 @@ export interface components {
              * @description Graphs only. Also one small graph per month or per cycle, for
              *     periods of at least 60 days. Months and cycles cut by the
              *     period's edges are clipped. `none` by default.
+             * @enum {string}
+             */
+            breakdown?: "none" | "month" | "cycle";
+        };
+        /**
+         * @description An In/out/balance module (#126): each bucket's money in and out with
+         *     its TF at the start and end, and each account's income and
+         *     expenses. Only the account and bucket filters apply; set here, they
+         *     replace the report's.
+         */
+        ReportFlows: {
+            account_ids?: components["schemas"]["AccountId"][];
+            bucket_ids?: components["schemas"]["BucketId"][];
+            /**
+             * @description The buckets' table (the default), the accounts', or both.
+             * @enum {string}
+             */
+            show?: "buckets" | "accounts" | "both";
+            /** @description Count the accounts' transfers as money in and out. */
+            transfers?: boolean;
+            /** @description Split in and out into their parts. */
+            details?: boolean;
+            /**
+             * @description Also a table per month or cycle, for periods of at least 60 days. `none` by default.
              * @enum {string}
              */
             breakdown?: "none" | "month" | "cycle";
@@ -2365,6 +2429,50 @@ export interface components {
             intervals: components["schemas"]["StatsInterval"][];
             /** @description Sorted by currency, then account or bucket ID (the series without a bucket last). */
             series: components["schemas"]["StatsSeriesLine"][];
+        };
+        StatsFlows: {
+            intervals: components["schemas"]["StatsInterval"][];
+            buckets: components["schemas"]["BucketFlow"][];
+            accounts: components["schemas"]["AccountFlowSeries"][];
+        };
+        BucketFlow: {
+            bucket_id: components["schemas"]["BucketId"];
+            /** @description The bucket's source account. */
+            account_id: components["schemas"]["AccountId"];
+            currency: components["schemas"]["Currency"];
+            /** @description One per interval, in the same order. */
+            values: components["schemas"]["BucketFlowValues"][];
+        };
+        BucketFlowValues: {
+            /** @description TF when the interval begins. */
+            start: components["schemas"]["Amount"];
+            refills: components["schemas"]["Amount"];
+            income: components["schemas"]["Amount"];
+            opening_funds: components["schemas"]["Amount"];
+            adjustments_in: components["schemas"]["Amount"];
+            adjustments_out: components["schemas"]["Amount"];
+            transfers_in: components["schemas"]["Amount"];
+            transfers_out: components["schemas"]["Amount"];
+            spent: components["schemas"]["Amount"];
+            overflow: components["schemas"]["Amount"];
+            /** @description refills + income + opening funds + adjustments in + transfers in. */
+            in: components["schemas"]["Amount"];
+            /** @description spent + overflow + adjustments out + transfers out. */
+            out: components["schemas"]["Amount"];
+            /** @description TF when the interval ends. */
+            end: components["schemas"]["Amount"];
+        };
+        AccountFlowSeries: {
+            account_id: components["schemas"]["AccountId"];
+            currency: components["schemas"]["Currency"];
+            /** @description One per interval, in the same order. */
+            values: components["schemas"]["AccountFlowValues"][];
+        };
+        AccountFlowValues: {
+            income: components["schemas"]["Amount"];
+            expenses: components["schemas"]["Amount"];
+            transfers_in: components["schemas"]["Amount"];
+            transfers_out: components["schemas"]["Amount"];
         };
         StatsInterval: {
             /** Format: date-time */
@@ -3523,6 +3631,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatsSeries"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getStatsFlows: {
+        parameters: {
+            query: {
+                /** @description The start of the period (inclusive). */
+                from: string;
+                /** @description The end of the period (exclusive). */
+                to: string;
+                resolution: "month" | "cycle" | "total";
+                /** @description The IANA time zone the intervals are cut in. Defaults to the user's `time_zone` preference, else UTC. */
+                time_zone?: string;
+                /** @description Only these accounts, and the buckets funded from them. Repeat for several. */
+                account_id?: components["schemas"]["AccountId"][];
+                /** @description Only these buckets. Repeat for several. */
+                bucket_id?: components["schemas"]["BucketId"][];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The intervals, and the buckets' and accounts' flows. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatsFlows"];
                 };
             };
             400: components["responses"]["Error"];

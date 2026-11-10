@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import type { components } from "@/api/schema";
 import { startAtFor } from "@/lib/cycles";
 import { formatDay } from "@/lib/dates";
+import { formatMoney } from "@/lib/money";
 import { apiMock, testUser, type MockRequest } from "@/test/api";
 import { account, bucket, transaction } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
@@ -33,6 +34,71 @@ function answer(req: MockRequest) {
   };
 }
 
+const flowsPath = "GET /api/v1/stats/flows";
+const zero = {
+  start: "0.00",
+  refills: "0.00",
+  income: "0.00",
+  opening_funds: "0.00",
+  adjustments_in: "0.00",
+  adjustments_out: "0.00",
+  transfers_in: "0.00",
+  transfers_out: "0.00",
+  spent: "0.00",
+  overflow: "0.00",
+  in: "0.00",
+  out: "0.00",
+  end: "0.00",
+};
+/** Food starts at 100, gets 1000 in and spends 400 per interval; Fun does nothing. */
+function flowsAnswer(req: MockRequest) {
+  const from = req.query.get("from") ?? "";
+  const to = req.query.get("to") ?? "";
+  const intervals =
+    req.query.get("resolution") === "month"
+      ? Array.from({ length: 12 }, (_, m) => ({
+          start: startAtFor(`${String(year - 1)}-${String(m + 1).padStart(2, "0")}-01`),
+          end:
+            m === 11 ? to : startAtFor(`${String(year - 1)}-${String(m + 2).padStart(2, "0")}-01`),
+        }))
+      : [{ start: from, end: to }];
+  const food = intervals.map((_, i) => ({
+    ...zero,
+    start: (100 + 600 * i).toFixed(2),
+    refills: "1000.00",
+    in: "1000.00",
+    spent: "400.00",
+    out: "400.00",
+    end: (700 + 600 * i).toFixed(2),
+  }));
+  return {
+    body: {
+      intervals,
+      buckets: [
+        { bucket_id: "1000000001", account_id: "1234", currency: "NOK", values: food },
+        {
+          bucket_id: "1000000002",
+          account_id: "1234",
+          currency: "NOK",
+          values: intervals.map(() => zero),
+        },
+      ],
+      accounts: [
+        {
+          account_id: "1234",
+          currency: "NOK",
+          values: intervals.map(() => ({
+            income: "30000.00",
+            expenses: "400.00",
+            transfers_in: "0.00",
+            transfers_out: "2000.00",
+          })),
+        },
+      ],
+    },
+  };
+}
+
 let prefs: Preferences;
 
 beforeEach(() => {
@@ -46,6 +112,7 @@ beforeEach(() => {
   apiMock.on("GET /api/v1/accounts", { body: [main] });
   apiMock.on("GET /api/v1/buckets", { body: [food, fun] });
   apiMock.on(stats, answer);
+  apiMock.on(flowsPath, flowsAnswer);
 });
 
 const lastBody = () =>
@@ -317,5 +384,100 @@ describe("Reports", () => {
     await waitFor(() => {
       expect(apiMock.calls(list).at(-1)?.query.get("order")).toBe("oldest");
     });
+  });
+
+  it("adds an in/out/balance module with buckets and accounts (#126)", async () => {
+    renderRoute("/stats/reports");
+    await userEvent.click(await screen.findByRole("button", { name: "Add module" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add module" });
+    await userEvent.click(within(dialog).getByRole("radio", { name: "In/out/balance" }));
+    await userEvent.click(within(dialog).getByRole("radio", { name: "Both" }));
+    await userEvent.click(
+      within(dialog).getByRole("switch", { name: "Count transfers between accounts" }),
+    );
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+
+    const module = await screen.findByRole("region", { name: "In, out and balance" });
+    const bucketsTable = await within(module).findByRole("table", { name: "Buckets" });
+    const query = apiMock.calls(flowsPath)[0]?.query;
+    expect(query?.get("from")).toBe(startAtFor(`${String(year - 1)}-01-01`));
+    expect(query?.get("resolution")).toBe("total");
+    const foodRow = within(bucketsTable).getByRole("row", { name: /Food/ });
+    expect(
+      within(foodRow)
+        .getAllByRole("cell")
+        .map((c) => c.textContent),
+    ).toEqual([
+      "Food",
+      formatMoney("100.00", "NOK"),
+      formatMoney("1000.00", "NOK"),
+      formatMoney("400.00", "NOK"),
+      formatMoney("700.00", "NOK"),
+    ]);
+    // Nothing happened to Fun.
+    expect(within(bucketsTable).queryByText("Fun")).not.toBeInTheDocument();
+    expect(within(bucketsTable).getByRole("row", { name: /Total/ })).toBeInTheDocument();
+    expect(within(foodRow).getByRole("link", { name: "Food" }).getAttribute("href")).toMatch(
+      /^\/transactions\?.*bucket_id=1000000001/,
+    );
+
+    const accountsTable = within(module).getByRole("table", { name: "Accounts" });
+    const mainRow = within(accountsTable).getByRole("row", { name: /Main/ });
+    expect(
+      within(mainRow)
+        .getAllByRole("cell")
+        .map((c) => c.textContent),
+    ).toEqual([
+      "Main",
+      formatMoney("30000.00", "NOK"),
+      formatMoney("2400.00", "NOK"),
+      formatMoney("27600.00", "NOK"),
+    ]);
+    expect(within(module).queryByText(/don't apply/)).not.toBeInTheDocument();
+  });
+
+  it("breaks a saved in/out/balance module down by month, with details (#126)", async () => {
+    prefs = {
+      ...prefs,
+      report_templates: [
+        template({
+          period: "previous-year",
+          tags: ["food"],
+          modules: [
+            {
+              id: "m-1",
+              type: "flows",
+              flows: { bucket_ids: ["1000000001"], details: true, breakdown: "month" },
+            },
+          ],
+        }),
+      ],
+    };
+    renderRoute("/stats/reports?template=r-1");
+    const module = await screen.findByRole("region", { name: "In, out and balance" });
+    await waitFor(() => {
+      expect(within(module).getAllByTestId("breakdown-part")).toHaveLength(12);
+    });
+    expect(within(module).getByText(`March ${String(year - 1)}`)).toBeInTheDocument();
+    expect(within(module).getByText(/don't apply/)).toBeInTheDocument();
+    const calls = apiMock.calls(flowsPath);
+    expect(calls.map((c) => c.query.get("resolution")).sort()).toEqual(["month", "total"]);
+    expect(calls[0]?.query.getAll("bucket_id")).toEqual(["1000000001"]);
+    expect(calls[0]?.query.getAll("tag")).toEqual([]);
+    const [whole] = within(module).getAllByRole("table", { name: "Buckets" });
+    if (!whole) throw new Error("no table");
+    expect(within(whole).getByRole("columnheader", { name: "Refills" })).toBeInTheDocument();
+    expect(within(whole).getByRole("columnheader", { name: "Spent" })).toBeInTheDocument();
+    expect(within(module).queryByRole("table", { name: "Accounts" })).not.toBeInTheDocument();
+    // The second month starts where the first ends.
+    const [, , second] = within(module).getAllByRole("table", { name: "Buckets" });
+    if (!second) throw new Error("no table");
+    const cells = within(within(second).getByRole("row", { name: /Food/ }))
+      .getAllByRole("cell")
+      .map((c) => c.textContent);
+    expect([cells[1], cells.at(-1)]).toEqual([
+      formatMoney("700.00", "NOK"),
+      formatMoney("1300.00", "NOK"),
+    ]);
   });
 });

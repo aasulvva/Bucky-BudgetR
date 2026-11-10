@@ -420,7 +420,7 @@ func TestPreferences(t *testing.T) {
 		t.Errorf("saved graphs reset: %d %s", w.Code, w.Body)
 	}
 	// Report templates (#125) too.
-	reports := `{"report_templates":[{"id":"r-1","name":"Year","report":{"bucket_ids":["1000000007"],"compare_to":"last_year","modules":[{"breakdown":"cycle","compare":"difference","graph":{"account_ids":["1234"],"group_by":"bucket","kind":"bar","metric":"spending","resolution":"month"},"id":"m-1","title":"Food","type":"graph"},{"compare":"off","graph":{"kind":"pie","metric":"spending","resolution":"total"},"id":"m-2","type":"graph"}],"period":"previous-year"}},{"id":"r-2","name":"Q3","report":{"modules":[{"id":"m-1","title":"Food","transactions":{"bucket_ids":["1000000007"],"counterparty":"rema","reversed":true,"system":true,"tags":["food"],"types":["EXP","TRF"]},"type":"transactions"}],"period":"quarter-2026-q3"}}]}`
+	reports := `{"report_templates":[{"id":"r-1","name":"Year","report":{"bucket_ids":["1000000007"],"compare_to":"last_year","modules":[{"breakdown":"cycle","compare":"difference","graph":{"account_ids":["1234"],"group_by":"bucket","kind":"bar","metric":"spending","resolution":"month"},"id":"m-1","title":"Food","type":"graph"},{"compare":"off","graph":{"kind":"pie","metric":"spending","resolution":"total"},"id":"m-2","type":"graph"}],"period":"previous-year"}},{"id":"r-2","name":"Q3","report":{"modules":[{"id":"m-1","title":"Food","transactions":{"bucket_ids":["1000000007"],"counterparty":"rema","reversed":true,"system":true,"tags":["food"],"types":["EXP","TRF"]},"type":"transactions"},{"flows":{"account_ids":["1234"],"breakdown":"cycle","details":true,"show":"both","transfers":true},"id":"m-2","type":"flows"}],"period":"quarter-2026-q3"}}]}`
 	if w := patch(reports); w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != reports {
 		t.Errorf("report templates: %d %s", w.Code, w.Body)
 	}
@@ -482,6 +482,9 @@ func TestPreferences(t *testing.T) {
 		`{"report_templates":[{"id":"a","name":"A","report":{"period":"current-year","modules":[{"id":"m","type":"transactions"}]}}]}`,
 		`{"report_templates":[{"id":"a","name":"A","report":{"period":"current-year","modules":[{"id":"m","type":"transactions","transactions":{},"graph":{"kind":"bar","metric":"spending","resolution":"day"}}]}}]}`,
 		`{"report_templates":[{"id":"a","name":"A","report":{"period":"current-year","modules":[{"id":"m","type":"transactions","transactions":{"types":["XYZ"]}}]}}]}`,
+		`{"report_templates":[{"id":"a","name":"A","report":{"period":"current-year","modules":[{"id":"m","type":"flows"}]}}]}`,
+		`{"report_templates":[{"id":"a","name":"A","report":{"period":"current-year","modules":[{"id":"m","type":"flows","flows":{},"transactions":{}}]}}]}`,
+		`{"report_templates":[{"id":"a","name":"A","report":{"period":"current-year","modules":[{"id":"m","type":"flows","flows":{"show":"everything"}}]}}]}`,
 		`{"report_templates":[{"id":"a","name":"A","report":{"period":"current-year","modules":[{"id":"m","type":"graph","graph":{"kind":"bar","metric":"spending","resolution":"day","period":"current-year"}}]}}]}`,
 		`{"report_templates":[{"id":"a","name":"A","report":{"period":"current-year","modules":[{"id":"m","type":"graph","compare":"maybe","graph":{"kind":"bar","metric":"spending","resolution":"day"}}]}}]}`,
 		`{"report_templates":[{"id":"a","name":"A","report":{"period":"current-year","modules":[{"id":"m","type":"graph","breakdown":"week","graph":{"kind":"bar","metric":"spending","resolution":"day"}}]}}]}`,

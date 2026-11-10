@@ -12,6 +12,7 @@ import {
   BREAKDOWN_MIN_DAYS,
   MAX_SUB_PERIODS,
   moduleGraph,
+  moduleFlows,
   moduleTitle,
   moduleTransactions,
   ownFilters,
@@ -23,6 +24,7 @@ import {
   type SubPeriod,
 } from "@/lib/reports";
 
+import { FlowsModule } from "./FlowsModule";
 import { TransactionsModule } from "./TransactionsModule";
 
 interface ModuleCardProps {
@@ -134,6 +136,16 @@ export function ModuleCard({
             period={period}
             cycles={cycles}
             isDesktop={isDesktop}
+          />
+        ) : module.type === "flows" ? (
+          <FlowsModule
+            settings={moduleFlows(report, module)}
+            choice={choice}
+            period={period}
+            cycles={cycles}
+            accounts={accounts}
+            buckets={buckets}
+            filtered={(report.tags?.length ?? 0) > 0 || Boolean(report.counterparty?.trim())}
           />
         ) : (
           <GraphBody
