@@ -88,16 +88,14 @@ function Printed({
   buckets: Bucket[];
 }) {
   const { report } = job;
-  const { choice, period, compare } = reportPeriods(report, cycles);
-  const ready = usePrintReady();
+  // Resolved once: a period that's still going ends now, and a new "now" on
+  // every render would be new queries on every render.
+  const periods = useMemo(() => reportPeriods(report, cycles), [report, cycles]);
+  const { choice, period, compare } = periods;
   return (
-    <Box
-      className="print-report"
-      w={PRINT_WIDTH}
-      data-print-ready={ready === "ready" || undefined}
-      data-print-error={ready === "error" || undefined}
-    >
-      <Cover job={job} user={user} cycles={cycles} accounts={accounts} buckets={buckets} />
+    <Box className="print-report" w={PRINT_WIDTH}>
+      <ReadyMark />
+      <Cover job={job} user={user} periods={periods} accounts={accounts} buckets={buckets} />
       <Stack gap="md">
         {report.modules.map((m, i) => (
           <ModuleCard
@@ -125,23 +123,38 @@ function Printed({
 
 const noop = () => undefined;
 
+/**
+ * Says when the page is ready to print, or failed. On its own, so the
+ * report doesn't render again whenever a query starts or ends.
+ */
+function ReadyMark() {
+  const ready = usePrintReady();
+  return (
+    <span
+      hidden
+      data-print-ready={ready === "ready" || undefined}
+      data-print-error={ready === "error" || undefined}
+    />
+  );
+}
+
 /** The first page: what the report is, for whom and when. */
 function Cover({
   job,
   user,
-  cycles,
+  periods,
   accounts,
   buckets,
 }: {
   job: PrintJob;
   user: User;
-  cycles: Cycle[];
+  periods: ReturnType<typeof reportPeriods>;
   accounts: Account[];
   buckets: Bucket[];
 }) {
   const { t } = useTranslation();
   const { report } = job;
-  const { period, label, name, compare } = reportPeriods(report, cycles);
+  const { period, label, name, compare } = periods;
   const range = period ? formatDateRange(period.from, period.to) : "";
   // "Previous month · October 2026 (1–31 Oct 2026)", without repeats.
   const periodText =

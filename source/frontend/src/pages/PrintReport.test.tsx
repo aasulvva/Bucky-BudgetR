@@ -115,6 +115,16 @@ describe("PrintReport", () => {
     expect(failed()).toBeNull();
   });
 
+  it("doesn't loop on a period that's still going", async () => {
+    renderRoute(
+      `/print/report#${fragment(job({ report: { period: "current-year", modules: [{ id: "m-2", type: "transactions", transactions: {} }] } }))}`,
+    );
+    expect(await screen.findByText("Kiwi")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(ready()).not.toBeNull();
+    });
+  });
+
   it("uses the job's language and locale", async () => {
     renderRoute(`/print/report#${fragment(job({ language: "nb", locale: "nb-NO" }))}`);
     const cover = await screen.findByTestId("print-cover");
