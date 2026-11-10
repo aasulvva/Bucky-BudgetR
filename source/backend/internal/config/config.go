@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/netip"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -44,6 +45,11 @@ type Config struct {
 	// TrustedProxies are the reverse proxies in front of the server, whose
 	// X-Forwarded-For header gives the client's address. Empty means none.
 	TrustedProxies []netip.Prefix
+	// PDFChromeURL is the headless Chrome's DevTools address (e.g.
+	// http://chrome:9222) and PDFAppURL the app as that Chrome reaches it
+	// (e.g. http://app:8080), for report PDFs (#127). Both or neither; empty
+	// turns the PDF export off.
+	PDFChromeURL, PDFAppURL string
 }
 
 // Addr is the listen address for the HTTP server.
@@ -132,6 +138,24 @@ func Load(getenv func(string) string) (Config, error) {
 			continue
 		}
 		cfg.TrustedProxies = append(cfg.TrustedProxies, p)
+	}
+
+	for _, v := range []struct {
+		key string
+		to  *string
+	}{{"PDF_CHROME_URL", &cfg.PDFChromeURL}, {"PDF_APP_URL", &cfg.PDFAppURL}} {
+		raw := strings.TrimRight(getenv(v.key), "/")
+		if raw == "" {
+			continue
+		}
+		if u, err := url.Parse(raw); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.Path != "" {
+			errs = append(errs, fmt.Errorf("%s: must be an http(s) URL without a path such as http://chrome:9222, got %q", v.key, getenv(v.key)))
+			continue
+		}
+		*v.to = raw
+	}
+	if (cfg.PDFChromeURL == "") != (cfg.PDFAppURL == "") {
+		errs = append(errs, errors.New("PDF_CHROME_URL and PDF_APP_URL: set both, or neither"))
 	}
 
 	if len(errs) > 0 {

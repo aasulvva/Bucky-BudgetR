@@ -57,6 +57,7 @@ type Service struct {
 	opts    Options
 	limiter *Limiter
 	logger  *slog.Logger
+	renders renders
 }
 
 // NewService returns a Service using pool.
@@ -67,7 +68,8 @@ func NewService(pool *pgxpool.Pool, logger *slog.Logger, opts Options) *Service 
 	}
 	now := func() time.Time { return clock().UTC() }
 	opts.Now = now
-	return &Service{pool: pool, q: sqlc.New(pool), opts: opts, limiter: NewLimiter(now), logger: logger}
+	return &Service{pool: pool, q: sqlc.New(pool), opts: opts, limiter: NewLimiter(now), logger: logger,
+		renders: renders{m: map[string]renderEntry{}}}
 }
 
 // MaxAge is how long a session can last at most, for the cookie's Max-Age.
@@ -78,6 +80,9 @@ type Session struct {
 	User      sqlc.User
 	TokenHash []byte
 	ExpiresAt time.Time
+	// Render marks a headless browser's read-only session from a render
+	// token (#127), which has no row and no TokenHash.
+	Render bool
 }
 
 // Client describes who is making a request, for sessions and rate limiting.

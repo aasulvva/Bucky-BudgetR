@@ -27,7 +27,8 @@ export function TransactionRow({
   names: Lookups;
   /** Signs the amount from this account's or bucket's side. */
   filter: Pick<TransactionFilter, "accountId" | "bucketId">;
-  to: string;
+  /** Where the row goes; without it (a report PDF, #127) it's no link. */
+  to?: string;
   selected: boolean;
   badge: boolean;
 }) {
@@ -46,22 +47,20 @@ export function TransactionRow({
   const balance = account
     ? tx.balances_after.find((b) => b.account_id === account)?.balance
     : undefined;
-  return (
-    <UnstyledButton
-      component={Link}
-      to={to}
-      aria-current={selected ? "true" : undefined}
-      px="md"
-      py={10}
-      bg={selected ? "var(--mantine-color-blue-light)" : undefined}
-      style={{
-        display: "grid",
-        gridTemplateColumns: badge ? "48px minmax(0, 1fr) auto" : "minmax(0, 1fr) auto",
-        gap: 12,
-        alignItems: "center",
-        borderBottom: "1px solid var(--mantine-color-default-border)",
-      }}
-    >
+  const row = {
+    px: "md",
+    py: 10,
+    bg: selected ? "var(--mantine-color-blue-light)" : undefined,
+    style: {
+      display: "grid",
+      gridTemplateColumns: badge ? "48px minmax(0, 1fr) auto" : "minmax(0, 1fr) auto",
+      gap: 12,
+      alignItems: "center",
+      borderBottom: "1px solid var(--mantine-color-default-border)",
+    },
+  };
+  const content = (
+    <>
       {badge && (
         <Badge variant="light" color="gray" radius="sm" size="sm" style={{ justifySelf: "start" }}>
           {tx.type}
@@ -118,6 +117,15 @@ export function TransactionRow({
           </Text>
         )}
       </Box>
+    </>
+  );
+  return to === undefined ? (
+    <Box {...row} data-transaction-row>
+      {content}
+    </Box>
+  ) : (
+    <UnstyledButton component={Link} to={to} aria-current={selected ? "true" : undefined} {...row}>
+      {content}
     </UnstyledButton>
   );
 }

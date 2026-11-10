@@ -1,7 +1,6 @@
-import { Anchor, Badge, Center, Group, Loader, Progress, Stack, Table, Text } from "@mantine/core";
+import { Badge, Center, Group, Loader, Progress, Stack, Table, Text } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router";
 
 import { useBucketFiguresFor, type Bucket, type BucketFigures } from "@/api/accounts";
 import type { Cycle } from "@/api/cycles";
@@ -21,6 +20,8 @@ import {
   type PeriodCycle,
   type ReportBudget,
 } from "@/lib/reports";
+
+import { ReportLink } from "./ReportLink";
 
 /**
  * A budget vs spending module (#126): each bucket's budget, used, unspent
@@ -196,16 +197,14 @@ function BudgetTable({
               key={r.id}
               row={r}
               name={
-                <Anchor
-                  component={Link}
+                <ReportLink
                   to={
                     transactionsLink({ bucket_ids: [r.id], system: true }, period) ??
                     "/transactions"
                   }
-                  size="sm"
                 >
                   {r.name}
-                </Anchor>
+                </ReportLink>
               }
             />
           ))}

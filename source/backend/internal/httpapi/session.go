@@ -21,6 +21,10 @@ const (
 	// request. Browsers only let a page add custom headers to same-origin
 	// requests (the API allows no CORS), so cross-site forms can't.
 	CSRFHeader = "X-Bucky-CSRF"
+	// RenderHeader holds a render token: the headless Chrome that makes a
+	// report PDF (#127) sends it on every request instead of a cookie. Its
+	// session only reads.
+	RenderHeader = "X-Bucky-Render"
 )
 
 type (
@@ -44,9 +48,10 @@ func clientFrom(ctx context.Context) auth.Client {
 	return c
 }
 
-// Sessions resolves the session cookie and stores the session (if valid) and
-// the client's address in the context. A stale cookie is cleared. With a nil
-// service, no request has a session.
+// Sessions resolves the session cookie, or a render token (#127), and stores
+// the session (if valid) and the client's address in the context. A stale
+// cookie is cleared. A render session may only read: anything but GET and
+// HEAD is 403. With a nil service, no request has a session.
 func Sessions(svc *auth.Service, logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -54,7 +59,23 @@ func Sessions(svc *auth.Service, logger *slog.Logger) func(http.Handler) http.Ha
 				IP:        ClientIPFromContext(r.Context()),
 				UserAgent: r.UserAgent(),
 			})
-			if c, err := r.Cookie(SessionCookie); err == nil && c.Value != "" && svc != nil {
+			if token := r.Header.Get(RenderHeader); token != "" && svc != nil {
+				sess, err := svc.AuthenticateRender(ctx, token)
+				switch {
+				case err == nil:
+					if r.Method != http.MethodGet && r.Method != http.MethodHead {
+						WriteProblem(w, r.WithContext(ctx), http.StatusForbidden, "read_only", "A render can only read.")
+						return
+					}
+					ctx = context.WithValue(ctx, sessionKey{}, sess)
+					logging.SetUser(ctx, sess.User.ID)
+				case errors.Is(err, auth.ErrNoSession):
+				default:
+					logger.ErrorContext(ctx, "render lookup failed", slog.Any("error", err))
+					WriteProblem(w, r.WithContext(ctx), http.StatusInternalServerError, "internal_error", "")
+					return
+				}
+			} else if c, err := r.Cookie(SessionCookie); err == nil && c.Value != "" && svc != nil {
 				sess, err := svc.Authenticate(ctx, c.Value)
 				switch {
 				case err == nil:

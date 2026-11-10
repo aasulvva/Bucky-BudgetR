@@ -1,6 +1,5 @@
-import { Anchor, Badge, Center, Group, Loader, Stack, Table, Text } from "@mantine/core";
+import { Badge, Center, Group, Loader, Stack, Table, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router";
 
 import type { Account, Bucket } from "@/api/accounts";
 import type { Cycle } from "@/api/cycles";
@@ -25,6 +24,8 @@ import {
   type ReportFlows,
   type SubPeriod,
 } from "@/lib/reports";
+
+import { ReportLink } from "./ReportLink";
 
 /**
  * An In/out/balance module (#126): each bucket's start, in, out and end, and
@@ -264,9 +265,7 @@ function FlowTable<F extends string>({
           {rows.map((r) => (
             <Table.Tr key={r.id}>
               <Table.Td>
-                <Anchor component={Link} to={linkOf(r.id)} size="sm">
-                  {r.name}
-                </Anchor>
+                <ReportLink to={linkOf(r.id)}>{r.name}</ReportLink>
               </Table.Td>
               {columns.map((c) => (
                 <Table.Td key={c} ta="right" style={{ whiteSpace: "nowrap" }}>

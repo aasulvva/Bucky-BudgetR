@@ -1283,6 +1283,22 @@
         "perCycleHint": "A table per cycle after the summary. Off: only the summary.",
         "unspent": "Unspent",
         "carried": "Carried over"
+      },
+      "pdf": {
+        "export": "Export PDF",
+        "exporting": "Making the PDF…",
+        "cover": {
+          "title": "Report",
+          "period": "Period",
+          "comparedWith": "Compared with",
+          "filters": "Filters",
+          "noFilters": "None: the whole report",
+          "modules": "Modules",
+          "user": "User",
+          "generated": "Generated"
+        },
+        "loading": "Getting the report ready…",
+        "nothing": "This page prints a report to PDF. Use Export PDF on a report."
       }
     },
     "graphs": {
@@ -1588,7 +1604,11 @@
       "not_next_cycle": "An earlier cycle is planned. Start that one first.",
       "own_account": "You can't change your own account here. Use Settings.",
       "password_change_required": "Change your password first.",
+      "pdf_failed": "The report couldn't be made into a PDF. Try again.",
+      "pdf_unavailable": "PDF export isn't set up on this server, or its renderer can't be reached.",
+      "read_only": "This session can only read.",
       "refill_unavailable": "Only income in the active cycle can trigger a refill.",
+      "too_many_renders": "Other PDFs are being made. Try again in a moment.",
       "unauthenticated": "Log in first.",
       "username_taken": "That username is already in use.",
       "wrong_password": "The current password is wrong.",

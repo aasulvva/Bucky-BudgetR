@@ -13,9 +13,23 @@ import type { BucketFlowValues, FlowsQuery, StatsFlows } from "@/api/stats";
 import type { Transaction, TransactionQuery } from "@/api/transactions";
 import i18n from "@/i18n";
 
-import { addDays, endAtFor, localDate, startAtFor, type LocalDate } from "./cycles";
+import {
+  addDays,
+  endAtFor,
+  formatDateRange,
+  localDate,
+  startAtFor,
+  type LocalDate,
+} from "./cycles";
 import { formatDay } from "./dates";
-import { cleanGraph, groupBy, maxIntervals, specificLabel, type GraphSettings } from "./graphs";
+import {
+  cleanGraph,
+  groupBy,
+  maxIntervals,
+  periodLabel,
+  specificLabel,
+  type GraphSettings,
+} from "./graphs";
 import { addAmounts, compareAmounts, percentOf, subtractAmounts } from "./money";
 import {
   defaultResolution,
@@ -653,6 +667,54 @@ function asSpecific(choice: PeriodChoice, period: Period, cycles: CycleTimes[]):
 /** Whether a period is still going: it was cut at now. */
 export function inProgress(period: Period): boolean {
   return Date.parse(period.toAt) < Date.parse(endAtFor(period.to));
+}
+
+/** What a report compares with, when it can: the period and its name. */
+export interface ReportCompare {
+  period: Period;
+  label: string;
+  /** The report's own period's name, beside it. */
+  currentLabel: string;
+}
+
+/**
+ * The report's period (#125): the choice, the period it resolves to now
+ * (null without a cycle), its label ("Previous month"), its name now
+ * ("October 2026", for a PDF, #127) and what it compares with.
+ */
+export function reportPeriods(
+  report: ReportSettings,
+  cycles: CycleTimes[],
+): {
+  choice: PeriodChoice;
+  period: Period | null;
+  label: string;
+  name: string;
+  compare: ReportCompare | null;
+} {
+  const choice = parseReportPeriod(report.period) ?? { kind: "previous", unit: "year" };
+  const period = resolvePeriod(choice, cycles);
+  const previous = period
+    ? previousPeriod(choice, period, report.compare_to ?? "previous", cycles)
+    : null;
+  const label = periodLabel(choice, cycles);
+  const compare =
+    previous && period
+      ? {
+          period: previous.period,
+          label: inProgress(period)
+            ? formatDateRange(previous.period.from, previous.period.to)
+            : specificLabel(previous.choice, cycles),
+          currentLabel: label,
+        }
+      : null;
+  const specific = period ? asSpecific(choice, period, cycles) : null;
+  const name = specific
+    ? specificLabel(specific, cycles)
+    : period
+      ? formatDateRange(period.from, period.to)
+      : label;
+  return { choice, period, label, name, compare };
 }
 
 /**

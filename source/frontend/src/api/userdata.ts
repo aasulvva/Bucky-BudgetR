@@ -4,6 +4,8 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
+import { downloadBlob } from "@/lib/download";
+
 import { api } from "./client";
 import { unwrap } from "./errors";
 import type { components } from "./schema";
@@ -23,17 +25,7 @@ export function exportFileName(username: string, date = new Date()): string {
 /** Downloads the user's data as a file. */
 export async function downloadExport(username: string): Promise<void> {
   const blob = await unwrap(api.GET("/api/v1/me/export", { parseAs: "blob" }));
-  const url = URL.createObjectURL(blob);
-  try {
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = exportFileName(username);
-    document.body.append(a);
-    a.click();
-    a.remove();
-  } finally {
-    URL.revokeObjectURL(url);
-  }
+  downloadBlob(blob, exportFileName(username));
 }
 
 export interface ExportPreview {

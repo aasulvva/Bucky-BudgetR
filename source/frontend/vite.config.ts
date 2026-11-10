@@ -51,6 +51,11 @@ export default defineConfig({
   server: {
     port: webPort,
     strictPort: true,
+    // Report PDFs in dev (#127): the Chrome container loads the print page
+    // from host.docker.internal, so Vite listens on VITE_HOST (0.0.0.0)
+    // when it's set, else on localhost only.
+    host: process.env.VITE_HOST ?? "localhost",
+    allowedHosts: ["host.docker.internal"],
     // Same-origin API calls in dev, so session cookies just work.
     proxy: {
       "/api": apiTarget,

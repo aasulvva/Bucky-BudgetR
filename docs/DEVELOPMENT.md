@@ -75,6 +75,8 @@ It is configured with environment variables. The Makefile exports everything in 
 | `SCHEDULE_INTERVAL` | `30s` | How often the scheduler looks for scheduled transactions that are due (#31). At least `1s`. |
 | `BUCKY_INITIAL_ADMIN_PASSWORD` | `BuckyBudgetR_ADMIN_Pa$$w0rd` | Password of the `admin` account created on first start. Must meet the password policy. |
 | `TRUSTED_PROXIES` | (none) | Comma-separated addresses or CIDR ranges of reverse proxies whose `X-Forwarded-For` gives the client's address. `deploy/compose.yaml` sets Caddy's. |
+| `PDF_CHROME_URL` | (none) | The headless Chrome's DevTools address for report PDFs (#127), e.g. `http://chrome:9222`. Set with `PDF_APP_URL`, or neither: without them, *Export PDF* answers 503 `pdf_unavailable`. |
+| `PDF_APP_URL` | (none) | The app as that Chrome reaches it, e.g. `http://app:8080`, or Vite in dev. No path. |
 
 `GET /healthz` reports that the process is up. `GET /readyz` also checks the database. Every error response is an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem (`application/problem+json`) with extra `code` and `request_id` fields. The frontend shows `request_id` as the error's *reference*, which an admin can paste into the Logs screen.
 
@@ -196,6 +198,24 @@ Settings → *Data* (#36) downloads all of a user's data as one JSON file (`GET 
 - **What's in it:** every per-user table (`tables` in `userdata.go`: accounts, cycles, buckets, tags, transactions and their lines and tags, refills, schedules with their lines and queue, notification dismissals) and the preferences, which hold the dashboard, saved graphs and report templates. Not the login, sessions, links or logs. Rows are decoded with `UseNumber`, so amounts stay exact; the file is never parsed as floats on the way back either.
 - **The format:** a file has `app`, `format` (`userdata.Format`), the schema version, when and by whom it was exported, and the data. `write` inserts each table with the columns the file has, so a column added later gets its default and older files still import. A column the table doesn't have is refused (`invalid_export`), and a newer format is 409 `export_too_new`. When a column is renamed, removed or changes meaning, bump `Format` and teach `upgrade` to convert older files; `TestColumns` lists every exported column, so a schema change fails it until you've looked.
 - **Importing:** in one transaction, under the user's ledger lock: the user's own file keeps its IDs when they're free, anything else gets new IDs (`remap.go`; `TestIDColumns` checks its ID columns against the schema's keys, and dashboard and saved graph IDs in the preferences follow). The ledger is immutable, but `ledger_immutable()` lets row deletes through while `bucky.replacing_user_data` is `on` (migration 00023), which `Replace` sets for its transaction only; updates and truncates stay refused. Afterwards, `allocation.Run` recomputes the funds allocations. The handlers log `data.exported` and `data.imported` with counts.
+
+### Report PDFs
+
+*Export PDF* on a report (#127) posts the report on screen, its name and the browser's language, locale and time zone to `POST /api/v1/reports/pdf`. The server (`internal/httpapi/report_pdf.go`) checks it, makes a **render token** for the user (`auth.StartRender`: 32 random bytes, kept as a hash in memory for at most `RenderTTL`, 2 minutes, and ended when the render returns) and has `internal/pdf` drive a headless Chrome over DevTools (chromedp):
+
+- a new tab with the time zone and locale emulated, a light `prefers-color-scheme`, a 703 px wide viewport (A4 less 12 mm margins, `PRINT_WIDTH` in `lib/print.ts`) and the token in an `X-Bucky-Render` header on every request;
+- it opens `<PDF_APP_URL>/print/report#<job>`, where the job is base64url JSON (`printJob`: the request plus `generated_at`). A fragment isn't sent to the server, so it's in no log;
+- it waits up to a minute for `[data-print-ready]` (or fails on `[data-print-error]`), and prints to A4 with a page number in the footer. At most two renders run at once; more get 429 `too_many_renders`. Chrome missing is 503 `pdf_unavailable`, a page that fails or times out 502 `pdf_failed`. The handler gets a longer write deadline than the server's 30 s (`longWrites`).
+
+`Sessions` (`session.go`) takes a render token instead of a cookie and gives a session marked `Render`: anything but GET and HEAD is 403 `read_only`, and the gate refuses admin routes even for an admin. DevTools refuses a `Host` header that isn't an IP address or `localhost`, so `pdf.devtoolsURL` resolves Chrome's host name first.
+
+The print page (`pages/PrintReport.tsx`, outside the app's shell and its session guard) reads the job, applies its language and locale, and renders a cover and the modules in **print mode** (`PrintMode` in `lib/print.ts`): no buttons or links (`ReportLink`, `TransactionRow` without `to`), every page of a transactions module, and charts without animation. `usePrintReady` sets `data-print-ready` once nothing has fetched for 300 ms, or `data-print-error` if a query failed. `PrintReport.css` keeps a module on one page when it fits and breaks long ones between rows.
+
+**In development**, run Chrome from the dev compose file and let it reach Vite through the Docker bridge:
+
+1. `docker compose --profile pdf up -d chrome` (DevTools on `127.0.0.1:9222`).
+2. In `.env`, uncomment `PDF_CHROME_URL=http://127.0.0.1:9222`, `PDF_APP_URL=http://host.docker.internal:5173` and `VITE_HOST=0.0.0.0`. Vite then listens on every interface instead of only localhost, so the container reaches it through the Docker bridge, and it accepts the `host.docker.internal` host name. Keep opening the app at `http://localhost:5173`: the session cookie is `Secure`, which browsers allow over plain HTTP only on localhost. Your firewall decides whether the LAN can reach port 5173 too.
+3. Restart `make dev`. Chrome's console goes to its log (`docker compose --profile pdf logs chrome`): the place to look when an export times out. With firewalld, Docker already puts its bridges in the `docker` zone, which lets them in.
 
 ### Debug settings
 

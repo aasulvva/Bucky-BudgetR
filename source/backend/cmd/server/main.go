@@ -45,6 +45,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/logging"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/notifications"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/pdf"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/refill"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/schedules"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/transactions"
@@ -161,6 +162,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, out, lo
 	go schedulesSvc.RunLoop(ctx, cfg.ScheduleInterval, logger)
 	bucketsSvc := buckets.NewService(pool, ledgerSvc, buckets.Options{Now: now, OnCreate: refills.OnCreate})
 	notificationsSvc := notifications.NewService(pool, notifications.Options{Now: now, Schedules: schedulesSvc, Buckets: bucketsSvc})
+	var renderer pdf.Renderer
+	if cfg.PDFChromeURL != "" {
+		renderer = pdf.NewChrome(cfg.PDFChromeURL, cfg.PDFAppURL)
+	}
 	handler, err := httpapi.NewHandler(logger, pool, httpapi.Options{
 		Auth:           authSvc,
 		Accounts:       accounts.NewService(pool, ledgerSvc, accounts.Options{Now: now}),
@@ -172,6 +177,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, out, lo
 		Notifications:  notificationsSvc,
 		Logs:           logsSvc,
 		UserData:       userdata.NewService(pool, userdata.Options{Now: now}),
+		PDF:            renderer,
 		Docs:           cfg.Env == config.EnvDevelopment,
 		Web:            web.Handler(),
 		TrustedProxies: cfg.TrustedProxies,

@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router";
 
 import { getLocale } from "@/lib/locale";
+import { usePrintMode } from "@/lib/print";
 import { formatMoney } from "@/lib/money";
 import type { GraphSettings, PieData, PieSlice } from "@/lib/graphs";
 
@@ -34,6 +35,8 @@ interface PieViewProps {
 export function PieView({ data, settings, currency, width, linkOf }: PieViewProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  // A PDF (#127) is printed as soon as the page is ready: no animation.
+  const still = usePrintMode() ? { isAnimationActive: false } : {};
   const mode = settings.pie_labels ?? "list";
   const withList = mode !== "slices";
   const withLabels = mode !== "list";
@@ -78,6 +81,7 @@ export function PieView({ data, settings, currency, width, linkOf }: PieViewProp
       pieProps={
         withLabels
           ? {
+              ...still,
               label: (p: {
                 x?: number;
                 y?: number;
@@ -119,7 +123,7 @@ export function PieView({ data, settings, currency, width, linkOf }: PieViewProp
                 );
               },
             }
-          : undefined
+          : still
       }
       cellProps={
         linkOf

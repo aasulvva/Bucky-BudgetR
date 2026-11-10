@@ -32,7 +32,7 @@ const adminOnly = "x-admin-only"
 //   - operations with security require a session (401 otherwise);
 //   - a user who must change their password may only call operations marked
 //     x-allowed-before-password-change (403 otherwise);
-//   - operations marked x-admin-only need an admin (403 otherwise);
+//   - operations marked x-admin-only need an admin, not a render (403 otherwise);
 //   - the request must match the spec: parameters, body schema, lengths,
 //     patterns, no unknown fields (400 otherwise).
 //
@@ -71,7 +71,8 @@ func Gate() (func(http.Handler) http.Handler, error) {
 				WriteProblem(w, r, http.StatusForbidden, "password_change_required", "Change your password first.")
 				return
 			}
-			if op.Extensions[adminOnly] == true && (sess == nil || !sess.User.Admin) {
+			// A render (#127) never gets admin rights, even for an admin.
+			if op.Extensions[adminOnly] == true && (sess == nil || !sess.User.Admin || sess.Render) {
 				WriteProblem(w, r, http.StatusForbidden, "admin_only", "Only admins can do this.")
 				return
 			}

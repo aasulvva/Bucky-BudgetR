@@ -10,7 +10,7 @@ import {
   TextInput,
 } from "@mantine/core";
 import { IconDots } from "@tabler/icons-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useUpdatePreferences } from "@/app/session";
@@ -37,6 +37,8 @@ interface ReportTemplatesProps {
   /** Whether it differs from its source. */
   changed: boolean;
   onSelect: (source: ReportSource) => void;
+  /** More buttons at the end of the row: Export PDF (#127). */
+  extra?: ReactNode;
 }
 
 type Dialog = { kind: "saveAs" | "rename"; name: string } | { kind: "delete" } | null;
@@ -48,6 +50,7 @@ export function ReportTemplates({
   current,
   changed,
   onSelect,
+  extra,
 }: ReportTemplatesProps) {
   const { t } = useTranslation();
   const update = useUpdatePreferences();
@@ -189,6 +192,7 @@ export function ReportTemplates({
             </Menu.Dropdown>
           </Menu>
         )}
+        {extra}
         {changed && (
           <Badge variant="light" color="gray" mb={6}>
             {t("stats.saved.unsaved")}

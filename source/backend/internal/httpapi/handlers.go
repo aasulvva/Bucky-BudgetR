@@ -21,6 +21,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/logging"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/notifications"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/pdf"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/refill"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/schedules"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/transactions"
@@ -41,6 +42,7 @@ type server struct {
 	notifications *notifications.Service
 	logs          *logging.Service
 	userData      *userdata.Service
+	pdf           pdf.Renderer
 	logger        *slog.Logger
 }
 
@@ -295,19 +297,28 @@ func checkReportTemplates(patch api.Preferences) error {
 		if strings.TrimSpace(r.Name) == "" {
 			return bad("Report template " + strconv.Quote(r.Id) + " has a blank name.")
 		}
-		modules := make(map[string]bool, len(r.Report.Modules))
-		for _, m := range r.Report.Modules {
-			if modules[m.Id] {
-				return bad("Report template " + strconv.Quote(r.Id) + " has module id " + strconv.Quote(m.Id) + " more than once.")
-			}
-			modules[m.Id] = true
-			// A module has the settings of its type and none of the others' (#126).
-			if (m.Graph != nil) != (m.Type == api.ReportModuleTypeGraph) ||
-				(m.Transactions != nil) != (m.Type == api.ReportModuleTypeTransactions) ||
-				(m.Flows != nil) != (m.Type == api.ReportModuleTypeFlows) ||
-				(m.Budget != nil) != (m.Type == api.ReportModuleTypeBudget) {
-				return bad("Report template " + strconv.Quote(r.Id) + " module " + strconv.Quote(m.Id) + " needs the settings of its type, " + string(m.Type) + ", and no others.")
-			}
+		if err := checkReportModules("Report template "+strconv.Quote(r.Id), r.Report); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// checkReportModules checks a report's modules: unique ids, and each with
+// the settings of its type and none of the others' (#126). what names the
+// report in the error.
+func checkReportModules(what string, report api.ReportSettings) error {
+	modules := make(map[string]bool, len(report.Modules))
+	for _, m := range report.Modules {
+		if modules[m.Id] {
+			return &Error{Status: http.StatusBadRequest, Code: "invalid_request", Detail: what + " has module id " + strconv.Quote(m.Id) + " more than once."}
+		}
+		modules[m.Id] = true
+		if (m.Graph != nil) != (m.Type == api.ReportModuleTypeGraph) ||
+			(m.Transactions != nil) != (m.Type == api.ReportModuleTypeTransactions) ||
+			(m.Flows != nil) != (m.Type == api.ReportModuleTypeFlows) ||
+			(m.Budget != nil) != (m.Type == api.ReportModuleTypeBudget) {
+			return &Error{Status: http.StatusBadRequest, Code: "invalid_request", Detail: what + " module " + strconv.Quote(m.Id) + " needs the settings of its type, " + string(m.Type) + ", and no others."}
 		}
 	}
 	return nil

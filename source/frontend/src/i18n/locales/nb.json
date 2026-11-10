@@ -1283,6 +1283,22 @@
         "perCycleHint": "En tabell per syklus etter oppsummeringen. Av: bare oppsummeringen.",
         "unspent": "Ubrukt",
         "carried": "Til neste syklus"
+      },
+      "pdf": {
+        "export": "Eksporter PDF",
+        "exporting": "Lager PDF-en …",
+        "cover": {
+          "title": "Rapport",
+          "period": "Periode",
+          "comparedWith": "Sammenlignet med",
+          "filters": "Filtre",
+          "noFilters": "Ingen: hele rapporten",
+          "modules": "Moduler",
+          "user": "Bruker",
+          "generated": "Generert"
+        },
+        "loading": "Gjør rapporten klar …",
+        "nothing": "Denne siden skriver ut en rapport til PDF. Bruk Eksporter PDF på en rapport."
       }
     },
     "graphs": {
@@ -1588,7 +1604,11 @@
       "not_next_cycle": "En tidligere periode er planlagt. Start den først.",
       "own_account": "Du kan ikke endre din egen konto her. Bruk Innstillinger.",
       "password_change_required": "Bytt passordet ditt først.",
+      "pdf_failed": "Rapporten kunne ikke gjøres om til PDF. Prøv igjen.",
+      "pdf_unavailable": "PDF-eksport er ikke satt opp på denne serveren, eller PDF-tjenesten svarer ikke.",
+      "read_only": "Denne økten kan bare lese.",
       "refill_unavailable": "Bare inntekt i den aktive perioden kan utløse påfyll.",
+      "too_many_renders": "Andre PDF-er lages nå. Prøv igjen om litt.",
       "unauthenticated": "Logg inn først.",
       "username_taken": "Det brukernavnet er allerede i bruk.",
       "wrong_password": "Det nåværende passordet er feil.",

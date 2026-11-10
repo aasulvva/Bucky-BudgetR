@@ -6,7 +6,7 @@ import { endAtFor, startAtFor } from "@/lib/cycles";
 import { formatDay } from "@/lib/dates";
 import { specificLabel } from "@/lib/graphs";
 import { formatMoney } from "@/lib/money";
-import { apiMock, testUser, type MockRequest } from "@/test/api";
+import { apiMock, problem, testUser, type MockRequest } from "@/test/api";
 import { account, bucket, bucketFigures, cycle, transaction } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
@@ -671,6 +671,60 @@ describe("Reports", () => {
       expect(
         await within(module).findByText("No cycles have begun in this period."),
       ).toBeInTheDocument();
+    });
+  });
+
+  describe("Export PDF (#127)", () => {
+    const pdf = "POST /api/v1/reports/pdf";
+    /** The previous month's name, e.g. "October 2026". */
+    const lastMonth = () => {
+      const d = new Date();
+      d.setDate(1);
+      d.setMonth(d.getMonth() - 1);
+      const at = `${String(d.getFullYear())}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+      return specificLabel({ kind: "specific", unit: "month", at }, []);
+    };
+    let downloads: string[];
+    beforeEach(() => {
+      downloads = [];
+      URL.createObjectURL = vi.fn(() => "blob:pdf");
+      URL.revokeObjectURL = vi.fn();
+      vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
+        this: HTMLAnchorElement,
+      ) {
+        downloads.push(this.download);
+      });
+    });
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("sends the report on screen in this browser's language and time zone, and downloads it", async () => {
+      apiMock.on(pdf, { body: "%PDF" });
+      prefs = { ...prefs, report_templates: [template()] };
+      renderRoute("/stats/reports?template=r-1");
+      await userEvent.click(await screen.findByRole("button", { name: "Export PDF" }));
+      await waitFor(() => {
+        expect(downloads).toEqual([`Mine – ${lastMonth()}.pdf`]);
+      });
+      expect(apiMock.calls(pdf)[0]?.body).toEqual({
+        name: "Mine",
+        report: template().report,
+        language: "en",
+        locale: navigator.language,
+        time_zone: "America/Los_Angeles",
+      });
+      expect(screen.getByRole("button", { name: "Export PDF" })).toBeEnabled();
+    });
+
+    it("says when the server can't make PDFs", async () => {
+      apiMock.on(pdf, problem(503, "pdf_unavailable", "PDF export isn't set up on this server."));
+      renderRoute("/stats/reports");
+      await userEvent.click(await screen.findByRole("button", { name: "Export PDF" }));
+      expect(
+        await screen.findByText(/PDF export isn't set up on this server, or its renderer/),
+      ).toBeInTheDocument();
+      expect(downloads).toEqual([]);
     });
   });
 });
