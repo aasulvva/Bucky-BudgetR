@@ -16,6 +16,35 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.09.00",
+    date: "2026-11-09",
+    title: {
+      en: "Reports",
+      nb: "Rapporter",
+      nn: "Rapportar",
+    },
+    changes: {
+      en: [
+        "Stats & reports has a Reports tab: pick a year, half-year, quarter, month, cycle or custom dates, filter the whole report by accounts, buckets, tags or counterparty, and add the graphs you want as modules, in the order you want them.",
+        "A module can compare with the previous period: both side by side, or the difference. Choose whether that's the period right before or the same period last year. While a period is still going, it's compared with as many days of the one before.",
+        "For periods of 60 days or more, a module can also be broken down by month or by cycle into small graphs, with parts cut by the period's edges marked as partial.",
+        "Start from the built-in Yearly report or Cycle summary, change it, and save it as your own report to open again later.",
+      ],
+      nb: [
+        "Statistikk og rapporter har en ny fane, Rapporter: velg et år, halvår, kvartal, en måned, syklus eller egendefinerte datoer, filtrer hele rapporten på kontoer, bøtter, tagger eller motpart, og legg til grafene du vil ha som moduler, i den rekkefølgen du vil.",
+        "En modul kan sammenlignes med forrige periode: begge ved siden av hverandre, eller differansen. Velg om det er perioden rett før eller samme periode i fjor. Mens en periode fortsatt pågår, sammenlignes den med like mange dager av perioden før.",
+        "For perioder på 60 dager eller mer kan en modul også deles opp per måned eller per syklus i små grafer, der deler som kuttes av periodens kanter, merkes som delvise.",
+        "Start fra den innebygde Årsrapport eller Syklusoppsummering, endre den, og lagre den som din egen rapport for å åpne den igjen senere.",
+      ],
+      nn: [
+        "Statistikk og rapportar har ei ny fane, Rapportar: vel eit år, halvår, kvartal, ein månad, syklus eller eigendefinerte datoar, filtrer heile rapporten på kontoar, bøtter, taggar eller motpart, og legg til grafane du vil ha som modular, i den rekkjefølgja du vil.",
+        "Ein modul kan samanliknast med førre periode: begge ved sida av kvarandre, eller differansen. Vel om det er perioden rett før eller same periode i fjor. Medan ein periode framleis går, vert han samanlikna med like mange dagar av perioden før.",
+        "For periodar på 60 dagar eller meir kan ein modul også delast opp per månad eller per syklus i små grafar, der delar som vert kutta av kantane til perioden, er merkte som delvise.",
+        "Start frå den innebygde Årsrapport eller Syklusoppsummering, endre han, og lagre han som din eigen rapport for å opne han igjen seinare.",
+      ],
+    },
+  },
+  {
     version: "v2.08.00",
     date: "2026-11-09",
     title: {

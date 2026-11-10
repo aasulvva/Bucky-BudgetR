@@ -1,5 +1,4 @@
 import {
-  Anchor,
   Button,
   Drawer,
   Group,
@@ -13,7 +12,7 @@ import {
 import { useMediaQuery } from "@mantine/hooks";
 import { IconAdjustmentsHorizontal } from "@tabler/icons-react";
 import { useState } from "react";
-import { Trans, useTranslation } from "react-i18next";
+import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 
 import { useAccounts, useBuckets, type Account, type Bucket } from "@/api/accounts";
@@ -21,6 +20,8 @@ import { useCycles, type Cycle } from "@/api/cycles";
 import { useTags } from "@/api/transactions";
 import { useSession } from "@/app/session";
 import { QueryState } from "@/components/QueryState";
+import { ReportTemplates } from "@/components/reports/ReportTemplates";
+import { ReportView } from "@/components/reports/ReportView";
 import { GraphControls } from "@/components/stats/GraphControls";
 import { GraphView } from "@/components/stats/GraphView";
 import { SavedGraphs } from "@/components/stats/SavedGraphs";
@@ -34,10 +35,19 @@ import {
   type SavedGraph,
 } from "@/lib/graphs";
 import { defaultPeriod, parsePeriod, resolvePeriod } from "@/lib/periods";
+import {
+  sameReport,
+  sourceValue,
+  starter,
+  STARTER_IDS,
+  type ReportSettings,
+  type ReportSource,
+  type ReportTemplate,
+} from "@/lib/reports";
 
 const REPORTS_PATH = "/stats/reports";
 
-/** Stats & reports (spec §9): graphs now (#122), reports with #125. */
+/** Stats & reports (spec §9): graphs (#122) and reports (#125). */
 export default function Stats() {
   const { t } = useTranslation();
   const location = useLocation();
@@ -63,18 +73,101 @@ export default function Stats() {
 }
 
 function ReportsTab() {
+  const cycles = useCycles();
+  const accounts = useAccounts();
+  const buckets = useBuckets();
   return (
-    <Text c="dimmed">
-      <Trans
-        i18nKey="stats.reports.comingIn"
-        values={{ issue: 125 }}
-        components={{
-          issue: (
-            <Anchor href="https://github.com/aasulvva/Bucky-BudgetR/issues/125" target="_blank" />
-          ),
-        }}
+    <QueryState query={cycles}>
+      {(c) => (
+        <QueryState query={accounts}>
+          {(a) => (
+            <QueryState query={buckets}>
+              {(b) => <Reports cycles={c} accounts={a} buckets={b} />}
+            </QueryState>
+          )}
+        </QueryState>
+      )}
+    </QueryState>
+  );
+}
+
+/** Reports (#125): a starter or saved template, changed on screen until saved. */
+function Reports({
+  cycles,
+  accounts,
+  buckets,
+}: {
+  cycles: Cycle[];
+  accounts: Account[];
+  buckets: Bucket[];
+}) {
+  const [params, setParams] = useSearchParams();
+  const templates = useSession().data?.preferences.report_templates ?? [];
+  const templateId = params.get("template");
+  const starterId = STARTER_IDS.find((x) => x === params.get("starter")) ?? "yearly";
+  const template = templateId ? templates.find((x) => x.id === templateId) : undefined;
+  const source: ReportSource = template
+    ? { kind: "template", id: template.id }
+    : { kind: "starter", id: starterId };
+  const select = (next: ReportSource) => {
+    setParams(new URLSearchParams({ [next.kind]: next.id }));
+  };
+  return (
+    <Report
+      // A new source starts over from what it holds.
+      key={sourceValue(source)}
+      source={source}
+      saved={template?.report ?? starter(starterId)}
+      templates={templates}
+      onSelect={select}
+      cycles={cycles}
+      accounts={accounts}
+      buckets={buckets}
+    />
+  );
+}
+
+function Report({
+  source,
+  saved,
+  templates,
+  onSelect,
+  cycles,
+  accounts,
+  buckets,
+}: {
+  source: ReportSource;
+  saved: ReportSettings;
+  templates: ReportTemplate[];
+  onSelect: (source: ReportSource) => void;
+  cycles: Cycle[];
+  accounts: Account[];
+  buckets: Bucket[];
+}) {
+  const theme = useMantineTheme();
+  const isDesktop = useMediaQuery(`(min-width: ${theme.breakpoints.sm})`, true);
+  useClockVersion();
+  const tags = (useTags().data ?? []).map((x) => x.name);
+  const [report, setReport] = useState(saved);
+  return (
+    <Stack gap="md">
+      <ReportTemplates
+        templates={templates}
+        source={source}
+        current={report}
+        changed={!sameReport(report, saved)}
+        onSelect={onSelect}
       />
-    </Text>
+      <ReportView
+        report={report}
+        onChange={setReport}
+        cycles={cycles}
+        accounts={accounts}
+        buckets={buckets}
+        tags={tags}
+        isDesktop={isDesktop}
+      />
+    </Stack>
   );
 }
 

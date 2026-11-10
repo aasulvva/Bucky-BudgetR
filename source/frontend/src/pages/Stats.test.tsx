@@ -554,12 +554,4 @@ describe("Stats", () => {
       ),
     ).toBeInTheDocument();
   });
-
-  it("has a Reports tab for later", async () => {
-    const { router } = renderRoute("/stats");
-    await userEvent.click(await screen.findByRole("tab", { name: "Reports" }));
-    expect(router.state.location.pathname).toBe("/stats/reports");
-    const link = await screen.findByRole("link", { name: "#125" });
-    expect(link.parentElement).toHaveTextContent(/^Reports are coming in #125: modules/);
-  });
 });

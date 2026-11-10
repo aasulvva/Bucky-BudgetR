@@ -242,29 +242,49 @@ func remapPreferences(raw json.RawMessage, m map[kind]map[string]string) (json.R
 			}
 		}
 	}
-	// Saved graphs (#122) filter on lists of accounts and buckets.
+	// Saved graphs (#122) and report templates (#125) filter on lists of
+	// accounts and buckets, and may name a specific cycle.
 	graphs, _ := prefs["saved_graphs"].([]any)
 	for _, g := range graphs {
 		g, _ := g.(map[string]any)
-		settings, _ := g["graph"].(map[string]any)
-		// A specific cycle is in the period, as cycle-<id>.
-		if period, ok := settings["period"].(string); ok {
-			if old, ok := strings.CutPrefix(period, "cycle-"); ok {
-				if id, ok := m[kCycle][old]; ok {
-					settings["period"] = "cycle-" + id
-				}
+		remapGraph(m, g["graph"])
+	}
+	templates, _ := prefs["report_templates"].([]any)
+	for _, r := range templates {
+		r, _ := r.(map[string]any)
+		report, _ := r["report"].(map[string]any)
+		remapGraph(m, report)
+		modules, _ := report["modules"].([]any)
+		for _, mod := range modules {
+			mod, _ := mod.(map[string]any)
+			remapGraph(m, mod["graph"])
+		}
+	}
+	return json.Marshal(prefs)
+}
+
+// remapGraph remaps a graph's or report's period (cycle-<id>) and its
+// account and bucket filters, in place.
+func remapGraph(m map[kind]map[string]string, v any) {
+	settings, _ := v.(map[string]any)
+	if settings == nil {
+		return
+	}
+	if period, ok := settings["period"].(string); ok {
+		if old, ok := strings.CutPrefix(period, "cycle-"); ok {
+			if id, ok := m[kCycle][old]; ok {
+				settings["period"] = "cycle-" + id
 			}
 		}
-		for field, k := range map[string]kind{"account_ids": kAccount, "bucket_ids": kBucket} {
-			ids, _ := settings[field].([]any)
-			for i, old := range ids {
-				if old, ok := old.(string); ok {
-					if id, ok := m[k][old]; ok {
-						ids[i] = id
-					}
+	}
+	for field, k := range map[string]kind{"account_ids": kAccount, "bucket_ids": kBucket} {
+		ids, _ := settings[field].([]any)
+		for i, old := range ids {
+			if old, ok := old.(string); ok {
+				if id, ok := m[k][old]; ok {
+					ids[i] = id
 				}
 			}
 		}
 	}
-	return json.Marshal(prefs)
 }

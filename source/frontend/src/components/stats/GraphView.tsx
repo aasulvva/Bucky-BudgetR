@@ -1,5 +1,5 @@
 import { BarChart, LineChart } from "@mantine/charts";
-import { Box, Stack, Text } from "@mantine/core";
+import { Box, Loader, SimpleGrid, Stack, Text } from "@mantine/core";
 import { useElementSize } from "@mantine/hooks";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -11,8 +11,8 @@ import { useStatsSeries, type StatsSeries } from "@/api/stats";
 import { QueryState } from "@/components/QueryState";
 import {
   cleanGraph,
+  compareGraphData,
   fitResolution,
-  graphData,
   intervalLink,
   maxIntervals,
   pieData,
@@ -22,6 +22,8 @@ import {
   showDots,
   statsQuery,
   yDomain,
+  PREVIOUS_SUFFIX,
+  type CompareMode,
   type GraphData,
   type GraphKind,
   type GraphSettings,
@@ -48,6 +50,15 @@ interface GraphViewProps {
   height?: number;
   /** A bar, point or slice opens its transactions; off on the Dashboard (#124), where the whole graph opens Stats. */
   clickThrough?: boolean;
+  /** The previous period, beside this one or taken from it (reports, #125). */
+  compare?: Compare;
+}
+
+export interface Compare {
+  period: Period;
+  mode: CompareMode;
+  /** The two periods' names, over a compared pie's two pies. */
+  labels: { current: string; previous: string };
 }
 
 /**
@@ -64,6 +75,7 @@ export function GraphView({
   buckets,
   height = 320,
   clickThrough = true,
+  compare,
 }: GraphViewProps) {
   const { t } = useTranslation();
   const { ref, width } = useElementSize();
@@ -77,6 +89,10 @@ export function GraphView({
       : { resolution: s.resolution, coarsened: null };
   const resolution = queryResolution(s, fitted.resolution);
   const query = useStatsSeries(period ? statsQuery(s, period, resolution) : null);
+  // The previous period at the same resolution, so the intervals line up.
+  const previous = useStatsSeries(
+    period && compare ? statsQuery(s, compare.period, resolution) : null,
+  );
   const view: View = { s, fitted, resolution, ...shownCurrency(s, accounts) };
 
   // While a changed graph loads, the previous numbers are kept (#167). They
@@ -96,6 +112,46 @@ export function GraphView({
       max: maxIntervals(s.kind),
       kind: s.kind,
     };
+    if (compare && !previous.data) {
+      return previous.isError ? (
+        <Text c="dimmed">{t("stats.reports.previousFailed")}</Text>
+      ) : (
+        <Loader size="sm" />
+      );
+    }
+    const before = compare && previous.data ? previous.data : null;
+    if (s.kind === "pie" && before && compare) {
+      const now = pieData(result, s, resolution, currency, accounts, buckets);
+      const then = pieData(before, s, resolution, currency, accounts, buckets);
+      const half = width >= 640 ? width / 2 : width;
+      return (
+        <Stack gap="xs">
+          <SimpleGrid cols={width >= 640 ? 2 : 1} spacing="md">
+            {[
+              { pie: now, label: compare.labels.current },
+              { pie: then, label: compare.labels.previous },
+            ].map(({ pie, label }) => (
+              <Stack key={label} gap={4}>
+                <Text size="sm" fw={500}>
+                  {label}
+                </Text>
+                {pie.slices.length === 0 ? (
+                  <Text c="dimmed">{t("stats.graphs.empty")}</Text>
+                ) : (
+                  <PieView data={pie} settings={s} currency={currency} width={half} />
+                )}
+              </Stack>
+            ))}
+          </SimpleGrid>
+          <Notes
+            other={now.other}
+            belowZero={now.belowZero}
+            leftOut={leftOut}
+            coarsened={coarsened}
+          />
+        </Stack>
+      );
+    }
     if (s.kind === "pie") {
       const pie = pieData(result, s, resolution, currency, accounts, buckets);
       return (
@@ -128,7 +184,15 @@ export function GraphView({
         </Stack>
       );
     }
-    const data = graphData(result, s, fitted.resolution, currency, accounts, buckets);
+    const data = compareGraphData(
+      result,
+      before && compare ? { result: before, mode: compare.mode } : null,
+      s,
+      fitted.resolution,
+      currency,
+      accounts,
+      buckets,
+    );
     return (
       <Stack gap="xs">
         <Chart
@@ -190,7 +254,10 @@ function Chart({ data, settings, currency, height, dots, intervals, clickThrough
   if (empty && settings.metric !== "balance") {
     return <Text c="dimmed">{t("stats.graphs.empty")}</Text>;
   }
+  const compared = data.series.some((x) => x.previous);
   const open = (seriesName: string, index: unknown) => {
+    // The previous period's series open nothing: their intervals aren't these.
+    if (seriesName.endsWith(PREVIOUS_SUFFIX)) return;
     const interval = intervals[Number(index)];
     if (interval) void navigate(intervalLink(settings, seriesName, interval));
   };
@@ -202,7 +269,18 @@ function Chart({ data, settings, currency, height, dots, intervals, clickThrough
     h: height,
     data: data.rows,
     dataKey: "label",
-    series: data.series.map(({ name, label, color }) => ({ name, label, color })),
+    series: data.series.map(({ name, label, color, previous }) => ({
+      name,
+      label,
+      // The previous period's bars are a lighter step of the same colour.
+      color:
+        previous && settings.kind === "bar"
+          ? `color-mix(in srgb, ${color} 45%, var(--mantine-color-body))`
+          : color,
+      ...(previous && settings.kind === "line" ? { strokeDasharray: "5 4" } : {}),
+      // Stacked bars stack per period: this period's and the previous one's.
+      ...(compared && !settings.side_by_side ? { stackId: previous ? "previous" : "current" } : {}),
+    })),
     valueFormatter: money,
     withLegend: data.series.length > 1,
     legendProps: { verticalAlign: "bottom" as const },
@@ -218,7 +296,7 @@ function Chart({ data, settings, currency, height, dots, intervals, clickThrough
     return (
       <BarChart
         {...common}
-        type={settings.side_by_side ? "default" : "stacked"}
+        type={settings.side_by_side || compared ? "default" : "stacked"}
         maxBarWidth={48}
         barProps={
           clickThrough

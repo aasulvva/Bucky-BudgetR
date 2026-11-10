@@ -1,0 +1,242 @@
+import { Button, Drawer, Group, Paper, Select, SimpleGrid, Stack, Text } from "@mantine/core";
+import { IconAdjustmentsHorizontal, IconPlus } from "@tabler/icons-react";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+
+import type { Account, Bucket } from "@/api/accounts";
+import type { Cycle } from "@/api/cycles";
+import { FilterFields, type Filters } from "@/components/stats/FilterFields";
+import { PeriodPicker } from "@/components/stats/PeriodPicker";
+import { formatDateRange } from "@/lib/cycles";
+import { periodLabel, specificLabel } from "@/lib/graphs";
+import { formatPeriod, resolvePeriod } from "@/lib/periods";
+import {
+  COMPARE_TOS,
+  inProgress,
+  MAX_MODULES,
+  newModule,
+  parseReportPeriod,
+  previousPeriod,
+  REPORT_UNITS,
+  type ReportModule,
+  type ReportSettings,
+} from "@/lib/reports";
+
+import { ModuleCard } from "./ModuleCard";
+import { ModuleEditor } from "./ModuleEditor";
+
+interface ReportViewProps {
+  report: ReportSettings;
+  onChange: (report: ReportSettings) => void;
+  cycles: Cycle[];
+  accounts: Account[];
+  buckets: Bucket[];
+  tags: string[];
+  isDesktop: boolean;
+}
+
+/** A report on screen (#125): its period, compare-to and filters, then its modules. */
+export function ReportView({
+  report,
+  onChange,
+  cycles,
+  accounts,
+  buckets,
+  tags,
+  isDesktop,
+}: ReportViewProps) {
+  const { t } = useTranslation();
+  const [drawer, setDrawer] = useState(false);
+  const [editing, setEditing] = useState<{ module: ReportModule; adding: boolean } | null>(null);
+  const choice = parseReportPeriod(report.period) ?? { kind: "previous", unit: "year" };
+  const period = resolvePeriod(choice, cycles);
+  const compareTo = report.compare_to ?? "previous";
+  const previous = period ? previousPeriod(choice, period, compareTo, cycles) : null;
+  const current = periodLabel(choice, cycles);
+  const compare =
+    previous && period
+      ? {
+          period: previous.period,
+          label: inProgress(period)
+            ? formatDateRange(previous.period.from, previous.period.to)
+            : specificLabel(previous.choice, cycles),
+          currentLabel: current,
+        }
+      : null;
+
+  const set = (patch: Partial<ReportSettings>) => {
+    onChange({ ...report, ...patch });
+  };
+  const setModules = (modules: ReportModule[]) => {
+    set({ modules });
+  };
+  const apply = (m: ReportModule) => {
+    const exists = report.modules.some((x) => x.id === m.id);
+    setModules(
+      exists ? report.modules.map((x) => (x.id === m.id ? m : x)) : [...report.modules, m],
+    );
+    setEditing(null);
+  };
+  const move = (i: number, d: -1 | 1) => {
+    const list = [...report.modules];
+    const [m] = list.splice(i, 1);
+    if (m) list.splice(i + d, 0, m);
+    setModules(list);
+  };
+
+  const custom = choice.kind === "custom";
+  const controls = (inline: boolean) => {
+    const dropdown = inline ? { withinPortal: false } : undefined;
+    return (
+      <SimpleGrid cols={inline ? 1 : { base: 1, sm: 2, md: 3 }} spacing="sm" verticalSpacing="sm">
+        <PeriodPicker
+          inline={inline}
+          only={REPORT_UNITS}
+          value={choice}
+          cycles={cycles}
+          onChange={(c) => {
+            set({ period: formatPeriod(c) });
+          }}
+        />
+        <Stack gap={4}>
+          <Select
+            comboboxProps={dropdown}
+            label={t("stats.reports.compareTo.label")}
+            data={COMPARE_TOS.map((c) => ({
+              value: c,
+              label: t(`stats.reports.compareTo.options.${c}`),
+            }))}
+            value={compareTo}
+            disabled={custom}
+            onChange={(c) => {
+              if (c) set({ compare_to: c });
+            }}
+            allowDeselect={false}
+          />
+          <Text size="xs" c="dimmed">
+            {custom
+              ? t("stats.reports.compareTo.custom")
+              : compare
+                ? t("stats.reports.compareTo.with", { period: compare.label })
+                : t("stats.reports.compare.unavailable")}
+          </Text>
+          {choice.kind !== "custom" && choice.unit === "cycle" && compareTo === "last_year" && (
+            <Text size="xs" c="dimmed">
+              {t("stats.reports.compareTo.cycle")}
+            </Text>
+          )}
+        </Stack>
+        <FilterFields
+          value={report}
+          onChange={(patch: Filters) => {
+            set(patch);
+          }}
+          accounts={accounts}
+          buckets={buckets}
+          tags={tags}
+          inline={inline}
+        />
+      </SimpleGrid>
+    );
+  };
+
+  return (
+    <Stack gap="md">
+      {isDesktop ? (
+        <Paper withBorder p="md">
+          {controls(false)}
+        </Paper>
+      ) : (
+        <Group justify="space-between" wrap="nowrap" gap="xs">
+          <Text size="sm" c="dimmed" data-testid="report-summary" style={{ flex: 1, minWidth: 0 }}>
+            {current}
+          </Text>
+          <Button
+            variant="default"
+            size="xs"
+            style={{ flexShrink: 0 }}
+            leftSection={<IconAdjustmentsHorizontal size={16} />}
+            onClick={() => {
+              setDrawer(true);
+            }}
+          >
+            {t("stats.reports.settings")}
+          </Button>
+        </Group>
+      )}
+      {period === null && <Text c="dimmed">{t("stats.graphs.noPeriod")}</Text>}
+      {report.modules.length === 0 && <Text c="dimmed">{t("stats.reports.noModules")}</Text>}
+      {report.modules.map((m, i) => (
+        <ModuleCard
+          key={m.id}
+          report={report}
+          module={m}
+          index={i}
+          count={report.modules.length}
+          choice={choice}
+          period={period}
+          compare={compare}
+          cycles={cycles}
+          accounts={accounts}
+          buckets={buckets}
+          isDesktop={isDesktop}
+          onEdit={() => {
+            setEditing({ module: m, adding: false });
+          }}
+          onMove={(d) => {
+            move(i, d);
+          }}
+          onRemove={() => {
+            setModules(report.modules.filter((x) => x.id !== m.id));
+          }}
+        />
+      ))}
+      <Group>
+        <Button
+          variant="default"
+          leftSection={<IconPlus size={16} />}
+          disabled={report.modules.length >= MAX_MODULES}
+          onClick={() => {
+            setEditing({ module: newModule(report), adding: true });
+          }}
+        >
+          {t("stats.reports.module.addButton")}
+        </Button>
+        {report.modules.length >= MAX_MODULES && (
+          <Text size="sm" c="dimmed">
+            {t("stats.reports.module.max", { max: MAX_MODULES })}
+          </Text>
+        )}
+      </Group>
+      <ModuleEditor
+        module={editing?.module ?? null}
+        adding={editing?.adding ?? false}
+        report={report}
+        choice={choice}
+        period={period}
+        comparable={compare !== null}
+        cycles={cycles}
+        accounts={accounts}
+        buckets={buckets}
+        tags={tags}
+        onApply={apply}
+        onClose={() => {
+          setEditing(null);
+        }}
+      />
+      {!isDesktop && (
+        <Drawer
+          opened={drawer}
+          onClose={() => {
+            setDrawer(false);
+          }}
+          position="bottom"
+          size="90%"
+          title={t("stats.reports.settings")}
+        >
+          {controls(true)}
+        </Drawer>
+      )}
+    </Stack>
+  );
+}

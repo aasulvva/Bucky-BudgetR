@@ -2927,6 +2927,18 @@ components:
             Null means none.
           items:
             $ref: "#/components/schemas/SavedGraph"
+        report_templates:
+          type: array
+          nullable: true
+          maxItems: 20
+          description: |
+            The report templates saved on Stats & reports (#125), in the
+            order the user sees them. Template ids are unique, names are not
+            blank and module ids are unique within a template (400
+            `invalid_request` otherwise). Replaced as a whole on update.
+            Null means none.
+          items:
+            $ref: "#/components/schemas/ReportTemplate"
         notifications:
           type: object
           allOf:
@@ -3723,16 +3735,9 @@ components:
         not used.
       properties:
         kind:
-          type: string
-          enum: [line, bar, pie]
-          description: |
-            A pie grouped by `account` or `bucket` has a slice per series
-            over the whole period (`resolution` is kept for when the kind
-            changes). Ungrouped, it has a slice per interval of
-            `resolution`, at most 12. A balance pie is always per account.
+          $ref: "#/components/schemas/GraphKind"
         metric:
-          type: string
-          enum: [spending, income, balance]
+          $ref: "#/components/schemas/GraphMetric"
         period:
           type: string
           maxLength: 40
@@ -3747,11 +3752,9 @@ components:
           pattern: "^(last-[0-9]{1,3}-(days|weeks|cycles|months|quarters|half_years|years)|(current|previous)-(day|week|cycle|month|quarter|half_year|year)|(day|week)-[0-9]{4}-[0-9]{2}-[0-9]{2}|month-[0-9]{4}-[0-9]{2}|quarter-[0-9]{4}-q[1-4]|half_year-[0-9]{4}-h[12]|year-[0-9]{4}|cycle-[1-9][0-9]{11}|custom-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{4}-[0-9]{2}-[0-9]{2})$"
           example: last-30-days
         resolution:
-          type: string
-          enum: [hour, day, week, month, year, cycle, total]
+          $ref: "#/components/schemas/GraphResolution"
         group_by:
-          type: string
-          enum: [none, account, bucket, counterparty]
+          $ref: "#/components/schemas/GraphGroupBy"
         account_ids:
           type: array
           maxItems: 50
@@ -3785,14 +3788,197 @@ components:
           type: boolean
           description: Fit the Y axis to the values instead of including 0 (the default).
         pie_labels:
-          type: string
-          enum: [list, slices, both]
+          allOf:
+            - $ref: "#/components/schemas/PieLabels"
           description: Pies only. A list of the slices beside the pie (`list`, the default), labels on the slices, or both.
         top:
           type: integer
           minimum: 1
           maximum: 8
           description: How many series get their own colour (at most 8, the graph palette); the rest add up to Other. 5 by default.
+
+    GraphKind:
+      type: string
+      enum: [line, bar, pie]
+      description: |
+        A pie grouped by `account` or `bucket` has a slice per series over
+        the whole period (`resolution` is kept for when the kind changes).
+        Ungrouped, it has a slice per interval of `resolution`, at most 12.
+        A balance pie is always per account.
+
+    GraphMetric:
+      type: string
+      enum: [spending, income, balance]
+
+    GraphResolution:
+      type: string
+      enum: [hour, day, week, month, year, cycle, total]
+
+    GraphGroupBy:
+      type: string
+      enum: [none, account, bucket, counterparty]
+
+    PieLabels:
+      type: string
+      enum: [list, slices, both]
+
+    ReportTemplate:
+      type: object
+      additionalProperties: false
+      required: [id, name, report]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 40
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        report:
+          $ref: "#/components/schemas/ReportSettings"
+
+    ReportSettings:
+      type: object
+      additionalProperties: false
+      required: [period, modules]
+      description: |
+        A report on Stats & reports (#125): a period, filters for the whole
+        report, and its modules in order.
+      properties:
+        period:
+          type: string
+          maxLength: 40
+          description: |
+            As in `GraphSettings`, but only years, half-years, quarters,
+            months and cycles: `current-<unit>` or `previous-<unit>`, one
+            specific period, or `custom-<first day>-<last day>`.
+          pattern: "^((current|previous)-(cycle|month|quarter|half_year|year)|month-[0-9]{4}-[0-9]{2}|quarter-[0-9]{4}-q[1-4]|half_year-[0-9]{4}-h[12]|year-[0-9]{4}|cycle-[1-9][0-9]{11}|custom-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{4}-[0-9]{2}-[0-9]{2})$"
+          example: previous-year
+        compare_to:
+          type: string
+          enum: [previous, last_year]
+          description: |
+            What a module compares with: the period right before (the
+            default), or the same period a year earlier. A cycle always
+            compares with the cycle before; a custom period doesn't compare.
+        account_ids:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/AccountId"
+        bucket_ids:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/BucketId"
+        tags:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            maxLength: 50
+        counterparty:
+          type: string
+          maxLength: 200
+        modules:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/ReportModule"
+
+    ReportModule:
+      type: object
+      additionalProperties: false
+      required: [id, type, graph]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 40
+        type:
+          type: string
+          enum: [graph]
+          description: What the module shows. More types come with #126.
+        title:
+          type: string
+          maxLength: 80
+        graph:
+          $ref: "#/components/schemas/ReportGraph"
+        compare:
+          type: string
+          enum: ["off", both, difference]
+          description: |
+            Lines and bars: the previous period beside this one (`both`) or
+            this period minus the previous (`difference`). Pies: `both` and
+            `difference` show the previous period's pie too. `off` by default.
+        breakdown:
+          type: string
+          enum: [none, month, cycle]
+          description: |
+            Also one small graph per month or per cycle, for periods of at
+            least 60 days. Months and cycles cut by the period's edges are
+            clipped. `none` by default.
+
+    ReportGraph:
+      type: object
+      additionalProperties: false
+      required: [kind, metric, resolution]
+      description: |
+        A report module's graph: `GraphSettings` without the period, which
+        is the report's. A filter set here replaces the report's for that
+        field.
+      properties:
+        kind:
+          $ref: "#/components/schemas/GraphKind"
+        metric:
+          $ref: "#/components/schemas/GraphMetric"
+        resolution:
+          $ref: "#/components/schemas/GraphResolution"
+        group_by:
+          $ref: "#/components/schemas/GraphGroupBy"
+        account_ids:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/AccountId"
+        bucket_ids:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/BucketId"
+        tags:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            maxLength: 50
+        counterparty:
+          type: string
+          maxLength: 200
+          description: Only transactions whose counterparty or description contains this text, ignoring case.
+        cumulative:
+          type: boolean
+          description: Lines only. Running totals from the start of the period.
+        side_by_side:
+          type: boolean
+          description: Bars only. Series side by side instead of stacked.
+        stepped:
+          type: boolean
+          description: Lines only. Each interval's value is held until the next, instead of a straight line between points.
+        fit_y_axis:
+          type: boolean
+          description: Fit the Y axis to the values instead of including 0 (the default).
+        pie_labels:
+          allOf:
+            - $ref: "#/components/schemas/PieLabels"
+          description: Pies only. A list of the slices beside the pie (`list`, the default), labels on the slices, or both.
+        top:
+          type: integer
+          minimum: 1
+          maximum: 8
+          description: How many series get their own colour (at most 8, the graph palette); the rest add up to Other. 5 by default.
+
 
     StatsSeries:
       type: object
