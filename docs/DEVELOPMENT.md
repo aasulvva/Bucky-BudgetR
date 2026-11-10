@@ -215,7 +215,7 @@ The print page (`pages/PrintReport.tsx`, outside the app's shell and its session
 
 1. `docker compose --profile pdf up -d chrome` (DevTools on `127.0.0.1:9222`).
 2. In `.env`, uncomment `PDF_CHROME_URL=http://127.0.0.1:9222`, `PDF_APP_URL=http://host.docker.internal:5173` and `VITE_HOST=0.0.0.0`. Vite then listens on every interface instead of only localhost, so the container reaches it through the Docker bridge, and it accepts the `host.docker.internal` host name. Keep opening the app at `http://localhost:5173`: the session cookie is `Secure`, which browsers allow over plain HTTP only on localhost. Your firewall decides whether the LAN can reach port 5173 too.
-3. Restart `make dev`. If Chrome can't reach Vite, the firewall (firewalld on Fedora) may need to let the `docker0` interface in, e.g. `sudo firewall-cmd --zone=trusted --add-interface=docker0`.
+3. Restart `make dev`. Chrome's console goes to its log (`docker compose --profile pdf logs chrome`): the place to look when an export times out. With firewalld, Docker already puts its bridges in the `docker` zone, which lets them in.
 
 ### Debug settings
 
