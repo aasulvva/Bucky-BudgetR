@@ -522,7 +522,7 @@ describe("Budget vs spending modules (#126)", () => {
   });
   const buckets = [food, fun, pets, travel];
 
-  it("show the cycles that have begun and overlap the period, whole", () => {
+  it("show the cycles that have begun and have most of their days in the period, whole", () => {
     const shown = (p: string) => {
       const r = periodCycles(resolvePeriod(parsePeriod(p) ?? fail(), cycles, now) ?? fail(), [
         ...cycles,
@@ -539,6 +539,16 @@ describe("Budget vs spending modules (#126)", () => {
       "100001000001 2026-08-25..2026-09-24 partial",
       "100001000002 2026-09-25..2026-10-24",
       "100001000003 2026-10-25..2026-11-24 partial active",
+    ]);
+    // 15 of the first cycle's 31 days, and 7 of the last's: not this period's.
+    expect(shown("custom-2026-09-10-2026-10-31")).toEqual(["100001000002 2026-09-25..2026-10-24"]);
+    // Half its days count where the cycle starts.
+    expect(shown("custom-2026-09-25-2026-10-09")).toEqual([
+      "100001000002 2026-09-25..2026-10-24 partial",
+    ]);
+    // Shorter than half a cycle: the one with the most of its days.
+    expect(shown("custom-2026-10-01-2026-10-05")).toEqual([
+      "100001000002 2026-09-25..2026-10-24 partial",
     ]);
     // No 60-day minimum: one cycle is enough.
     expect(shown("cycle-100001000002")).toEqual(["100001000002 2026-09-25..2026-10-24"]);
@@ -662,11 +672,15 @@ describe("Budget vs spending modules (#126)", () => {
             id: "m-1",
             type: "budget",
             title: " ",
-            budget: { account_ids: [], bucket_ids: ["1000000001"] },
+            budget: { account_ids: [], bucket_ids: ["1000000001"], per_cycle: true },
           },
+          { id: "m-2", type: "budget", budget: { per_cycle: false } },
         ],
       }).modules,
-    ).toEqual([{ id: "m-1", type: "budget", budget: { bucket_ids: ["1000000001"] } }]);
+    ).toEqual([
+      { id: "m-1", type: "budget", budget: { bucket_ids: ["1000000001"] } },
+      { id: "m-2", type: "budget", budget: { per_cycle: false } },
+    ]);
     expect(
       readTemplates([
         {

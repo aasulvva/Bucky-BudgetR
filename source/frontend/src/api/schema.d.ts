@@ -2371,15 +2371,18 @@ export interface components {
             breakdown?: "none" | "month" | "cycle";
         };
         /**
-         * @description A budget vs spending module (#126): each bucket's budget, used and
-         *     left per cycle that overlaps the period, from the cycle's bucket
-         *     figures, with a summary over the cycles. Only the account and
-         *     bucket filters apply; set here, they replace the report's. An
-         *     account filter matches a bucket's source account.
+         * @description A budget vs spending module (#126): each bucket's budget, used,
+         *     overflow and left per cycle, from the cycle's bucket figures, with a
+         *     summary over the cycles. A cycle counts in the period that holds
+         *     most of its days. Only the account and bucket filters apply; set
+         *     here, they replace the report's. An account filter matches a
+         *     bucket's source account.
          */
         ReportBudget: {
             account_ids?: components["schemas"]["AccountId"][];
             bucket_ids?: components["schemas"]["BucketId"][];
+            /** @description A table per cycle after the summary (the default), or only the summary (false). */
+            per_cycle?: boolean;
         };
         /**
          * @description A transactions module (#126): the report's period's transactions, as

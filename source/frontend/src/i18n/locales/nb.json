@@ -1273,13 +1273,16 @@
         "total": "Totalt",
         "totalIn": "Totalt ({{currency}})",
         "overBudget": "Over budsjett",
-        "partial": "Delvis i perioden",
+        "partial": "Går utenfor perioden",
         "active": "Pågår",
         "empty": "Ingen bøtter hadde budsjett i denne syklusen.",
         "none": "Ingen sykluser har startet i denne perioden.",
         "many": "Perioden har mer enn {{max}} sykluser. Velg en kortere periode.",
         "filtersNote": "Rapportens tagger og motpart gjelder ikke for denne modulen.",
-        "hint": "Én tabell per syklus som overlapper perioden, med hele sykluser. Planlagte sykluser er utelatt."
+        "hint": "En syklus teller i perioden som har flest av dagene dens, og vises hel. Planlagte sykluser er utelatt.",
+        "overflow": "Overløp",
+        "perCycle": "Vis hver syklus",
+        "perCycleHint": "En tabell per syklus etter oppsummeringen. Av: bare oppsummeringen."
       }
     },
     "graphs": {

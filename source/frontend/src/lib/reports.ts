@@ -264,6 +264,7 @@ export function moduleFlows(report: ReportSettings, module: FlowsModule): Report
 export function moduleBudget(report: ReportSettings, module: BudgetModule): ReportBudget {
   const b = module.budget;
   return {
+    ...b,
     account_ids: b.account_ids?.length ? b.account_ids : report.account_ids,
     bucket_ids: b.bucket_ids?.length ? b.bucket_ids : report.bucket_ids,
   };
@@ -399,7 +400,7 @@ export function flowTables(
 }
 
 /** A budget vs spending table's amount columns. */
-export const BUDGET_FIGURES = ["budget", "used", "left"] as const;
+export const BUDGET_FIGURES = ["budget", "used", "overflow", "left"] as const;
 export type BudgetFigure = (typeof BUDGET_FIGURES)[number];
 
 export interface BudgetRow extends FlowRow<BudgetFigure> {
@@ -438,7 +439,7 @@ export function budgetRows(
           id: b.id,
           name: b.name,
           currency: b.currency,
-          values: { budget: f.budget, used: f.used, left: f.left },
+          values: { budget: f.budget, used: f.used, overflow: f.overflow, left: f.left },
         },
       ];
     })
@@ -747,7 +748,7 @@ export interface PeriodCycle {
   id: string;
   /** The whole cycle, which a budget module shows even where the period cuts it. */
   period: Period;
-  /** Cut by the report period's edges. */
+  /** Runs past the report period's edges, by less than half its days. */
   partial: boolean;
   /** Still going. */
   active: boolean;
@@ -757,33 +758,47 @@ export type PeriodCycles =
   { ok: true; cycles: PeriodCycle[] } | { ok: false; reason: "many" | "none" };
 
 /**
- * The cycles a budget module shows: those that have begun and overlap the
- * period, whole and oldest first, at most MAX_SUB_PERIODS. Planned ones
- * have no figures yet.
+ * The cycles a budget module shows, whole and oldest first, at most
+ * MAX_SUB_PERIODS: those that have begun and have most of their days in
+ * the period, so that each cycle counts in one year's, quarter's or
+ * month's report. Half its days count where the cycle starts. A period
+ * shorter than that (a few custom days) gets the cycle with the most of
+ * its days. Planned cycles have no figures yet.
  */
 export function periodCycles(period: Period, cycles: CycleTimes[]): PeriodCycles {
-  const from = Date.parse(period.fromAt);
-  const to = Date.parse(period.toAt);
-  const overlapping = overlappingCycles(cycles, from, to);
-  if (overlapping.length === 0) return { ok: false, reason: "none" };
-  if (overlapping.length > MAX_SUB_PERIODS) return { ok: false, reason: "many" };
+  const days = (a: LocalDate, b: LocalDate) => dayjs(b).diff(dayjs(a), "day") + 1;
+  const overlapping = overlappingCycles(
+    cycles,
+    Date.parse(period.fromAt),
+    Date.parse(period.toAt),
+  ).map((c) => {
+    const from = localDate(c.start_at);
+    const to = localDate(new Date(Date.parse(c.end_at) - 1));
+    const inside = days(from < period.from ? period.from : from, to > period.to ? period.to : to);
+    const total = days(from, to);
+    return {
+      cycle: c,
+      from,
+      to,
+      inside,
+      counts: inside * 2 > total || (inside * 2 === total && from >= period.from),
+    };
+  });
+  let shown = overlapping.filter((c) => c.counts);
+  if (shown.length === 0 && overlapping.length > 0) {
+    const most = overlapping.reduce((a, b) => (b.inside > a.inside ? b : a));
+    shown = [most];
+  }
+  if (shown.length === 0) return { ok: false, reason: "none" };
+  if (shown.length > MAX_SUB_PERIODS) return { ok: false, reason: "many" };
   return {
     ok: true,
-    cycles: overlapping.map((c) => {
-      const start = Date.parse(c.start_at);
-      const end = Date.parse(c.end_at);
-      return {
-        id: c.id ?? "",
-        period: {
-          from: localDate(new Date(start)),
-          to: localDate(new Date(end - 1)),
-          fromAt: c.start_at,
-          toAt: c.end_at,
-        },
-        partial: start < from || end > to,
-        active: c.state === "active",
-      };
-    }),
+    cycles: shown.map(({ cycle: c, from, to }) => ({
+      id: c.id ?? "",
+      period: { from, to, fromAt: c.start_at, toAt: c.end_at },
+      partial: from < period.from || to > period.to,
+      active: c.state === "active",
+    })),
   };
 }
 
@@ -821,6 +836,7 @@ export function cleanReport(r: ReportSettings): ReportSettings {
       const budget: ReportBudget = {};
       if (m.budget.account_ids?.length) budget.account_ids = [...m.budget.account_ids];
       if (m.budget.bucket_ids?.length) budget.bucket_ids = [...m.budget.bucket_ids];
+      if (m.budget.per_cycle === false) budget.per_cycle = false;
       return { id: m.id, type: m.type, ...title, budget };
     }
     const graph = withoutPeriod(cleanGraph({ ...m.graph, period: r.period }));

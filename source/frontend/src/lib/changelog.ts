@@ -25,16 +25,19 @@ export const CHANGELOG: ChangelogEntry[] = [
     },
     changes: {
       en: [
-        "A report can now show budget vs spending as a module: for each cycle in the period, each bucket's budget, what it used (with a bar), and what's left, with a total per currency. Buckets over budget are marked. Cycles are shown whole, and those the period cuts, or that are still going, are marked.",
-        "With more than one cycle, a summary over all of them comes first. It uses the report's accounts and buckets, or its own; tags and counterparty don't apply.",
+        "A report can now show budget vs spending as a module: for each cycle in the period, each bucket's budget, what it used (with a bar), what overflowed and what's left, with a total per currency. Buckets over budget are marked.",
+        "A cycle counts in the period that holds most of its days, so it's in one year's report, not two. It's shown whole, and marked when it runs past the period or is still going.",
+        "With more than one cycle, a summary over all of them comes first; turn off Show each cycle to see only the summary. It uses the report's accounts and buckets, or its own; tags and counterparty don't apply.",
       ],
       nb: [
-        "En rapport kan nå vise budsjett mot forbruk som en modul: for hver syklus i perioden, hver bøttes budsjett, hva den brukte (med en stolpe) og hva som er igjen, med en total per valuta. Bøtter over budsjett er markert. Syklusene vises hele, og de perioden skjærer, eller som pågår, er markert.",
-        "Med mer enn én syklus kommer en oppsummering over alle først. Den bruker rapportens kontoer og bøtter, eller sine egne; tagger og motpart gjelder ikke.",
+        "En rapport kan nå vise budsjett mot forbruk som en modul: for hver syklus i perioden, hver bøttes budsjett, hva den brukte (med en stolpe), hva som gikk til overløp og hva som er igjen, med en total per valuta. Bøtter over budsjett er markert.",
+        "En syklus teller i perioden som har flest av dagene dens, så den er med i én årsrapport, ikke to. Den vises hel, og er markert når den går utenfor perioden eller pågår.",
+        "Med mer enn én syklus kommer en oppsummering over alle først; slå av Vis hver syklus for å se bare oppsummeringen. Den bruker rapportens kontoer og bøtter, eller sine egne; tagger og motpart gjelder ikke.",
       ],
       nn: [
-        "Ein rapport kan no vise budsjett mot forbruk som ein modul: for kvar syklus i perioden, budsjettet til kvar bøtte, kva ho brukte (med ein stolpe) og kva som er att, med ein total per valuta. Bøtter over budsjett er markerte. Syklusane vert viste heile, og dei perioden skjer, eller som pågår, er markerte.",
-        "Med meir enn éin syklus kjem ei oppsummering over alle først. Han bruker kontoane og bøttene til rapporten, eller sine eigne; taggar og motpart gjeld ikkje.",
+        "Ein rapport kan no vise budsjett mot forbruk som ein modul: for kvar syklus i perioden, budsjettet til kvar bøtte, kva ho brukte (med ein stolpe), kva som gjekk til overløp og kva som er att, med ein total per valuta. Bøtter over budsjett er markerte.",
+        "Ein syklus tel i perioden som har flest av dagane hans, så han er med i éin årsrapport, ikkje to. Han vert vist heil, og er markert når han går utanfor perioden eller pågår.",
+        "Med meir enn éin syklus kjem ei oppsummering over alle først; slå av Vis kvar syklus for å sjå berre oppsummeringa. Han bruker kontoane og bøttene til rapporten, eller sine eigne; taggar og motpart gjeld ikkje.",
       ],
     },
   },

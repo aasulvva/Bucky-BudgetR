@@ -382,6 +382,14 @@ function BudgetFields({
         clearable
         searchable
       />
+      <Switch
+        label={t("stats.reports.budget.perCycle")}
+        description={t("stats.reports.budget.perCycleHint")}
+        checked={s.per_cycle !== false}
+        onChange={(e) => {
+          set({ per_cycle: e.currentTarget.checked });
+        }}
+      />
       <Text size="sm" c="dimmed">
         {t("stats.reports.budget.hint")}
       </Text>

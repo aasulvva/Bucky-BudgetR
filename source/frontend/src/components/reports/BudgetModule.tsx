@@ -7,6 +7,7 @@ import { useBucketFiguresFor, type Bucket, type BucketFigures } from "@/api/acco
 import type { Cycle } from "@/api/cycles";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { toneText, usageColor } from "@/lib/buckets";
+import { formatDateRange } from "@/lib/cycles";
 import { specificLabel } from "@/lib/graphs";
 import { compareAmounts, formatMoney } from "@/lib/money";
 import type { Period } from "@/lib/periods";
@@ -86,13 +87,15 @@ export function BudgetModule({
 
   const first = shown[0];
   const last = shown.at(-1);
+  const perCycle = settings.per_cycle !== false;
   return (
     <Stack gap="md">
       {note}
-      {first && last && shown.length > 1 && (
+      {first && last && (shown.length > 1 || !perCycle) && (
         <Stack gap={4}>
           <Text size="sm" fw={500}>
-            {t("stats.reports.budget.summary")}
+            {t("stats.reports.budget.summary")} ·{" "}
+            {formatDateRange(first.period.from, last.period.to)}
           </Text>
           <Text size="xs" c="dimmed">
             {t("stats.reports.budget.summaryHint")}
@@ -111,18 +114,19 @@ export function BudgetModule({
           />
         </Stack>
       )}
-      {shown.map((c, i) => (
-        <Stack key={c.id} gap={4} data-testid="budget-cycle">
-          <CycleLabel cycle={c} cycles={cycles} />
-          <BudgetTable
-            label={specificLabel({ kind: "specific", unit: "cycle", at: c.id }, cycles)}
-            figures={figures[i] ?? []}
-            buckets={buckets}
-            settings={settings}
-            period={c.period}
-          />
-        </Stack>
-      ))}
+      {perCycle &&
+        shown.map((c, i) => (
+          <Stack key={c.id} gap={4} data-testid="budget-cycle">
+            <CycleLabel cycle={c} cycles={cycles} />
+            <BudgetTable
+              label={specificLabel({ kind: "specific", unit: "cycle", at: c.id }, cycles)}
+              figures={figures[i] ?? []}
+              buckets={buckets}
+              settings={settings}
+              period={c.period}
+            />
+          </Stack>
+        ))}
     </Stack>
   );
 }
@@ -174,7 +178,7 @@ function BudgetTable({
   }
   const several = totals.length > 1;
   return (
-    <Table.ScrollContainer minWidth={420} type="native">
+    <Table.ScrollContainer minWidth={520} type="native">
       <Table striped highlightOnHover verticalSpacing={4} fz="sm" aria-label={label}>
         <Table.Thead>
           <Table.Tr>
@@ -182,6 +186,7 @@ function BudgetTable({
             <Table.Th ta="right">{t("stats.reports.budget.budget")}</Table.Th>
             <Table.Th ta="right">{t("stats.reports.budget.used")}</Table.Th>
             <Table.Th ta="right">{t("stats.reports.budget.usedPct")}</Table.Th>
+            <Table.Th ta="right">{t("stats.reports.budget.overflow")}</Table.Th>
             <Table.Th ta="right">{t("stats.reports.budget.left")}</Table.Th>
           </Table.Tr>
         </Table.Thead>
@@ -229,7 +234,14 @@ function Row({ row, name, bold }: { row: BudgetRow; name: React.ReactNode; bold?
   const money = (a: string) => formatMoney(a, row.currency);
   const over = compareAmounts(row.values.left, "0") < 0;
   const overColor = over ? toneText("alert") : undefined;
-  const cell = { ta: "right" as const, style: { whiteSpace: "nowrap" as const } };
+  const cell = {
+    ta: "right" as const,
+    style: { whiteSpace: "nowrap" as const, fontVariantNumeric: "tabular-nums" },
+  };
+  // A fixed width, so the bars line up whatever the share's digits.
+  const pct = (text: string) => (
+    <span style={{ display: "inline-block", minWidth: "4.5ch", textAlign: "right" }}>{text}</span>
+  );
   return (
     <Table.Tr fw={bold ? 600 : undefined}>
       <Table.Td>
@@ -249,7 +261,7 @@ function Row({ row, name, bold }: { row: BudgetRow; name: React.ReactNode; bold?
       <Table.Td {...cell}>{money(row.values.used)}</Table.Td>
       <Table.Td {...cell}>
         {row.usedPct === null ? (
-          "–"
+          pct("–")
         ) : (
           <Group gap={6} justify="flex-end" wrap="nowrap">
             <Progress
@@ -259,10 +271,11 @@ function Row({ row, name, bold }: { row: BudgetRow; name: React.ReactNode; bold?
               w={48}
               aria-hidden
             />
-            <span>{`${String(row.usedPct)}%`}</span>
+            {pct(`${String(row.usedPct)}%`)}
           </Group>
         )}
       </Table.Td>
+      <Table.Td {...cell}>{money(row.values.overflow)}</Table.Td>
       <Table.Td {...cell} c={overColor}>
         {money(row.values.left)}
       </Table.Td>
