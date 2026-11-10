@@ -248,7 +248,8 @@ export interface GraphRow {
   title: string;
   /** The interval's index in the API's result. */
   index: number;
-  [series: string]: string | number;
+  /** Null past the end of a compared period that is shorter than the other. */
+  [series: string]: string | number | null;
 }
 
 export interface GraphSeries {
@@ -259,7 +260,10 @@ export interface GraphSeries {
   name: string;
   label: string;
   color: string;
-  /** The exact amounts per interval, for the tooltip. */
+  /**
+   * The exact amounts per interval, for the tooltip. When compared (#125),
+   * as many as its own period has: the shorter period's line ends there.
+   */
   amounts: string[];
   /** The previous period's, beside the current one's (#125). */
   previous?: boolean;
@@ -422,7 +426,7 @@ function namedLines(
   return named;
 }
 
-function sumAt(lines: NamedLine[], i: number): string {
+function sumAt(lines: readonly NamedLine[], i: number): string {
   return addAmounts("0", ...lines.map((r) => r.amounts[i] ?? "0"));
 }
 
@@ -474,8 +478,13 @@ export function compareGraphData(
   const byName = (a: { label: string; name: string }, b: { label: string; name: string }) =>
     last(a.name) - last(b.name) || a.label.localeCompare(b.label, locale);
   const keptNames = new Set(kept.map((x) => x.name));
-  const count = Math.max(result.intervals.length, previous?.result.intervals.length ?? 0);
+  // Lined up by position. The longer period gives the rows; the shorter
+  // one's series end where it does, instead of going on as zeros.
+  const nowCount = result.intervals.length;
+  const prevCount = previous?.result.intervals.length ?? 0;
+  const count = Math.max(nowCount, prevCount);
   const indexes = Array.from({ length: count }, (_, i) => i);
+  const upTo = (n: number) => indexes.slice(0, n);
 
   interface Raw {
     name: string;
@@ -488,8 +497,8 @@ export function compareGraphData(
     name: x.name,
     label: x.label,
     color: seriesColor(i),
-    now: indexes.map((j) => x.amounts[j] ?? "0"),
-    prev: indexes.map((j) => before.find((b) => b.name === x.name)?.amounts[j] ?? "0"),
+    now: upTo(nowCount).map((j) => x.amounts[j] ?? "0"),
+    prev: upTo(prevCount).map((j) => before.find((b) => b.name === x.name)?.amounts[j] ?? "0"),
   }));
   const beforeRest = before.filter((b) => !keptNames.has(b.name));
   // The previous period's other series count too, even when all of this
@@ -499,8 +508,8 @@ export function compareGraphData(
       name: "other",
       label: i18n.t("stats.graphs.other"),
       color: seriesColor("other"),
-      now: indexes.map((j) => sumAt(rest, j)),
-      prev: indexes.map((j) => sumAt(beforeRest, j)),
+      now: upTo(nowCount).map((j) => sumAt(rest, j)),
+      prev: upTo(prevCount).map((j) => sumAt(beforeRest, j)),
     });
   }
   const shown = (a: string[]) => (s.cumulative ? cumulative(a) : a);
@@ -515,7 +524,8 @@ export function compareGraphData(
         name: x.name,
         label: x.label,
         color: x.color,
-        amounts: now.map((a, j) => addAmounts(a, negate(prev[j] ?? "0"))),
+        // Only where both periods have the interval.
+        amounts: now.slice(0, prev.length).map((a, j) => addAmounts(a, negate(prev[j] ?? "0"))),
       });
       continue;
     }
@@ -544,7 +554,10 @@ export function compareGraphData(
           : (cur?.title ?? old?.title ?? ""),
       index,
     };
-    for (const x of series) row[x.name] = Number(x.amounts[index] ?? "0");
+    for (const x of series) {
+      const a = x.amounts[index];
+      row[x.name] = a === undefined ? null : Number(a);
+    }
     return row;
   });
   return { rows, series, other: rest.length };
@@ -670,7 +683,10 @@ export function yDomain(data: GraphData, settings: GraphSettings): [number, numb
   if (!s.fit_y_axis || data.rows.length === 0) return undefined;
   const stacked = s.kind === "bar" && !s.side_by_side;
   const values = data.rows.flatMap((row) => {
-    const v = data.series.map((x) => Number(row[x.name] ?? 0));
+    const v = data.series
+      .map((x) => row[x.name])
+      .filter((n) => n !== null && n !== undefined)
+      .map(Number);
     if (!stacked) return v;
     // A stack reaches from the sum of its negative parts to the sum of its positive ones.
     const neg = v.filter((n) => n < 0);

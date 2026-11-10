@@ -802,17 +802,18 @@ describe("compareGraphData", () => {
     // The largest of this period keeps its colour; the rest is Other, the
     // previous period's Pets included.
     expect(data.series.map((x) => [x.name, x.amounts, x.previous ?? false])).toEqual([
-      ["b-b1", ["10.00", "20.00", "0"], false],
+      ["b-b1", ["10.00", "20.00"], false],
       ["b-b1-prev", ["4.00", "5.00", "6.00"], true],
-      ["other", ["1.00", "2.00", "0.00"], false],
+      ["other", ["1.00", "2.00"], false],
       ["other-prev", ["7.00", "0.00", "0.00"], true],
     ]);
     expect(data.series[1]).toMatchObject({ label: "Food (previous)", color: "var(--graph-1)" });
     expect(data.rows).toHaveLength(3);
     expect(data.rows[0]).toMatchObject({ label: "1 Nov", "b-b1": 10, "b-b1-prev": 4 });
     expect(data.rows[0]?.title).toBe("Sun, 1 Nov 2026 vs Thu, 1 Oct 2026");
-    // Past this period's end, the previous one's day names the row.
-    expect(data.rows[2]).toMatchObject({ label: "3 Oct", "b-b1": 0, "b-b1-prev": 6 });
+    // Past this period's end, the previous one's day names the row, and
+    // this period's series end instead of going on as zeros.
+    expect(data.rows[2]).toMatchObject({ label: "3 Oct", "b-b1": null, "b-b1-prev": 6 });
     expect(data.other).toBe(1);
   });
 
@@ -828,9 +829,26 @@ describe("compareGraphData", () => {
       "en-GB",
     );
     expect(data.series.map((x) => [x.name, x.amounts])).toEqual([
-      // Running totals 10, 30, 30 against 4, 9, 15.
-      ["b-b1", ["6.00", "21.00", "15.00"]],
-      ["other", ["-6.00", "-4.00", "-4.00"]],
+      // Running totals 10, 30 against 4, 9: only the days both have.
+      ["b-b1", ["6.00", "21.00"]],
+      ["other", ["-6.00", "-4.00"]],
     ]);
+    expect(data.rows).toHaveLength(3);
+    expect(data.rows[2]).toMatchObject({ "b-b1": null, other: null });
+  });
+
+  it("ends the previous period's line where it ends, when this one is longer", () => {
+    const data = compareGraphData(
+      before,
+      { result: now, mode: "both" },
+      { ...perBucket, kind: "line", cumulative: true },
+      "day",
+      "NOK",
+      [main],
+      buckets,
+      "en-GB",
+    );
+    expect(data.rows).toHaveLength(3);
+    expect(data.rows[2]).toMatchObject({ "b-b1": 15, "b-b1-prev": null });
   });
 });
