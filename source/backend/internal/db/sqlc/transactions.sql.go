@@ -414,15 +414,16 @@ WHERE h.user_id = $1 AND h.correction_type = 'none'
   AND ($2::text[] IS NULL OR h.transaction_type::text = ANY($2::text[]))
   AND ($3::timestamptz IS NULL OR h.transaction_at >= $3::timestamptz)
   AND ($4::timestamptz IS NULL OR h.transaction_at < $4::timestamptz)
-  AND ($5::text IS NULL OR EXISTS (
+  AND ($5::text[] IS NULL OR EXISTS (
       SELECT 1 FROM bank_transactions b JOIN transaction_headers c ON c.id = b.transaction_id
-      WHERE b.account_id = $5::text AND (c.id = h.id OR c.parent_id = h.id)))
-  AND ($6::text IS NULL OR EXISTS (
+      WHERE b.account_id = ANY($5::text[]) AND (c.id = h.id OR c.parent_id = h.id)))
+  AND ($6::text[] IS NULL OR EXISTS (
       SELECT 1 FROM bucket_transactions b JOIN transaction_headers c ON c.id = b.transaction_id
-      WHERE b.bucket_id = $6::text AND (c.id = h.id OR c.parent_id = h.id)))
-  AND ($7::text IS NULL OR EXISTS (
+      WHERE b.bucket_id = ANY($6::text[]) AND (c.id = h.id OR c.parent_id = h.id)))
+  -- tags are lowercased by the caller.
+  AND ($7::text[] IS NULL OR EXISTS (
       SELECT 1 FROM transaction_tags tt JOIN tags t ON t.id = tt.tag_id
-      WHERE tt.transaction_id = latest.id AND lower(t.name) = lower($7::text)))
+      WHERE tt.transaction_id = latest.id AND lower(t.name) = ANY($7::text[])))
   -- counterparty is a LIKE pattern, escaped by the caller, matching the
   -- counterparty or the description (#130).
   AND ($8::text IS NULL OR latest.counterparty ILIKE $8::text
@@ -445,9 +446,9 @@ type ListTransactionsParams struct {
 	Types          []string
 	FromAt         pgtype.Timestamptz
 	ToAt           pgtype.Timestamptz
-	AccountID      pgtype.Text
-	BucketID       pgtype.Text
-	Tag            pgtype.Text
+	AccountIds     []string
+	BucketIds      []string
+	Tags           []string
 	Counterparty   pgtype.Text
 	CounterpartyIs pgtype.Text
 	Reversed       pgtype.Bool
@@ -457,7 +458,8 @@ type ListTransactionsParams struct {
 }
 
 // A page of the user's original transactions (not corrections), newest first.
-// A null filter matches everything. The account and bucket filters also match
+// A null filter matches everything; an array filter matches any of its
+// values (#126). The account and bucket filters also match
 // lines added by corrections; the tag and counterparty filters use the
 // newest header of the family, which holds the effective values. The
 // counterparty filter matches the description too (#130).
@@ -468,9 +470,9 @@ func (q *Queries) ListTransactions(ctx context.Context, arg ListTransactionsPara
 		arg.Types,
 		arg.FromAt,
 		arg.ToAt,
-		arg.AccountID,
-		arg.BucketID,
-		arg.Tag,
+		arg.AccountIds,
+		arg.BucketIds,
+		arg.Tags,
 		arg.Counterparty,
 		arg.CounterpartyIs,
 		arg.Reversed,

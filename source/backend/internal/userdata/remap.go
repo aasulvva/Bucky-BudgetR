@@ -258,6 +258,7 @@ func remapPreferences(raw json.RawMessage, m map[kind]map[string]string) (json.R
 		for _, mod := range modules {
 			mod, _ := mod.(map[string]any)
 			remapGraph(m, mod["graph"])
+			remapGraph(m, mod["transactions"]) // Its filters, as a graph's (#126).
 		}
 	}
 	return json.Marshal(prefs)

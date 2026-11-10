@@ -1,10 +1,21 @@
-import { Button, Group, Input, SegmentedControl, Stack, Text, TextInput } from "@mantine/core";
+import {
+  Button,
+  Group,
+  Input,
+  MultiSelect,
+  SegmentedControl,
+  Stack,
+  Switch,
+  Text,
+  TextInput,
+} from "@mantine/core";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { Account, Bucket } from "@/api/accounts";
 import type { Cycle } from "@/api/cycles";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
+import { FilterFields } from "@/components/stats/FilterFields";
 import { GraphControls } from "@/components/stats/GraphControls";
 import type { Period, PeriodChoice } from "@/lib/periods";
 import {
@@ -12,12 +23,17 @@ import {
   BREAKDOWNS,
   MAX_SUB_PERIODS,
   MODULE_COMPARES,
+  MODULE_TYPES,
+  newModule,
   subPeriods,
   type Breakdown,
+  type GraphModule,
   type ReportModule,
   type ReportSettings,
+  type TransactionsModule,
   withoutPeriod,
 } from "@/lib/reports";
+import { USER_TYPES } from "@/lib/transactionList";
 
 const MAX_TITLE = 80;
 
@@ -39,7 +55,7 @@ interface ModuleEditorProps {
   onClose: () => void;
 }
 
-/** A report module's settings (#125): the graph, a title, comparison and breakdown. */
+/** A report module's settings (#125): its type when added, a title, and its type's settings. */
 export function ModuleEditor(props: ModuleEditorProps) {
   const { t } = useTranslation();
   return (
@@ -58,6 +74,77 @@ function Editor({
   module,
   adding,
   report,
+  onApply,
+  onClose,
+  ...rest
+}: ModuleEditorProps & { module: ReportModule }) {
+  const { t } = useTranslation();
+  const [draft, setDraft] = useState(module);
+  const tooLong = (draft.title ?? "").trim().length > MAX_TITLE;
+
+  return (
+    <Stack gap="md">
+      {adding && (
+        <Input.Wrapper label={t("stats.reports.module.type")}>
+          <SegmentedControl
+            fullWidth
+            mt={4}
+            data={MODULE_TYPES.map((x) => ({
+              value: x,
+              label: t(`stats.reports.module.types.${x}`),
+            }))}
+            value={draft.type}
+            onChange={(type) => {
+              if (type === draft.type) return;
+              // A new module of the other type, keeping the id and title.
+              const next = newModule(report, type);
+              setDraft({
+                ...next,
+                id: draft.id,
+                ...(draft.title === undefined ? {} : { title: draft.title }),
+              });
+            }}
+          />
+        </Input.Wrapper>
+      )}
+      <TextInput
+        label={t("stats.reports.module.title")}
+        description={t("stats.reports.module.titleHint")}
+        value={draft.title ?? ""}
+        error={tooLong ? t("common.maxChars", { count: MAX_TITLE }) : undefined}
+        onChange={(e) => {
+          setDraft({ ...draft, title: e.currentTarget.value });
+        }}
+      />
+      {draft.type === "transactions" ? (
+        <TransactionsFields draft={draft} onChange={setDraft} {...rest} />
+      ) : (
+        <GraphFields draft={draft} onChange={setDraft} report={report} {...rest} />
+      )}
+      <Group justify="flex-end" gap="xs">
+        <Button variant="default" onClick={onClose}>
+          {t("common.cancel")}
+        </Button>
+        <Button
+          disabled={tooLong}
+          onClick={() => {
+            onApply(draft);
+          }}
+        >
+          {t(adding ? "stats.reports.module.add" : "stats.reports.module.apply")}
+        </Button>
+      </Group>
+    </Stack>
+  );
+}
+
+type FieldsProps = Omit<ModuleEditorProps, "module" | "adding" | "report" | "onApply" | "onClose">;
+
+/** A graph module's graph, comparison and breakdown (#125). */
+function GraphFields({
+  draft,
+  onChange,
+  report,
   choice,
   period,
   comparable,
@@ -65,13 +152,13 @@ function Editor({
   accounts,
   buckets,
   tags,
-  onApply,
-  onClose,
-}: ModuleEditorProps & { module: ReportModule }) {
+}: FieldsProps & {
+  draft: GraphModule;
+  onChange: (m: GraphModule) => void;
+  report: ReportSettings;
+}) {
   const { t } = useTranslation();
-  const [draft, setDraft] = useState(module);
   const g = draft.graph;
-  const tooLong = (draft.title ?? "").trim().length > MAX_TITLE;
   const breakdownWhy = (by: Exclude<Breakdown, "none">) => {
     if (!period) return null;
     const parts = subPeriods(choice, period, by, cycles);
@@ -90,20 +177,11 @@ function Editor({
     draft.compare === "difference" && g.kind === "pie" ? "both" : (draft.compare ?? "off");
 
   return (
-    <Stack gap="md">
-      <TextInput
-        label={t("stats.reports.module.title")}
-        description={t("stats.reports.module.titleHint")}
-        value={draft.title ?? ""}
-        error={tooLong ? t("common.maxChars", { count: MAX_TITLE }) : undefined}
-        onChange={(e) => {
-          setDraft({ ...draft, title: e.currentTarget.value });
-        }}
-      />
+    <>
       <GraphControls
         value={{ ...g, period: report.period }}
         onChange={(next) => {
-          setDraft({ ...draft, graph: withoutPeriod(next) });
+          onChange({ ...draft, graph: withoutPeriod(next) });
         }}
         cycles={cycles}
         accounts={accounts}
@@ -125,7 +203,7 @@ function Editor({
           data={compares.map((c) => ({ value: c, label: t(`stats.reports.compare.options.${c}`) }))}
           value={compare}
           onChange={(c) => {
-            setDraft({ ...draft, compare: c });
+            onChange({ ...draft, compare: c });
           }}
         />
       </Input.Wrapper>
@@ -143,7 +221,7 @@ function Editor({
           }))}
           value={breakdown}
           onChange={(b) => {
-            setDraft({ ...draft, breakdown: b });
+            onChange({ ...draft, breakdown: b });
           }}
         />
       </Input.Wrapper>
@@ -152,19 +230,59 @@ function Editor({
           {why}
         </Text>
       )}
-      <Group justify="flex-end" gap="xs">
-        <Button variant="default" onClick={onClose}>
-          {t("common.cancel")}
-        </Button>
-        <Button
-          disabled={tooLong}
-          onClick={() => {
-            onApply(draft);
-          }}
-        >
-          {t(adding ? "stats.reports.module.add" : "stats.reports.module.apply")}
-        </Button>
-      </Group>
-    </Stack>
+    </>
+  );
+}
+
+/** A transactions module's filters, types and what else it shows (#126). */
+function TransactionsFields({
+  draft,
+  onChange,
+  accounts,
+  buckets,
+  tags,
+}: FieldsProps & { draft: TransactionsModule; onChange: (m: TransactionsModule) => void }) {
+  const { t } = useTranslation();
+  const s = draft.transactions;
+  const set = (patch: Partial<TransactionsModule["transactions"]>) => {
+    onChange({ ...draft, transactions: { ...s, ...patch } });
+  };
+  return (
+    <>
+      <FilterFields
+        value={s}
+        onChange={set}
+        accounts={accounts}
+        buckets={buckets}
+        tags={tags}
+        inline
+        inherits
+      />
+      <MultiSelect
+        comboboxProps={{ withinPortal: false }}
+        label={t("transactions.filters.type")}
+        placeholder={s.types?.length ? undefined : t("transactions.filters.all")}
+        data={USER_TYPES.map((x) => ({ value: x, label: t(`transactionTypes.${x}`) }))}
+        value={s.types ?? []}
+        onChange={(v) => {
+          set({ types: USER_TYPES.filter((x) => v.includes(x)) });
+        }}
+        clearable
+      />
+      <Switch
+        label={t("transactions.filters.system")}
+        checked={s.system ?? false}
+        onChange={(e) => {
+          set({ system: e.currentTarget.checked });
+        }}
+      />
+      <Switch
+        label={t("transactions.filters.reversed")}
+        checked={s.reversed ?? false}
+        onChange={(e) => {
+          set({ reversed: e.currentTarget.checked });
+        }}
+      />
+    </>
   );
 }

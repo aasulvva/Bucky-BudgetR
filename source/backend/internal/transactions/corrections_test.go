@@ -83,14 +83,14 @@ func TestCorrectExpense(t *testing.T) {
 	}
 	for name, f := range map[string]transactions.Filter{
 		"new counterparty": {Counterparty: "1000"},
-		"new tag":          {Tag: "week 43"},
+		"new tag":          {Tags: []string{"week 43"}},
 	} {
 		page, err := e.svc.List(t.Context(), e.user, f)
 		if err != nil || len(page.Items) != 1 || page.Items[0].Counterparty != "Rema 1000" {
 			t.Errorf("%s: %v %+v", name, err, page.Items)
 		}
 	}
-	if page, _ := e.svc.List(t.Context(), e.user, transactions.Filter{Tag: "food"}); len(page.Items) != 0 {
+	if page, _ := e.svc.List(t.Context(), e.user, transactions.Filter{Tags: []string{"food"}}); len(page.Items) != 0 {
 		t.Errorf("old tag still matches: %+v", page.Items)
 	}
 

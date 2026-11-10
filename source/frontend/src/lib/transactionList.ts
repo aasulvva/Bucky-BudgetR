@@ -161,12 +161,12 @@ export function listQuery(filter: TransactionFilter, active: Cycle | null): Tran
   const q = filter.q.trim();
   return {
     type: filter.type ? [filter.type] : filter.system ? ALL_TYPES : USER_TYPES,
-    ...(filter.accountId ? { account_id: filter.accountId } : {}),
-    ...(filter.bucketId ? { bucket_id: filter.bucketId } : {}),
+    ...(filter.accountId ? { account_id: [filter.accountId] } : {}),
+    ...(filter.bucketId ? { bucket_id: [filter.bucketId] } : {}),
     ...(cycle ? { cycle_id: cycle } : {}),
     ...(filter.from ? { from: startAtFor(filter.from) } : {}),
     ...(filter.to ? { to: endAtFor(filter.to) } : {}),
-    ...(filter.tag ? { tag: filter.tag } : {}),
+    ...(filter.tag ? { tag: [filter.tag] } : {}),
     ...(q ? { counterparty: q } : {}),
     ...(filter.counterparty ? { counterparty_is: filter.counterparty } : {}),
     ...(filter.reversed ? {} : { reversed: false }),

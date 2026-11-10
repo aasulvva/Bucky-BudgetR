@@ -1,6 +1,7 @@
 -- name: ListTransactions :many
 -- A page of the user's original transactions (not corrections), newest first.
--- A null filter matches everything. The account and bucket filters also match
+-- A null filter matches everything; an array filter matches any of its
+-- values (#126). The account and bucket filters also match
 -- lines added by corrections; the tag and counterparty filters use the
 -- newest header of the family, which holds the effective values. The
 -- counterparty filter matches the description too (#130).
@@ -16,15 +17,16 @@ WHERE h.user_id = sqlc.arg(user_id) AND h.correction_type = 'none'
   AND (sqlc.narg(types)::text[] IS NULL OR h.transaction_type::text = ANY(sqlc.narg(types)::text[]))
   AND (sqlc.narg(from_at)::timestamptz IS NULL OR h.transaction_at >= sqlc.narg(from_at)::timestamptz)
   AND (sqlc.narg(to_at)::timestamptz IS NULL OR h.transaction_at < sqlc.narg(to_at)::timestamptz)
-  AND (sqlc.narg(account_id)::text IS NULL OR EXISTS (
+  AND (sqlc.narg(account_ids)::text[] IS NULL OR EXISTS (
       SELECT 1 FROM bank_transactions b JOIN transaction_headers c ON c.id = b.transaction_id
-      WHERE b.account_id = sqlc.narg(account_id)::text AND (c.id = h.id OR c.parent_id = h.id)))
-  AND (sqlc.narg(bucket_id)::text IS NULL OR EXISTS (
+      WHERE b.account_id = ANY(sqlc.narg(account_ids)::text[]) AND (c.id = h.id OR c.parent_id = h.id)))
+  AND (sqlc.narg(bucket_ids)::text[] IS NULL OR EXISTS (
       SELECT 1 FROM bucket_transactions b JOIN transaction_headers c ON c.id = b.transaction_id
-      WHERE b.bucket_id = sqlc.narg(bucket_id)::text AND (c.id = h.id OR c.parent_id = h.id)))
-  AND (sqlc.narg(tag)::text IS NULL OR EXISTS (
+      WHERE b.bucket_id = ANY(sqlc.narg(bucket_ids)::text[]) AND (c.id = h.id OR c.parent_id = h.id)))
+  -- tags are lowercased by the caller.
+  AND (sqlc.narg(tags)::text[] IS NULL OR EXISTS (
       SELECT 1 FROM transaction_tags tt JOIN tags t ON t.id = tt.tag_id
-      WHERE tt.transaction_id = latest.id AND lower(t.name) = lower(sqlc.narg(tag)::text)))
+      WHERE tt.transaction_id = latest.id AND lower(t.name) = ANY(sqlc.narg(tags)::text[])))
   -- counterparty is a LIKE pattern, escaped by the caller, matching the
   -- counterparty or the description (#130).
   AND (sqlc.narg(counterparty)::text IS NULL OR latest.counterparty ILIKE sqlc.narg(counterparty)::text

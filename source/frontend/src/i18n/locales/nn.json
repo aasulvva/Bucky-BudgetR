@@ -1180,13 +1180,23 @@
         "moveDown": "Flytt ned",
         "title": "Tittel",
         "titleHint": "Valfritt. Utan tittel får modulen namn etter det han viser.",
-        "max": "Ein rapport har høgst {{max}} modular."
+        "max": "Ein rapport har høgst {{max}} modular.",
+        "type": "Type",
+        "types": {
+          "graph": "Graf",
+          "transactions": "Transaksjonar"
+        }
       },
       "ownFilters": {
         "accounts": "Eigne kontoar",
         "buckets": "Eigne bøtter",
         "tags": "Eigne taggar",
         "counterparty": "Eigen motpart"
+      },
+      "transactions": {
+        "title": "Transaksjonar",
+        "empty": "Ingen transaksjonar i perioden passar.",
+        "open": "Opne i Transaksjonar"
       }
     },
     "graphs": {

@@ -1630,7 +1630,8 @@ paths:
         The user's transactions, newest first, one page at a time. Each is
         merged with its corrections: the lines show the effective amounts,
         and `corrected` and `reversed` say what happened to it. Filters
-        combine with AND. Pass `next_cursor` as `cursor` to get the next page.
+        combine with AND; several values of one filter match any of them
+        (#126). Pass `next_cursor` as `cursor` to get the next page.
       parameters:
         - name: type
           in: query
@@ -1643,14 +1644,26 @@ paths:
           explode: true
         - name: account_id
           in: query
-          description: Only transactions with a line on this account.
+          description: |
+            Only transactions with a line on one of these accounts. Repeat
+            for several. `balances_after` is only filled with exactly one.
           schema:
-            $ref: "#/components/schemas/AccountId"
+            type: array
+            maxItems: 50
+            items:
+              $ref: "#/components/schemas/AccountId"
+          style: form
+          explode: true
         - name: bucket_id
           in: query
-          description: Only transactions with a line on this bucket.
+          description: Only transactions with a line on one of these buckets. Repeat for several.
           schema:
-            $ref: "#/components/schemas/BucketId"
+            type: array
+            maxItems: 100
+            items:
+              $ref: "#/components/schemas/BucketId"
+          style: form
+          explode: true
         - name: cycle_id
           in: query
           description: Only transactions dated within this cycle.
@@ -1670,10 +1683,15 @@ paths:
             format: date-time
         - name: tag
           in: query
-          description: Only transactions with this tag, ignoring case.
+          description: Only transactions with any of these tags, ignoring case. Repeat for several.
           schema:
-            type: string
-            maxLength: 50
+            type: array
+            maxItems: 20
+            items:
+              type: string
+              maxLength: 50
+          style: form
+          explode: true
         - name: counterparty
           in: query
           description: Only transactions whose counterparty or description contains this text, ignoring case.
@@ -3890,7 +3908,11 @@ components:
     ReportModule:
       type: object
       additionalProperties: false
-      required: [id, type, graph]
+      description: |
+        A module of a report. Its `type` says which settings it has: a
+        `graph` module has `graph`, a `transactions` module (#126) has
+        `transactions`, and not the other (400 `invalid_request`).
+      required: [id, type]
       properties:
         id:
           type: string
@@ -3898,27 +3920,70 @@ components:
           maxLength: 40
         type:
           type: string
-          enum: [graph]
-          description: What the module shows. More types come with #126.
+          enum: [graph, transactions]
+          description: What the module shows.
         title:
           type: string
           maxLength: 80
         graph:
           $ref: "#/components/schemas/ReportGraph"
+        transactions:
+          $ref: "#/components/schemas/ReportTransactions"
         compare:
           type: string
           enum: ["off", both, difference]
           description: |
-            Lines and bars: the previous period beside this one (`both`) or
-            this period minus the previous (`difference`). Pies: `both` and
-            `difference` show the previous period's pie too. `off` by default.
+            Graphs only. Lines and bars: the previous period beside this one
+            (`both`) or this period minus the previous (`difference`). Pies:
+            `both` and `difference` show the previous period's pie too.
+            `off` by default.
         breakdown:
           type: string
           enum: [none, month, cycle]
           description: |
-            Also one small graph per month or per cycle, for periods of at
-            least 60 days. Months and cycles cut by the period's edges are
-            clipped. `none` by default.
+            Graphs only. Also one small graph per month or per cycle, for
+            periods of at least 60 days. Months and cycles cut by the
+            period's edges are clipped. `none` by default.
+
+    ReportTransactions:
+      type: object
+      additionalProperties: false
+      description: |
+        A transactions module (#126): the report's period's transactions, as
+        the Transactions list shows them. A filter set here replaces the
+        report's for that field.
+      properties:
+        account_ids:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/AccountId"
+        bucket_ids:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/BucketId"
+        tags:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            maxLength: 50
+        counterparty:
+          type: string
+          maxLength: 200
+        types:
+          type: array
+          description: Only these types; empty or left out, all but refills and adjustments.
+          maxItems: 10
+          items:
+            $ref: "#/components/schemas/TransactionType"
+        system:
+          type: boolean
+          description: Also refills and adjustments (REF, OVF, OPF, BUA, BAT).
+        reversed:
+          type: boolean
+          description: Also reversed transactions and moved originals (#91).
 
     ReportGraph:
       type: object

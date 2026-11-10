@@ -301,6 +301,11 @@ func checkReportTemplates(patch api.Preferences) error {
 				return bad("Report template " + strconv.Quote(r.Id) + " has module id " + strconv.Quote(m.Id) + " more than once.")
 			}
 			modules[m.Id] = true
+			// A module has the settings of its type and not the other's (#126).
+			graph := m.Type == api.ReportModuleTypeGraph
+			if (m.Graph != nil) != graph || (m.Transactions != nil) == graph {
+				return bad("Report template " + strconv.Quote(r.Id) + " module " + strconv.Quote(m.Id) + " needs the settings of its type, " + string(m.Type) + ", and no others.")
+			}
 		}
 	}
 	return nil

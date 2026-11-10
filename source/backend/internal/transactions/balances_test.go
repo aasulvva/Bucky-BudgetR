@@ -63,7 +63,7 @@ func TestBalancesAfter(t *testing.T) {
 		}
 	}
 	main := e.account
-	check("main", balances(transactions.Filter{AccountID: main}, main), []string{
+	check("main", balances(transactions.Filter{AccountIDs: []string{main}}, main), []string{
 		transfer.ID + " 620.00",
 		moved.ID + " -",
 		reversed.ID + " -",
@@ -72,25 +72,27 @@ func TestBalancesAfter(t *testing.T) {
 		food.ID + " 850.00",
 		salary.ID + " 1000.00",
 	})
-	check("card", balances(transactions.Filter{AccountID: card}, card), []string{
+	check("card", balances(transactions.Filter{AccountIDs: []string{card}}, card), []string{
 		transfer.ID + " 140.00",
 		replacement.ID + " -60.00",
 	})
 	// Lines the filter leaves out still count.
-	check("incomes", balances(transactions.Filter{AccountID: main, Types: []sqlc.TransactionType{sqlc.TransactionTypeINC}}, main),
+	check("incomes", balances(transactions.Filter{AccountIDs: []string{main}, Types: []sqlc.TransactionType{sqlc.TransactionTypeINC}}, main),
 		[]string{salary.ID + " 1000.00"})
-	check("by counterparty", balances(transactions.Filter{AccountID: main, Counterparty: "kiwi"}, main), []string{food.ID + " 850.00"})
+	check("by counterparty", balances(transactions.Filter{AccountIDs: []string{main}, Counterparty: "kiwi"}, main), []string{food.ID + " 850.00"})
 	// A later page follows on from the first.
-	page, err := e.svc.List(t.Context(), e.user, transactions.Filter{AccountID: main, Limit: 4})
+	page, err := e.svc.List(t.Context(), e.user, transactions.Filter{AccountIDs: []string{main}, Limit: 4})
 	if err != nil {
 		t.Fatal(err)
 	}
-	check("page 2", balances(transactions.Filter{AccountID: main, Limit: 4, Cursor: page.Next}, main)[:1],
+	check("page 2", balances(transactions.Filter{AccountIDs: []string{main}, Limit: 4, Cursor: page.Next}, main)[:1],
 		[]string{first.ID + " " + map[bool]string{true: "830.00", false: "840.00"}[second.ID == a.ID]})
-	// Without an account filter, there are none.
-	for _, s := range balances(transactions.Filter{}, "") {
-		if s[len(s)-1] != '-' {
-			t.Errorf("unfiltered: %s", s)
+	// Without an account filter, or with two accounts (#126), there are none.
+	for _, f := range []transactions.Filter{{}, {AccountIDs: []string{main, card}}} {
+		for _, s := range balances(f, "") {
+			if s[len(s)-1] != '-' {
+				t.Errorf("%v: %s", f.AccountIDs, s)
+			}
 		}
 	}
 

@@ -116,7 +116,7 @@ func (e env) get(t *testing.T, id string) buckets.Bucket {
 // type, oldest first; reversed ones are left out.
 func (e env) lines(t *testing.T, bucketID string, typ sqlc.TransactionType) []string {
 	t.Helper()
-	p, err := e.tx.List(t.Context(), e.user, transactions.Filter{BucketID: bucketID, Types: []sqlc.TransactionType{typ}})
+	p, err := e.tx.List(t.Context(), e.user, transactions.Filter{BucketIDs: []string{bucketID}, Types: []sqlc.TransactionType{typ}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -449,7 +449,7 @@ func TestCycleRoutines(t *testing.T) {
 	}
 
 	// The cycle-end OVF is dated in October, the REF at November's start.
-	p, err := e.tx.List(t.Context(), e.user, transactions.Filter{BucketID: offAuto})
+	p, err := e.tx.List(t.Context(), e.user, transactions.Filter{BucketIDs: []string{offAuto}})
 	if err != nil {
 		t.Fatal(err)
 	}

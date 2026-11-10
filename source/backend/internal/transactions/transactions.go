@@ -158,15 +158,16 @@ type Version struct {
 
 // Filter narrows List. Zero fields match everything.
 type Filter struct {
-	Types     []sqlc.TransactionType
-	AccountID string
-	BucketID  string
+	Types []sqlc.TransactionType
+	// AccountIDs and BucketIDs match a line on any of them (#126).
+	AccountIDs []string
+	BucketIDs  []string
 	// CycleID limits the list to transactions dated within the cycle.
 	CycleID string
 	// From and To limit the transaction time to [From, To).
 	From, To time.Time
-	// Tag matches a tag name, ignoring case.
-	Tag string
+	// Tags match any of these tag names, ignoring case.
+	Tags []string
 	// Counterparty matches part of the counterparty or the description,
 	// ignoring case.
 	Counterparty string
@@ -422,6 +423,22 @@ func balancesAfter(ctx context.Context, q *sqlc.Queries, userID string, accounts
 	return nil
 }
 
+// nonEmpty trims the values and drops the empty ones, lowercased if lower;
+// nil when none are left, which the query reads as no filter.
+func nonEmpty(values []string, lower bool) []string {
+	var out []string
+	for _, v := range values {
+		v = strings.TrimSpace(v)
+		if lower {
+			v = strings.ToLower(v)
+		}
+		if v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
 // List returns a page of the user's transactions, newest first, each merged
 // with its corrections.
 func (s *Service) List(ctx context.Context, userID string, f Filter) (Page, error) {
@@ -457,9 +474,9 @@ func (s *Service) List(ctx context.Context, userID string, f Filter) (Page, erro
 	}
 	p.FromAt = timestamptz(f.From)
 	p.ToAt = timestamptz(f.To)
-	p.AccountID = text(f.AccountID)
-	p.BucketID = text(f.BucketID)
-	p.Tag = text(strings.TrimSpace(f.Tag))
+	p.AccountIds = nonEmpty(f.AccountIDs, false)
+	p.BucketIds = nonEmpty(f.BucketIDs, false)
+	p.Tags = nonEmpty(f.Tags, true)
 	p.Counterparty = likeContains(f.Counterparty)
 	if is := strings.TrimSpace(f.CounterpartyIs); is != "" {
 		p.CounterpartyIs = pgtype.Text{String: is, Valid: true}
@@ -492,8 +509,9 @@ func (s *Service) List(ctx context.Context, userID string, f Filter) (Page, erro
 	if page.Items, err = s.load(ctx, q, userID, idList, false); err != nil {
 		return Page{}, err
 	}
-	if f.AccountID != "" {
-		if err := balancesAfter(ctx, q, userID, []string{f.AccountID}, page.Items); err != nil {
+	// The balance after each (#106) is one account's, so only with one.
+	if len(p.AccountIds) == 1 {
+		if err := balancesAfter(ctx, q, userID, p.AccountIds, page.Items); err != nil {
 			return Page{}, err
 		}
 	}

@@ -53,7 +53,7 @@ func (s *Service) RenameCounterparty(ctx context.Context, userID string, r Renam
 	}
 
 	notReversed := false
-	f := Filter{AccountID: r.AccountID, Tag: r.Tag, Reversed: &notReversed, Limit: MaxLimit}
+	f := Filter{AccountIDs: []string{r.AccountID}, Tags: []string{r.Tag}, Reversed: &notReversed, Limit: MaxLimit}
 	if r.Type != "" {
 		f.Types = []sqlc.TransactionType{r.Type}
 	}

@@ -94,7 +94,7 @@ export function useBucketTransactions(bucketId: string, cycleId: string | undefi
       let cursor: string | undefined;
       for (let page = 0; page < HISTORY_PAGES; page++) {
         const query: TransactionQuery = {
-          bucket_id: bucketId,
+          bucket_id: [bucketId],
           cycle_id: cycleId,
           type: [...USER_TYPES, ...SYSTEM_TYPES],
           limit: 200,

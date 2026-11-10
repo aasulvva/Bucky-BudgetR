@@ -16,6 +16,29 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.10.00",
+    date: "2026-11-10",
+    title: {
+      en: "Reports: a transactions module",
+      nb: "Rapporter: en transaksjonsmodul",
+      nn: "Rapportar: ein transaksjonsmodul",
+    },
+    changes: {
+      en: [
+        "A report can now list the period's transactions as a module, as the Transactions screen shows them. Filter it by accounts, buckets, tags, counterparty and type, or let it use the report's filters, and choose whether it shows refills & adjustments and reversed transactions.",
+        "It shows the first 50, with Load more. Open in Transactions shows the same list there, and a transaction opens there too.",
+      ],
+      nb: [
+        "En rapport kan nå vise periodens transaksjoner som en modul, slik Transaksjoner-skjermen viser dem. Filtrer på kontoer, bøtter, tagger, motpart og type, eller la den bruke rapportens filtre, og velg om den skal vise påfyll og justeringer og reverserte transaksjoner.",
+        "Den viser de første 50, med Last inn flere. Åpne i Transaksjoner viser den samme listen der, og en transaksjon åpnes der også.",
+      ],
+      nn: [
+        "Ein rapport kan no vise transaksjonane i perioden som ein modul, slik Transaksjonar-skjermen viser dei. Filtrer på kontoar, bøtter, taggar, motpart og type, eller la han bruke filtera til rapporten, og vel om han skal vise påfyll og justeringar og reverserte transaksjonar.",
+        "Han viser dei første 50, med Last inn fleire. Opne i Transaksjonar viser den same lista der, og ein transaksjon vert opna der òg.",
+      ],
+    },
+  },
+  {
     version: "v2.09.00",
     date: "2026-11-09",
     title: {

@@ -3,12 +3,17 @@ import { parsePeriod, resolvePeriod } from "./periods";
 import {
   cleanReport,
   moduleGraph,
+  moduleTransactions,
   previousPeriod,
+  readTemplates,
   sameReport,
   starter,
   subPeriods,
+  transactionsLink,
+  transactionsQuery,
   type ReportSettings,
 } from "./reports";
+import { SYSTEM_TYPES, USER_TYPES } from "./transactionList";
 
 const now = new Date(2026, 10, 9, 12, 0); // 9 Nov 2026, noon local
 
@@ -175,7 +180,9 @@ describe("cleanReport", () => {
       ...yearly,
       compare_to: "previous",
       tags: [],
-      modules: yearly.modules.map((m) => ({ ...m, compare: m.compare ?? "off", title: " " })),
+      modules: yearly.modules.map((m) =>
+        m.type === "graph" ? { ...m, compare: m.compare ?? "off", title: " " } : m,
+      ),
     };
     expect(sameReport(changed, yearly)).toBe(true);
     expect(cleanReport(changed).modules[0]).toEqual({
@@ -184,5 +191,106 @@ describe("cleanReport", () => {
       graph: { kind: "pie", metric: "spending", resolution: "month", group_by: "bucket" },
     });
     expect(sameReport({ ...yearly, compare_to: "last_year" }, yearly)).toBe(false);
+  });
+});
+
+describe("transactions modules (#126)", () => {
+  const report: ReportSettings = {
+    period: "previous-month",
+    account_ids: ["1234"],
+    tags: ["food"],
+    counterparty: "rema",
+    modules: [],
+  };
+  const period = {
+    from: "2026-10-01",
+    to: "2026-10-31",
+    fromAt: startAtFor("2026-10-01"),
+    toAt: endAtFor("2026-10-31"),
+  };
+
+  it("use the report's filters where they set none", () => {
+    const t = moduleTransactions(report, {
+      id: "m-1",
+      type: "transactions",
+      transactions: { bucket_ids: ["1000000001", "1000000002"], tags: [], types: ["EXP"] },
+    });
+    expect(t).toMatchObject({
+      account_ids: ["1234"],
+      bucket_ids: ["1000000001", "1000000002"],
+      tags: ["food"],
+      counterparty: "rema",
+      types: ["EXP"],
+    });
+  });
+
+  it("ask the list API for the period, without system types or reversed ones by default", () => {
+    expect(transactionsQuery({ bucket_ids: ["1000000001", "1000000002"] }, period)).toEqual({
+      type: USER_TYPES,
+      from: period.fromAt,
+      to: period.toAt,
+      bucket_id: ["1000000001", "1000000002"],
+      reversed: false,
+      limit: 50,
+    });
+    const q = transactionsQuery({ types: ["EXP"], system: true, reversed: true }, period);
+    expect(q.type).toEqual(["EXP", ...SYSTEM_TYPES]);
+    expect(q).not.toHaveProperty("reversed");
+  });
+
+  it("link to the Transactions screen while each filter has one value", () => {
+    const link = transactionsLink(
+      { account_ids: ["1234"], tags: ["food"], types: ["EXP"], counterparty: " rema " },
+      period,
+    );
+    expect(link).not.toBeNull();
+    const params = new URL(link ?? "", "http://x").searchParams;
+    expect(Object.fromEntries(params)).toEqual({
+      cycle_id: "all",
+      from: "2026-10-01",
+      to: "2026-10-31",
+      account_id: "1234",
+      tag: "food",
+      type: "EXP",
+      q: "rema",
+      reversed: "0",
+    });
+    // Two buckets aren't one of that screen's filters yet (#162).
+    expect(transactionsLink({ bucket_ids: ["1000000001", "1000000002"] }, period)).toBeNull();
+    // A row still opens there, over the period.
+    const row = transactionsLink({ bucket_ids: ["1000000001", "1000000002"] }, period, "t1");
+    expect(row).toBe("/transactions?cycle_id=all&from=2026-10-01&to=2026-10-31&open=t1");
+  });
+
+  it("are saved without defaults, and read back by type", () => {
+    const r: ReportSettings = {
+      period: "previous-month",
+      modules: [
+        {
+          id: "m-1",
+          type: "transactions",
+          title: " ",
+          transactions: { tags: [], types: [], system: false, reversed: true, counterparty: " " },
+        },
+      ],
+    };
+    expect(cleanReport(r).modules).toEqual([
+      { id: "m-1", type: "transactions", transactions: { reversed: true } },
+    ]);
+    const [read] = readTemplates([
+      {
+        id: "r-1",
+        name: "Mine",
+        report: {
+          period: "previous-month",
+          modules: [
+            { id: "m-1", type: "transactions", transactions: {} },
+            // Without its type's settings, which the server refuses.
+            { id: "m-2", type: "graph" },
+          ],
+        },
+      },
+    ]);
+    expect(read?.report.modules).toEqual([{ id: "m-1", type: "transactions", transactions: {} }]);
   });
 });
