@@ -4384,7 +4384,7 @@ components:
         `income` + `opening_funds` + `adjustments` + `transfers`, and `left` =
         `budget` − `used` − `overflow`, which is the current TF while the cycle
         is active.
-      required: [bucket_id, start, refills, income, opening_funds, adjustments, transfers, budget, used, overflow, left]
+      required: [bucket_id, start, refills, income, opening_funds, adjustments, transfers, budget, used, overflow, capped, swept, left]
       properties:
         bucket_id:
           $ref: "#/components/schemas/BucketId"
@@ -4423,7 +4423,19 @@ components:
         overflow:
           allOf:
             - $ref: "#/components/schemas/Amount"
-          description: What overflowed (OVF), as a positive amount.
+          description: What overflowed (OVF), as a positive amount; `capped` + `swept`.
+        capped:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: |
+            What a refill's overflow removed because TF went above BC (Keep
+            funds), as a positive amount: never spendable in the cycle.
+        swept:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: |
+            What the cycle's end removed (without Keep funds), as a positive
+            amount: what was left unspent.
         left:
           allOf:
             - $ref: "#/components/schemas/Amount"

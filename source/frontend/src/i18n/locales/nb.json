@@ -1264,12 +1264,11 @@
       "budget": {
         "title": "Budsjett mot forbruk",
         "summary": "Alle sykluser",
-        "summaryHint": "Budsjett: det bøttene hadde ved starten av første syklus, pluss alt som er lagt inn siden. Igjen: ved slutten av siste syklus.",
+        "summaryHint": "Budsjett: det bøttene kunne bruke, fra starten av første syklus pluss alt som er lagt inn siden, uten det som gikk til overløp over bøttas kapasitet. Til neste syklus: det som var igjen ved slutten av siste syklus.",
         "bucket": "Bøtte",
         "budget": "Budsjett",
         "used": "Brukt",
         "usedPct": "Brukt %",
-        "left": "Igjen",
         "total": "Totalt",
         "totalIn": "Totalt ({{currency}})",
         "overBudget": "Over budsjett",
@@ -1279,10 +1278,11 @@
         "none": "Ingen sykluser har startet i denne perioden.",
         "many": "Perioden har mer enn {{max}} sykluser. Velg en kortere periode.",
         "filtersNote": "Rapportens tagger og motpart gjelder ikke for denne modulen.",
-        "hint": "En syklus teller i perioden som har flest av dagene dens, og vises hel. Planlagte sykluser er utelatt.",
-        "overflow": "Overløp",
+        "hint": "En syklus teller i perioden som har flest av dagene dens, og vises hel. Planlagte sykluser er utelatt. Ubrukt er budsjettet minus det som ble brukt; Til neste syklus er det som ble med videre, 0 for en bøtte som ikke beholder midlene.",
         "perCycle": "Vis hver syklus",
-        "perCycleHint": "En tabell per syklus etter oppsummeringen. Av: bare oppsummeringen."
+        "perCycleHint": "En tabell per syklus etter oppsummeringen. Av: bare oppsummeringen.",
+        "unspent": "Ubrukt",
+        "carried": "Til neste syklus"
       }
     },
     "graphs": {

@@ -175,7 +175,7 @@ func TestBucketsAPI(t *testing.T) {
 	}
 	for _, f := range figs {
 		want := api.BucketFigures{BucketId: f.BucketId, Start: "0.00", Refills: "0.00", Income: "0.00",
-			OpeningFunds: "0.00", Adjustments: "0.00", Transfers: "0.00", Budget: "0.00", Used: "0.00", Overflow: "0.00", Left: "0.00"}
+			OpeningFunds: "0.00", Adjustments: "0.00", Transfers: "0.00", Budget: "0.00", Used: "0.00", Overflow: "0.00", Capped: "0.00", Swept: "0.00", Left: "0.00"}
 		if f.BucketId == fun.Id {
 			want.OpeningFunds, want.Budget, want.Left = "100.00", "100.00", "100.00"
 		}

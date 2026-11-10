@@ -400,7 +400,7 @@ export function flowTables(
 }
 
 /** A budget vs spending table's amount columns. */
-export const BUDGET_FIGURES = ["budget", "used", "overflow", "left"] as const;
+export const BUDGET_FIGURES = ["budget", "used", "unspent", "carried"] as const;
 export type BudgetFigure = (typeof BUDGET_FIGURES)[number];
 
 export interface BudgetRow extends FlowRow<BudgetFigure> {
@@ -418,6 +418,12 @@ function withPct(r: FlowRow<BudgetFigure>): BudgetRow {
  * One cycle's bucket figures as table rows: the buckets the module's
  * filters match (an account filter by the bucket's source account), by
  * name, without the ones where nothing happened, and a total per currency.
+ *
+ * Budget is what could be spent: without what a refill's overflow capped
+ * at BC (Keep funds). Unspent is Budget − Used, below 0 when overspent.
+ * Carried over is what went into the next cycle (Left): 0 or the overspent
+ * part for a bucket without Keep funds, whose unspent part is swept at the
+ * cycle's end.
  */
 export function budgetRows(
   figures: BucketFigures[],
@@ -434,12 +440,18 @@ export function budgetRows(
       if (bucketIds && !bucketIds.has(b.id)) return [];
       if (accountIds && !accountIds.has(b.source_account_id)) return [];
       if ([f.start, f.budget, f.used, f.overflow, f.left].every(isZero)) return [];
+      const budget = subtractAmounts(f.budget, f.capped);
       return [
         {
           id: b.id,
           name: b.name,
           currency: b.currency,
-          values: { budget: f.budget, used: f.used, overflow: f.overflow, left: f.left },
+          values: {
+            budget,
+            used: f.used,
+            unspent: subtractAmounts(budget, f.used),
+            carried: f.left,
+          },
         },
       ];
     })
@@ -447,12 +459,25 @@ export function budgetRows(
   return { rows: rows.map(withPct), totals: totals(rows, BUDGET_FIGURES).map(withPct) };
 }
 
-const FIGURE_PARTS = ["refills", "income", "opening_funds", "adjustments", "transfers"] as const;
+const SUMMED_PARTS = [
+  "refills",
+  "income",
+  "opening_funds",
+  "adjustments",
+  "transfers",
+  "used",
+  "overflow",
+  "capped",
+  "swept",
+] as const;
 
 /**
  * The bucket figures of several cycles, oldest first, as one: the first
- * cycle's start, what was added and used in them all, and the last one's
- * left. A cycle's start is the one before's left, so it isn't counted twice.
+ * cycle's start, what was put in, used and overflowed in them all, and the
+ * last one's left. A later cycle's budget counts without the funds it
+ * brought along, which the cycle before counted already. What it brought
+ * along overspent stays in, as in that cycle's own budget: the refill that
+ * tops up a bucket without Keep funds isn't more to spend.
  */
 export function budgetSummary(perCycle: BucketFigures[][]): BucketFigures[] {
   const out = new Map<string, BucketFigures>();
@@ -463,10 +488,9 @@ export function budgetSummary(perCycle: BucketFigures[][]): BucketFigures[] {
         out.set(f.bucket_id, { ...f });
         continue;
       }
-      for (const k of FIGURE_PARTS) s[k] = addAmounts(s[k], f[k]);
-      s.budget = addAmounts(s.budget, subtractAmounts(f.budget, f.start));
-      s.used = addAmounts(s.used, f.used);
-      s.overflow = addAmounts(s.overflow, f.overflow);
+      for (const k of SUMMED_PARTS) s[k] = addAmounts(s[k], f[k]);
+      const brought = compareAmounts(f.start, "0") > 0 ? f.start : "0.00";
+      s.budget = addAmounts(s.budget, subtractAmounts(f.budget, brought));
       s.left = f.left;
     }
   }

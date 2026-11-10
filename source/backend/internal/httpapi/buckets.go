@@ -59,6 +59,8 @@ func (s *server) ListBucketFigures(ctx context.Context, req api.ListBucketFigure
 			Budget:       amount(f.Budget),
 			Used:         amount(f.Used),
 			Overflow:     amount(f.Overflow),
+			Capped:       amount(f.Capped),
+			Swept:        amount(f.Swept),
 			Left:         amount(f.Left),
 		}
 	}

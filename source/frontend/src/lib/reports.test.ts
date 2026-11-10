@@ -22,6 +22,7 @@ import {
   subPeriods,
   transactionsLink,
   transactionsQuery,
+  type BudgetRow,
   type ReportSettings,
 } from "./reports";
 import { SYSTEM_TYPES, USER_TYPES } from "./transactionList";
@@ -575,18 +576,23 @@ describe("Budget vs spending modules (#126)", () => {
 
   it("give a row per matching bucket by name, used %, and a total per currency", () => {
     const figures = [
+      // Without Keep funds: what wasn't used is swept at the cycle's end.
       bucketFigures({
         bucket_id: "1000000002",
         start: "200.00",
         budget: "1000.00",
-        used: "1200.00",
-        left: "-200.00",
+        used: "600.00",
+        overflow: "400.00",
+        swept: "400.00",
       }),
+      // Keep funds: the refill's overflow above BC was never there to spend.
       bucketFigures({
         bucket_id: "1000000001",
         budget: "4000.00",
         used: "3000.00",
-        left: "1000.00",
+        overflow: "500.00",
+        capped: "500.00",
+        left: "500.00",
       }),
       // Nothing happened: left out.
       bucketFigures({ bucket_id: "1000000003" }),
@@ -595,16 +601,22 @@ describe("Budget vs spending modules (#126)", () => {
       bucketFigures({ bucket_id: "1000000009", budget: "10.00" }),
     ];
     const all = budgetRows(figures, buckets, {}, "en-GB");
-    expect(all.rows.map((r) => [r.name, r.values.left, r.usedPct])).toEqual([
-      ["Food", "1000.00", 75],
-      ["Fun", "-200.00", 120],
-      ["Travel", "-50.00", null],
+    const shown = (r: BudgetRow) => [
+      r.name || r.currency,
+      r.values.budget,
+      r.values.used,
+      r.usedPct,
+      r.values.unspent,
+      r.values.carried,
+    ];
+    expect(all.rows.map(shown)).toEqual([
+      ["Food", "3500.00", "3000.00", 85, "500.00", "500.00"],
+      ["Fun", "1000.00", "600.00", 60, "400.00", "0.00"],
+      ["Travel", "0.00", "50.00", null, "-50.00", "-50.00"],
     ]);
-    expect(
-      all.totals.map((r) => [r.currency, r.values.budget, r.values.used, r.values.left, r.usedPct]),
-    ).toEqual([
-      ["NOK", "5000.00", "4200.00", "800.00", 84],
-      ["EUR", "0.00", "50.00", "-50.00", null],
+    expect(all.totals.map(shown)).toEqual([
+      ["NOK", "4500.00", "3600.00", 80, "900.00", "500.00"],
+      ["EUR", "0.00", "50.00", null, "-50.00", "-50.00"],
     ]);
     expect(budgetRows(figures, buckets, { account_ids: ["2345"] }).rows.map((r) => r.name)).toEqual(
       ["Travel"],
@@ -617,9 +629,10 @@ describe("Budget vs spending modules (#126)", () => {
     ).toEqual(["Fun"]);
   });
 
-  it("sum the cycles without counting carried funds twice", () => {
-    const [summary] = budgetSummary([
+  it("sum the cycles without counting carried funds twice, nor a refill that tops up", () => {
+    const summary = budgetSummary([
       [
+        // Keeps its funds: 250 carried into the next cycle.
         bucketFigures({
           bucket_id: "1000000001",
           start: "100.00",
@@ -627,7 +640,16 @@ describe("Budget vs spending modules (#126)", () => {
           budget: "1100.00",
           used: "800.00",
           overflow: "50.00",
+          capped: "50.00",
           left: "250.00",
+        }),
+        // Without Keep funds: overspent by 200.
+        bucketFigures({
+          bucket_id: "1000000002",
+          refills: "1000.00",
+          budget: "1000.00",
+          used: "1200.00",
+          left: "-200.00",
         }),
       ],
       [
@@ -639,16 +661,38 @@ describe("Budget vs spending modules (#126)", () => {
           used: "1300.00",
           left: "-50.00",
         }),
+        // The refill tops it up to 1000 again; 500 unused is swept.
+        bucketFigures({
+          bucket_id: "1000000002",
+          start: "-200.00",
+          refills: "1200.00",
+          budget: "1000.00",
+          used: "500.00",
+          overflow: "500.00",
+          swept: "500.00",
+        }),
       ],
     ]);
-    expect(summary).toMatchObject({
+    expect(summary[0]).toMatchObject({
       start: "100.00",
       refills: "2000.00",
       budget: "2100.00",
+      capped: "50.00",
       used: "2100.00",
-      overflow: "50.00",
       left: "-50.00",
     });
+    expect(summary[1]).toMatchObject({
+      budget: "2000.00",
+      used: "1700.00",
+      swept: "500.00",
+      left: "0.00",
+    });
+    // Unspent over the two cycles: −200 + 500.
+    const rows = budgetRows(summary, buckets, {}, "en-GB").rows;
+    expect(rows.map((r) => [r.name, r.values.budget, r.values.unspent, r.values.carried])).toEqual([
+      ["Food", "2050.00", "-50.00", "-50.00"],
+      ["Fun", "2000.00", "300.00", "0.00"],
+    ]);
   });
 
   it("use the report's accounts and buckets, and save without empty fields", () => {

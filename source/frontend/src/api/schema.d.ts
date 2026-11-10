@@ -2536,8 +2536,18 @@ export interface components {
             budget: components["schemas"]["Amount"];
             /** @description What was spent (EXP, net of corrections), as a positive amount. */
             used: components["schemas"]["Amount"];
-            /** @description What overflowed (OVF), as a positive amount. */
+            /** @description What overflowed (OVF), as a positive amount; `capped` + `swept`. */
             overflow: components["schemas"]["Amount"];
+            /**
+             * @description What a refill's overflow removed because TF went above BC (Keep
+             *     funds), as a positive amount: never spendable in the cycle.
+             */
+            capped: components["schemas"]["Amount"];
+            /**
+             * @description What the cycle's end removed (without Keep funds), as a positive
+             *     amount: what was left unspent.
+             */
+            swept: components["schemas"]["Amount"];
             /** @description What's left at the end of the cycle. */
             left: components["schemas"]["Amount"];
         };

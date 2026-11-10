@@ -23,9 +23,9 @@ import {
 } from "@/lib/reports";
 
 /**
- * A budget vs spending module (#126): each bucket's budget, used and left
- * per cycle that overlaps the period, whole, from the cycle's bucket
- * figures, after a summary over all of them.
+ * A budget vs spending module (#126): each bucket's budget, used, unspent
+ * and carried over per cycle of the period (periodCycles), whole, from the
+ * cycle's bucket figures, after a summary over all of them.
  */
 export function BudgetModule({
   settings,
@@ -152,7 +152,7 @@ function CycleLabel({ cycle, cycles }: { cycle: PeriodCycle; cycles: Cycle[] }) 
   );
 }
 
-/** One cycle's, or the summary's, table: Bucket | Budget | Used | Used % | Left. */
+/** One cycle's, or the summary's, table: Bucket | Budget | Used | Used % | Unspent | Carried over. */
 function BudgetTable({
   label,
   figures,
@@ -186,8 +186,8 @@ function BudgetTable({
             <Table.Th ta="right">{t("stats.reports.budget.budget")}</Table.Th>
             <Table.Th ta="right">{t("stats.reports.budget.used")}</Table.Th>
             <Table.Th ta="right">{t("stats.reports.budget.usedPct")}</Table.Th>
-            <Table.Th ta="right">{t("stats.reports.budget.overflow")}</Table.Th>
-            <Table.Th ta="right">{t("stats.reports.budget.left")}</Table.Th>
+            <Table.Th ta="right">{t("stats.reports.budget.unspent")}</Table.Th>
+            <Table.Th ta="right">{t("stats.reports.budget.carried")}</Table.Th>
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
@@ -232,8 +232,10 @@ function BudgetTable({
 function Row({ row, name, bold }: { row: BudgetRow; name: React.ReactNode; bold?: boolean }) {
   const { t } = useTranslation();
   const money = (a: string) => formatMoney(a, row.currency);
-  const over = compareAmounts(row.values.left, "0") < 0;
+  // Over budget: used more than it could spend.
+  const over = compareAmounts(row.values.unspent, "0") < 0;
   const overColor = over ? toneText("alert") : undefined;
+  const debtColor = compareAmounts(row.values.carried, "0") < 0 ? toneText("alert") : undefined;
   const cell = {
     ta: "right" as const,
     style: { whiteSpace: "nowrap" as const, fontVariantNumeric: "tabular-nums" },
@@ -275,9 +277,11 @@ function Row({ row, name, bold }: { row: BudgetRow; name: React.ReactNode; bold?
           </Group>
         )}
       </Table.Td>
-      <Table.Td {...cell}>{money(row.values.overflow)}</Table.Td>
       <Table.Td {...cell} c={overColor}>
-        {money(row.values.left)}
+        {money(row.values.unspent)}
+      </Table.Td>
+      <Table.Td {...cell} c={debtColor}>
+        {money(row.values.carried)}
       </Table.Td>
     </Table.Tr>
   );

@@ -543,6 +543,7 @@ describe("Reports", () => {
             budget: "5000.00",
             used: "2000.00",
             overflow: "500.00",
+            capped: "500.00",
             left: "2500.00",
           }),
           bucketFigures({
@@ -568,21 +569,30 @@ describe("Reports", () => {
 
       const module = await screen.findByRole("region", { name: "Budget vs spending" });
       const summary = await within(module).findByRole("table", { name: "All cycles" });
-      // Food: 4000 + (5000 − 1000) put in, 3000 + 2000 used, 500 overflowed, 2500 left at the end.
+      // Food: 4000 + (5000 − 1000) put in, less 500 capped at its refill; 5000 used.
       expect(cells(within(summary).getByRole("row", { name: /Food/ }))).toEqual([
         "Food",
-        nok("8000.00"),
+        nok("7500.00"),
         nok("5000.00"),
-        "62%",
-        nok("500.00"),
+        "66%",
         nok("2500.00"),
+        nok("2500.00"),
+      ]);
+      // Fun: the 200 overspent in January isn't more budget in November.
+      expect(cells(within(summary).getByRole("row", { name: /Fun/ }))).toEqual([
+        "Fun",
+        nok("1800.00"),
+        nok("1200.00"),
+        "66%",
+        nok("600.00"),
+        nok("800.00"),
       ]);
       expect(cells(within(summary).getByRole("row", { name: /Total/ }))).toEqual([
         "Total",
-        nok("10000.00"),
+        nok("9300.00"),
         nok("6200.00"),
-        "62%",
-        nok("500.00"),
+        "66%",
+        nok("3100.00"),
         nok("3300.00"),
       ]);
       // The cycle that starts last December is this year's.
@@ -597,7 +607,7 @@ describe("Reports", () => {
         nok("1000.00"),
         nok("1200.00"),
         "120%",
-        nok("0.00"),
+        nok("-200.00"),
         nok("-200.00"),
       ]);
       expect(within(fun).getByRole("img", { name: "Over budget" })).toBeInTheDocument();

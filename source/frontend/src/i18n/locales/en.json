@@ -1264,12 +1264,11 @@
       "budget": {
         "title": "Budget vs spending",
         "summary": "All cycles",
-        "summaryHint": "Budget: what the buckets had at the first cycle's start plus everything put in since. Left: at the end of the last cycle.",
+        "summaryHint": "Budget: what the buckets could spend, from the first cycle's start plus everything put in since, without what overflowed above a bucket's capacity. Carried over: what was left at the end of the last cycle.",
         "bucket": "Bucket",
         "budget": "Budget",
         "used": "Used",
         "usedPct": "Used %",
-        "left": "Left",
         "total": "Total",
         "totalIn": "Total ({{currency}})",
         "overBudget": "Over budget",
@@ -1279,10 +1278,11 @@
         "none": "No cycles have begun in this period.",
         "many": "This period has more than {{max}} cycles. Choose a shorter one.",
         "filtersNote": "The report's tags and counterparty don't apply to this module.",
-        "hint": "A cycle counts in the period that holds most of its days, and is shown whole. Planned cycles are left out.",
-        "overflow": "Overflow",
+        "hint": "A cycle counts in the period that holds most of its days, and is shown whole. Planned cycles are left out. Unspent is the budget minus what was used; Carried over is what went into the next cycle, 0 for a bucket that doesn't keep its funds.",
         "perCycle": "Show each cycle",
-        "perCycleHint": "A table per cycle after the summary. Off: only the summary."
+        "perCycleHint": "A table per cycle after the summary. Off: only the summary.",
+        "unspent": "Unspent",
+        "carried": "Carried over"
       }
     },
     "graphs": {
