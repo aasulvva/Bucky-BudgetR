@@ -1,0 +1,39 @@
+/*
+ * The report PDF's page (#127). Chrome prints it to A4 with 12 mm margins
+ * (internal/pdf), at PRINT_WIDTH. A module stays on one page when it fits;
+ * a longer one breaks between rows, and a table repeats its header.
+ */
+.print-report {
+  margin: 0 auto;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.print-report .print-cover {
+  break-after: page;
+}
+
+.print-report [data-report-module] {
+  break-inside: avoid;
+}
+
+.print-report thead {
+  display: table-header-group;
+}
+
+.print-report tr,
+.print-report [data-transaction-row],
+.print-report [data-testid="breakdown-part"],
+.print-report .recharts-wrapper {
+  break-inside: avoid;
+}
+
+.print-report h3 {
+  break-after: avoid;
+}
+
+@media print {
+  body {
+    margin: 0;
+  }
+}

@@ -1,4 +1,5 @@
 import { Anchor, Box, Button, Center, Group, Loader, Stack, Text } from "@mantine/core";
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
@@ -8,6 +9,7 @@ import { ErrorAlert } from "@/components/ErrorAlert";
 import { TransactionRow } from "@/components/transactions/TransactionRow";
 import { useLookups } from "@/components/transactions/lookups";
 import type { Period } from "@/lib/periods";
+import { usePrintMode } from "@/lib/print";
 import {
   groupTransactions,
   transactionsLink,
@@ -33,11 +35,17 @@ export function TransactionsModule({
   isDesktop: boolean;
 }) {
   const { t } = useTranslation();
+  const print = usePrintMode();
   const names = useLookups();
   const pages = useTransactionPages(
     period ? transactionsQuery(settings, period) : { limit: 1 },
     period !== null,
   );
+  // A PDF (#127) has all of them: the next page as soon as one is in.
+  const { hasNextPage, isFetching, fetchNextPage } = pages;
+  useEffect(() => {
+    if (print && hasNextPage && !isFetching) void fetchNextPage();
+  }, [print, hasNextPage, isFetching, fetchNextPage]);
   if (!period) return null;
   const items = pages.data?.pages.flatMap((p) => p.items) ?? [];
   const link = transactionsLink(settings, period);
@@ -88,7 +96,11 @@ export function TransactionsModule({
                   tx={tx}
                   names={names}
                   filter={focus}
-                  to={transactionsLink(settings, period, tx.id) ?? "/transactions"}
+                  to={
+                    print
+                      ? undefined
+                      : (transactionsLink(settings, period, tx.id) ?? "/transactions")
+                  }
                   selected={false}
                   badge={isDesktop}
                 />
@@ -97,27 +109,29 @@ export function TransactionsModule({
           ))}
         </Box>
       )}
-      <Group justify="space-between" gap="xs">
-        {pages.hasNextPage ? (
-          <Button
-            variant="default"
-            size="xs"
-            loading={pages.isFetchingNextPage}
-            onClick={() => {
-              void pages.fetchNextPage();
-            }}
-          >
-            {t("transactions.loadMore")}
-          </Button>
-        ) : (
-          <span />
-        )}
-        {link && (
-          <Anchor component={Link} to={link} size="sm">
-            {t("stats.reports.transactions.open")}
-          </Anchor>
-        )}
-      </Group>
+      {!print && (
+        <Group justify="space-between" gap="xs">
+          {pages.hasNextPage ? (
+            <Button
+              variant="default"
+              size="xs"
+              loading={pages.isFetchingNextPage}
+              onClick={() => {
+                void pages.fetchNextPage();
+              }}
+            >
+              {t("transactions.loadMore")}
+            </Button>
+          ) : (
+            <span />
+          )}
+          {link && (
+            <Anchor component={Link} to={link} size="sm">
+              {t("stats.reports.transactions.open")}
+            </Anchor>
+          )}
+        </Group>
+      )}
     </Stack>
   );
 }

@@ -114,3 +114,29 @@ func TestLoadTrustedProxies(t *testing.T) {
 		t.Errorf("got %v, want %v", cfg.TrustedProxies, want)
 	}
 }
+
+func TestLoadPDF(t *testing.T) {
+	cfg, err := Load(env(map[string]string{
+		"DATABASE_URL":   "postgres://x",
+		"PDF_CHROME_URL": "http://chrome:9222/",
+		"PDF_APP_URL":    "http://app:8080",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.PDFChromeURL != "http://chrome:9222" || cfg.PDFAppURL != "http://app:8080" {
+		t.Errorf("got %q and %q", cfg.PDFChromeURL, cfg.PDFAppURL)
+	}
+
+	for name, vars := range map[string]map[string]string{
+		"only one":  {"PDF_CHROME_URL": "http://chrome:9222"},
+		"a path":    {"PDF_CHROME_URL": "http://chrome:9222", "PDF_APP_URL": "http://app:8080/app"},
+		"no scheme": {"PDF_CHROME_URL": "chrome:9222", "PDF_APP_URL": "http://app:8080"},
+		"ws":        {"PDF_CHROME_URL": "ws://chrome:9222", "PDF_APP_URL": "http://app:8080"},
+	} {
+		vars["DATABASE_URL"] = "postgres://x"
+		if _, err := Load(env(vars)); err == nil || !strings.Contains(err.Error(), "PDF_") {
+			t.Errorf("%s: err = %v", name, err)
+		}
+	}
+}

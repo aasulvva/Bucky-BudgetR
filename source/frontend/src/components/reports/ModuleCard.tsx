@@ -8,6 +8,7 @@ import { GraphView, type Compare } from "@/components/stats/GraphView";
 import { formatDateRange } from "@/lib/cycles";
 import { specificLabel } from "@/lib/graphs";
 import type { Period, PeriodChoice } from "@/lib/periods";
+import { usePrintMode } from "@/lib/print";
 import {
   BREAKDOWN_MIN_DAYS,
   MAX_SUB_PERIODS,
@@ -65,11 +66,12 @@ export function ModuleCard({
   onRemove,
 }: ModuleCardProps) {
   const { t } = useTranslation();
+  const print = usePrintMode();
   const title = moduleTitle(module);
   const own = ownFilters(module);
 
   return (
-    <Card withBorder padding="md" aria-label={title} component="section">
+    <Card withBorder padding="md" aria-label={title} component="section" data-report-module>
       <Stack gap="sm">
         <Group justify="space-between" wrap="nowrap" align="flex-start">
           <Stack gap={2} style={{ minWidth: 0 }}>
@@ -84,53 +86,55 @@ export function ModuleCard({
               </Group>
             )}
           </Stack>
-          <Group gap={2} wrap="nowrap">
-            <Tooltip label={t("stats.reports.module.moveUp")}>
-              <ActionIcon
-                variant="subtle"
-                color="gray"
-                aria-label={t("stats.reports.module.moveUp")}
-                disabled={index === 0}
-                onClick={() => {
-                  onMove(-1);
-                }}
-              >
-                <IconArrowUp size={16} />
-              </ActionIcon>
-            </Tooltip>
-            <Tooltip label={t("stats.reports.module.moveDown")}>
-              <ActionIcon
-                variant="subtle"
-                color="gray"
-                aria-label={t("stats.reports.module.moveDown")}
-                disabled={index === count - 1}
-                onClick={() => {
-                  onMove(1);
-                }}
-              >
-                <IconArrowDown size={16} />
-              </ActionIcon>
-            </Tooltip>
-            <Tooltip label={t("stats.reports.module.edit")}>
-              <ActionIcon
-                variant="subtle"
-                aria-label={t("stats.reports.module.edit")}
-                onClick={onEdit}
-              >
-                <IconPencil size={16} />
-              </ActionIcon>
-            </Tooltip>
-            <Tooltip label={t("stats.reports.module.remove")}>
-              <ActionIcon
-                variant="subtle"
-                color="red"
-                aria-label={t("stats.reports.module.remove")}
-                onClick={onRemove}
-              >
-                <IconTrash size={16} />
-              </ActionIcon>
-            </Tooltip>
-          </Group>
+          {!print && (
+            <Group gap={2} wrap="nowrap">
+              <Tooltip label={t("stats.reports.module.moveUp")}>
+                <ActionIcon
+                  variant="subtle"
+                  color="gray"
+                  aria-label={t("stats.reports.module.moveUp")}
+                  disabled={index === 0}
+                  onClick={() => {
+                    onMove(-1);
+                  }}
+                >
+                  <IconArrowUp size={16} />
+                </ActionIcon>
+              </Tooltip>
+              <Tooltip label={t("stats.reports.module.moveDown")}>
+                <ActionIcon
+                  variant="subtle"
+                  color="gray"
+                  aria-label={t("stats.reports.module.moveDown")}
+                  disabled={index === count - 1}
+                  onClick={() => {
+                    onMove(1);
+                  }}
+                >
+                  <IconArrowDown size={16} />
+                </ActionIcon>
+              </Tooltip>
+              <Tooltip label={t("stats.reports.module.edit")}>
+                <ActionIcon
+                  variant="subtle"
+                  aria-label={t("stats.reports.module.edit")}
+                  onClick={onEdit}
+                >
+                  <IconPencil size={16} />
+                </ActionIcon>
+              </Tooltip>
+              <Tooltip label={t("stats.reports.module.remove")}>
+                <ActionIcon
+                  variant="subtle"
+                  color="red"
+                  aria-label={t("stats.reports.module.remove")}
+                  onClick={onRemove}
+                >
+                  <IconTrash size={16} />
+                </ActionIcon>
+              </Tooltip>
+            </Group>
+          )}
         </Group>
         {module.type === "transactions" ? (
           <TransactionsModule

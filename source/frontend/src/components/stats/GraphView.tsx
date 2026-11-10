@@ -29,6 +29,7 @@ import {
   type GraphSettings,
 } from "@/lib/graphs";
 import { getLocale } from "@/lib/locale";
+import { usePrintMode } from "@/lib/print";
 import { formatMoney } from "@/lib/money";
 import type { Period, Resolution } from "@/lib/periods";
 
@@ -74,10 +75,13 @@ export function GraphView({
   accounts,
   buckets,
   height = 320,
-  clickThrough = true,
+  clickThrough: canClick = true,
   compare,
 }: GraphViewProps) {
   const { t } = useTranslation();
+  // On paper (#127) nothing opens anything.
+  const print = usePrintMode();
+  const clickThrough = canClick && !print;
   const { ref, width } = useElementSize();
   const s = cleanGraph(settings);
   const plot = Math.max(0, width - AXIS_PX);
@@ -248,6 +252,8 @@ interface ChartProps {
 
 function Chart({ data, settings, currency, height, dots, intervals, clickThrough }: ChartProps) {
   const { t } = useTranslation();
+  // A PDF (#127) is printed as soon as the page is ready: no animation.
+  const still = usePrintMode() ? { isAnimationActive: false } : {};
   const navigate = useNavigate();
   const empty =
     data.series.length === 0 || data.series.every((x) => x.amounts.every((a) => Number(a) === 0));
@@ -298,16 +304,17 @@ function Chart({ data, settings, currency, height, dots, intervals, clickThrough
         {...common}
         type={settings.side_by_side || compared ? "default" : "stacked"}
         maxBarWidth={48}
-        barProps={
-          clickThrough
-            ? (series) => ({
+        barProps={(series) => ({
+          ...still,
+          ...(clickThrough
+            ? {
                 onClick: (_: unknown, index: number) => {
                   open(series.name, index);
                 },
                 style: { cursor: "pointer" },
-              })
-            : undefined
-        }
+              }
+            : {}),
+        })}
       />
     );
   }
@@ -321,6 +328,7 @@ function Chart({ data, settings, currency, height, dots, intervals, clickThrough
       dotProps={{ r: 4 }}
       activeDotProps={{ r: 5 }}
       connectNulls
+      lineProps={still}
       lineChartProps={
         clickThrough
           ? {

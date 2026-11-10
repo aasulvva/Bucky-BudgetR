@@ -3,6 +3,8 @@ module github.com/aasulvva/Bucky-BudgetR/source/backend
 go 1.26.0
 
 require (
+	github.com/chromedp/cdproto v0.157.8
+	github.com/chromedp/chromedp v0.21.0
 	github.com/getkin/kin-openapi v0.152.0
 	github.com/jackc/pgx-shopspring-decimal v0.0.0-20220624020537-1d36b5a1853e
 	github.com/jackc/pgx/v5 v5.12.0
@@ -106,6 +108,7 @@ require (
 	github.com/go-critic/go-critic v0.15.0 // indirect
 	github.com/go-faster/city v1.0.1 // indirect
 	github.com/go-faster/errors v0.8.0 // indirect
+	github.com/go-json-experiment/json v0.0.0-20260213210345-44df1a37e875 // indirect
 	github.com/go-openapi/jsonpointer v0.23.1 // indirect
 	github.com/go-openapi/swag/jsonname v0.26.0 // indirect
 	github.com/go-sql-driver/mysql v1.10.1 // indirect

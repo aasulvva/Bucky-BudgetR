@@ -8,8 +8,9 @@ How to run Bucky BudgetR for real on a home server. It is reached over HTTPS fro
 | `db`     | PostgreSQL 18. Its data is in the `db-data` volume. |
 | `caddy`  | HTTPS with your certificate, on the host's LAN address (and tailnet address) only, ports 443 (and 80, which redirects). |
 | `backup` | A database dump every day, kept in a folder on the host with rotation. |
+| `chrome` | A headless Chrome that renders report PDFs (#127) for the app. Not reachable from outside. |
 
-The app and the database sit on an internal Docker network with no way in or out except through Caddy.
+The app, the database and Chrome sit on an internal Docker network with no way in or out except through Caddy.
 
 This is financial data: **set up backups, and copy them off the machine, before you rely on it.**
 
@@ -238,6 +239,7 @@ It prints a temporary password, makes `admin` an active admin and ends their ses
 
 - Only Caddy is reachable, on the LAN address (and the tailnet address). The app, the database and the backup service have no published ports and no internet access.
 - The app runs as a non-root user on a read-only filesystem with no capabilities. The image has only the binary, with no shell or package manager.
+- `chrome` (`chromedp/headless-shell`) runs as `nobody` on a read-only filesystem with no capabilities, on the internal network only, so it reaches nothing outside the stack. The app drives it over DevTools (`PDF_CHROME_URL=http://chrome:9222`), and it opens the app's print page (`PDF_APP_URL=http://app:8080`) with a render token: random, held in the app's memory for at most 2 minutes, ended when the PDF is done, and good only for reading that user's data (anything but GET and HEAD, and admin routes, are refused). The token is in a request header, never in a URL or a log. Without the two settings, or with Chrome stopped, *Export PDF* says PDF export isn't available and the rest of the app works as before.
 - Logins are rate limited per user and per client address. The app trusts Caddy's `X-Forwarded-For` (and nobody else's) for the client address.
 - Session cookies are `Secure`, `HttpOnly` and `SameSite=Lax`, and HTTPS is required. Plain HTTP only redirects.
 - Keep `deploy/.env`, the TLS key and the backups readable only by you.

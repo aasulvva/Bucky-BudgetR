@@ -20,6 +20,7 @@ import { useCycles, type Cycle } from "@/api/cycles";
 import { useTags } from "@/api/transactions";
 import { useSession } from "@/app/session";
 import { QueryState } from "@/components/QueryState";
+import { ExportPdfButton } from "@/components/reports/ExportPdfButton";
 import { ReportTemplates } from "@/components/reports/ReportTemplates";
 import { ReportView } from "@/components/reports/ReportView";
 import { GraphControls } from "@/components/stats/GraphControls";
@@ -146,11 +147,16 @@ function Report({
   accounts: Account[];
   buckets: Bucket[];
 }) {
+  const { t } = useTranslation();
   const theme = useMantineTheme();
   const isDesktop = useMediaQuery(`(min-width: ${theme.breakpoints.sm})`, true);
   useClockVersion();
   const tags = (useTags().data ?? []).map((x) => x.name);
   const [report, setReport] = useState(saved);
+  const name =
+    source.kind === "template"
+      ? (templates.find((x) => x.id === source.id)?.name ?? "")
+      : t(`stats.reports.starters.${source.id}`);
   return (
     <Stack gap="md">
       <ReportTemplates
@@ -159,6 +165,7 @@ function Report({
         current={report}
         changed={!sameReport(report, saved)}
         onSelect={onSelect}
+        extra={<ExportPdfButton name={name} report={report} cycles={cycles} />}
       />
       <ReportView
         report={report}

@@ -49,6 +49,9 @@ export const routes: RouteObject[] = [
   { path: "/login", lazy: lazyPage(() => import("@/pages/Login")) },
   { path: "/change-password", lazy: lazyPage(() => import("@/pages/ChangePassword")) },
   { path: "/set-password", lazy: lazyPage(() => import("@/pages/SetPassword")) },
+  // The report PDF's page (#127): the server's Chrome opens it with a render
+  // token. Its own guard, as it applies the job's language and locale.
+  { path: "/print/report", lazy: lazyPage(() => import("@/pages/PrintReport")) },
   {
     element: <RequireSession />,
     children: [

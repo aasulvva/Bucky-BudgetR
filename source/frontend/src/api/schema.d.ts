@@ -369,6 +369,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A report as a PDF
+         * @description Renders a report (#127) as an A4 PDF: a cover page with its name,
+         *     period, filters, modules, the username and when it was made, then
+         *     its modules, with page numbers. A headless Chrome loads the app's
+         *     print page with a short-lived, read-only render token and the
+         *     asking browser's language, locale and time zone, so the PDF reads
+         *     as the screen does. Without a renderer (`PDF_CHROME_URL` and
+         *     `PDF_APP_URL` unset, or Chrome not reachable) it's 503
+         *     `pdf_unavailable`; a page that fails or takes over a minute is 502
+         *     `pdf_failed`; more than two at once is 429 `too_many_renders`.
+         */
+        post: operations["exportReportPdf"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reports/flows": {
         parameters: {
             query?: never;
@@ -2371,6 +2399,24 @@ export interface components {
             breakdown?: "none" | "month" | "cycle";
         };
         /**
+         * @description What to render (#127): the report as the screen has it, its name,
+         *     and the asking browser's language, locale and time zone.
+         */
+        ReportPdfRequest: {
+            /** @description The report's name, for the cover and the file name. */
+            name: string;
+            report: components["schemas"]["ReportSettings"];
+            /** @enum {string} */
+            language: "en" | "nb" | "nn";
+            /** @description A BCP 47 tag, e.g. `nb-NO`, for numbers and dates. */
+            locale: string;
+            /**
+             * @description An IANA time zone, e.g. `Europe/Oslo`.
+             * @example Europe/Oslo
+             */
+            time_zone: string;
+        };
+        /**
          * @description A budget vs spending module (#126): each bucket's budget, used,
          *     overflow and left per cycle, from the cycle's bucket figures, with a
          *     summary over the cycles. A cycle counts in the period that holds
@@ -3586,6 +3632,38 @@ export interface operations {
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    exportReportPdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportPdfRequest"];
+            };
+        };
+        responses: {
+            /** @description The PDF. */
+            200: {
+                headers: {
+                    /** @description `attachment` with a file name from the report's name. */
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+            503: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };

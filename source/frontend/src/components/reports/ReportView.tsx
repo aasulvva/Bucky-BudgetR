@@ -7,17 +7,13 @@ import type { Account, Bucket } from "@/api/accounts";
 import type { Cycle } from "@/api/cycles";
 import { FilterFields, type Filters } from "@/components/stats/FilterFields";
 import { PeriodPicker } from "@/components/stats/PeriodPicker";
-import { formatDateRange } from "@/lib/cycles";
-import { periodLabel, specificLabel } from "@/lib/graphs";
-import { formatPeriod, resolvePeriod } from "@/lib/periods";
+import { formatPeriod } from "@/lib/periods";
 import {
   COMPARE_TOS,
-  inProgress,
   MAX_MODULES,
   newModule,
-  parseReportPeriod,
-  previousPeriod,
   REPORT_UNITS,
+  reportPeriods,
   type ReportModule,
   type ReportSettings,
 } from "@/lib/reports";
@@ -48,21 +44,8 @@ export function ReportView({
   const { t } = useTranslation();
   const [drawer, setDrawer] = useState(false);
   const [editing, setEditing] = useState<{ module: ReportModule; adding: boolean } | null>(null);
-  const choice = parseReportPeriod(report.period) ?? { kind: "previous", unit: "year" };
-  const period = resolvePeriod(choice, cycles);
+  const { choice, period, label: current, compare } = reportPeriods(report, cycles);
   const compareTo = report.compare_to ?? "previous";
-  const previous = period ? previousPeriod(choice, period, compareTo, cycles) : null;
-  const current = periodLabel(choice, cycles);
-  const compare =
-    previous && period
-      ? {
-          period: previous.period,
-          label: inProgress(period)
-            ? formatDateRange(previous.period.from, previous.period.to)
-            : specificLabel(previous.choice, cycles),
-          currentLabel: current,
-        }
-      : null;
 
   const set = (patch: Partial<ReportSettings>) => {
     onChange({ ...report, ...patch });

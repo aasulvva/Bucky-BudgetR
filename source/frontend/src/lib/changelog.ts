@@ -16,6 +16,29 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.13.00",
+    date: "2026-11-10",
+    title: {
+      en: "Reports: export to PDF",
+      nb: "Rapporter: eksport til PDF",
+      nn: "Rapportar: eksport til PDF",
+    },
+    changes: {
+      en: [
+        "Export PDF on a report makes a PDF of the report as it is on screen, saved or not. It starts with a cover page: the report's name, its period and what it compares with, its filters, its modules, who made it and when. Then come the modules, one after another, on A4 pages with page numbers.",
+        "A transactions module has all of its transactions in the PDF, not just the first page. The PDF is always light, and uses your language, number and date format and time zone.",
+      ],
+      nb: [
+        "Eksporter PDF på en rapport lager en PDF av rapporten slik den er på skjermen, lagret eller ikke. Den begynner med en forside: rapportens navn, perioden og hva den sammenlignes med, filtrene, modulene, hvem som laget den og når. Så kommer modulene etter hverandre, på A4-sider med sidetall.",
+        "En transaksjonsmodul har alle transaksjonene sine i PDF-en, ikke bare den første siden. PDF-en er alltid lys, og bruker språket ditt, tall- og datoformatet ditt og tidssonen din.",
+      ],
+      nn: [
+        "Eksporter PDF på ein rapport lagar ein PDF av rapporten slik han er på skjermen, lagra eller ikkje. Han byrjar med ei framside: namnet på rapporten, perioden og kva han vert samanlikna med, filtera, modulane, kven som laga han og når. Så kjem modulane etter kvarandre, på A4-sider med sidetal.",
+        "Ein transaksjonsmodul har alle transaksjonane sine i PDF-en, ikkje berre den første sida. PDF-en er alltid lys, og bruker språket ditt, tal- og datoformatet ditt og tidssona di.",
+      ],
+    },
+  },
+  {
     version: "v2.12.00",
     date: "2026-11-10",
     title: {
