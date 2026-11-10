@@ -2,27 +2,34 @@ import { Anchor, Box, Button, Center, Group, Loader, Stack, Text } from "@mantin
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
+import type { Cycle } from "@/api/cycles";
 import { useTransactionPages } from "@/api/transactions";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { TransactionRow } from "@/components/transactions/TransactionRow";
 import { useLookups } from "@/components/transactions/lookups";
-import { formatDay } from "@/lib/dates";
 import type { Period } from "@/lib/periods";
-import { transactionsLink, transactionsQuery, type ReportTransactions } from "@/lib/reports";
-import { groupByDay } from "@/lib/transactionList";
+import {
+  groupTransactions,
+  transactionsLink,
+  transactionsQuery,
+  type ReportTransactions,
+} from "@/lib/reports";
 
 /**
  * A transactions module (#126): the period's transactions with the module's
- * filters, as the Transactions list shows them, a page at a time.
+ * filters, as the Transactions list shows them, a page at a time, under a
+ * heading per day, week, month or cycle, newest or oldest first.
  */
 export function TransactionsModule({
   settings,
   period,
+  cycles,
   isDesktop,
 }: {
   /** With the report's filters where the module has none of its own. */
   settings: ReportTransactions;
   period: Period | null;
+  cycles: Cycle[];
   isDesktop: boolean;
 }) {
   const { t } = useTranslation();
@@ -61,8 +68,8 @@ export function TransactionsModule({
         <Text c="dimmed">{t("stats.reports.transactions.empty")}</Text>
       ) : (
         <Box>
-          {groupByDay(items).map((g) => (
-            <Box key={g.day} component="section" aria-label={formatDay(g.day)}>
+          {groupTransactions(items, settings.group_by ?? "day", cycles).map((g) => (
+            <Box key={g.key} component="section" aria-label={g.label}>
               <Text
                 component="h3"
                 m={0}
@@ -73,7 +80,7 @@ export function TransactionsModule({
                 c="dimmed"
                 bg="var(--mantine-color-default-hover)"
               >
-                {formatDay(g.day)}
+                {g.label}
               </Text>
               {g.items.map((tx) => (
                 <TransactionRow

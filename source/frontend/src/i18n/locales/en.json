@@ -1196,7 +1196,24 @@
       "transactions": {
         "title": "Transactions",
         "empty": "No transactions in this period match.",
-        "open": "Open in Transactions"
+        "open": "Open in Transactions",
+        "noCycle": "Outside any cycle",
+        "groupBy": {
+          "label": "Group by",
+          "options": {
+            "day": "Day",
+            "week": "Week",
+            "month": "Month",
+            "cycle": "Cycle"
+          }
+        },
+        "order": {
+          "label": "Order",
+          "options": {
+            "newest": "Newest first",
+            "oldest": "Oldest first"
+          }
+        }
       }
     },
     "graphs": {

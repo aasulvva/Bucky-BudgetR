@@ -31,6 +31,8 @@ import {
   type ReportModule,
   type ReportSettings,
   type TransactionsModule,
+  TRANSACTIONS_GROUPS,
+  TRANSACTIONS_ORDERS,
   withoutPeriod,
 } from "@/lib/reports";
 import { USER_TYPES } from "@/lib/transactionList";
@@ -269,6 +271,34 @@ function TransactionsFields({
         }}
         clearable
       />
+      <Input.Wrapper label={t("stats.reports.transactions.groupBy.label")}>
+        <SegmentedControl
+          fullWidth
+          mt={4}
+          data={TRANSACTIONS_GROUPS.map((g) => ({
+            value: g,
+            label: t(`stats.reports.transactions.groupBy.options.${g}`),
+          }))}
+          value={s.group_by ?? "day"}
+          onChange={(g) => {
+            set({ group_by: g });
+          }}
+        />
+      </Input.Wrapper>
+      <Input.Wrapper label={t("stats.reports.transactions.order.label")}>
+        <SegmentedControl
+          fullWidth
+          mt={4}
+          data={TRANSACTIONS_ORDERS.map((o) => ({
+            value: o,
+            label: t(`stats.reports.transactions.order.options.${o}`),
+          }))}
+          value={s.order ?? "newest"}
+          onChange={(o) => {
+            set({ order: o });
+          }}
+        />
+      </Input.Wrapper>
       <Switch
         label={t("transactions.filters.system")}
         checked={s.system ?? false}

@@ -25,15 +25,15 @@ export const CHANGELOG: ChangelogEntry[] = [
     },
     changes: {
       en: [
-        "A report can now list the period's transactions as a module, as the Transactions screen shows them. Filter it by accounts, buckets, tags, counterparty and type, or let it use the report's filters, and choose whether it shows refills & adjustments and reversed transactions.",
+        "A report can now list the period's transactions as a module, as the Transactions screen shows them. Filter it by accounts, buckets, tags, counterparty and type, or let it use the report's filters, and choose whether it shows refills & adjustments and reversed transactions. Group it by day, week, month or cycle, newest or oldest first.",
         "It shows the first 50, with Load more. Open in Transactions shows the same list there, and a transaction opens there too.",
       ],
       nb: [
-        "En rapport kan nå vise periodens transaksjoner som en modul, slik Transaksjoner-skjermen viser dem. Filtrer på kontoer, bøtter, tagger, motpart og type, eller la den bruke rapportens filtre, og velg om den skal vise påfyll og justeringer og reverserte transaksjoner.",
+        "En rapport kan nå vise periodens transaksjoner som en modul, slik Transaksjoner-skjermen viser dem. Filtrer på kontoer, bøtter, tagger, motpart og type, eller la den bruke rapportens filtre, og velg om den skal vise påfyll og justeringer og reverserte transaksjoner. Grupper den per dag, uke, måned eller syklus, med nyeste eller eldste først.",
         "Den viser de første 50, med Last inn flere. Åpne i Transaksjoner viser den samme listen der, og en transaksjon åpnes der også.",
       ],
       nn: [
-        "Ein rapport kan no vise transaksjonane i perioden som ein modul, slik Transaksjonar-skjermen viser dei. Filtrer på kontoar, bøtter, taggar, motpart og type, eller la han bruke filtera til rapporten, og vel om han skal vise påfyll og justeringar og reverserte transaksjonar.",
+        "Ein rapport kan no vise transaksjonane i perioden som ein modul, slik Transaksjonar-skjermen viser dei. Filtrer på kontoar, bøtter, taggar, motpart og type, eller la han bruke filtera til rapporten, og vel om han skal vise påfyll og justeringar og reverserte transaksjonar. Grupper han per dag, veke, månad eller syklus, med nyaste eller eldste først.",
         "Han viser dei første 50, med Last inn fleire. Opne i Transaksjonar viser den same lista der, og ein transaksjon vert opna der òg.",
       ],
     },

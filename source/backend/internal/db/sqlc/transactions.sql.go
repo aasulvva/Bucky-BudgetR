@@ -436,9 +436,15 @@ WHERE h.user_id = $1 AND h.correction_type = 'none'
       SELECT 1 FROM transaction_headers r WHERE r.parent_id = h.id AND r.correction_type = 'reversal'
   ) = $10::boolean)
   AND ($11::timestamptz IS NULL
-       OR (h.transaction_at, h.id) < ($11::timestamptz, $12::text))
-ORDER BY h.transaction_at DESC, h.id DESC
-LIMIT $13
+       OR (NOT $12::boolean
+           AND (h.transaction_at, h.id) < ($11::timestamptz, $13::text))
+       OR ($12::boolean
+           AND (h.transaction_at, h.id) > ($11::timestamptz, $13::text)))
+ORDER BY
+  CASE WHEN $12::boolean THEN h.transaction_at END ASC,
+  CASE WHEN $12::boolean THEN h.id END ASC,
+  h.transaction_at DESC, h.id DESC
+LIMIT $14
 `
 
 type ListTransactionsParams struct {
@@ -453,17 +459,20 @@ type ListTransactionsParams struct {
 	CounterpartyIs pgtype.Text
 	Reversed       pgtype.Bool
 	BeforeAt       pgtype.Timestamptz
+	OldestFirst    bool
 	BeforeID       pgtype.Text
 	RowLimit       int32
 }
 
-// A page of the user's original transactions (not corrections), newest first.
+// A page of the user's original transactions (not corrections), newest first,
+// or oldest first with oldest_first (#126).
 // A null filter matches everything; an array filter matches any of its
 // values (#126). The account and bucket filters also match
 // lines added by corrections; the tag and counterparty filters use the
 // newest header of the family, which holds the effective values. The
 // counterparty filter matches the description too (#130).
-// before_at/before_id is the keyset cursor: the last row of the previous page.
+// before_at/before_id is the keyset cursor: the last row of the previous page,
+// so the next page is before it (or after it, oldest first).
 func (q *Queries) ListTransactions(ctx context.Context, arg ListTransactionsParams) ([]TransactionHeader, error) {
 	rows, err := q.db.Query(ctx, listTransactions,
 		arg.UserID,
@@ -477,6 +486,7 @@ func (q *Queries) ListTransactions(ctx context.Context, arg ListTransactionsPara
 		arg.CounterpartyIs,
 		arg.Reversed,
 		arg.BeforeAt,
+		arg.OldestFirst,
 		arg.BeforeID,
 		arg.RowLimit,
 	)

@@ -1,7 +1,10 @@
+import { transaction } from "@/test/fixtures";
+
 import { endAtFor, startAtFor } from "./cycles";
 import { parsePeriod, resolvePeriod } from "./periods";
 import {
   cleanReport,
+  groupTransactions,
   moduleGraph,
   moduleTransactions,
   previousPeriod,
@@ -233,9 +236,14 @@ describe("transactions modules (#126)", () => {
       reversed: false,
       limit: 50,
     });
-    const q = transactionsQuery({ types: ["EXP"], system: true, reversed: true }, period);
+    const q = transactionsQuery(
+      { types: ["EXP"], system: true, reversed: true, order: "oldest" },
+      period,
+    );
     expect(q.type).toEqual(["EXP", ...SYSTEM_TYPES]);
     expect(q).not.toHaveProperty("reversed");
+    expect(q.order).toBe("oldest");
+    expect(transactionsQuery({ order: "newest" }, period)).not.toHaveProperty("order");
   });
 
   it("link to the Transactions screen while each filter has one value", () => {
@@ -270,7 +278,15 @@ describe("transactions modules (#126)", () => {
           id: "m-1",
           type: "transactions",
           title: " ",
-          transactions: { tags: [], types: [], system: false, reversed: true, counterparty: " " },
+          transactions: {
+            tags: [],
+            types: [],
+            system: false,
+            reversed: true,
+            counterparty: " ",
+            group_by: "day",
+            order: "newest",
+          },
         },
       ],
     };
@@ -292,5 +308,39 @@ describe("transactions modules (#126)", () => {
       },
     ]);
     expect(read?.report.modules).toEqual([{ id: "m-1", type: "transactions", transactions: {} }]);
+  });
+});
+
+describe("groupTransactions", () => {
+  // Noon local time on the day.
+  const on = (id: string, day: string) =>
+    transaction({ id, at: new Date(Date.parse(startAtFor(day)) + 12 * 3600e3).toISOString() });
+  // Oldest first: Sun 1 Nov, Mon 2 Nov, Mon 23 Nov, Wed 25 Nov 2026.
+  const items = [
+    on("a", "2026-11-01"),
+    on("b", "2026-11-02"),
+    on("c", "2026-11-23"),
+    on("d", "2026-11-25"),
+  ];
+  const groups = (by: Parameters<typeof groupTransactions>[1]) =>
+    groupTransactions(items, by, cycles, "nb-NO").map((g) => [g.key, g.items.map((x) => x.id)]);
+
+  it("groups by day, by week from the locale's first day, and by month", () => {
+    expect(groups("day")).toHaveLength(4);
+    expect(groups("week")).toEqual([
+      ["2026-10-26", ["a"]],
+      ["2026-11-02", ["b"]],
+      ["2026-11-23", ["c", "d"]],
+    ]);
+    expect(groups("month")).toEqual([["2026-11-01", ["a", "b", "c", "d"]]]);
+  });
+
+  it("groups by cycle, with those outside any under their own heading", () => {
+    expect(groups("cycle")).toEqual([
+      ["100001000003", ["a", "b", "c"]],
+      ["", ["d"]],
+    ]);
+    const [, outside] = groupTransactions(items, "cycle", cycles, "nb-NO");
+    expect(outside?.label).toBe("Outside any cycle");
   });
 });

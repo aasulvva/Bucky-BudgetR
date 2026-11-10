@@ -1196,7 +1196,24 @@
       "transactions": {
         "title": "Transaksjonar",
         "empty": "Ingen transaksjonar i perioden passar.",
-        "open": "Opne i Transaksjonar"
+        "open": "Opne i Transaksjonar",
+        "noCycle": "Utanfor syklusar",
+        "groupBy": {
+          "label": "Grupper etter",
+          "options": {
+            "day": "Dag",
+            "week": "Veke",
+            "month": "Månad",
+            "cycle": "Syklus"
+          }
+        },
+        "order": {
+          "label": "Rekkjefølgje",
+          "options": {
+            "newest": "Nyaste først",
+            "oldest": "Eldste først"
+          }
+        }
       }
     },
     "graphs": {

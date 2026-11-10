@@ -132,6 +132,7 @@ export function ModuleCard({
           <TransactionsModule
             settings={moduleTransactions(report, module)}
             period={period}
+            cycles={cycles}
             isDesktop={isDesktop}
           />
         ) : (

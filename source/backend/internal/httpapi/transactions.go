@@ -24,7 +24,7 @@ func (s *server) ListTransactions(ctx context.Context, req api.ListTransactionsR
 	f := transactions.Filter{
 		AccountIDs: deref(p.AccountId), BucketIDs: deref(p.BucketId), CycleID: deref(p.CycleId),
 		Tags: deref(p.Tag), Counterparty: deref(p.Counterparty), CounterpartyIs: deref(p.CounterpartyIs), Limit: deref(p.Limit), Cursor: deref(p.Cursor),
-		Reversed: p.Reversed,
+		Reversed: p.Reversed, OldestFirst: deref(p.Order) == api.ListTransactionsParamsOrderOldest,
 	}
 	if p.Type != nil {
 		for _, t := range *p.Type {

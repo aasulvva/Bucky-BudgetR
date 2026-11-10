@@ -1,11 +1,13 @@
 -- name: ListTransactions :many
--- A page of the user's original transactions (not corrections), newest first.
+-- A page of the user's original transactions (not corrections), newest first,
+-- or oldest first with oldest_first (#126).
 -- A null filter matches everything; an array filter matches any of its
 -- values (#126). The account and bucket filters also match
 -- lines added by corrections; the tag and counterparty filters use the
 -- newest header of the family, which holds the effective values. The
 -- counterparty filter matches the description too (#130).
--- before_at/before_id is the keyset cursor: the last row of the previous page.
+-- before_at/before_id is the keyset cursor: the last row of the previous page,
+-- so the next page is before it (or after it, oldest first).
 SELECT h.* FROM transaction_headers h
 JOIN LATERAL (
     SELECT c.id, c.counterparty, c.description FROM transaction_headers c
@@ -39,8 +41,14 @@ WHERE h.user_id = sqlc.arg(user_id) AND h.correction_type = 'none'
       SELECT 1 FROM transaction_headers r WHERE r.parent_id = h.id AND r.correction_type = 'reversal'
   ) = sqlc.narg(reversed)::boolean)
   AND (sqlc.narg(before_at)::timestamptz IS NULL
-       OR (h.transaction_at, h.id) < (sqlc.narg(before_at)::timestamptz, sqlc.narg(before_id)::text))
-ORDER BY h.transaction_at DESC, h.id DESC
+       OR (NOT sqlc.arg(oldest_first)::boolean
+           AND (h.transaction_at, h.id) < (sqlc.narg(before_at)::timestamptz, sqlc.narg(before_id)::text))
+       OR (sqlc.arg(oldest_first)::boolean
+           AND (h.transaction_at, h.id) > (sqlc.narg(before_at)::timestamptz, sqlc.narg(before_id)::text)))
+ORDER BY
+  CASE WHEN sqlc.arg(oldest_first)::boolean THEN h.transaction_at END ASC,
+  CASE WHEN sqlc.arg(oldest_first)::boolean THEN h.id END ASC,
+  h.transaction_at DESC, h.id DESC
 LIMIT sqlc.arg(row_limit);
 
 -- name: ListTransactionFamilies :many

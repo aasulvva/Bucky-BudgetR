@@ -995,7 +995,8 @@ export interface paths {
         };
         /**
          * List transactions
-         * @description The user's transactions, newest first, one page at a time. Each is
+         * @description The user's transactions, newest first (or oldest first with
+         *     `order`), one page at a time. Each is
          *     merged with its corrections: the lines show the effective amounts,
          *     and `corrected` and `reversed` say what happened to it. Filters
          *     combine with AND; several values of one filter match any of them
@@ -2320,6 +2321,16 @@ export interface components {
             system?: boolean;
             /** @description Also reversed transactions and moved originals (#91). */
             reversed?: boolean;
+            /**
+             * @description Under a heading per day (the default), week, month or cycle.
+             * @enum {string}
+             */
+            group_by?: "day" | "week" | "month" | "cycle";
+            /**
+             * @description Newest first (the default) or oldest first.
+             * @enum {string}
+             */
+            order?: "newest" | "oldest";
         };
         /**
          * @description A report module's graph: `GraphSettings` without the period, which
@@ -4253,8 +4264,10 @@ export interface operations {
                 reversed?: boolean;
                 /** @description The page size. */
                 limit?: number;
-                /** @description The previous page's `next_cursor`. */
+                /** @description The previous page's `next_cursor`, with the same `order`. */
                 cursor?: string;
+                /** @description Newest first (the default) or oldest first (#126). */
+                order?: "newest" | "oldest";
             };
             header?: never;
             path?: never;

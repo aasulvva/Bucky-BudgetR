@@ -287,4 +287,31 @@ describe("Reports", () => {
     expect(within(dialog).getByRole("switch", { name: "Show reversed & moved" })).not.toBeChecked();
     expect(within(dialog).queryByText("Breakdown")).not.toBeInTheDocument();
   });
+
+  it("groups a transactions module by month, oldest first (#126)", async () => {
+    apiMock.on(list, {
+      body: {
+        items: [transaction({ id: "t1", counterparty: "Rema 1000", at: "2026-10-15T19:00:00Z" })],
+        next_cursor: null,
+      },
+    });
+    prefs = {
+      ...prefs,
+      report_templates: [
+        template({ modules: [{ id: "m-1", type: "transactions", transactions: {} }] }),
+      ],
+    };
+    renderRoute("/stats/reports?template=r-1");
+    const module = await screen.findByRole("region", { name: "Transactions" });
+    expect(await within(module).findByRole("region", { name: /15 Oct/ })).toBeInTheDocument();
+    await userEvent.click(within(module).getByRole("button", { name: "Edit" }));
+    const dialog = await screen.findByRole("dialog", { name: "Edit module" });
+    await userEvent.click(within(dialog).getByRole("radio", { name: "Month" }));
+    await userEvent.click(within(dialog).getByRole("radio", { name: "Oldest first" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
+    expect(await within(module).findByRole("region", { name: "October 2026" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(apiMock.calls(list).at(-1)?.query.get("order")).toBe("oldest");
+    });
+  });
 });

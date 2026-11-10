@@ -1627,7 +1627,8 @@ paths:
       tags: [transactions]
       summary: List transactions
       description: |
-        The user's transactions, newest first, one page at a time. Each is
+        The user's transactions, newest first (or oldest first with
+        `order`), one page at a time. Each is
         merged with its corrections: the lines show the effective amounts,
         and `corrected` and `reversed` say what happened to it. Filters
         combine with AND; several values of one filter match any of them
@@ -1722,10 +1723,16 @@ paths:
             default: 50
         - name: cursor
           in: query
-          description: The previous page's `next_cursor`.
+          description: The previous page's `next_cursor`, with the same `order`.
           schema:
             type: string
             maxLength: 100
+        - name: order
+          in: query
+          description: Newest first (the default) or oldest first (#126).
+          schema:
+            type: string
+            enum: [newest, oldest]
       responses:
         "200":
           description: A page of transactions.
@@ -3984,6 +3991,14 @@ components:
         reversed:
           type: boolean
           description: Also reversed transactions and moved originals (#91).
+        group_by:
+          type: string
+          enum: [day, week, month, cycle]
+          description: Under a heading per day (the default), week, month or cycle.
+        order:
+          type: string
+          enum: [newest, oldest]
+          description: Newest first (the default) or oldest first.
 
     ReportGraph:
       type: object

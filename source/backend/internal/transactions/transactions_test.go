@@ -298,24 +298,33 @@ func TestList(t *testing.T) {
 		}
 	}
 
-	// Pages of 2.
-	var all []string
-	f := transactions.Filter{Limit: 2}
-	for range 4 {
-		page, err := e.svc.List(t.Context(), e.user, f)
-		if err != nil {
-			t.Fatal(err)
+	// Pages of 2, newest first or oldest first (#126).
+	paged := func(f transactions.Filter) []string {
+		t.Helper()
+		var all []string
+		for range 4 {
+			page, err := e.svc.List(t.Context(), e.user, f)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, item := range page.Items {
+				all = append(all, item.ID)
+			}
+			if page.Next == "" {
+				break
+			}
+			f.Cursor = page.Next
 		}
-		for _, item := range page.Items {
-			all = append(all, item.ID)
-		}
-		if page.Next == "" {
-			break
-		}
-		f.Cursor = page.Next
+		return all
 	}
-	if want := []string{ids["save"], ids["food"], ids["rent"], ids["salary"], ids["old"]}; !slices.Equal(all, want) {
-		t.Errorf("paged %v, want %v", all, want)
+	newest := []string{ids["save"], ids["food"], ids["rent"], ids["salary"], ids["old"]}
+	if all := paged(transactions.Filter{Limit: 2}); !slices.Equal(all, newest) {
+		t.Errorf("paged %v, want %v", all, newest)
+	}
+	oldest := slices.Clone(newest)
+	slices.Reverse(oldest)
+	if all := paged(transactions.Filter{Limit: 2, OldestFirst: true}); !slices.Equal(all, oldest) {
+		t.Errorf("paged oldest first %v, want %v", all, oldest)
 	}
 
 	for name, f := range map[string]transactions.Filter{

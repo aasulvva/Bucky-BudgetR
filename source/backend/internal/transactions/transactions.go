@@ -181,6 +181,8 @@ type Filter struct {
 	Limit int
 	// Cursor continues from a previous page's Next.
 	Cursor string
+	// OldestFirst lists the oldest first instead of the newest (#126).
+	OldestFirst bool
 }
 
 // Page is one page of List.
@@ -439,11 +441,11 @@ func nonEmpty(values []string, lower bool) []string {
 	return out
 }
 
-// List returns a page of the user's transactions, newest first, each merged
-// with its corrections.
+// List returns a page of the user's transactions, newest first (or oldest
+// first), each merged with its corrections.
 func (s *Service) List(ctx context.Context, userID string, f Filter) (Page, error) {
 	q := sqlc.New(s.pool)
-	p := sqlc.ListTransactionsParams{UserID: userID}
+	p := sqlc.ListTransactionsParams{UserID: userID, OldestFirst: f.OldestFirst}
 	switch {
 	case f.Limit == 0:
 		f.Limit = DefaultLimit

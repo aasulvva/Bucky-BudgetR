@@ -7,11 +7,12 @@
 import dayjs from "dayjs";
 
 import type { components } from "@/api/schema";
-import type { TransactionQuery } from "@/api/transactions";
+import type { Transaction, TransactionQuery } from "@/api/transactions";
 import i18n from "@/i18n";
 
-import { endAtFor, localDate, startAtFor, type LocalDate } from "./cycles";
-import { cleanGraph, groupBy, maxIntervals, type GraphSettings } from "./graphs";
+import { addDays, endAtFor, localDate, startAtFor, type LocalDate } from "./cycles";
+import { formatDay } from "./dates";
+import { cleanGraph, groupBy, maxIntervals, specificLabel, type GraphSettings } from "./graphs";
 import {
   defaultResolution,
   formatPeriod,
@@ -24,6 +25,7 @@ import {
   type PeriodChoice,
   type Resolution,
   type SpecificUnit,
+  weekStart,
 } from "./periods";
 import { ALL_CYCLES, SYSTEM_TYPES, USER_TYPES, withFilter } from "./transactionList";
 
@@ -61,6 +63,10 @@ export type ReportSettings = Omit<ApiReport, "modules"> & { modules: ReportModul
 export type ReportTemplate = Omit<ApiTemplate, "report"> & { report: ReportSettings };
 
 export const MODULE_TYPES: ModuleType[] = ["graph", "transactions"];
+export type TransactionsGroup = NonNullable<ReportTransactions["group_by"]>;
+export type TransactionsOrder = NonNullable<ReportTransactions["order"]>;
+export const TRANSACTIONS_GROUPS: TransactionsGroup[] = ["day", "week", "month", "cycle"];
+export const TRANSACTIONS_ORDERS: TransactionsOrder[] = ["newest", "oldest"];
 
 /** The units a report's period can have, besides custom dates. */
 export const REPORT_UNITS = ["cycle", "month", "quarter", "half_year", "year"] as const;
@@ -230,8 +236,61 @@ export function transactionsQuery(t: ReportTransactions, period: Period): Transa
     ...(t.tags?.length ? { tag: t.tags } : {}),
     ...(counterparty ? { counterparty } : {}),
     ...(t.reversed ? {} : { reversed: false }),
+    ...(t.order === "oldest" ? { order: "oldest" as const } : {}),
     limit: TRANSACTIONS_PAGE,
   };
+}
+
+export interface TransactionGroup {
+  /** The day, the week's or month's first day, or the cycle's id ("" outside any). */
+  key: string;
+  label: string;
+  items: Transaction[];
+}
+
+/**
+ * Transactions under a heading per day, week (from the locale's first day),
+ * month or cycle, in the order given (newest or oldest first).
+ */
+export function groupTransactions(
+  items: Transaction[],
+  by: TransactionsGroup,
+  cycles: CycleTimes[],
+  locale?: string,
+): TransactionGroup[] {
+  const keyOf = (tx: Transaction): string => {
+    const day = localDate(tx.at);
+    switch (by) {
+      case "day":
+        return day;
+      case "week": {
+        // dayjs: 0 = Sunday; the locale's week: 1 = Monday … 7 = Sunday.
+        const d = dayjs(day).day();
+        const weekday = d === 0 ? 7 : d;
+        return addDays(day, -((weekday - weekStart(locale) + 7) % 7));
+      }
+      case "month":
+        return `${day.slice(0, 7)}-01`;
+      case "cycle": {
+        const at = Date.parse(tx.at);
+        const c = cycles.find((x) => Date.parse(x.start_at) <= at && at < Date.parse(x.end_at));
+        return c?.id ?? "";
+      }
+    }
+  };
+  const labelOf = (key: string): string => {
+    if (by === "day") return formatDay(key, locale);
+    if (by === "cycle" && key === "") return i18n.t("stats.reports.transactions.noCycle");
+    return specificLabel({ kind: "specific", unit: by, at: key }, cycles, locale);
+  };
+  const out: TransactionGroup[] = [];
+  for (const tx of items) {
+    const key = keyOf(tx);
+    const last = out.at(-1);
+    if (last?.key === key) last.items.push(tx);
+    else out.push({ key, label: labelOf(key), items: [tx] });
+  }
+  return out;
 }
 
 /**
@@ -469,6 +528,8 @@ function cleanTransactions(t: ReportTransactions): ReportTransactions {
   if (t.types?.length) out.types = [...t.types];
   if (t.system) out.system = true;
   if (t.reversed) out.reversed = true;
+  if (t.group_by && t.group_by !== "day") out.group_by = t.group_by;
+  if (t.order === "oldest") out.order = t.order;
   return out;
 }
 
