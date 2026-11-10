@@ -21,6 +21,11 @@
   display: table-header-group;
 }
 
+/* A total prints once, at the end: Chrome repeats a tfoot on every page. */
+.print-report tfoot {
+  display: table-row-group;
+}
+
 .print-report tr,
 .print-report [data-transaction-row],
 .print-report [data-testid="breakdown-part"],
