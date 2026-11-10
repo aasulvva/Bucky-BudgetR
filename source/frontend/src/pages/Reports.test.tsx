@@ -2,11 +2,12 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import type { components } from "@/api/schema";
-import { startAtFor } from "@/lib/cycles";
+import { endAtFor, startAtFor } from "@/lib/cycles";
 import { formatDay } from "@/lib/dates";
+import { specificLabel } from "@/lib/graphs";
 import { formatMoney } from "@/lib/money";
 import { apiMock, testUser, type MockRequest } from "@/test/api";
-import { account, bucket, transaction } from "@/test/fixtures";
+import { account, bucket, bucketFigures, cycle, transaction } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
 
@@ -479,5 +480,197 @@ describe("Reports", () => {
       formatMoney("700.00", "NOK"),
       formatMoney("1300.00", "NOK"),
     ]);
+  });
+
+  describe("budget vs spending (#126)", () => {
+    const y = String(year - 1);
+    // 24 of its 31 days are in last year: last year's.
+    const january = cycle({
+      id: "100001000101",
+      start_at: startAtFor(`${String(year - 2)}-12-25`),
+      end_at: endAtFor(`${y}-01-24`),
+      state: "finished",
+    });
+    const november = cycle({
+      id: "100001000102",
+      start_at: startAtFor(`${y}-11-25`),
+      end_at: endAtFor(`${y}-12-24`),
+      state: "finished",
+    });
+    // 7 of its 31 days are in last year: this year's.
+    const late = cycle({
+      id: "100001000103",
+      start_at: startAtFor(`${y}-12-25`),
+      end_at: endAtFor(`${String(year)}-01-24`),
+      state: "finished",
+    });
+    const cycles = [january, november, late];
+    const figuresOf = (id: string) => `GET /api/v1/cycles/${id}/bucket-figures`;
+    const cells = (row: HTMLElement) =>
+      within(row)
+        .getAllByRole("cell")
+        .map((c) => c.textContent);
+    const nok = (a: string) => formatMoney(a, "NOK");
+    const label = (c: { id: string }) =>
+      specificLabel({ kind: "specific", unit: "cycle", at: c.id }, cycles);
+
+    beforeEach(() => {
+      apiMock.on("GET /api/v1/cycles", { body: cycles });
+      apiMock.on(figuresOf(january.id), {
+        body: [
+          bucketFigures({
+            bucket_id: "1000000001",
+            refills: "4000.00",
+            budget: "4000.00",
+            used: "3000.00",
+            left: "1000.00",
+          }),
+          bucketFigures({
+            bucket_id: "1000000002",
+            refills: "1000.00",
+            budget: "1000.00",
+            used: "1200.00",
+            left: "-200.00",
+          }),
+        ],
+      });
+      apiMock.on(figuresOf(november.id), {
+        body: [
+          bucketFigures({
+            bucket_id: "1000000001",
+            start: "1000.00",
+            refills: "4000.00",
+            budget: "5000.00",
+            used: "2000.00",
+            overflow: "500.00",
+            capped: "500.00",
+            left: "2500.00",
+          }),
+          bucketFigures({
+            bucket_id: "1000000002",
+            start: "-200.00",
+            refills: "1000.00",
+            budget: "800.00",
+            left: "800.00",
+          }),
+        ],
+      });
+      apiMock.on(figuresOf(late.id), { body: [] });
+    });
+
+    it("adds a module with a summary and a table per cycle", async () => {
+      renderRoute("/stats/reports");
+      await userEvent.click(await screen.findByRole("button", { name: "Add module" }));
+      const dialog = await screen.findByRole("dialog", { name: "Add module" });
+      await userEvent.click(within(dialog).getByRole("radio", { name: "Budget vs spending" }));
+      expect(within(dialog).queryByText("Breakdown")).not.toBeInTheDocument();
+      expect(within(dialog).getByRole("switch", { name: /Show each cycle/ })).toBeChecked();
+      await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+
+      const module = await screen.findByRole("region", { name: "Budget vs spending" });
+      const summary = await within(module).findByRole("table", { name: "All cycles" });
+      // Food: 4000 + (5000 − 1000) put in, less 500 capped at its refill; 5000 used.
+      expect(cells(within(summary).getByRole("row", { name: /Food/ }))).toEqual([
+        "Food",
+        nok("7500.00"),
+        nok("5000.00"),
+        "66%",
+        nok("2500.00"),
+        nok("2500.00"),
+      ]);
+      // Fun: the 200 overspent in January isn't more budget in November.
+      expect(cells(within(summary).getByRole("row", { name: /Fun/ }))).toEqual([
+        "Fun",
+        nok("1800.00"),
+        nok("1200.00"),
+        "66%",
+        nok("600.00"),
+        nok("800.00"),
+      ]);
+      expect(cells(within(summary).getByRole("row", { name: /Total/ }))).toEqual([
+        "Total",
+        nok("9300.00"),
+        nok("6200.00"),
+        "66%",
+        nok("3100.00"),
+        nok("3300.00"),
+      ]);
+      // The cycle that starts last December is this year's.
+      expect(within(module).getAllByTestId("budget-cycle")).toHaveLength(2);
+      expect(within(module).queryByRole("table", { name: label(late) })).not.toBeInTheDocument();
+      expect(apiMock.calls(figuresOf(late.id))).toHaveLength(0);
+
+      const first = within(module).getByRole("table", { name: label(january) });
+      const fun = within(first).getByRole("row", { name: /Fun/ });
+      expect(cells(fun)).toEqual([
+        "Fun",
+        nok("1000.00"),
+        nok("1200.00"),
+        "120%",
+        nok("-200.00"),
+        nok("-200.00"),
+      ]);
+      expect(within(fun).getByRole("img", { name: "Over budget" })).toBeInTheDocument();
+      expect(within(fun).getByRole("link", { name: "Fun" }).getAttribute("href")).toMatch(
+        new RegExp(`from=${String(year - 2)}-12-25&to=${y}-01-24.*bucket_id=1000000002`),
+      );
+      // The January cycle starts the year before: shown whole, and marked.
+      expect(within(module).getAllByText("Runs past the period")).toHaveLength(1);
+      expect(within(module).queryByText(/don't apply/)).not.toBeInTheDocument();
+    });
+
+    it("shows a saved module's own buckets, with the report's tags noted", async () => {
+      prefs = {
+        ...prefs,
+        report_templates: [
+          template({
+            period: "previous-year",
+            tags: ["food"],
+            modules: [{ id: "m-1", type: "budget", budget: { bucket_ids: ["1000000001"] } }],
+          }),
+        ],
+      };
+      renderRoute("/stats/reports?template=r-1");
+      const module = await screen.findByRole("region", { name: "Budget vs spending" });
+      const summary = await within(module).findByRole("table", { name: "All cycles" });
+      expect(within(summary).getByRole("row", { name: /Food/ })).toBeInTheDocument();
+      expect(within(module).queryByText("Fun")).not.toBeInTheDocument();
+      expect(within(module).getByText(/don't apply/)).toBeInTheDocument();
+      expect(within(module).getByText("Own buckets")).toBeInTheDocument();
+    });
+
+    it("shows only the summary when each cycle is off", async () => {
+      prefs = {
+        ...prefs,
+        report_templates: [
+          template({
+            period: "previous-year",
+            modules: [{ id: "m-1", type: "budget", budget: { per_cycle: false } }],
+          }),
+        ],
+      };
+      renderRoute("/stats/reports?template=r-1");
+      const module = await screen.findByRole("region", { name: "Budget vs spending" });
+      expect(await within(module).findByRole("table", { name: "All cycles" })).toBeInTheDocument();
+      expect(within(module).queryByTestId("budget-cycle")).not.toBeInTheDocument();
+    });
+
+    it("says when no cycle has begun in the period", async () => {
+      apiMock.on("GET /api/v1/cycles", { body: [] });
+      prefs = {
+        ...prefs,
+        report_templates: [
+          template({
+            period: "previous-year",
+            modules: [{ id: "m-1", type: "budget", budget: {} }],
+          }),
+        ],
+      };
+      renderRoute("/stats/reports?template=r-1");
+      const module = await screen.findByRole("region", { name: "Budget vs spending" });
+      expect(
+        await within(module).findByText("No cycles have begun in this period."),
+      ).toBeInTheDocument();
+    });
   });
 });

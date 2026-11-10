@@ -78,9 +78,10 @@ type Figures struct {
 	// Used is what was spent: the cycle's EXP lines, net of corrections,
 	// as a positive amount.
 	Used decimal.Decimal
-	// Overflow is what OVF removed in the cycle, as a positive amount: at
-	// cycle end, or when a refill pushed TF above BC.
-	Overflow decimal.Decimal
+	// Overflow is what OVF removed in the cycle, as a positive amount:
+	// Capped, when a refill pushed TF above BC (Keep funds), plus Swept, at
+	// cycle end (without Keep funds).
+	Overflow, Capped, Swept decimal.Decimal
 	// Left is Budget − Used − Overflow: TF at the end of the cycle, or the
 	// current TF while the cycle is active.
 	Left decimal.Decimal
@@ -113,7 +114,9 @@ func Cycle(ctx context.Context, db sqlc.DBTX, userID, cycleID string) (map[strin
 			Transfers:   r.Transfers,
 			Used:        r.Expenses.Neg(),
 			Overflow:    r.Overflow.Neg(),
+			Capped:      r.Capped.Neg(),
 		}
+		f.Swept = f.Overflow.Sub(f.Capped)
 		f.Budget = f.Start.Add(f.Refills).Add(f.Income).Add(f.Opening).Add(f.Adjustments).Add(f.Transfers)
 		f.Left = f.Budget.Sub(f.Used).Sub(f.Overflow)
 		out[r.ID] = f

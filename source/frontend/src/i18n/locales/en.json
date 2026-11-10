@@ -1185,7 +1185,8 @@
         "types": {
           "graph": "Graph",
           "transactions": "Transactions",
-          "flows": "In/out/balance"
+          "flows": "In/out/balance",
+          "budget": "Budget vs spending"
         }
       },
       "ownFilters": {
@@ -1259,6 +1260,29 @@
         "details": "Show details",
         "detailsHint": "Split in and out into refills, income, adjustments, transfers, spent and overflow.",
         "breakdownHint": "Also a table per month or cycle, for periods of at least {{days}} days."
+      },
+      "budget": {
+        "title": "Budget vs spending",
+        "summary": "All cycles",
+        "summaryHint": "Budget: what the buckets could spend, from the first cycle's start plus everything put in since, without what overflowed above a bucket's capacity. Carried over: what was left at the end of the last cycle.",
+        "bucket": "Bucket",
+        "budget": "Budget",
+        "used": "Used",
+        "usedPct": "Used %",
+        "total": "Total",
+        "totalIn": "Total ({{currency}})",
+        "overBudget": "Over budget",
+        "partial": "Runs past the period",
+        "active": "In progress",
+        "empty": "No buckets had a budget in this cycle.",
+        "none": "No cycles have begun in this period.",
+        "many": "This period has more than {{max}} cycles. Choose a shorter one.",
+        "filtersNote": "The report's tags and counterparty don't apply to this module.",
+        "hint": "A cycle counts in the period that holds most of its days, and is shown whole. Planned cycles are left out. Unspent is the budget minus what was used; Carried over is what went into the next cycle, 0 for a bucket that doesn't keep its funds.",
+        "perCycle": "Show each cycle",
+        "perCycleHint": "A table per cycle after the summary. Off: only the summary.",
+        "unspent": "Unspent",
+        "carried": "Carried over"
       }
     },
     "graphs": {

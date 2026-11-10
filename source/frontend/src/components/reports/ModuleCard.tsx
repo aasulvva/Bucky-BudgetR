@@ -11,6 +11,7 @@ import type { Period, PeriodChoice } from "@/lib/periods";
 import {
   BREAKDOWN_MIN_DAYS,
   MAX_SUB_PERIODS,
+  moduleBudget,
   moduleGraph,
   moduleFlows,
   moduleTitle,
@@ -24,6 +25,7 @@ import {
   type SubPeriod,
 } from "@/lib/reports";
 
+import { BudgetModule } from "./BudgetModule";
 import { FlowsModule } from "./FlowsModule";
 import { TransactionsModule } from "./TransactionsModule";
 
@@ -144,6 +146,14 @@ export function ModuleCard({
             period={period}
             cycles={cycles}
             accounts={accounts}
+            buckets={buckets}
+            filtered={(report.tags?.length ?? 0) > 0 || Boolean(report.counterparty?.trim())}
+          />
+        ) : module.type === "budget" ? (
+          <BudgetModule
+            settings={moduleBudget(report, module)}
+            period={period}
+            cycles={cycles}
             buckets={buckets}
             filtered={(report.tags?.length ?? 0) > 0 || Boolean(report.counterparty?.trim())}
           />

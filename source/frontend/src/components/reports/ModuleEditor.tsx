@@ -8,7 +8,9 @@ import {
   Switch,
   Text,
   TextInput,
+  useMantineTheme,
 } from "@mantine/core";
+import { useMediaQuery } from "@mantine/hooks";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -27,6 +29,7 @@ import {
   newModule,
   subPeriods,
   type Breakdown,
+  type BudgetModule,
   FLOWS_SHOWS,
   type FlowsModule,
   type GraphModule,
@@ -85,6 +88,9 @@ function Editor({
   const { t } = useTranslation();
   const [draft, setDraft] = useState(module);
   const tooLong = (draft.title ?? "").trim().length > MAX_TITLE;
+  // The four types don't fit side by side on a phone.
+  const theme = useMantineTheme();
+  const phone = !useMediaQuery(`(min-width: ${theme.breakpoints.sm})`, true);
 
   return (
     <Stack gap="md">
@@ -92,6 +98,7 @@ function Editor({
         <Input.Wrapper label={t("stats.reports.module.type")}>
           <SegmentedControl
             fullWidth
+            orientation={phone ? "vertical" : "horizontal"}
             mt={4}
             data={MODULE_TYPES.map((x) => ({
               value: x,
@@ -124,6 +131,8 @@ function Editor({
         <TransactionsFields draft={draft} onChange={setDraft} {...rest} />
       ) : draft.type === "flows" ? (
         <FlowsFields draft={draft} onChange={setDraft} {...rest} />
+      ) : draft.type === "budget" ? (
+        <BudgetFields draft={draft} onChange={setDraft} {...rest} />
       ) : (
         <GraphFields draft={draft} onChange={setDraft} report={report} {...rest} />
       )}
@@ -329,6 +338,63 @@ function useBreakdownWhy({
         ? t("stats.reports.breakdown.many", { max: MAX_SUB_PERIODS })
         : t("stats.reports.breakdown.none");
   };
+}
+
+/** A budget vs spending module's accounts and buckets (#126); it's always per cycle. */
+function BudgetFields({
+  draft,
+  onChange,
+  accounts,
+  buckets,
+}: FieldsProps & { draft: BudgetModule; onChange: (m: BudgetModule) => void }) {
+  const { t } = useTranslation();
+  const s = draft.budget;
+  const set = (patch: Partial<BudgetModule["budget"]>) => {
+    onChange({ ...draft, budget: { ...s, ...patch } });
+  };
+  const chosenAccounts = s.account_ids ?? [];
+  return (
+    <>
+      <MultiSelect
+        comboboxProps={{ withinPortal: false }}
+        label={t("stats.graphs.accounts")}
+        placeholder={chosenAccounts.length ? undefined : t("stats.reports.asReport")}
+        data={accounts.map((a) => ({ value: a.id, label: a.name }))}
+        value={chosenAccounts}
+        onChange={(v) => {
+          set({ account_ids: v });
+        }}
+        clearable
+      />
+      <MultiSelect
+        comboboxProps={{ withinPortal: false }}
+        label={t("stats.graphs.buckets")}
+        placeholder={s.bucket_ids?.length ? undefined : t("stats.reports.asReport")}
+        data={buckets
+          .filter(
+            (b) => chosenAccounts.length === 0 || chosenAccounts.includes(b.source_account_id),
+          )
+          .map((b) => ({ value: b.id, label: b.name }))}
+        value={s.bucket_ids ?? []}
+        onChange={(v) => {
+          set({ bucket_ids: v });
+        }}
+        clearable
+        searchable
+      />
+      <Switch
+        label={t("stats.reports.budget.perCycle")}
+        description={t("stats.reports.budget.perCycleHint")}
+        checked={s.per_cycle !== false}
+        onChange={(e) => {
+          set({ per_cycle: e.currentTarget.checked });
+        }}
+      />
+      <Text size="sm" c="dimmed">
+        {t("stats.reports.budget.hint")}
+      </Text>
+    </>
+  );
 }
 
 /** An In/out/balance module's accounts and buckets, what it shows and its breakdown (#126). */

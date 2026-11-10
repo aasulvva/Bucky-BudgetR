@@ -4004,8 +4004,8 @@ components:
       description: |
         A module of a report. Its `type` says which settings it has: a
         `graph` module has `graph`, a `transactions` module (#126) has
-        `transactions`, a `flows` module (#126) has `flows`, and none of the
-        others (400 `invalid_request`).
+        `transactions`, a `flows` module (#126) has `flows`, a `budget` module
+        (#126) has `budget`, and none of the others (400 `invalid_request`).
       required: [id, type]
       properties:
         id:
@@ -4014,7 +4014,7 @@ components:
           maxLength: 40
         type:
           type: string
-          enum: [graph, transactions, flows]
+          enum: [graph, transactions, flows, budget]
           description: What the module shows.
         title:
           type: string
@@ -4025,6 +4025,8 @@ components:
           $ref: "#/components/schemas/ReportTransactions"
         flows:
           $ref: "#/components/schemas/ReportFlows"
+        budget:
+          $ref: "#/components/schemas/ReportBudget"
         compare:
           type: string
           enum: ["off", both, difference]
@@ -4074,6 +4076,31 @@ components:
           type: string
           enum: [none, month, cycle]
           description: Also a table per month or cycle, for periods of at least 60 days. `none` by default.
+
+    ReportBudget:
+      type: object
+      additionalProperties: false
+      description: |
+        A budget vs spending module (#126): each bucket's budget, used,
+        overflow and left per cycle, from the cycle's bucket figures, with a
+        summary over the cycles. A cycle counts in the period that holds
+        most of its days. Only the account and bucket filters apply; set
+        here, they replace the report's. An account filter matches a
+        bucket's source account.
+      properties:
+        account_ids:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/AccountId"
+        bucket_ids:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/BucketId"
+        per_cycle:
+          type: boolean
+          description: A table per cycle after the summary (the default), or only the summary (false).
 
     ReportTransactions:
       type: object
@@ -4357,7 +4384,7 @@ components:
         `income` + `opening_funds` + `adjustments` + `transfers`, and `left` =
         `budget` − `used` − `overflow`, which is the current TF while the cycle
         is active.
-      required: [bucket_id, start, refills, income, opening_funds, adjustments, transfers, budget, used, overflow, left]
+      required: [bucket_id, start, refills, income, opening_funds, adjustments, transfers, budget, used, overflow, capped, swept, left]
       properties:
         bucket_id:
           $ref: "#/components/schemas/BucketId"
@@ -4396,7 +4423,19 @@ components:
         overflow:
           allOf:
             - $ref: "#/components/schemas/Amount"
-          description: What overflowed (OVF), as a positive amount.
+          description: What overflowed (OVF), as a positive amount; `capped` + `swept`.
+        capped:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: |
+            What a refill's overflow removed because TF went above BC (Keep
+            funds), as a positive amount: never spendable in the cycle.
+        swept:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: |
+            What the cycle's end removed (without Keep funds), as a positive
+            amount: what was left unspent.
         left:
           allOf:
             - $ref: "#/components/schemas/Amount"

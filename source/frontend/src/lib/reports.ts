@@ -1,12 +1,13 @@
 // Reports on Stats & reports (#125): a period, filters for the whole
 // report, and modules: graphs that may compare with the previous period or
-// break down by month or cycle, and transaction lists (#126). What's here is
+// break down by month or cycle, transaction lists, in/out/balance tables and
+// budget vs spending per cycle (#126). What's here is
 // pure: the settings, the built-in starters, the previous period and the
 // sub-periods.
 
 import dayjs from "dayjs";
 
-import type { Account, Bucket } from "@/api/accounts";
+import type { Account, Bucket, BucketFigures } from "@/api/accounts";
 import type { components } from "@/api/schema";
 import type { BucketFlowValues, FlowsQuery, StatsFlows } from "@/api/stats";
 import type { Transaction, TransactionQuery } from "@/api/transactions";
@@ -15,7 +16,7 @@ import i18n from "@/i18n";
 import { addDays, endAtFor, localDate, startAtFor, type LocalDate } from "./cycles";
 import { formatDay } from "./dates";
 import { cleanGraph, groupBy, maxIntervals, specificLabel, type GraphSettings } from "./graphs";
-import { addAmounts, compareAmounts, subtractAmounts } from "./money";
+import { addAmounts, compareAmounts, percentOf, subtractAmounts } from "./money";
 import {
   defaultResolution,
   formatPeriod,
@@ -38,6 +39,7 @@ type ApiTemplate = components["schemas"]["ReportTemplate"];
 export type ReportGraph = components["schemas"]["ReportGraph"];
 export type ReportTransactions = components["schemas"]["ReportTransactions"];
 export type ReportFlows = components["schemas"]["ReportFlows"];
+export type ReportBudget = components["schemas"]["ReportBudget"];
 export type CompareTo = NonNullable<ApiReport["compare_to"]>;
 export type ModuleCompare = NonNullable<ApiModule["compare"]>;
 export type Breakdown = NonNullable<ApiModule["breakdown"]>;
@@ -69,12 +71,20 @@ export interface FlowsModule {
   flows: ReportFlows;
 }
 
+/** A budget vs spending module (#126): each bucket's budget, used and left per cycle. */
+export interface BudgetModule {
+  id: string;
+  type: "budget";
+  title?: string;
+  budget: ReportBudget;
+}
+
 /** The API's module, by its type: each has its own settings. */
-export type ReportModule = GraphModule | TransactionsModule | FlowsModule;
+export type ReportModule = GraphModule | TransactionsModule | FlowsModule | BudgetModule;
 export type ReportSettings = Omit<ApiReport, "modules"> & { modules: ReportModule[] };
 export type ReportTemplate = Omit<ApiTemplate, "report"> & { report: ReportSettings };
 
-export const MODULE_TYPES: ModuleType[] = ["graph", "transactions", "flows"];
+export const MODULE_TYPES: ModuleType[] = ["graph", "transactions", "flows", "budget"];
 export type FlowsShow = NonNullable<ReportFlows["show"]>;
 export const FLOWS_SHOWS: FlowsShow[] = ["buckets", "accounts", "both"];
 export type TransactionsGroup = NonNullable<ReportTransactions["group_by"]>;
@@ -185,6 +195,9 @@ function readModule(m: ApiModule): ReportModule | null {
   if (m.type === "flows") {
     return m.flows ? { ...base, type: "flows", flows: m.flows } : null;
   }
+  if (m.type === "budget") {
+    return m.budget ? { ...base, type: "budget", budget: m.budget } : null;
+  }
   if (!m.graph) return null;
   return {
     ...base,
@@ -244,6 +257,16 @@ export function moduleFlows(report: ReportSettings, module: FlowsModule): Report
     ...f,
     account_ids: f.account_ids?.length ? f.account_ids : report.account_ids,
     bucket_ids: f.bucket_ids?.length ? f.bucket_ids : report.bucket_ids,
+  };
+}
+
+/** A budget vs spending module's settings, with the report's accounts and buckets where it sets none. */
+export function moduleBudget(report: ReportSettings, module: BudgetModule): ReportBudget {
+  const b = module.budget;
+  return {
+    ...b,
+    account_ids: b.account_ids?.length ? b.account_ids : report.account_ids,
+    bucket_ids: b.bucket_ids?.length ? b.bucket_ids : report.bucket_ids,
   };
 }
 
@@ -376,6 +399,104 @@ export function flowTables(
   };
 }
 
+/** A budget vs spending table's amount columns. */
+export const BUDGET_FIGURES = ["budget", "used", "unspent", "carried"] as const;
+export type BudgetFigure = (typeof BUDGET_FIGURES)[number];
+
+export interface BudgetRow extends FlowRow<BudgetFigure> {
+  /** Used as a share of the budget; null while the budget isn't above 0. */
+  usedPct: number | null;
+}
+
+function withPct(r: FlowRow<BudgetFigure>): BudgetRow {
+  const pct =
+    compareAmounts(r.values.budget, "0") > 0 ? percentOf(r.values.used, r.values.budget) : null;
+  return { ...r, usedPct: pct };
+}
+
+/**
+ * One cycle's bucket figures as table rows: the buckets the module's
+ * filters match (an account filter by the bucket's source account), by
+ * name, without the ones where nothing happened, and a total per currency.
+ *
+ * Budget is what could be spent: without what a refill's overflow capped
+ * at BC (Keep funds). Unspent is Budget − Used, below 0 when overspent.
+ * Carried over is what went into the next cycle (Left): 0 or the overspent
+ * part for a bucket without Keep funds, whose unspent part is swept at the
+ * cycle's end.
+ */
+export function budgetRows(
+  figures: BucketFigures[],
+  buckets: Bucket[],
+  filters: ReportBudget,
+  locale?: string,
+): { rows: BudgetRow[]; totals: BudgetRow[] } {
+  const accountIds = filters.account_ids?.length ? new Set(filters.account_ids) : null;
+  const bucketIds = filters.bucket_ids?.length ? new Set(filters.bucket_ids) : null;
+  const rows: FlowRow<BudgetFigure>[] = figures
+    .flatMap((f) => {
+      const b = buckets.find((x) => x.id === f.bucket_id);
+      if (!b) return [];
+      if (bucketIds && !bucketIds.has(b.id)) return [];
+      if (accountIds && !accountIds.has(b.source_account_id)) return [];
+      if ([f.start, f.budget, f.used, f.overflow, f.left].every(isZero)) return [];
+      const budget = subtractAmounts(f.budget, f.capped);
+      return [
+        {
+          id: b.id,
+          name: b.name,
+          currency: b.currency,
+          values: {
+            budget,
+            used: f.used,
+            unspent: subtractAmounts(budget, f.used),
+            carried: f.left,
+          },
+        },
+      ];
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, locale));
+  return { rows: rows.map(withPct), totals: totals(rows, BUDGET_FIGURES).map(withPct) };
+}
+
+const SUMMED_PARTS = [
+  "refills",
+  "income",
+  "opening_funds",
+  "adjustments",
+  "transfers",
+  "used",
+  "overflow",
+  "capped",
+  "swept",
+] as const;
+
+/**
+ * The bucket figures of several cycles, oldest first, as one: the first
+ * cycle's start, what was put in, used and overflowed in them all, and the
+ * last one's left. A later cycle's budget counts without the funds it
+ * brought along, which the cycle before counted already. What it brought
+ * along overspent stays in, as in that cycle's own budget: the refill that
+ * tops up a bucket without Keep funds isn't more to spend.
+ */
+export function budgetSummary(perCycle: BucketFigures[][]): BucketFigures[] {
+  const out = new Map<string, BucketFigures>();
+  for (const cycle of perCycle) {
+    for (const f of cycle) {
+      const s = out.get(f.bucket_id);
+      if (!s) {
+        out.set(f.bucket_id, { ...f });
+        continue;
+      }
+      for (const k of SUMMED_PARTS) s[k] = addAmounts(s[k], f[k]);
+      const brought = compareAmounts(f.start, "0") > 0 ? f.start : "0.00";
+      s.budget = addAmounts(s.budget, subtractAmounts(f.budget, brought));
+      s.left = f.left;
+    }
+  }
+  return [...out.values()];
+}
+
 /** A transactions module shows this many at first, and as many more on Load more. */
 export const TRANSACTIONS_PAGE = 50;
 
@@ -505,7 +626,9 @@ export function ownFilters(
       ? module.graph
       : module.type === "transactions"
         ? module.transactions
-        : module.flows;
+        : module.type === "flows"
+          ? module.flows
+          : module.budget;
   const out: ("accounts" | "buckets" | "tags" | "counterparty")[] = [];
   if (g.account_ids?.length) out.push("accounts");
   if (g.bucket_ids?.length) out.push("buckets");
@@ -615,15 +738,7 @@ export function subPeriods(
       m = m.add(1, "month");
     }
   } else {
-    const overlapping = cycles
-      .filter(
-        (c) =>
-          c.id &&
-          c.state !== "future" &&
-          Date.parse(c.start_at) < to &&
-          Date.parse(c.end_at) > from,
-      )
-      .sort((a, b) => Date.parse(a.start_at) - Date.parse(b.start_at));
+    const overlapping = overlappingCycles(cycles, from, to);
     if (overlapping.length > MAX_SUB_PERIODS) return { ok: false, reason: "many" };
     for (const c of overlapping) {
       const start = Math.max(Date.parse(c.start_at), from);
@@ -641,6 +756,74 @@ export function subPeriods(
     }
   }
   return parts.length > 0 ? { ok: true, parts } : { ok: false, reason: "none" };
+}
+
+/** The cycles that have begun and overlap [from, to), oldest first. */
+function overlappingCycles<C extends CycleTimes>(cycles: C[], from: number, to: number): C[] {
+  return cycles
+    .filter(
+      (c) =>
+        c.id && c.state !== "future" && Date.parse(c.start_at) < to && Date.parse(c.end_at) > from,
+    )
+    .sort((a, b) => Date.parse(a.start_at) - Date.parse(b.start_at));
+}
+
+export interface PeriodCycle {
+  id: string;
+  /** The whole cycle, which a budget module shows even where the period cuts it. */
+  period: Period;
+  /** Runs past the report period's edges, by less than half its days. */
+  partial: boolean;
+  /** Still going. */
+  active: boolean;
+}
+
+export type PeriodCycles =
+  { ok: true; cycles: PeriodCycle[] } | { ok: false; reason: "many" | "none" };
+
+/**
+ * The cycles a budget module shows, whole and oldest first, at most
+ * MAX_SUB_PERIODS: those that have begun and have most of their days in
+ * the period, so that each cycle counts in one year's, quarter's or
+ * month's report. Half its days count where the cycle starts. A period
+ * shorter than that (a few custom days) gets the cycle with the most of
+ * its days. Planned cycles have no figures yet.
+ */
+export function periodCycles(period: Period, cycles: CycleTimes[]): PeriodCycles {
+  const days = (a: LocalDate, b: LocalDate) => dayjs(b).diff(dayjs(a), "day") + 1;
+  const overlapping = overlappingCycles(
+    cycles,
+    Date.parse(period.fromAt),
+    Date.parse(period.toAt),
+  ).map((c) => {
+    const from = localDate(c.start_at);
+    const to = localDate(new Date(Date.parse(c.end_at) - 1));
+    const inside = days(from < period.from ? period.from : from, to > period.to ? period.to : to);
+    const total = days(from, to);
+    return {
+      cycle: c,
+      from,
+      to,
+      inside,
+      counts: inside * 2 > total || (inside * 2 === total && from >= period.from),
+    };
+  });
+  let shown = overlapping.filter((c) => c.counts);
+  if (shown.length === 0 && overlapping.length > 0) {
+    const most = overlapping.reduce((a, b) => (b.inside > a.inside ? b : a));
+    shown = [most];
+  }
+  if (shown.length === 0) return { ok: false, reason: "none" };
+  if (shown.length > MAX_SUB_PERIODS) return { ok: false, reason: "many" };
+  return {
+    ok: true,
+    cycles: shown.map(({ cycle: c, from, to }) => ({
+      id: c.id ?? "",
+      period: { from, to, fromAt: c.start_at, toAt: c.end_at },
+      partial: from < period.from || to > period.to,
+      active: c.state === "active",
+    })),
+  };
 }
 
 /** A graph's settings as a report module's: without the period, which is the report's. */
@@ -672,6 +855,13 @@ export function cleanReport(r: ReportSettings): ReportSettings {
     }
     if (m.type === "flows") {
       return { id: m.id, type: m.type, ...title, flows: cleanFlows(m.flows) };
+    }
+    if (m.type === "budget") {
+      const budget: ReportBudget = {};
+      if (m.budget.account_ids?.length) budget.account_ids = [...m.budget.account_ids];
+      if (m.budget.bucket_ids?.length) budget.bucket_ids = [...m.budget.bucket_ids];
+      if (m.budget.per_cycle === false) budget.per_cycle = false;
+      return { id: m.id, type: m.type, ...title, budget };
     }
     const graph = withoutPeriod(cleanGraph({ ...m.graph, period: r.period }));
     const clean: GraphModule = { id: m.id, type: m.type, ...title, graph };
@@ -730,6 +920,7 @@ export function newModule(report: ReportSettings, type: ModuleType = "graph"): R
   );
   if (type === "transactions") return { id, type, transactions: {} };
   if (type === "flows") return { id, type, flows: {} };
+  if (type === "budget") return { id, type, budget: {} };
   return { id, type, graph: { kind: "bar", metric: "spending", resolution: "month" } };
 }
 
@@ -761,6 +952,7 @@ export function moduleTitle(module: ReportModule): string {
   if (module.title?.trim()) return module.title.trim();
   if (module.type === "transactions") return i18n.t("stats.reports.transactions.title");
   if (module.type === "flows") return i18n.t("stats.reports.flows.title");
+  if (module.type === "budget") return i18n.t("stats.reports.budget.title");
   const g = module.graph;
   const group = groupBy({ ...g, period: "" });
   return [

@@ -1,7 +1,7 @@
 // Bank accounts and buckets: the queries the screens share, and what to
 // refresh after money moves.
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import i18n from "@/i18n";
 
@@ -61,6 +61,24 @@ export function useBucketFigures(cycleId: string | undefined) {
         }),
       ),
     enabled: cycleId !== undefined,
+  });
+}
+
+/**
+ * The buckets' figures for several cycles at once (#126), in the order
+ * given, under the same keys as useBucketFigures so they share the cache.
+ */
+export function useBucketFiguresFor(cycleIds: string[]) {
+  return useQueries({
+    queries: cycleIds.map((cycleId) => ({
+      queryKey: [...BUCKETS_KEY, "figures", cycleId],
+      queryFn: () =>
+        unwrap(
+          api.GET("/api/v1/cycles/{cycleId}/bucket-figures", {
+            params: { path: { cycleId } },
+          }),
+        ),
+    })),
   });
 }
 

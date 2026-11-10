@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/shopspring/decimal"
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/authtest"
@@ -83,9 +84,16 @@ func TestBalancesAndCycleFigures(t *testing.T) {
 		t.Fatal(err)
 	}
 	nov := ledgertest.Cycle(t, pool, user, novStart, novEnd, "active")
-	record(sqlc.TransactionTypeREF, "2026-11-01T08:00:00Z", nil, []line{{groceries, "1000"}})
+	ref := record(sqlc.TransactionTypeREF, "2026-11-01T08:00:00Z", nil, []line{{groceries, "1000"}})
 	record(sqlc.TransactionTypeEXP, "2026-11-02T12:00:00Z", []line{{acc, "-400"}}, []line{{groceries, "-400"}})
-	record(sqlc.TransactionTypeOVF, "2026-11-02T12:00:00Z", nil, []line{{groceries, "-50"}})
+	// The refill's overflow above BC (Keep funds): capped, not swept.
+	ovf := record(sqlc.TransactionTypeOVF, "2026-11-02T12:00:00Z", nil, []line{{groceries, "-50"}})
+	if err := sqlc.New(pool).CreateRefill(ctx, sqlc.CreateRefillParams{
+		BucketID: groceries, CycleID: nov, UserID: user, Trigger: sqlc.RefillModeAuto,
+		RefID: pgtype.Text{String: ref.Header.ID, Valid: true}, OvfID: pgtype.Text{String: ovf.Header.ID, Valid: true},
+	}); err != nil {
+		t.Fatal(err)
+	}
 	record(sqlc.TransactionTypeBUA, "2026-11-03T12:00:00Z", nil, []line{{hobby, "-100"}})
 
 	// Another user's money never counts.
@@ -153,6 +161,8 @@ func TestBalancesAndCycleFigures(t *testing.T) {
 	}
 	check("October groceries", figs[groceries], "0", "2800", "350", "100", "2350")
 	g := figs[groceries]
+	same("October groceries capped", g.Capped, decimal.Zero)
+	same("October groceries swept", g.Swept, dec("100"))
 	same("October groceries refills", g.Refills, dec("1500"))
 	same("October groceries income", g.Income, dec("1000"))
 	same("October groceries opening", g.Opening, dec("500"))
@@ -167,6 +177,8 @@ func TestBalancesAndCycleFigures(t *testing.T) {
 		t.Fatal(err)
 	}
 	check("November groceries", figs[groceries], "2350", "3350", "400", "50", "2900")
+	same("November groceries capped", figs[groceries].Capped, dec("50"))
+	same("November groceries swept", figs[groceries].Swept, decimal.Zero)
 	check("November hobby", figs[hobby], "200", "100", "0", "0", "100")
 	same("November hobby adjustments", figs[hobby].Adjustments, dec("-100"))
 	if !figs[groceries].Left.Equal(tf[groceries]) {

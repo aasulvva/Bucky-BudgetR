@@ -56,6 +56,8 @@ export function bucketFigures(
     budget: "0.00",
     used: "0.00",
     overflow: "0.00",
+    capped: "0.00",
+    swept: "0.00",
     left: "0.00",
     ...overrides,
   };

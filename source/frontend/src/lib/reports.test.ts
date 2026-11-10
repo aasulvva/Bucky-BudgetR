@@ -1,16 +1,20 @@
 import type { BucketFlowValues, StatsFlows } from "@/api/stats";
-import { account, bucket, transaction } from "@/test/fixtures";
+import { account, bucket, bucketFigures, transaction } from "@/test/fixtures";
 
 import { endAtFor, startAtFor } from "./cycles";
 import { parsePeriod, resolvePeriod } from "./periods";
 import {
+  budgetRows,
+  budgetSummary,
   cleanReport,
   flowsQuery,
   flowTables,
   groupTransactions,
+  moduleBudget,
   moduleFlows,
   moduleGraph,
   moduleTransactions,
+  periodCycles,
   previousPeriod,
   readTemplates,
   sameReport,
@@ -18,6 +22,7 @@ import {
   subPeriods,
   transactionsLink,
   transactionsQuery,
+  type BudgetRow,
   type ReportSettings,
 } from "./reports";
 import { SYSTEM_TYPES, USER_TYPES } from "./transactionList";
@@ -505,3 +510,233 @@ describe("In/out/balance modules (#126)", () => {
     ).toEqual([{ id: "m-1", type: "flows", flows: { transfers: true } }]);
   });
 });
+
+describe("Budget vs spending modules (#126)", () => {
+  const food = bucket({ id: "1000000001", name: "Food", source_account_id: "1234" });
+  const fun = bucket({ id: "1000000002", name: "Fun", source_account_id: "1234" });
+  const pets = bucket({ id: "1000000003", name: "Pets", source_account_id: "1234" });
+  const travel = bucket({
+    id: "1000000004",
+    name: "Travel",
+    source_account_id: "2345",
+    currency: "EUR",
+  });
+  const buckets = [food, fun, pets, travel];
+
+  it("show the cycles that have begun and have most of their days in the period, whole", () => {
+    const shown = (p: string) => {
+      const r = periodCycles(resolvePeriod(parsePeriod(p) ?? fail(), cycles, now) ?? fail(), [
+        ...cycles,
+        cycleOf("100001000004", "2026-11-25", "2026-12-24", "future"),
+      ]);
+      return r.ok
+        ? r.cycles.map(
+            (c) =>
+              `${c.id} ${c.period.from}..${c.period.to}${c.partial ? " partial" : ""}${c.active ? " active" : ""}`,
+          )
+        : r.reason;
+    };
+    expect(shown("custom-2026-09-01-2026-12-31")).toEqual([
+      "100001000001 2026-08-25..2026-09-24 partial",
+      "100001000002 2026-09-25..2026-10-24",
+      "100001000003 2026-10-25..2026-11-24 partial active",
+    ]);
+    // 15 of the first cycle's 31 days, and 7 of the last's: not this period's.
+    expect(shown("custom-2026-09-10-2026-10-31")).toEqual(["100001000002 2026-09-25..2026-10-24"]);
+    // Half its days count where the cycle starts.
+    expect(shown("custom-2026-09-25-2026-10-09")).toEqual([
+      "100001000002 2026-09-25..2026-10-24 partial",
+    ]);
+    // Shorter than half a cycle: the one with the most of its days.
+    expect(shown("custom-2026-10-01-2026-10-05")).toEqual([
+      "100001000002 2026-09-25..2026-10-24 partial",
+    ]);
+    // No 60-day minimum: one cycle is enough.
+    expect(shown("cycle-100001000002")).toEqual(["100001000002 2026-09-25..2026-10-24"]);
+    expect(shown("custom-2026-01-01-2026-03-31")).toBe("none");
+    const many = Array.from({ length: 25 }, (_, i) =>
+      cycleOf(
+        String(200001000001 + i),
+        `2024-${String((i % 12) + 1).padStart(2, "0")}-01`,
+        `2024-${String((i % 12) + 1).padStart(2, "0")}-02`,
+      ),
+    );
+    expect(
+      periodCycles(
+        {
+          from: "2024-01-01",
+          to: "2024-12-31",
+          fromAt: startAtFor("2024-01-01"),
+          toAt: endAtFor("2024-12-31"),
+        },
+        many,
+      ),
+    ).toEqual({ ok: false, reason: "many" });
+  });
+
+  it("give a row per matching bucket by name, used %, and a total per currency", () => {
+    const figures = [
+      // Without Keep funds: what wasn't used is swept at the cycle's end.
+      bucketFigures({
+        bucket_id: "1000000002",
+        start: "200.00",
+        budget: "1000.00",
+        used: "600.00",
+        overflow: "400.00",
+        swept: "400.00",
+      }),
+      // Keep funds: the refill's overflow above BC was never there to spend.
+      bucketFigures({
+        bucket_id: "1000000001",
+        budget: "4000.00",
+        used: "3000.00",
+        overflow: "500.00",
+        capped: "500.00",
+        left: "500.00",
+      }),
+      // Nothing happened: left out.
+      bucketFigures({ bucket_id: "1000000003" }),
+      bucketFigures({ bucket_id: "1000000004", budget: "0.00", used: "50.00", left: "-50.00" }),
+      // Not one of the buckets (deleted): left out.
+      bucketFigures({ bucket_id: "1000000009", budget: "10.00" }),
+    ];
+    const all = budgetRows(figures, buckets, {}, "en-GB");
+    const shown = (r: BudgetRow) => [
+      r.name || r.currency,
+      r.values.budget,
+      r.values.used,
+      r.usedPct,
+      r.values.unspent,
+      r.values.carried,
+    ];
+    expect(all.rows.map(shown)).toEqual([
+      ["Food", "3500.00", "3000.00", 85, "500.00", "500.00"],
+      ["Fun", "1000.00", "600.00", 60, "400.00", "0.00"],
+      ["Travel", "0.00", "50.00", null, "-50.00", "-50.00"],
+    ]);
+    expect(all.totals.map(shown)).toEqual([
+      ["NOK", "4500.00", "3600.00", 80, "900.00", "500.00"],
+      ["EUR", "0.00", "50.00", null, "-50.00", "-50.00"],
+    ]);
+    expect(budgetRows(figures, buckets, { account_ids: ["2345"] }).rows.map((r) => r.name)).toEqual(
+      ["Travel"],
+    );
+    expect(
+      budgetRows(figures, buckets, {
+        account_ids: ["1234"],
+        bucket_ids: ["1000000002", "1000000004"],
+      }).rows.map((r) => r.name),
+    ).toEqual(["Fun"]);
+  });
+
+  it("sum the cycles without counting carried funds twice, nor a refill that tops up", () => {
+    const summary = budgetSummary([
+      [
+        // Keeps its funds: 250 carried into the next cycle.
+        bucketFigures({
+          bucket_id: "1000000001",
+          start: "100.00",
+          refills: "1000.00",
+          budget: "1100.00",
+          used: "800.00",
+          overflow: "50.00",
+          capped: "50.00",
+          left: "250.00",
+        }),
+        // Without Keep funds: overspent by 200.
+        bucketFigures({
+          bucket_id: "1000000002",
+          refills: "1000.00",
+          budget: "1000.00",
+          used: "1200.00",
+          left: "-200.00",
+        }),
+      ],
+      [
+        bucketFigures({
+          bucket_id: "1000000001",
+          start: "250.00",
+          refills: "1000.00",
+          budget: "1250.00",
+          used: "1300.00",
+          left: "-50.00",
+        }),
+        // The refill tops it up to 1000 again; 500 unused is swept.
+        bucketFigures({
+          bucket_id: "1000000002",
+          start: "-200.00",
+          refills: "1200.00",
+          budget: "1000.00",
+          used: "500.00",
+          overflow: "500.00",
+          swept: "500.00",
+        }),
+      ],
+    ]);
+    expect(summary[0]).toMatchObject({
+      start: "100.00",
+      refills: "2000.00",
+      budget: "2100.00",
+      capped: "50.00",
+      used: "2100.00",
+      left: "-50.00",
+    });
+    expect(summary[1]).toMatchObject({
+      budget: "2000.00",
+      used: "1700.00",
+      swept: "500.00",
+      left: "0.00",
+    });
+    // Unspent over the two cycles: −200 + 500.
+    const rows = budgetRows(summary, buckets, {}, "en-GB").rows;
+    expect(rows.map((r) => [r.name, r.values.budget, r.values.unspent, r.values.carried])).toEqual([
+      ["Food", "2050.00", "-50.00", "-50.00"],
+      ["Fun", "2000.00", "300.00", "0.00"],
+    ]);
+  });
+
+  it("use the report's accounts and buckets, and save without empty fields", () => {
+    const report: ReportSettings = {
+      period: "previous-year",
+      account_ids: ["1234"],
+      tags: ["food"],
+      modules: [],
+    };
+    expect(
+      moduleBudget(report, { id: "m-1", type: "budget", budget: { bucket_ids: ["1000000001"] } }),
+    ).toEqual({
+      account_ids: ["1234"],
+      bucket_ids: ["1000000001"],
+    });
+    expect(
+      cleanReport({
+        period: "previous-year",
+        modules: [
+          {
+            id: "m-1",
+            type: "budget",
+            title: " ",
+            budget: { account_ids: [], bucket_ids: ["1000000001"], per_cycle: true },
+          },
+          { id: "m-2", type: "budget", budget: { per_cycle: false } },
+        ],
+      }).modules,
+    ).toEqual([
+      { id: "m-1", type: "budget", budget: { bucket_ids: ["1000000001"] } },
+      { id: "m-2", type: "budget", budget: { per_cycle: false } },
+    ]);
+    expect(
+      readTemplates([
+        {
+          id: "r",
+          name: "R",
+          report: { period: "previous-year", modules: [{ id: "m", type: "budget" }] },
+        },
+      ])[0]?.report.modules,
+    ).toEqual([]);
+  });
+});
+
+function fail(): never {
+  throw new Error("no period");
+}

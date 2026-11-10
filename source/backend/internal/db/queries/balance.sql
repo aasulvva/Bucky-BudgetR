@@ -43,12 +43,16 @@ SELECT
     COALESCE(SUM(l.amount) FILTER (WHERE l.cycle_id = this.id AND h.transaction_type = 'BUA'), 0)::numeric AS adjustments,
     COALESCE(SUM(l.amount) FILTER (WHERE l.cycle_id = this.id AND h.transaction_type = 'BAT'), 0)::numeric AS transfers,
     COALESCE(SUM(l.amount) FILTER (WHERE l.cycle_id = this.id AND h.transaction_type = 'EXP'), 0)::numeric AS expenses,
-    COALESCE(SUM(l.amount) FILTER (WHERE l.cycle_id = this.id AND h.transaction_type = 'OVF'), 0)::numeric AS overflow
+    COALESCE(SUM(l.amount) FILTER (WHERE l.cycle_id = this.id AND h.transaction_type = 'OVF'), 0)::numeric AS overflow,
+    -- The overflow of refills that pushed TF above BC (and its reversals),
+    -- rather than of the cycle's end.
+    COALESCE(SUM(l.amount) FILTER (WHERE l.cycle_id = this.id AND h.transaction_type = 'OVF' AND rf.ovf_id IS NOT NULL), 0)::numeric AS capped
 FROM cycles this
 JOIN buckets b ON b.user_id = this.user_id
 LEFT JOIN bucket_transactions l ON l.bucket_id = b.id
 LEFT JOIN transaction_headers h ON h.id = l.transaction_id
 LEFT JOIN cycles c ON c.id = l.cycle_id
+LEFT JOIN refills rf ON rf.user_id = this.user_id AND rf.ovf_id = COALESCE(h.parent_id, h.id)
 WHERE this.id = sqlc.arg(cycle_id) AND this.user_id = sqlc.arg(user_id)
 GROUP BY b.id
 ORDER BY b.id;

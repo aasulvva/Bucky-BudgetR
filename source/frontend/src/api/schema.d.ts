@@ -2315,8 +2315,8 @@ export interface components {
         /**
          * @description A module of a report. Its `type` says which settings it has: a
          *     `graph` module has `graph`, a `transactions` module (#126) has
-         *     `transactions`, a `flows` module (#126) has `flows`, and none of the
-         *     others (400 `invalid_request`).
+         *     `transactions`, a `flows` module (#126) has `flows`, a `budget` module
+         *     (#126) has `budget`, and none of the others (400 `invalid_request`).
          */
         ReportModule: {
             id: string;
@@ -2324,11 +2324,12 @@ export interface components {
              * @description What the module shows.
              * @enum {string}
              */
-            type: "graph" | "transactions" | "flows";
+            type: "graph" | "transactions" | "flows" | "budget";
             title?: string;
             graph?: components["schemas"]["ReportGraph"];
             transactions?: components["schemas"]["ReportTransactions"];
             flows?: components["schemas"]["ReportFlows"];
+            budget?: components["schemas"]["ReportBudget"];
             /**
              * @description Graphs only. Lines and bars: the previous period beside this one
              *     (`both`) or this period minus the previous (`difference`). Pies:
@@ -2368,6 +2369,20 @@ export interface components {
              * @enum {string}
              */
             breakdown?: "none" | "month" | "cycle";
+        };
+        /**
+         * @description A budget vs spending module (#126): each bucket's budget, used,
+         *     overflow and left per cycle, from the cycle's bucket figures, with a
+         *     summary over the cycles. A cycle counts in the period that holds
+         *     most of its days. Only the account and bucket filters apply; set
+         *     here, they replace the report's. An account filter matches a
+         *     bucket's source account.
+         */
+        ReportBudget: {
+            account_ids?: components["schemas"]["AccountId"][];
+            bucket_ids?: components["schemas"]["BucketId"][];
+            /** @description A table per cycle after the summary (the default), or only the summary (false). */
+            per_cycle?: boolean;
         };
         /**
          * @description A transactions module (#126): the report's period's transactions, as
@@ -2521,8 +2536,18 @@ export interface components {
             budget: components["schemas"]["Amount"];
             /** @description What was spent (EXP, net of corrections), as a positive amount. */
             used: components["schemas"]["Amount"];
-            /** @description What overflowed (OVF), as a positive amount. */
+            /** @description What overflowed (OVF), as a positive amount; `capped` + `swept`. */
             overflow: components["schemas"]["Amount"];
+            /**
+             * @description What a refill's overflow removed because TF went above BC (Keep
+             *     funds), as a positive amount: never spendable in the cycle.
+             */
+            capped: components["schemas"]["Amount"];
+            /**
+             * @description What the cycle's end removed (without Keep funds), as a positive
+             *     amount: what was left unspent.
+             */
+            swept: components["schemas"]["Amount"];
             /** @description What's left at the end of the cycle. */
             left: components["schemas"]["Amount"];
         };

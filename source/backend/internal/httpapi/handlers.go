@@ -304,7 +304,8 @@ func checkReportTemplates(patch api.Preferences) error {
 			// A module has the settings of its type and none of the others' (#126).
 			if (m.Graph != nil) != (m.Type == api.ReportModuleTypeGraph) ||
 				(m.Transactions != nil) != (m.Type == api.ReportModuleTypeTransactions) ||
-				(m.Flows != nil) != (m.Type == api.ReportModuleTypeFlows) {
+				(m.Flows != nil) != (m.Type == api.ReportModuleTypeFlows) ||
+				(m.Budget != nil) != (m.Type == api.ReportModuleTypeBudget) {
 				return bad("Report template " + strconv.Quote(r.Id) + " module " + strconv.Quote(m.Id) + " needs the settings of its type, " + string(m.Type) + ", and no others.")
 			}
 		}

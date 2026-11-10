@@ -1185,7 +1185,8 @@
         "types": {
           "graph": "Graf",
           "transactions": "Transaksjonar",
-          "flows": "Inn/ut/saldo"
+          "flows": "Inn/ut/saldo",
+          "budget": "Budsjett mot forbruk"
         }
       },
       "ownFilters": {
@@ -1259,6 +1260,29 @@
         "details": "Vis detaljar",
         "detailsHint": "Del inn og ut i påfyll, inntekt, justeringar, flyttingar, brukt og overløp.",
         "breakdownHint": "Også ein tabell per månad eller syklus, for periodar på minst {{days}} dagar."
+      },
+      "budget": {
+        "title": "Budsjett mot forbruk",
+        "summary": "Alle syklusar",
+        "summaryHint": "Budsjett: det bøttene kunne bruke, frå starten av første syklus pluss alt som er lagt inn sidan, utan det som gjekk til overløp over kapasiteten til bøtta. Til neste syklus: det som var att ved slutten av siste syklus.",
+        "bucket": "Bøtte",
+        "budget": "Budsjett",
+        "used": "Brukt",
+        "usedPct": "Brukt %",
+        "total": "Totalt",
+        "totalIn": "Totalt ({{currency}})",
+        "overBudget": "Over budsjett",
+        "partial": "Går utanfor perioden",
+        "active": "Pågår",
+        "empty": "Ingen bøtter hadde budsjett i denne syklusen.",
+        "none": "Ingen syklusar har starta i denne perioden.",
+        "many": "Perioden har meir enn {{max}} syklusar. Vel ein kortare periode.",
+        "filtersNote": "Taggane og motparten til rapporten gjeld ikkje for denne modulen.",
+        "hint": "Ein syklus tel i perioden som har flest av dagane hans, og vert vist heil. Planlagde syklusar er utelatne. Ubrukt er budsjettet minus det som vart brukt; Til neste syklus er det som vart med vidare, 0 for ei bøtte som ikkje held på midlane.",
+        "perCycle": "Vis kvar syklus",
+        "perCycleHint": "Ein tabell per syklus etter oppsummeringa. Av: berre oppsummeringa.",
+        "unspent": "Ubrukt",
+        "carried": "Til neste syklus"
       }
     },
     "graphs": {
