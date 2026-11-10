@@ -40,3 +40,24 @@ export function useStatsSeries(query: StatsQuery | null) {
     placeholderData: keepPreviousData,
   });
 }
+
+export type StatsFlows = components["schemas"]["StatsFlows"];
+export type BucketFlowValues = components["schemas"]["BucketFlowValues"];
+export type AccountFlowValues = components["schemas"]["AccountFlowValues"];
+/** Which flows: the time zone is added, as for series. */
+export type FlowsQuery = Omit<operations["getStatsFlows"]["parameters"]["query"], "time_zone">;
+
+/**
+ * The buckets' and accounts' money in and out per interval (#126); off
+ * without a query. Under the transactions key, so money changes refresh it.
+ */
+export function useStatsFlows(query: FlowsQuery | null) {
+  const full = query && { ...query, time_zone: browserTimeZone() };
+  return useQuery({
+    queryKey: ["transactions", "stats", "flows", full],
+    queryFn: full
+      ? () => unwrap(api.GET("/api/v1/stats/flows", { params: { query: full } }))
+      : skipToken,
+    placeholderData: keepPreviousData,
+  });
+}

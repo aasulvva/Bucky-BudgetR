@@ -185,6 +185,11 @@ func (s *Service) Stats(ctx context.Context, userID string, q stats.Query) (stat
 	return stats.Series(ctx, s.pool, userID, q)
 }
 
+// StatsFlows is the buckets' and accounts' money in and out (#126).
+func (s *Service) StatsFlows(ctx context.Context, userID string, q stats.FlowsQuery) (stats.FlowsResult, error) {
+	return stats.Flows(ctx, s.pool, userID, q)
+}
+
 func (s *Service) List(ctx context.Context, userID string) ([]Account, error) {
 	q := sqlc.New(s.pool)
 	rows, err := q.ListAccounts(ctx, userID)

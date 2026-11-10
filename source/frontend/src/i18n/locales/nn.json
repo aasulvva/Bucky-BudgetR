@@ -1184,7 +1184,8 @@
         "type": "Type",
         "types": {
           "graph": "Graf",
-          "transactions": "Transaksjonar"
+          "transactions": "Transaksjonar",
+          "flows": "Inn/ut/saldo"
         }
       },
       "ownFilters": {
@@ -1214,6 +1215,50 @@
             "oldest": "Eldste først"
           }
         }
+      },
+      "flows": {
+        "title": "Inn, ut og saldo",
+        "buckets": "Bøtter",
+        "accounts": "Kontoar",
+        "bucket": "Bøtte",
+        "account": "Konto",
+        "total": "Totalt",
+        "totalIn": "Totalt ({{currency}})",
+        "empty": "Ingenting skjedde i perioden.",
+        "filtersNote": "Taggane og motparten til rapporten gjeld ikkje for denne modulen.",
+        "columns": {
+          "start": "Start",
+          "refills": "Påfyll",
+          "income": "Inntekt",
+          "opening_funds": "Startmidlar",
+          "adjustments_in": "Justert inn",
+          "transfers_in": "Flytt inn",
+          "in": "Inn",
+          "spent": "Brukt",
+          "overflow": "Overløp",
+          "adjustments_out": "Justert ut",
+          "transfers_out": "Flytt ut",
+          "out": "Ut",
+          "end": "Slutt",
+          "expenses": "Utgifter",
+          "net": "Netto"
+        },
+        "accountColumns": {
+          "transfers_in": "Overføringar inn",
+          "transfers_out": "Overføringar ut"
+        },
+        "show": {
+          "label": "Vis",
+          "options": {
+            "buckets": "Bøtter",
+            "accounts": "Kontoar",
+            "both": "Begge"
+          }
+        },
+        "transfers": "Tel med overføringar mellom kontoar",
+        "details": "Vis detaljar",
+        "detailsHint": "Del inn og ut i påfyll, inntekt, justeringar, flyttingar, brukt og overløp.",
+        "breakdownHint": "Også ein tabell per månad eller syklus, for periodar på minst {{days}} dagar."
       }
     },
     "graphs": {

@@ -16,6 +16,29 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.11.00",
+    date: "2026-11-10",
+    title: {
+      en: "Reports: in, out and balance",
+      nb: "Rapporter: inn, ut og saldo",
+      nn: "Rapportar: inn, ut og saldo",
+    },
+    changes: {
+      en: [
+        "A report can now show a table of money in and out as a module. Per bucket: what it had at the start, what came in (refills, income, opening funds, adjustments, moves), what went out (spending, overflow, adjustments, moves) and what it had at the end. Per account: income, expenses and the net, with transfers between accounts if you want them. Show buckets, accounts or both, and Show details for the parts of in and out.",
+        "Each table has a total per currency, and a name opens its transactions. Break the module down by month or cycle to get a smaller table for each. It uses the report's accounts and buckets, or its own; tags and counterparty don't apply.",
+      ],
+      nb: [
+        "En rapport kan nå vise en tabell over penger inn og ut som en modul. Per bøtte: hva den hadde ved start, hva som kom inn (påfyll, inntekt, startmidler, justeringer, flyttinger), hva som gikk ut (forbruk, overløp, justeringer, flyttinger) og hva den hadde ved slutt. Per konto: inntekter, utgifter og netto, med overføringer mellom kontoer om du vil. Vis bøtter, kontoer eller begge, og Vis detaljer for delene av inn og ut.",
+        "Hver tabell har en total per valuta, og et navn åpner transaksjonene. Del modulen inn per måned eller syklus for å få en mindre tabell for hver. Den bruker rapportens kontoer og bøtter, eller sine egne; tagger og motpart gjelder ikke.",
+      ],
+      nn: [
+        "Ein rapport kan no vise ein tabell over pengar inn og ut som ein modul. Per bøtte: kva ho hadde ved start, kva som kom inn (påfyll, inntekt, startmidlar, justeringar, flyttingar), kva som gjekk ut (forbruk, overløp, justeringar, flyttingar) og kva ho hadde ved slutt. Per konto: inntekter, utgifter og netto, med overføringar mellom kontoar om du vil. Vis bøtter, kontoar eller begge, og Vis detaljar for delane av inn og ut.",
+        "Kvar tabell har ein total per valuta, og eit namn opnar transaksjonane. Del modulen inn per månad eller syklus for å få ein mindre tabell for kvar. Han bruker kontoane og bøttene til rapporten, eller sine eigne; taggar og motpart gjeld ikkje.",
+      ],
+    },
+  },
+  {
     version: "v2.10.00",
     date: "2026-11-10",
     title: {

@@ -119,3 +119,20 @@ ORDER BY k.id;
 SELECT start_at, end_at FROM cycles
 WHERE user_id = sqlc.arg(user_id) AND end_at > sqlc.arg(from_at) AND start_at < sqlc.arg(to_at)
 ORDER BY start_at;
+
+-- name: StatsBucketStarts :many
+-- For the In/out/balance module (#126): each bucket's TF at from_at, the sum
+-- of its lines whose family's original is dated before it (the dating of
+-- StatsBucketNets, so start + nets = end). Every filtered bucket that isn't
+-- deleted gets a row.
+SELECT k.id AS bucket_id,
+       COALESCE(SUM(l.amount) FILTER (WHERE o.transaction_at < sqlc.arg(from_at)), 0)::numeric AS start
+FROM buckets k
+LEFT JOIN bucket_transactions l ON l.bucket_id = k.id
+LEFT JOIN transaction_headers c ON c.id = l.transaction_id
+LEFT JOIN transaction_headers o ON o.id = COALESCE(c.parent_id, c.id)
+WHERE k.user_id = sqlc.arg(user_id) AND NOT k.deleted
+  AND (sqlc.narg(account_ids)::text[] IS NULL OR k.source_account_id = ANY(sqlc.narg(account_ids)::text[]))
+  AND (sqlc.narg(bucket_ids)::text[] IS NULL OR k.id = ANY(sqlc.narg(bucket_ids)::text[]))
+GROUP BY k.id
+ORDER BY k.id;

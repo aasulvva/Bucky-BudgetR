@@ -6,13 +6,16 @@
 
 import dayjs from "dayjs";
 
+import type { Account, Bucket } from "@/api/accounts";
 import type { components } from "@/api/schema";
+import type { BucketFlowValues, FlowsQuery, StatsFlows } from "@/api/stats";
 import type { Transaction, TransactionQuery } from "@/api/transactions";
 import i18n from "@/i18n";
 
 import { addDays, endAtFor, localDate, startAtFor, type LocalDate } from "./cycles";
 import { formatDay } from "./dates";
 import { cleanGraph, groupBy, maxIntervals, specificLabel, type GraphSettings } from "./graphs";
+import { addAmounts, compareAmounts, subtractAmounts } from "./money";
 import {
   defaultResolution,
   formatPeriod,
@@ -34,6 +37,7 @@ type ApiReport = components["schemas"]["ReportSettings"];
 type ApiTemplate = components["schemas"]["ReportTemplate"];
 export type ReportGraph = components["schemas"]["ReportGraph"];
 export type ReportTransactions = components["schemas"]["ReportTransactions"];
+export type ReportFlows = components["schemas"]["ReportFlows"];
 export type CompareTo = NonNullable<ApiReport["compare_to"]>;
 export type ModuleCompare = NonNullable<ApiModule["compare"]>;
 export type Breakdown = NonNullable<ApiModule["breakdown"]>;
@@ -57,12 +61,22 @@ export interface TransactionsModule {
   transactions: ReportTransactions;
 }
 
+/** An In/out/balance module (#126): the buckets' and accounts' money in and out. */
+export interface FlowsModule {
+  id: string;
+  type: "flows";
+  title?: string;
+  flows: ReportFlows;
+}
+
 /** The API's module, by its type: each has its own settings. */
-export type ReportModule = GraphModule | TransactionsModule;
+export type ReportModule = GraphModule | TransactionsModule | FlowsModule;
 export type ReportSettings = Omit<ApiReport, "modules"> & { modules: ReportModule[] };
 export type ReportTemplate = Omit<ApiTemplate, "report"> & { report: ReportSettings };
 
-export const MODULE_TYPES: ModuleType[] = ["graph", "transactions"];
+export const MODULE_TYPES: ModuleType[] = ["graph", "transactions", "flows"];
+export type FlowsShow = NonNullable<ReportFlows["show"]>;
+export const FLOWS_SHOWS: FlowsShow[] = ["buckets", "accounts", "both"];
 export type TransactionsGroup = NonNullable<ReportTransactions["group_by"]>;
 export type TransactionsOrder = NonNullable<ReportTransactions["order"]>;
 export const TRANSACTIONS_GROUPS: TransactionsGroup[] = ["day", "week", "month", "cycle"];
@@ -168,6 +182,9 @@ function readModule(m: ApiModule): ReportModule | null {
   if (m.type === "transactions") {
     return m.transactions ? { ...base, type: "transactions", transactions: m.transactions } : null;
   }
+  if (m.type === "flows") {
+    return m.flows ? { ...base, type: "flows", flows: m.flows } : null;
+  }
   if (!m.graph) return null;
   return {
     ...base,
@@ -218,6 +235,145 @@ export function moduleTransactions(
   module: TransactionsModule,
 ): ReportTransactions {
   return effectiveFilters(report, module.transactions);
+}
+
+/** An In/out/balance module's settings, with the report's accounts and buckets where it sets none. */
+export function moduleFlows(report: ReportSettings, module: FlowsModule): ReportFlows {
+  const f = module.flows;
+  return {
+    ...f,
+    account_ids: f.account_ids?.length ? f.account_ids : report.account_ids,
+    bucket_ids: f.bucket_ids?.length ? f.bucket_ids : report.bucket_ids,
+  };
+}
+
+/** The flows API's query for a module over a period, per month, cycle or in total. */
+export function flowsQuery(
+  f: ReportFlows,
+  period: Period,
+  resolution: FlowsQuery["resolution"],
+): FlowsQuery {
+  return {
+    from: period.fromAt,
+    to: period.toAt,
+    resolution,
+    ...(f.account_ids?.length ? { account_id: f.account_ids } : {}),
+    ...(f.bucket_ids?.length ? { bucket_id: f.bucket_ids } : {}),
+  };
+}
+
+/** The bucket table's amount columns, and those added by Show details. */
+export const BUCKET_FIGURES = ["start", "in", "out", "end"] as const;
+export const BUCKET_DETAILS = [
+  "start",
+  "refills",
+  "income",
+  "opening_funds",
+  "adjustments_in",
+  "transfers_in",
+  "in",
+  "spent",
+  "overflow",
+  "adjustments_out",
+  "transfers_out",
+  "out",
+  "end",
+] as const satisfies readonly (keyof BucketFlowValues)[];
+export type BucketFigure = (typeof BUCKET_DETAILS)[number];
+/** The accounts table's columns: in and out with or without transfers, and the net. */
+export const ACCOUNT_FIGURES = ["in", "out", "net"] as const;
+export const ACCOUNT_DETAILS = [
+  "income",
+  "transfers_in",
+  "in",
+  "expenses",
+  "transfers_out",
+  "out",
+  "net",
+] as const;
+export type AccountFigure = (typeof ACCOUNT_DETAILS)[number];
+
+export interface FlowRow<F extends string> {
+  /** The bucket's or account's id; "" for a total. */
+  id: string;
+  name: string;
+  currency: string;
+  values: Record<F, string>;
+}
+
+export interface FlowTables {
+  buckets: { rows: FlowRow<BucketFigure>[]; totals: FlowRow<BucketFigure>[] };
+  accounts: { rows: FlowRow<AccountFigure>[]; totals: FlowRow<AccountFigure>[] };
+}
+
+const isZero = (a: string) => compareAmounts(a, "0") === 0;
+
+/** Totals per currency, in the order the currencies first come. */
+function totals<F extends string>(rows: FlowRow<F>[], keys: readonly F[]): FlowRow<F>[] {
+  const out = new Map<string, FlowRow<F>>();
+  for (const r of rows) {
+    const t = out.get(r.currency);
+    if (!t) {
+      out.set(r.currency, { id: "", name: "", currency: r.currency, values: { ...r.values } });
+      continue;
+    }
+    for (const k of keys) t.values[k] = addAmounts(t.values[k], r.values[k]);
+  }
+  return [...out.values()];
+}
+
+/**
+ * One interval of the flows as table rows: a row per bucket and per account,
+ * by name, without the ones where nothing happened, and a total per
+ * currency. With `transfers`, an account's transfers count as in and out.
+ */
+export function flowTables(
+  result: StatsFlows,
+  index: number,
+  accounts: Account[],
+  buckets: Bucket[],
+  transfers: boolean,
+  locale?: string,
+): FlowTables {
+  const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, locale);
+  const bucketRows: FlowRow<BucketFigure>[] = result.buckets
+    .flatMap((b) => {
+      const v = b.values[index];
+      if (!v || BUCKET_DETAILS.every((k) => isZero(v[k]))) return [];
+      const name = buckets.find((x) => x.id === b.bucket_id)?.name ?? b.bucket_id;
+      const values = Object.fromEntries(BUCKET_DETAILS.map((k) => [k, v[k]])) as Record<
+        BucketFigure,
+        string
+      >;
+      return [{ id: b.bucket_id, name, currency: b.currency, values }];
+    })
+    .sort(byName);
+  const accountRows: FlowRow<AccountFigure>[] = result.accounts
+    .flatMap((a) => {
+      const v = a.values[index];
+      if (!v) return [];
+      const tin = transfers ? v.transfers_in : "0.00";
+      const tout = transfers ? v.transfers_out : "0.00";
+      const into = addAmounts(v.income, tin);
+      const out = addAmounts(v.expenses, tout);
+      const values: Record<AccountFigure, string> = {
+        income: v.income,
+        transfers_in: tin,
+        in: into,
+        expenses: v.expenses,
+        transfers_out: tout,
+        out,
+        net: subtractAmounts(into, out),
+      };
+      if (ACCOUNT_DETAILS.every((k) => isZero(values[k]))) return [];
+      const name = accounts.find((x) => x.id === a.account_id)?.name ?? a.account_id;
+      return [{ id: a.account_id, name, currency: a.currency, values }];
+    })
+    .sort(byName);
+  return {
+    buckets: { rows: bucketRows, totals: totals(bucketRows, BUCKET_DETAILS) },
+    accounts: { rows: accountRows, totals: totals(accountRows, ACCOUNT_DETAILS) },
+  };
 }
 
 /** A transactions module shows this many at first, and as many more on Load more. */
@@ -344,7 +500,12 @@ function periodLink(period: Period, open: string): string {
 export function ownFilters(
   module: ReportModule,
 ): ("accounts" | "buckets" | "tags" | "counterparty")[] {
-  const g = module.type === "graph" ? module.graph : module.transactions;
+  const g: Pick<ReportTransactions, "account_ids" | "bucket_ids" | "tags" | "counterparty"> =
+    module.type === "graph"
+      ? module.graph
+      : module.type === "transactions"
+        ? module.transactions
+        : module.flows;
   const out: ("accounts" | "buckets" | "tags" | "counterparty")[] = [];
   if (g.account_ids?.length) out.push("accounts");
   if (g.bucket_ids?.length) out.push("buckets");
@@ -509,12 +670,27 @@ export function cleanReport(r: ReportSettings): ReportSettings {
     if (m.type === "transactions") {
       return { id: m.id, type: m.type, ...title, transactions: cleanTransactions(m.transactions) };
     }
+    if (m.type === "flows") {
+      return { id: m.id, type: m.type, ...title, flows: cleanFlows(m.flows) };
+    }
     const graph = withoutPeriod(cleanGraph({ ...m.graph, period: r.period }));
     const clean: GraphModule = { id: m.id, type: m.type, ...title, graph };
     if (m.compare && m.compare !== "off") clean.compare = m.compare;
     if (m.breakdown && m.breakdown !== "none") clean.breakdown = m.breakdown;
     return clean;
   });
+  return out;
+}
+
+/** An In/out/balance module's settings without defaults and empty fields. */
+function cleanFlows(f: ReportFlows): ReportFlows {
+  const out: ReportFlows = {};
+  if (f.account_ids?.length) out.account_ids = [...f.account_ids];
+  if (f.bucket_ids?.length) out.bucket_ids = [...f.bucket_ids];
+  if (f.show && f.show !== "buckets") out.show = f.show;
+  if (f.transfers) out.transfers = true;
+  if (f.details) out.details = true;
+  if (f.breakdown && f.breakdown !== "none") out.breakdown = f.breakdown;
   return out;
 }
 
@@ -552,9 +728,9 @@ export function newModule(report: ReportSettings, type: ModuleType = "graph"): R
     "m",
     report.modules.map((m) => m.id),
   );
-  return type === "transactions"
-    ? { id, type, transactions: {} }
-    : { id, type, graph: { kind: "bar", metric: "spending", resolution: "month" } };
+  if (type === "transactions") return { id, type, transactions: {} };
+  if (type === "flows") return { id, type, flows: {} };
+  return { id, type, graph: { kind: "bar", metric: "spending", resolution: "month" } };
 }
 
 /** The report's period with a different choice. */
@@ -584,6 +760,7 @@ export function partResolution(
 export function moduleTitle(module: ReportModule): string {
   if (module.title?.trim()) return module.title.trim();
   if (module.type === "transactions") return i18n.t("stats.reports.transactions.title");
+  if (module.type === "flows") return i18n.t("stats.reports.flows.title");
   const g = module.graph;
   const group = groupBy({ ...g, period: "" });
   return [

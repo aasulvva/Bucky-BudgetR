@@ -1,10 +1,14 @@
-import { transaction } from "@/test/fixtures";
+import type { BucketFlowValues, StatsFlows } from "@/api/stats";
+import { account, bucket, transaction } from "@/test/fixtures";
 
 import { endAtFor, startAtFor } from "./cycles";
 import { parsePeriod, resolvePeriod } from "./periods";
 import {
   cleanReport,
+  flowsQuery,
+  flowTables,
   groupTransactions,
+  moduleFlows,
   moduleGraph,
   moduleTransactions,
   previousPeriod,
@@ -342,5 +346,162 @@ describe("groupTransactions", () => {
     ]);
     const [, outside] = groupTransactions(items, "cycle", cycles, "nb-NO");
     expect(outside?.label).toBe("Outside any cycle");
+  });
+});
+
+describe("In/out/balance modules (#126)", () => {
+  const zero: BucketFlowValues = {
+    start: "0.00",
+    refills: "0.00",
+    income: "0.00",
+    opening_funds: "0.00",
+    adjustments_in: "0.00",
+    adjustments_out: "0.00",
+    transfers_in: "0.00",
+    transfers_out: "0.00",
+    spent: "0.00",
+    overflow: "0.00",
+    in: "0.00",
+    out: "0.00",
+    end: "0.00",
+  };
+  const flow = (id: string, currency: string, v: Partial<BucketFlowValues>) => ({
+    bucket_id: id,
+    account_id: "1234",
+    currency,
+    values: [{ ...zero, ...v }],
+  });
+  const result: StatsFlows = {
+    intervals: [{ start: "2026-01-01T08:00:00Z", end: "2027-01-01T08:00:00Z" }],
+    buckets: [
+      flow("1000000002", "NOK", {
+        start: "100.00",
+        refills: "500.00",
+        in: "500.00",
+        spent: "650.00",
+        out: "650.00",
+        end: "-50.00",
+      }),
+      flow("1000000001", "NOK", {
+        refills: "1000.00",
+        in: "1000.00",
+        spent: "400.00",
+        out: "400.00",
+        end: "600.00",
+      }),
+      // Nothing happened: left out.
+      flow("1000000003", "NOK", {}),
+      flow("1000000004", "EUR", { start: "20.00", end: "20.00" }),
+    ],
+    accounts: [
+      {
+        account_id: "1234",
+        currency: "NOK",
+        values: [
+          {
+            income: "30000.00",
+            expenses: "1050.00",
+            transfers_in: "0.00",
+            transfers_out: "2000.00",
+          },
+        ],
+      },
+      {
+        account_id: "2345",
+        currency: "NOK",
+        values: [
+          { income: "0.00", expenses: "0.00", transfers_in: "2000.00", transfers_out: "0.00" },
+        ],
+      },
+    ],
+  };
+  const accounts = [
+    account({ id: "1234", name: "Main" }),
+    account({ id: "2345", name: "Savings" }),
+  ];
+  const buckets = [
+    bucket({ id: "1000000001", name: "Food", source_account_id: "1234" }),
+    bucket({ id: "1000000002", name: "Fun", source_account_id: "1234" }),
+    bucket({ id: "1000000003", name: "Pets", source_account_id: "1234" }),
+    bucket({ id: "1000000004", name: "Travel", source_account_id: "1234" }),
+  ];
+
+  it("give a row per bucket by name, without empty ones, and a total per currency", () => {
+    const t = flowTables(result, 0, accounts, buckets, false, "en-GB");
+    expect(t.buckets.rows.map((r) => r.name)).toEqual(["Food", "Fun", "Travel"]);
+    expect(
+      t.buckets.totals.map((r) => [
+        r.currency,
+        r.values.start,
+        r.values.in,
+        r.values.out,
+        r.values.end,
+      ]),
+    ).toEqual([
+      ["NOK", "100.00", "1500.00", "1050.00", "550.00"],
+      ["EUR", "20.00", "0.00", "0.00", "20.00"],
+    ]);
+  });
+
+  it("give accounts in, out and net, with transfers only when asked", () => {
+    const without = flowTables(result, 0, accounts, buckets, false, "en-GB").accounts;
+    expect(without.rows.map((r) => [r.name, r.values.in, r.values.out, r.values.net])).toEqual([
+      ["Main", "30000.00", "1050.00", "28950.00"],
+    ]);
+    const withTransfers = flowTables(result, 0, accounts, buckets, true, "en-GB").accounts;
+    expect(
+      withTransfers.rows.map((r) => [r.name, r.values.in, r.values.out, r.values.net]),
+    ).toEqual([
+      ["Main", "30000.00", "3050.00", "26950.00"],
+      ["Savings", "2000.00", "0.00", "2000.00"],
+    ]);
+    expect(withTransfers.totals[0]?.values.net).toBe("28950.00");
+  });
+
+  it("use only the report's accounts and buckets, and save without defaults", () => {
+    const report: ReportSettings = {
+      period: "previous-year",
+      account_ids: ["1234"],
+      bucket_ids: ["1000000001"],
+      tags: ["food"],
+      modules: [],
+    };
+    const f = moduleFlows(report, {
+      id: "m-1",
+      type: "flows",
+      flows: { bucket_ids: ["1000000002"] },
+    });
+    expect(f).toEqual({ account_ids: ["1234"], bucket_ids: ["1000000002"] });
+    const period = {
+      from: "2025-01-01",
+      to: "2025-12-31",
+      fromAt: startAtFor("2025-01-01"),
+      toAt: endAtFor("2025-12-31"),
+    };
+    expect(flowsQuery(f, period, "month")).toEqual({
+      from: period.fromAt,
+      to: period.toAt,
+      resolution: "month",
+      account_id: ["1234"],
+      bucket_id: ["1000000002"],
+    });
+    expect(
+      cleanReport({
+        period: "previous-year",
+        modules: [
+          {
+            id: "m-1",
+            type: "flows",
+            flows: {
+              show: "buckets",
+              breakdown: "none",
+              details: false,
+              transfers: true,
+              bucket_ids: [],
+            },
+          },
+        ],
+      }).modules,
+    ).toEqual([{ id: "m-1", type: "flows", flows: { transfers: true } }]);
   });
 });
