@@ -1185,7 +1185,8 @@
         "types": {
           "graph": "Graph",
           "transactions": "Transactions",
-          "flows": "In/out/balance"
+          "flows": "In/out/balance",
+          "budget": "Budget vs spending"
         }
       },
       "ownFilters": {
@@ -1259,6 +1260,26 @@
         "details": "Show details",
         "detailsHint": "Split in and out into refills, income, adjustments, transfers, spent and overflow.",
         "breakdownHint": "Also a table per month or cycle, for periods of at least {{days}} days."
+      },
+      "budget": {
+        "title": "Budget vs spending",
+        "summary": "All cycles",
+        "summaryHint": "Budget: what the buckets had at the first cycle's start plus everything put in since. Left: at the end of the last cycle.",
+        "bucket": "Bucket",
+        "budget": "Budget",
+        "used": "Used",
+        "usedPct": "Used %",
+        "left": "Left",
+        "total": "Total",
+        "totalIn": "Total ({{currency}})",
+        "overBudget": "Over budget",
+        "partial": "Partly in the period",
+        "active": "In progress",
+        "empty": "No buckets had a budget in this cycle.",
+        "none": "No cycles have begun in this period.",
+        "many": "This period has more than {{max}} cycles. Choose a shorter one.",
+        "filtersNote": "The report's tags and counterparty don't apply to this module.",
+        "hint": "One table per cycle that overlaps the period, with whole cycles. Planned cycles are left out."
       }
     },
     "graphs": {

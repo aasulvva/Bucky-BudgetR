@@ -16,6 +16,29 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.12.00",
+    date: "2026-11-10",
+    title: {
+      en: "Reports: budget vs spending",
+      nb: "Rapporter: budsjett mot forbruk",
+      nn: "Rapportar: budsjett mot forbruk",
+    },
+    changes: {
+      en: [
+        "A report can now show budget vs spending as a module: for each cycle in the period, each bucket's budget, what it used (with a bar), and what's left, with a total per currency. Buckets over budget are marked. Cycles are shown whole, and those the period cuts, or that are still going, are marked.",
+        "With more than one cycle, a summary over all of them comes first. It uses the report's accounts and buckets, or its own; tags and counterparty don't apply.",
+      ],
+      nb: [
+        "En rapport kan nå vise budsjett mot forbruk som en modul: for hver syklus i perioden, hver bøttes budsjett, hva den brukte (med en stolpe) og hva som er igjen, med en total per valuta. Bøtter over budsjett er markert. Syklusene vises hele, og de perioden skjærer, eller som pågår, er markert.",
+        "Med mer enn én syklus kommer en oppsummering over alle først. Den bruker rapportens kontoer og bøtter, eller sine egne; tagger og motpart gjelder ikke.",
+      ],
+      nn: [
+        "Ein rapport kan no vise budsjett mot forbruk som ein modul: for kvar syklus i perioden, budsjettet til kvar bøtte, kva ho brukte (med ein stolpe) og kva som er att, med ein total per valuta. Bøtter over budsjett er markerte. Syklusane vert viste heile, og dei perioden skjer, eller som pågår, er markerte.",
+        "Med meir enn éin syklus kjem ei oppsummering over alle først. Han bruker kontoane og bøttene til rapporten, eller sine eigne; taggar og motpart gjeld ikkje.",
+      ],
+    },
+  },
+  {
     version: "v2.11.00",
     date: "2026-11-10",
     title: {

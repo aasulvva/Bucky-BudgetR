@@ -1185,7 +1185,8 @@
         "types": {
           "graph": "Graf",
           "transactions": "Transaksjoner",
-          "flows": "Inn/ut/saldo"
+          "flows": "Inn/ut/saldo",
+          "budget": "Budsjett mot forbruk"
         }
       },
       "ownFilters": {
@@ -1259,6 +1260,26 @@
         "details": "Vis detaljer",
         "detailsHint": "Del inn og ut i påfyll, inntekt, justeringer, flyttinger, brukt og overløp.",
         "breakdownHint": "Også en tabell per måned eller syklus, for perioder på minst {{days}} dager."
+      },
+      "budget": {
+        "title": "Budsjett mot forbruk",
+        "summary": "Alle sykluser",
+        "summaryHint": "Budsjett: det bøttene hadde ved starten av første syklus, pluss alt som er lagt inn siden. Igjen: ved slutten av siste syklus.",
+        "bucket": "Bøtte",
+        "budget": "Budsjett",
+        "used": "Brukt",
+        "usedPct": "Brukt %",
+        "left": "Igjen",
+        "total": "Totalt",
+        "totalIn": "Totalt ({{currency}})",
+        "overBudget": "Over budsjett",
+        "partial": "Delvis i perioden",
+        "active": "Pågår",
+        "empty": "Ingen bøtter hadde budsjett i denne syklusen.",
+        "none": "Ingen sykluser har startet i denne perioden.",
+        "many": "Perioden har mer enn {{max}} sykluser. Velg en kortere periode.",
+        "filtersNote": "Rapportens tagger og motpart gjelder ikke for denne modulen.",
+        "hint": "Én tabell per syklus som overlapper perioden, med hele sykluser. Planlagte sykluser er utelatt."
       }
     },
     "graphs": {

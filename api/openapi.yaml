@@ -4004,8 +4004,8 @@ components:
       description: |
         A module of a report. Its `type` says which settings it has: a
         `graph` module has `graph`, a `transactions` module (#126) has
-        `transactions`, a `flows` module (#126) has `flows`, and none of the
-        others (400 `invalid_request`).
+        `transactions`, a `flows` module (#126) has `flows`, a `budget` module
+        (#126) has `budget`, and none of the others (400 `invalid_request`).
       required: [id, type]
       properties:
         id:
@@ -4014,7 +4014,7 @@ components:
           maxLength: 40
         type:
           type: string
-          enum: [graph, transactions, flows]
+          enum: [graph, transactions, flows, budget]
           description: What the module shows.
         title:
           type: string
@@ -4025,6 +4025,8 @@ components:
           $ref: "#/components/schemas/ReportTransactions"
         flows:
           $ref: "#/components/schemas/ReportFlows"
+        budget:
+          $ref: "#/components/schemas/ReportBudget"
         compare:
           type: string
           enum: ["off", both, difference]
@@ -4074,6 +4076,27 @@ components:
           type: string
           enum: [none, month, cycle]
           description: Also a table per month or cycle, for periods of at least 60 days. `none` by default.
+
+    ReportBudget:
+      type: object
+      additionalProperties: false
+      description: |
+        A budget vs spending module (#126): each bucket's budget, used and
+        left per cycle that overlaps the period, from the cycle's bucket
+        figures, with a summary over the cycles. Only the account and
+        bucket filters apply; set here, they replace the report's. An
+        account filter matches a bucket's source account.
+      properties:
+        account_ids:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/AccountId"
+        bucket_ids:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/BucketId"
 
     ReportTransactions:
       type: object
