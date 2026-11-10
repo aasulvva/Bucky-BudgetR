@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 
 import type { components } from "@/api/schema";
 import { startAtFor } from "@/lib/cycles";
+import { formatDay } from "@/lib/dates";
 import { apiMock, testUser, type MockRequest } from "@/test/api";
 import { account, bucket, transaction } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
@@ -303,7 +304,10 @@ describe("Reports", () => {
     };
     renderRoute("/stats/reports?template=r-1");
     const module = await screen.findByRole("region", { name: "Transactions" });
-    expect(await within(module).findByRole("region", { name: /15 Oct/ })).toBeInTheDocument();
+    // Under the day's heading, as the locale writes it (CI runs in en-US).
+    expect(
+      await within(module).findByRole("region", { name: formatDay("2026-10-15") }),
+    ).toBeInTheDocument();
     await userEvent.click(within(module).getByRole("button", { name: "Edit" }));
     const dialog = await screen.findByRole("dialog", { name: "Edit module" });
     await userEvent.click(within(dialog).getByRole("radio", { name: "Month" }));
