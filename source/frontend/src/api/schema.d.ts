@@ -995,10 +995,12 @@ export interface paths {
         };
         /**
          * List transactions
-         * @description The user's transactions, newest first, one page at a time. Each is
+         * @description The user's transactions, newest first (or oldest first with
+         *     `order`), one page at a time. Each is
          *     merged with its corrections: the lines show the effective amounts,
          *     and `corrected` and `reversed` say what happened to it. Filters
-         *     combine with AND. Pass `next_cursor` as `cursor` to get the next page.
+         *     combine with AND; several values of one filter match any of them
+         *     (#126). Pass `next_cursor` as `cursor` to get the next page.
          */
         get: operations["listTransactions"];
         put?: never;
@@ -2272,29 +2274,63 @@ export interface components {
             counterparty?: string;
             modules: components["schemas"]["ReportModule"][];
         };
+        /**
+         * @description A module of a report. Its `type` says which settings it has: a
+         *     `graph` module has `graph`, a `transactions` module (#126) has
+         *     `transactions`, and not the other (400 `invalid_request`).
+         */
         ReportModule: {
             id: string;
             /**
-             * @description What the module shows. More types come with
+             * @description What the module shows.
              * @enum {string}
              */
-            type: "graph";
+            type: "graph" | "transactions";
             title?: string;
-            graph: components["schemas"]["ReportGraph"];
+            graph?: components["schemas"]["ReportGraph"];
+            transactions?: components["schemas"]["ReportTransactions"];
             /**
-             * @description Lines and bars: the previous period beside this one (`both`) or
-             *     this period minus the previous (`difference`). Pies: `both` and
-             *     `difference` show the previous period's pie too. `off` by default.
+             * @description Graphs only. Lines and bars: the previous period beside this one
+             *     (`both`) or this period minus the previous (`difference`). Pies:
+             *     `both` and `difference` show the previous period's pie too.
+             *     `off` by default.
              * @enum {string}
              */
             compare?: "off" | "both" | "difference";
             /**
-             * @description Also one small graph per month or per cycle, for periods of at
-             *     least 60 days. Months and cycles cut by the period's edges are
-             *     clipped. `none` by default.
+             * @description Graphs only. Also one small graph per month or per cycle, for
+             *     periods of at least 60 days. Months and cycles cut by the
+             *     period's edges are clipped. `none` by default.
              * @enum {string}
              */
             breakdown?: "none" | "month" | "cycle";
+        };
+        /**
+         * @description A transactions module (#126): the report's period's transactions, as
+         *     the Transactions list shows them. A filter set here replaces the
+         *     report's for that field.
+         */
+        ReportTransactions: {
+            account_ids?: components["schemas"]["AccountId"][];
+            bucket_ids?: components["schemas"]["BucketId"][];
+            tags?: string[];
+            counterparty?: string;
+            /** @description Only these types; empty or left out, all but refills and adjustments. */
+            types?: components["schemas"]["TransactionType"][];
+            /** @description Also refills and adjustments (REF, OVF, OPF, BUA, BAT). */
+            system?: boolean;
+            /** @description Also reversed transactions and moved originals (#91). */
+            reversed?: boolean;
+            /**
+             * @description Under a heading per day (the default), week, month or cycle.
+             * @enum {string}
+             */
+            group_by?: "day" | "week" | "month" | "cycle";
+            /**
+             * @description Newest first (the default) or oldest first.
+             * @enum {string}
+             */
+            order?: "newest" | "oldest";
         };
         /**
          * @description A report module's graph: `GraphSettings` without the period, which
@@ -4201,18 +4237,21 @@ export interface operations {
             query?: {
                 /** @description Only these types. Repeat for several (`?type=INC&type=EXP`). */
                 type?: components["schemas"]["TransactionType"][];
-                /** @description Only transactions with a line on this account. */
-                account_id?: components["schemas"]["AccountId"];
-                /** @description Only transactions with a line on this bucket. */
-                bucket_id?: components["schemas"]["BucketId"];
+                /**
+                 * @description Only transactions with a line on one of these accounts. Repeat
+                 *     for several. `balances_after` is only filled with exactly one.
+                 */
+                account_id?: components["schemas"]["AccountId"][];
+                /** @description Only transactions with a line on one of these buckets. Repeat for several. */
+                bucket_id?: components["schemas"]["BucketId"][];
                 /** @description Only transactions dated within this cycle. */
                 cycle_id?: components["schemas"]["CycleId"];
                 /** @description Only transactions at or after this moment. */
                 from?: string;
                 /** @description Only transactions before this moment. */
                 to?: string;
-                /** @description Only transactions with this tag, ignoring case. */
-                tag?: string;
+                /** @description Only transactions with any of these tags, ignoring case. Repeat for several. */
+                tag?: string[];
                 /** @description Only transactions whose counterparty or description contains this text, ignoring case. */
                 counterparty?: string;
                 /** @description Only transactions whose effective counterparty is exactly this, ignoring case and spaces at the ends (#170). */
@@ -4225,8 +4264,10 @@ export interface operations {
                 reversed?: boolean;
                 /** @description The page size. */
                 limit?: number;
-                /** @description The previous page's `next_cursor`. */
+                /** @description The previous page's `next_cursor`, with the same `order`. */
                 cursor?: string;
+                /** @description Newest first (the default) or oldest first (#126). */
+                order?: "newest" | "oldest";
             };
             header?: never;
             path?: never;

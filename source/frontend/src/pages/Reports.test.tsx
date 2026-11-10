@@ -3,8 +3,9 @@ import userEvent from "@testing-library/user-event";
 
 import type { components } from "@/api/schema";
 import { startAtFor } from "@/lib/cycles";
+import { formatDay } from "@/lib/dates";
 import { apiMock, testUser, type MockRequest } from "@/test/api";
-import { account, bucket } from "@/test/fixtures";
+import { account, bucket, transaction } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
 
@@ -13,6 +14,8 @@ type ReportTemplate = components["schemas"]["ReportTemplate"];
 
 const main = account({ id: "1234", name: "Main" });
 const food = bucket({ id: "1000000001", name: "Food", source_account_id: "1234" });
+const fun = bucket({ id: "1000000002", name: "Fun", source_account_id: "1234" });
+const list = "GET /api/v1/transactions";
 const stats = "GET /api/v1/stats/series";
 const year = new Date().getFullYear();
 
@@ -41,7 +44,7 @@ beforeEach(() => {
     return { body: prefs };
   });
   apiMock.on("GET /api/v1/accounts", { body: [main] });
-  apiMock.on("GET /api/v1/buckets", { body: [food] });
+  apiMock.on("GET /api/v1/buckets", { body: [food, fun] });
   apiMock.on(stats, answer);
 });
 
@@ -205,5 +208,114 @@ describe("Reports", () => {
     expect(within(first).getByRole("button", { name: "Move up" })).toBeDisabled();
     await userEvent.click(within(first).getByRole("button", { name: "Move down" }));
     expect(modules()[1]).toBe("Spending · Pie · Per bucket");
+  });
+
+  it("adds a transactions module, a page at a time (#126)", async () => {
+    apiMock.on(list, (req) =>
+      req.query.get("cursor")
+        ? { body: { items: [transaction({ id: "t2", counterparty: "Kiwi" })], next_cursor: null } }
+        : {
+            body: {
+              items: [transaction({ id: "t1", counterparty: "Rema 1000" })],
+              next_cursor: "c1",
+            },
+          },
+    );
+    renderRoute("/stats/reports");
+    await userEvent.click(await screen.findByRole("button", { name: "Add module" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add module" });
+    await userEvent.click(within(dialog).getByRole("radio", { name: "Transactions" }));
+    await userEvent.click(
+      within(dialog).getByRole("switch", { name: "Show refills & adjustments" }),
+    );
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+
+    const module = await screen.findByRole("region", { name: "Transactions" });
+    expect(await within(module).findByText("Rema 1000")).toBeInTheDocument();
+    const query = apiMock.calls(list)[0]?.query;
+    expect(query?.get("from")).toBe(startAtFor(`${String(year - 1)}-01-01`));
+    expect(query?.getAll("type")).toContain("REF");
+    expect(query?.get("reversed")).toBe("false");
+    expect(query?.get("limit")).toBe("50");
+    expect(within(module).getByRole("link", { name: "Open in Transactions" })).toHaveAttribute(
+      "href",
+      `/transactions?cycle_id=all&from=${String(year - 1)}-01-01&to=${String(year - 1)}-12-31&system=1&reversed=0`,
+    );
+
+    await userEvent.click(within(module).getByRole("button", { name: "Load more" }));
+    expect(await within(module).findByText("Kiwi")).toBeInTheDocument();
+    expect(apiMock.calls(list).at(-1)?.query.get("cursor")).toBe("c1");
+    expect(within(module).queryByRole("button", { name: "Load more" })).not.toBeInTheDocument();
+  });
+
+  it("filters a saved transactions module by several buckets (#126)", async () => {
+    apiMock.on(list, {
+      body: { items: [transaction({ id: "t1", counterparty: "Rema 1000" })], next_cursor: null },
+    });
+    prefs = {
+      ...prefs,
+      report_templates: [
+        template({
+          modules: [
+            {
+              id: "m-1",
+              type: "transactions",
+              title: "Food and fun",
+              transactions: { bucket_ids: ["1000000001", "1000000002"] },
+            },
+          ],
+        }),
+      ],
+    };
+    renderRoute("/stats/reports?template=r-1");
+    const module = await screen.findByRole("region", { name: "Food and fun" });
+    expect(await within(module).findByText("Rema 1000")).toBeInTheDocument();
+    expect(within(module).getByText("Own buckets")).toBeInTheDocument();
+    expect(apiMock.calls(list)[0]?.query.getAll("bucket_id")).toEqual(["1000000001", "1000000002"]);
+    // The Transactions screen can't show two buckets yet (#162), but a row opens there.
+    expect(
+      within(module).queryByRole("link", { name: "Open in Transactions" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(module)
+        .getByRole("link", { name: /Rema 1000/ })
+        .getAttribute("href"),
+    ).toMatch(/^\/transactions\?cycle_id=all&from=.*&open=t1$/);
+    // Editing shows its own settings, not a graph's.
+    await userEvent.click(within(module).getByRole("button", { name: "Edit" }));
+    const dialog = await screen.findByRole("dialog", { name: "Edit module" });
+    expect(within(dialog).queryByRole("radio", { name: "Transactions" })).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("switch", { name: "Show reversed & moved" })).not.toBeChecked();
+    expect(within(dialog).queryByText("Breakdown")).not.toBeInTheDocument();
+  });
+
+  it("groups a transactions module by month, oldest first (#126)", async () => {
+    apiMock.on(list, {
+      body: {
+        items: [transaction({ id: "t1", counterparty: "Rema 1000", at: "2026-10-15T19:00:00Z" })],
+        next_cursor: null,
+      },
+    });
+    prefs = {
+      ...prefs,
+      report_templates: [
+        template({ modules: [{ id: "m-1", type: "transactions", transactions: {} }] }),
+      ],
+    };
+    renderRoute("/stats/reports?template=r-1");
+    const module = await screen.findByRole("region", { name: "Transactions" });
+    // Under the day's heading, as the locale writes it (CI runs in en-US).
+    expect(
+      await within(module).findByRole("region", { name: formatDay("2026-10-15") }),
+    ).toBeInTheDocument();
+    await userEvent.click(within(module).getByRole("button", { name: "Edit" }));
+    const dialog = await screen.findByRole("dialog", { name: "Edit module" });
+    await userEvent.click(within(dialog).getByRole("radio", { name: "Month" }));
+    await userEvent.click(within(dialog).getByRole("radio", { name: "Oldest first" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
+    expect(await within(module).findByRole("region", { name: "October 2026" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(apiMock.calls(list).at(-1)?.query.get("order")).toBe("oldest");
+    });
   });
 });

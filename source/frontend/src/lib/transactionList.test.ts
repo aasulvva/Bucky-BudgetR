@@ -107,6 +107,14 @@ describe("listQuery", () => {
     expect(q.cycle_id).toBeUndefined();
     expect(listQuery(readFilter(new URLSearchParams("type=REF")), null).type).toEqual(["REF"]);
   });
+
+  it("sends the account, bucket and tag as lists of one (#126)", () => {
+    const q = listQuery(
+      readFilter(new URLSearchParams("account_id=1234&bucket_id=1000000001&tag=food")),
+      active,
+    );
+    expect(q).toMatchObject({ account_id: ["1234"], bucket_id: ["1000000001"], tag: ["food"] });
+  });
 });
 
 describe("rows", () => {

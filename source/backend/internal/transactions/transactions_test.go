@@ -279,38 +279,52 @@ func TestList(t *testing.T) {
 	}{
 		"all":            {transactions.Filter{}, []string{"save", "food", "rent", "salary", "old"}},
 		"types":          {transactions.Filter{Types: []sqlc.TransactionType{sqlc.TransactionTypeINC, sqlc.TransactionTypeTRF}}, []string{"save", "salary"}},
-		"account":        {transactions.Filter{AccountID: savings}, []string{"save"}},
-		"bucket":         {transactions.Filter{BucketID: bucket}, []string{"food"}},
+		"account":        {transactions.Filter{AccountIDs: []string{savings}}, []string{"save"}},
+		"bucket":         {transactions.Filter{BucketIDs: []string{bucket}}, []string{"food"}},
 		"cycle":          {transactions.Filter{CycleID: e.cycle}, []string{"save", "food", "rent", "salary"}},
 		"cycle and from": {transactions.Filter{CycleID: e.cycle, From: now.Add(-3 * day)}, []string{"save", "food"}},
 		"range":          {transactions.Filter{From: now.Add(-9 * day), To: now.Add(-2 * day)}, []string{"rent", "salary"}},
-		"tag":            {transactions.Filter{Tag: "housing"}, []string{"rent"}},
-		"counterparty":   {transactions.Filter{Counterparty: "rema"}, []string{"food"}},
-		"wildcards":      {transactions.Filter{Counterparty: "%_"}, []string{"old"}},
+		"tag":            {transactions.Filter{Tags: []string{"housing"}}, []string{"rent"}},
+		// Several values match any of them (#126); blank ones are dropped.
+		"tags":         {transactions.Filter{Tags: []string{" HOUSING ", "nope", " "}}, []string{"rent"}},
+		"no tags":      {transactions.Filter{Tags: []string{" "}}, []string{"save", "food", "rent", "salary", "old"}},
+		"accounts":     {transactions.Filter{AccountIDs: []string{savings, "1111"}}, []string{"save"}},
+		"buckets":      {transactions.Filter{BucketIDs: []string{"1111111111", bucket}}, []string{"food"}},
+		"counterparty": {transactions.Filter{Counterparty: "rema"}, []string{"food"}},
+		"wildcards":    {transactions.Filter{Counterparty: "%_"}, []string{"old"}},
 	} {
 		if got := list(tc.f); !slices.Equal(got, tc.want) {
 			t.Errorf("%s: %v, want %v", name, got, tc.want)
 		}
 	}
 
-	// Pages of 2.
-	var all []string
-	f := transactions.Filter{Limit: 2}
-	for range 4 {
-		page, err := e.svc.List(t.Context(), e.user, f)
-		if err != nil {
-			t.Fatal(err)
+	// Pages of 2, newest first or oldest first (#126).
+	paged := func(f transactions.Filter) []string {
+		t.Helper()
+		var all []string
+		for range 4 {
+			page, err := e.svc.List(t.Context(), e.user, f)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, item := range page.Items {
+				all = append(all, item.ID)
+			}
+			if page.Next == "" {
+				break
+			}
+			f.Cursor = page.Next
 		}
-		for _, item := range page.Items {
-			all = append(all, item.ID)
-		}
-		if page.Next == "" {
-			break
-		}
-		f.Cursor = page.Next
+		return all
 	}
-	if want := []string{ids["save"], ids["food"], ids["rent"], ids["salary"], ids["old"]}; !slices.Equal(all, want) {
-		t.Errorf("paged %v, want %v", all, want)
+	newest := []string{ids["save"], ids["food"], ids["rent"], ids["salary"], ids["old"]}
+	if all := paged(transactions.Filter{Limit: 2}); !slices.Equal(all, newest) {
+		t.Errorf("paged %v, want %v", all, newest)
+	}
+	oldest := slices.Clone(newest)
+	slices.Reverse(oldest)
+	if all := paged(transactions.Filter{Limit: 2, OldestFirst: true}); !slices.Equal(all, oldest) {
+		t.Errorf("paged oldest first %v, want %v", all, oldest)
 	}
 
 	for name, f := range map[string]transactions.Filter{

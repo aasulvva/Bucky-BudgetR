@@ -13,13 +13,17 @@ import {
   MAX_SUB_PERIODS,
   moduleGraph,
   moduleTitle,
+  moduleTransactions,
   ownFilters,
   partResolution,
   subPeriods,
+  type GraphModule,
   type ReportModule,
   type ReportSettings,
   type SubPeriod,
 } from "@/lib/reports";
+
+import { TransactionsModule } from "./TransactionsModule";
 
 interface ModuleCardProps {
   report: ReportSettings;
@@ -39,7 +43,7 @@ interface ModuleCardProps {
   onRemove: () => void;
 }
 
-/** One module of a report (#125): its graph, compared or broken down as set. */
+/** One module of a report (#125): its graph, compared or broken down as set, or its transactions (#126). */
 export function ModuleCard({
   report,
   module,
@@ -57,21 +61,8 @@ export function ModuleCard({
   onRemove,
 }: ModuleCardProps) {
   const { t } = useTranslation();
-  const graph = moduleGraph(report, module);
   const title = moduleTitle(module);
   const own = ownFilters(module);
-  const mode = module.compare ?? "off";
-  const compared: Compare | undefined =
-    mode !== "off" && compare
-      ? {
-          period: compare.period,
-          mode: graph.kind === "pie" ? "both" : mode,
-          labels: { current: compare.currentLabel, previous: compare.label },
-        }
-      : undefined;
-  const breakdown = module.breakdown ?? "none";
-  const parts =
-    breakdown !== "none" && period ? subPeriods(choice, period, breakdown, cycles) : null;
 
   return (
     <Card withBorder padding="md" aria-label={title} component="section">
@@ -137,61 +128,117 @@ export function ModuleCard({
             </Tooltip>
           </Group>
         </Group>
-        {mode !== "off" && (
-          <Text size="sm" c="dimmed">
-            {compare
-              ? t(
-                  mode === "difference" && graph.kind !== "pie"
-                    ? "stats.reports.compare.differenceWith"
-                    : "stats.reports.compare.comparedWith",
-                  { period: compare.label },
-                )
-              : t("stats.reports.compare.unavailable")}
-          </Text>
+        {module.type === "transactions" ? (
+          <TransactionsModule
+            settings={moduleTransactions(report, module)}
+            period={period}
+            cycles={cycles}
+            isDesktop={isDesktop}
+          />
+        ) : (
+          <GraphBody
+            report={report}
+            module={module}
+            choice={choice}
+            period={period}
+            compare={compare}
+            cycles={cycles}
+            accounts={accounts}
+            buckets={buckets}
+            isDesktop={isDesktop}
+          />
         )}
-        <GraphView
-          settings={graph}
-          period={period}
-          cycles={cycles}
-          accounts={accounts}
-          buckets={buckets}
-          height={isDesktop ? 300 : 240}
-          compare={compared}
-        />
-        {parts &&
-          (parts.ok ? (
-            <Stack gap="xs">
-              <Text size="sm" fw={500}>
-                {t(
-                  breakdown === "cycle"
-                    ? "stats.reports.breakdown.title.cycle"
-                    : "stats.reports.breakdown.title.month",
-                )}
-              </Text>
-              <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md" verticalSpacing="md">
-                {parts.parts.map((part) => (
-                  <Part
-                    key={part.period.fromAt}
-                    part={part}
-                    graph={graph}
-                    cycles={cycles}
-                    accounts={accounts}
-                    buckets={buckets}
-                  />
-                ))}
-              </SimpleGrid>
-            </Stack>
-          ) : (
-            <Text size="sm" c="dimmed">
-              {parts.reason === "short"
-                ? t("stats.reports.breakdown.short", { days: BREAKDOWN_MIN_DAYS })
-                : parts.reason === "many"
-                  ? t("stats.reports.breakdown.many", { max: MAX_SUB_PERIODS })
-                  : t("stats.reports.breakdown.none")}
-            </Text>
-          ))}
       </Stack>
     </Card>
+  );
+}
+
+/** A graph module's graph, its comparison and its breakdown. */
+function GraphBody({
+  report,
+  module,
+  choice,
+  period,
+  compare,
+  cycles,
+  accounts,
+  buckets,
+  isDesktop,
+}: Pick<
+  ModuleCardProps,
+  "report" | "choice" | "period" | "compare" | "cycles" | "accounts" | "buckets" | "isDesktop"
+> & { module: GraphModule }) {
+  const { t } = useTranslation();
+  const graph = moduleGraph(report, module);
+  const mode = module.compare ?? "off";
+  const compared: Compare | undefined =
+    mode !== "off" && compare
+      ? {
+          period: compare.period,
+          mode: graph.kind === "pie" ? "both" : mode,
+          labels: { current: compare.currentLabel, previous: compare.label },
+        }
+      : undefined;
+  const breakdown = module.breakdown ?? "none";
+  const parts =
+    breakdown !== "none" && period ? subPeriods(choice, period, breakdown, cycles) : null;
+
+  return (
+    <>
+      {mode !== "off" && (
+        <Text size="sm" c="dimmed">
+          {compare
+            ? t(
+                mode === "difference" && graph.kind !== "pie"
+                  ? "stats.reports.compare.differenceWith"
+                  : "stats.reports.compare.comparedWith",
+                { period: compare.label },
+              )
+            : t("stats.reports.compare.unavailable")}
+        </Text>
+      )}
+      <GraphView
+        settings={graph}
+        period={period}
+        cycles={cycles}
+        accounts={accounts}
+        buckets={buckets}
+        height={isDesktop ? 300 : 240}
+        compare={compared}
+      />
+      {parts &&
+        (parts.ok ? (
+          <Stack gap="xs">
+            <Text size="sm" fw={500}>
+              {t(
+                breakdown === "cycle"
+                  ? "stats.reports.breakdown.title.cycle"
+                  : "stats.reports.breakdown.title.month",
+              )}
+            </Text>
+            <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md" verticalSpacing="md">
+              {parts.parts.map((part) => (
+                <Part
+                  key={part.period.fromAt}
+                  part={part}
+                  graph={graph}
+                  cycles={cycles}
+                  accounts={accounts}
+                  buckets={buckets}
+                />
+              ))}
+            </SimpleGrid>
+          </Stack>
+        ) : (
+          <Text size="sm" c="dimmed">
+            {parts.reason === "short"
+              ? t("stats.reports.breakdown.short", { days: BREAKDOWN_MIN_DAYS })
+              : parts.reason === "many"
+                ? t("stats.reports.breakdown.many", { max: MAX_SUB_PERIODS })
+                : t("stats.reports.breakdown.none")}
+          </Text>
+        ))}
+    </>
   );
 }
 

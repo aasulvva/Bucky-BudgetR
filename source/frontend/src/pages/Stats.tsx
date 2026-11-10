@@ -11,7 +11,7 @@ import {
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import { IconAdjustmentsHorizontal } from "@tabler/icons-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 
@@ -36,6 +36,7 @@ import {
 } from "@/lib/graphs";
 import { defaultPeriod, parsePeriod, resolvePeriod } from "@/lib/periods";
 import {
+  readTemplates,
   sameReport,
   sourceValue,
   starter,
@@ -102,7 +103,8 @@ function Reports({
   buckets: Bucket[];
 }) {
   const [params, setParams] = useSearchParams();
-  const templates = useSession().data?.preferences.report_templates ?? [];
+  const saved = useSession().data?.preferences.report_templates;
+  const templates = useMemo(() => readTemplates(saved ?? []), [saved]);
   const templateId = params.get("template");
   const starterId = STARTER_IDS.find((x) => x === params.get("starter")) ?? "yearly";
   const template = templateId ? templates.find((x) => x.id === templateId) : undefined;

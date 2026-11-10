@@ -1,15 +1,18 @@
 // Reports on Stats & reports (#125): a period, filters for the whole
-// report, and modules (graphs) that may compare with the previous period or
-// break down by month or cycle. What's here is pure: the settings, the
-// built-in starters, the previous period and the sub-periods.
+// report, and modules: graphs that may compare with the previous period or
+// break down by month or cycle, and transaction lists (#126). What's here is
+// pure: the settings, the built-in starters, the previous period and the
+// sub-periods.
 
 import dayjs from "dayjs";
 
 import type { components } from "@/api/schema";
+import type { Transaction, TransactionQuery } from "@/api/transactions";
 import i18n from "@/i18n";
 
-import { endAtFor, localDate, startAtFor, type LocalDate } from "./cycles";
-import { cleanGraph, groupBy, maxIntervals, type GraphSettings } from "./graphs";
+import { addDays, endAtFor, localDate, startAtFor, type LocalDate } from "./cycles";
+import { formatDay } from "./dates";
+import { cleanGraph, groupBy, maxIntervals, specificLabel, type GraphSettings } from "./graphs";
 import {
   defaultResolution,
   formatPeriod,
@@ -22,15 +25,48 @@ import {
   type PeriodChoice,
   type Resolution,
   type SpecificUnit,
+  weekStart,
 } from "./periods";
+import { ALL_CYCLES, SYSTEM_TYPES, USER_TYPES, withFilter } from "./transactionList";
 
-export type ReportSettings = components["schemas"]["ReportSettings"];
-export type ReportModule = components["schemas"]["ReportModule"];
+type ApiModule = components["schemas"]["ReportModule"];
+type ApiReport = components["schemas"]["ReportSettings"];
+type ApiTemplate = components["schemas"]["ReportTemplate"];
 export type ReportGraph = components["schemas"]["ReportGraph"];
-export type ReportTemplate = components["schemas"]["ReportTemplate"];
-export type CompareTo = NonNullable<ReportSettings["compare_to"]>;
-export type ModuleCompare = NonNullable<ReportModule["compare"]>;
-export type Breakdown = NonNullable<ReportModule["breakdown"]>;
+export type ReportTransactions = components["schemas"]["ReportTransactions"];
+export type CompareTo = NonNullable<ApiReport["compare_to"]>;
+export type ModuleCompare = NonNullable<ApiModule["compare"]>;
+export type Breakdown = NonNullable<ApiModule["breakdown"]>;
+export type ModuleType = ApiModule["type"];
+
+/** A graph module (#125). */
+export interface GraphModule {
+  id: string;
+  type: "graph";
+  title?: string;
+  graph: ReportGraph;
+  compare?: ModuleCompare;
+  breakdown?: Breakdown;
+}
+
+/** A transactions module (#126): the period's transactions, as the Transactions list shows them. */
+export interface TransactionsModule {
+  id: string;
+  type: "transactions";
+  title?: string;
+  transactions: ReportTransactions;
+}
+
+/** The API's module, by its type: each has its own settings. */
+export type ReportModule = GraphModule | TransactionsModule;
+export type ReportSettings = Omit<ApiReport, "modules"> & { modules: ReportModule[] };
+export type ReportTemplate = Omit<ApiTemplate, "report"> & { report: ReportSettings };
+
+export const MODULE_TYPES: ModuleType[] = ["graph", "transactions"];
+export type TransactionsGroup = NonNullable<ReportTransactions["group_by"]>;
+export type TransactionsOrder = NonNullable<ReportTransactions["order"]>;
+export const TRANSACTIONS_GROUPS: TransactionsGroup[] = ["day", "week", "month", "cycle"];
+export const TRANSACTIONS_ORDERS: TransactionsOrder[] = ["newest", "oldest"];
 
 /** The units a report's period can have, besides custom dates. */
 export const REPORT_UNITS = ["cycle", "month", "quarter", "half_year", "year"] as const;
@@ -126,30 +162,189 @@ export function starter(id: StarterId): ReportSettings {
   return structuredClone(STARTERS[id]);
 }
 
+/** A module from the API, by its type; null without its type's settings, which the server refuses. */
+function readModule(m: ApiModule): ReportModule | null {
+  const base = { id: m.id, ...(m.title === undefined ? {} : { title: m.title }) };
+  if (m.type === "transactions") {
+    return m.transactions ? { ...base, type: "transactions", transactions: m.transactions } : null;
+  }
+  if (!m.graph) return null;
+  return {
+    ...base,
+    type: "graph",
+    graph: m.graph,
+    ...(m.compare === undefined ? {} : { compare: m.compare }),
+    ...(m.breakdown === undefined ? {} : { breakdown: m.breakdown }),
+  };
+}
+
+/** The saved templates from the preferences, with their modules by type. */
+export function readTemplates(list: ApiTemplate[]): ReportTemplate[] {
+  return list.map((x) => ({
+    ...x,
+    report: {
+      ...x.report,
+      modules: x.report.modules.flatMap((m) => readModule(m) ?? []),
+    },
+  }));
+}
+
+/** The module's filters where it sets them, else the report's (#125). */
+function effectiveFilters<
+  T extends Pick<ReportSettings, "account_ids" | "bucket_ids" | "tags" | "counterparty">,
+>(report: ReportSettings, own: T): T {
+  const pick = <V>(list: V[] | undefined, fallback: V[] | undefined) =>
+    list?.length ? list : fallback;
+  return {
+    ...own,
+    account_ids: pick(own.account_ids, report.account_ids),
+    bucket_ids: pick(own.bucket_ids, report.bucket_ids),
+    tags: pick(own.tags, report.tags),
+    counterparty: own.counterparty?.trim() ? own.counterparty : report.counterparty,
+  };
+}
+
 /**
  * The graph a module draws: its own settings with the report's period, and
  * the report's filters where the module doesn't set its own.
  */
-export function moduleGraph(report: ReportSettings, module: ReportModule): GraphSettings {
-  const g = module.graph;
-  const own = <T>(list: T[] | undefined, fallback: T[] | undefined) =>
-    list?.length ? list : fallback;
-  const counterparty = g.counterparty?.trim() ? g.counterparty : report.counterparty;
-  return cleanGraph({
-    ...g,
-    period: report.period,
-    account_ids: own(g.account_ids, report.account_ids),
-    bucket_ids: own(g.bucket_ids, report.bucket_ids),
-    tags: own(g.tags, report.tags),
-    counterparty,
+export function moduleGraph(report: ReportSettings, module: GraphModule): GraphSettings {
+  return cleanGraph({ ...effectiveFilters(report, module.graph), period: report.period });
+}
+
+/** A transactions module's settings, with the report's filters where it doesn't set its own. */
+export function moduleTransactions(
+  report: ReportSettings,
+  module: TransactionsModule,
+): ReportTransactions {
+  return effectiveFilters(report, module.transactions);
+}
+
+/** A transactions module shows this many at first, and as many more on Load more. */
+export const TRANSACTIONS_PAGE = 50;
+
+/** The list API's query for a transactions module over the period. */
+export function transactionsQuery(t: ReportTransactions, period: Period): TransactionQuery {
+  const types = t.types?.length ? t.types : USER_TYPES;
+  const counterparty = t.counterparty?.trim();
+  return {
+    type: t.system ? [...new Set([...types, ...SYSTEM_TYPES])] : [...types],
+    from: period.fromAt,
+    to: period.toAt,
+    ...(t.account_ids?.length ? { account_id: t.account_ids } : {}),
+    ...(t.bucket_ids?.length ? { bucket_id: t.bucket_ids } : {}),
+    ...(t.tags?.length ? { tag: t.tags } : {}),
+    ...(counterparty ? { counterparty } : {}),
+    ...(t.reversed ? {} : { reversed: false }),
+    ...(t.order === "oldest" ? { order: "oldest" as const } : {}),
+    limit: TRANSACTIONS_PAGE,
+  };
+}
+
+export interface TransactionGroup {
+  /** The day, the week's or month's first day, or the cycle's id ("" outside any). */
+  key: string;
+  label: string;
+  items: Transaction[];
+}
+
+/**
+ * Transactions under a heading per day, week (from the locale's first day),
+ * month or cycle, in the order given (newest or oldest first).
+ */
+export function groupTransactions(
+  items: Transaction[],
+  by: TransactionsGroup,
+  cycles: CycleTimes[],
+  locale?: string,
+): TransactionGroup[] {
+  const keyOf = (tx: Transaction): string => {
+    const day = localDate(tx.at);
+    switch (by) {
+      case "day":
+        return day;
+      case "week": {
+        // dayjs: 0 = Sunday; the locale's week: 1 = Monday … 7 = Sunday.
+        const d = dayjs(day).day();
+        const weekday = d === 0 ? 7 : d;
+        return addDays(day, -((weekday - weekStart(locale) + 7) % 7));
+      }
+      case "month":
+        return `${day.slice(0, 7)}-01`;
+      case "cycle": {
+        const at = Date.parse(tx.at);
+        const c = cycles.find((x) => Date.parse(x.start_at) <= at && at < Date.parse(x.end_at));
+        return c?.id ?? "";
+      }
+    }
+  };
+  const labelOf = (key: string): string => {
+    if (by === "day") return formatDay(key, locale);
+    if (by === "cycle" && key === "") return i18n.t("stats.reports.transactions.noCycle");
+    return specificLabel({ kind: "specific", unit: by, at: key }, cycles, locale);
+  };
+  const out: TransactionGroup[] = [];
+  for (const tx of items) {
+    const key = keyOf(tx);
+    const last = out.at(-1);
+    if (last?.key === key) last.items.push(tx);
+    else out.push({ key, label: labelOf(key), items: [tx] });
+  }
+  return out;
+}
+
+/**
+ * The Transactions screen with the same list: the period, and the filters.
+ * Null while a filter has several values, which that screen can't show yet
+ * (#162). `open` opens a transaction there.
+ */
+export function transactionsLink(
+  t: ReportTransactions,
+  period: Period,
+  open?: string,
+): string | null {
+  // null: not filtered; undefined: several values.
+  const one = <V>(list: V[] | undefined): V | null | undefined =>
+    !list?.length ? null : list.length === 1 ? list[0] : undefined;
+  const accountId = one(t.account_ids);
+  const bucketId = one(t.bucket_ids);
+  const tag = one(t.tags);
+  const type = one(t.types);
+  const several = [accountId, bucketId, tag, type].some((x) => x === undefined);
+  // One type and the system types too isn't one of that screen's choices.
+  if (several || (type && t.system)) return open ? periodLink(period, open) : null;
+  const params = withFilter(new URLSearchParams(), {
+    cycleId: ALL_CYCLES,
+    from: period.from,
+    to: period.to,
+    accountId: accountId ?? null,
+    bucketId: bucketId ?? null,
+    tag: tag ?? null,
+    type: type ?? null,
+    q: t.counterparty?.trim() ?? "",
+    system: t.system ?? false,
+    reversed: t.reversed ?? false,
   });
+  if (open) params.set("open", open);
+  return `/transactions?${params.toString()}`;
+}
+
+/** The Transactions screen over the period, opening one transaction. */
+function periodLink(period: Period, open: string): string {
+  const params = withFilter(new URLSearchParams(), {
+    cycleId: ALL_CYCLES,
+    from: period.from,
+    to: period.to,
+  });
+  params.set("open", open);
+  return `/transactions?${params.toString()}`;
 }
 
 /** Which of the report's filters a module sets itself. */
 export function ownFilters(
   module: ReportModule,
 ): ("accounts" | "buckets" | "tags" | "counterparty")[] {
-  const g = module.graph;
+  const g = module.type === "graph" ? module.graph : module.transactions;
   const out: ("accounts" | "buckets" | "tags" | "counterparty")[] = [];
   if (g.account_ids?.length) out.push("accounts");
   if (g.bucket_ids?.length) out.push("buckets");
@@ -309,14 +504,32 @@ export function cleanReport(r: ReportSettings): ReportSettings {
   if (r.bucket_ids?.length) out.bucket_ids = [...r.bucket_ids];
   if (r.tags?.length) out.tags = [...r.tags];
   if (r.counterparty?.trim()) out.counterparty = r.counterparty.trim();
-  out.modules = r.modules.map((m) => {
+  out.modules = r.modules.map((m): ReportModule => {
+    const title = m.title?.trim() ? { title: m.title.trim() } : {};
+    if (m.type === "transactions") {
+      return { id: m.id, type: m.type, ...title, transactions: cleanTransactions(m.transactions) };
+    }
     const graph = withoutPeriod(cleanGraph({ ...m.graph, period: r.period }));
-    const clean: ReportModule = { id: m.id, type: m.type, graph };
-    if (m.title?.trim()) clean.title = m.title.trim();
+    const clean: GraphModule = { id: m.id, type: m.type, ...title, graph };
     if (m.compare && m.compare !== "off") clean.compare = m.compare;
     if (m.breakdown && m.breakdown !== "none") clean.breakdown = m.breakdown;
     return clean;
   });
+  return out;
+}
+
+/** A transactions module's settings without defaults and empty fields. */
+function cleanTransactions(t: ReportTransactions): ReportTransactions {
+  const out: ReportTransactions = {};
+  if (t.account_ids?.length) out.account_ids = [...t.account_ids];
+  if (t.bucket_ids?.length) out.bucket_ids = [...t.bucket_ids];
+  if (t.tags?.length) out.tags = [...t.tags];
+  if (t.counterparty?.trim()) out.counterparty = t.counterparty.trim();
+  if (t.types?.length) out.types = [...t.types];
+  if (t.system) out.system = true;
+  if (t.reversed) out.reversed = true;
+  if (t.group_by && t.group_by !== "day") out.group_by = t.group_by;
+  if (t.order === "oldest") out.order = t.order;
   return out;
 }
 
@@ -333,16 +546,15 @@ export function newId(prefix: string, used: string[]): string {
   }
 }
 
-/** A module to add: spending this period as bars, by the report's resolution. */
-export function newModule(report: ReportSettings): ReportModule {
-  return {
-    id: newId(
-      "m",
-      report.modules.map((m) => m.id),
-    ),
-    type: "graph",
-    graph: { kind: "bar", metric: "spending", resolution: "month" },
-  };
+/** A module to add: spending this period as bars by month, or the period's transactions. */
+export function newModule(report: ReportSettings, type: ModuleType = "graph"): ReportModule {
+  const id = newId(
+    "m",
+    report.modules.map((m) => m.id),
+  );
+  return type === "transactions"
+    ? { id, type, transactions: {} }
+    : { id, type, graph: { kind: "bar", metric: "spending", resolution: "month" } };
 }
 
 /** The report's period with a different choice. */
@@ -371,6 +583,7 @@ export function partResolution(
 /** A module's name: its title, or what it shows ("Spending · Month · Per bucket"). */
 export function moduleTitle(module: ReportModule): string {
   if (module.title?.trim()) return module.title.trim();
+  if (module.type === "transactions") return i18n.t("stats.reports.transactions.title");
   const g = module.graph;
   const group = groupBy({ ...g, period: "" });
   return [

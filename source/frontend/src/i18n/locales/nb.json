@@ -1180,13 +1180,40 @@
         "moveDown": "Flytt ned",
         "title": "Tittel",
         "titleHint": "Valgfritt. Uten tittel får modulen navn etter det den viser.",
-        "max": "En rapport har høyst {{max}} moduler."
+        "max": "En rapport har høyst {{max}} moduler.",
+        "type": "Type",
+        "types": {
+          "graph": "Graf",
+          "transactions": "Transaksjoner"
+        }
       },
       "ownFilters": {
         "accounts": "Egne kontoer",
         "buckets": "Egne bøtter",
         "tags": "Egne tagger",
         "counterparty": "Egen motpart"
+      },
+      "transactions": {
+        "title": "Transaksjoner",
+        "empty": "Ingen transaksjoner i perioden passer.",
+        "open": "Åpne i Transaksjoner",
+        "noCycle": "Utenfor sykluser",
+        "groupBy": {
+          "label": "Grupper etter",
+          "options": {
+            "day": "Dag",
+            "week": "Uke",
+            "month": "Måned",
+            "cycle": "Syklus"
+          }
+        },
+        "order": {
+          "label": "Rekkefølge",
+          "options": {
+            "newest": "Nyeste først",
+            "oldest": "Eldste først"
+          }
+        }
       }
     },
     "graphs": {

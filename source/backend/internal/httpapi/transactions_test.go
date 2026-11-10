@@ -113,6 +113,19 @@ func TestTransactionsAPI(t *testing.T) {
 	if page := decode[api.TransactionPage](t, w); len(page.Items) != 1 || page.Items[0].Id != exp.Id {
 		t.Errorf("filtered %+v", page)
 	}
+	// Oldest first (#126).
+	w = do(http.MethodGet, "/api/v1/transactions?order=oldest", nil, alice)
+	expect(t, "oldest first", w, http.StatusOK, "")
+	if page := decode[api.TransactionPage](t, w); len(page.Items) < 2 || page.Items[0].At.After(page.Items[len(page.Items)-1].At) {
+		t.Errorf("oldest first %+v", page)
+	}
+	expect(t, "bad order", do(http.MethodGet, "/api/v1/transactions?order=sideways", nil, alice), http.StatusBadRequest, "invalid_request")
+	// Several tags match any of them (#126).
+	w = do(http.MethodGet, "/api/v1/transactions?type=EXP&type=TRF&tag=nope&tag=FOOD", nil, alice)
+	expect(t, "several tags", w, http.StatusOK, "")
+	if page := decode[api.TransactionPage](t, w); len(page.Items) != 1 || page.Items[0].Id != exp.Id {
+		t.Errorf("several tags %+v", page)
+	}
 	expect(t, "bad type", do(http.MethodGet, "/api/v1/transactions?type=XYZ", nil, alice), http.StatusBadRequest, "invalid_request")
 	expect(t, "bad cursor", do(http.MethodGet, "/api/v1/transactions?cursor=abc", nil, alice), http.StatusBadRequest, "invalid_request")
 

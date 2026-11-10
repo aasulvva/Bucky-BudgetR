@@ -1180,13 +1180,40 @@
         "moveDown": "Move down",
         "title": "Title",
         "titleHint": "Optional. Without one, the module is named after what it shows.",
-        "max": "A report has at most {{max}} modules."
+        "max": "A report has at most {{max}} modules.",
+        "type": "Type",
+        "types": {
+          "graph": "Graph",
+          "transactions": "Transactions"
+        }
       },
       "ownFilters": {
         "accounts": "Own accounts",
         "buckets": "Own buckets",
         "tags": "Own tags",
         "counterparty": "Own counterparty"
+      },
+      "transactions": {
+        "title": "Transactions",
+        "empty": "No transactions in this period match.",
+        "open": "Open in Transactions",
+        "noCycle": "Outside any cycle",
+        "groupBy": {
+          "label": "Group by",
+          "options": {
+            "day": "Day",
+            "week": "Week",
+            "month": "Month",
+            "cycle": "Cycle"
+          }
+        },
+        "order": {
+          "label": "Order",
+          "options": {
+            "newest": "Newest first",
+            "oldest": "Oldest first"
+          }
+        }
       }
     },
     "graphs": {
