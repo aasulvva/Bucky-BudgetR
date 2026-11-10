@@ -420,7 +420,7 @@ func TestPreferences(t *testing.T) {
 		t.Errorf("saved graphs reset: %d %s", w.Code, w.Body)
 	}
 	// Report templates (#125) too.
-	reports := `{"report_templates":[{"id":"r-1","name":"Year","report":{"bucket_ids":["1000000007"],"compare_to":"last_year","modules":[{"breakdown":"cycle","compare":"difference","graph":{"account_ids":["1234"],"group_by":"bucket","kind":"bar","metric":"spending","resolution":"month"},"id":"m-1","title":"Food","type":"graph"},{"compare":"off","graph":{"kind":"pie","metric":"spending","resolution":"total"},"id":"m-2","type":"graph"}],"period":"previous-year"}},{"id":"r-2","name":"Q3","report":{"modules":[{"id":"m-1","title":"Food","transactions":{"bucket_ids":["1000000007"],"counterparty":"rema","reversed":true,"system":true,"tags":["food"],"types":["EXP","TRF"]},"type":"transactions"},{"flows":{"account_ids":["1234"],"breakdown":"cycle","details":true,"show":"both","transfers":true},"id":"m-2","type":"flows"},{"budget":{"account_ids":["1234"],"bucket_ids":["1000000007"],"per_cycle":false},"id":"m-3","type":"budget"}],"period":"quarter-2026-q3"}}]}`
+	reports := `{"report_templates":[{"id":"r-1","name":"Year","report":{"bucket_ids":["1000000007"],"compare_to":"last_year","modules":[{"breakdown":"cycle","compare":"difference","graph":{"account_ids":["1234"],"group_by":"bucket","kind":"bar","metric":"spending","resolution":"month"},"id":"m-1","title":"Food","type":"graph"},{"compare":"off","graph":{"kind":"pie","metric":"spending","resolution":"total"},"id":"m-2","type":"graph"}],"period":"previous-year"}},{"id":"r-2","name":"Q3","report":{"modules":[{"id":"m-1","title":"Food","transactions":{"bucket_ids":["1000000007"],"columns":["date","amount","balance"],"counterparty":"rema","reversed":true,"rows":"bucket_line","system":true,"tags":["food"],"types":["EXP","TRF"],"view":"table"},"type":"transactions"},{"flows":{"account_ids":["1234"],"breakdown":"cycle","details":true,"show":"both","transfers":true},"id":"m-2","type":"flows"},{"budget":{"account_ids":["1234"],"bucket_ids":["1000000007"],"per_cycle":false},"id":"m-3","type":"budget"}],"period":"quarter-2026-q3"}}]}`
 	if w := patch(reports); w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != reports {
 		t.Errorf("report templates: %d %s", w.Code, w.Body)
 	}
@@ -482,6 +482,12 @@ func TestPreferences(t *testing.T) {
 		`{"report_templates":[{"id":"a","name":"A","report":{"period":"current-year","modules":[{"id":"m","type":"transactions"}]}}]}`,
 		`{"report_templates":[{"id":"a","name":"A","report":{"period":"current-year","modules":[{"id":"m","type":"transactions","transactions":{},"graph":{"kind":"bar","metric":"spending","resolution":"day"}}]}}]}`,
 		`{"report_templates":[{"id":"a","name":"A","report":{"period":"current-year","modules":[{"id":"m","type":"transactions","transactions":{"types":["XYZ"]}}]}}]}`,
+		// A table's columns are known, once each, at least one (#185).
+		`{"report_templates":[{"id":"a","name":"A","report":{"period":"current-year","modules":[{"id":"m","type":"transactions","transactions":{"view":"table","columns":["date","colour"]}}]}}]}`,
+		`{"report_templates":[{"id":"a","name":"A","report":{"period":"current-year","modules":[{"id":"m","type":"transactions","transactions":{"view":"table","columns":["date","date"]}}]}}]}`,
+		`{"report_templates":[{"id":"a","name":"A","report":{"period":"current-year","modules":[{"id":"m","type":"transactions","transactions":{"view":"table","columns":[]}}]}}]}`,
+		`{"report_templates":[{"id":"a","name":"A","report":{"period":"current-year","modules":[{"id":"m","type":"transactions","transactions":{"view":"grid"}}]}}]}`,
+		`{"report_templates":[{"id":"a","name":"A","report":{"period":"current-year","modules":[{"id":"m","type":"transactions","transactions":{"rows":"line"}}]}}]}`,
 		`{"report_templates":[{"id":"a","name":"A","report":{"period":"current-year","modules":[{"id":"m","type":"flows"}]}}]}`,
 		`{"report_templates":[{"id":"a","name":"A","report":{"period":"current-year","modules":[{"id":"m","type":"flows","flows":{},"transactions":{}}]}}]}`,
 		`{"report_templates":[{"id":"a","name":"A","report":{"period":"current-year","modules":[{"id":"m","type":"flows","flows":{"show":"everything"}}]}}]}`,

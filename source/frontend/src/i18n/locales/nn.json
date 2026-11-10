@@ -1215,6 +1215,45 @@
             "newest": "Nyaste først",
             "oldest": "Eldste først"
           }
+        },
+        "view": {
+          "label": "Vising",
+          "options": {
+            "list": "Liste",
+            "table": "Tabell"
+          }
+        },
+        "rows": {
+          "label": "Rader",
+          "options": {
+            "transaction": "Éi per transaksjon",
+            "bucket_line": "Éi per bøtteline"
+          }
+        },
+        "table": {
+          "label": "Transaksjonar",
+          "columnsLabel": "Kolonnar",
+          "columnsHint": "Kryss av kolonnane som skal visast, og flytt dei i rekkjefølgje. Saldo etter vert berre vist med nøyaktig éin konto.",
+          "moveUp": "Flytt {{column}} opp",
+          "moveDown": "Flytt {{column}} ned",
+          "subtotal": "Delsum",
+          "subtotalIn": "Delsum ({{currency}})",
+          "total": "Totalt",
+          "totalIn": "Totalt ({{currency}})",
+          "scheduled": "Planlagd",
+          "columns": {
+            "date": "Dato",
+            "time": "Tid",
+            "type": "Type",
+            "counterparty": "Motpart",
+            "account": "Konto",
+            "buckets": "Bøtter",
+            "tags": "Taggar",
+            "description": "Skildring",
+            "amount": "Beløp",
+            "balance": "Saldo etter",
+            "notes": "Merknader"
+          }
         }
       },
       "flows": {

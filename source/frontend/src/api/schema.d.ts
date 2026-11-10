@@ -2456,7 +2456,31 @@ export interface components {
              * @enum {string}
              */
             order?: "newest" | "oldest";
+            /**
+             * @description As the Transactions list shows them (the default), or as a table
+             *     with `columns` (#185), with a subtotal per group and a total.
+             * @enum {string}
+             */
+            view?: "list" | "table";
+            /**
+             * @description The table's columns, in order (#185). Left out, date,
+             *     counterparty, account, buckets, tags and amount. `balance` (the
+             *     balance after, #106) shows only with exactly one account.
+             */
+            columns?: components["schemas"]["TransactionColumn"][];
+            /**
+             * @description A table row per transaction, its buckets in one cell (the
+             *     default), or per bucket line, with that line's amount (#185).
+             * @enum {string}
+             */
+            rows?: "transaction" | "bucket_line";
         };
+        /**
+         * @description A column of a transactions table (#185). `notes` are the edited,
+         *     reversed, moved and scheduled marks.
+         * @enum {string}
+         */
+        TransactionColumn: "date" | "time" | "type" | "account" | "counterparty" | "description" | "tags" | "buckets" | "amount" | "balance" | "notes";
         /**
          * @description A report module's graph: `GraphSettings` without the period, which
          *     is the report's. A filter set here replaces the report's for that

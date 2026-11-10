@@ -17,6 +17,8 @@ import {
   type ReportTransactions,
 } from "@/lib/reports";
 
+import { TransactionsTable } from "./TransactionsTable";
+
 /**
  * A transactions module (#126): the period's transactions with the module's
  * filters, as the Transactions list shows them, a page at a time, under a
@@ -74,6 +76,15 @@ export function TransactionsModule({
     <Stack gap="xs">
       {items.length === 0 ? (
         <Text c="dimmed">{t("stats.reports.transactions.empty")}</Text>
+      ) : settings.view === "table" ? (
+        <TransactionsTable
+          items={items}
+          settings={settings}
+          period={period}
+          cycles={cycles}
+          names={names}
+          focus={focus}
+        />
       ) : (
         <Box>
           {groupTransactions(items, settings.group_by ?? "day", cycles).map((g) => (

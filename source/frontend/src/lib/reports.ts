@@ -46,6 +46,7 @@ import {
   weekStart,
 } from "./periods";
 import { ALL_CYCLES, SYSTEM_TYPES, USER_TYPES, withFilter } from "./transactionList";
+import { DEFAULT_COLUMNS } from "./transactionTable";
 
 type ApiModule = components["schemas"]["ReportModule"];
 type ApiReport = components["schemas"]["ReportSettings"];
@@ -958,6 +959,12 @@ function cleanTransactions(t: ReportTransactions): ReportTransactions {
   if (t.reversed) out.reversed = true;
   if (t.group_by && t.group_by !== "day") out.group_by = t.group_by;
   if (t.order === "oldest") out.order = t.order;
+  if (t.view === "table") out.view = t.view;
+  // The defaults are left out, so a table that keeps them stays unchanged.
+  if (t.columns?.length && t.columns.join() !== DEFAULT_COLUMNS.join()) {
+    out.columns = [...t.columns];
+  }
+  if (t.rows === "bucket_line") out.rows = t.rows;
   return out;
 }
 

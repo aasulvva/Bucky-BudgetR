@@ -1,5 +1,7 @@
 import {
+  ActionIcon,
   Button,
+  Checkbox,
   Group,
   Input,
   MultiSelect,
@@ -11,6 +13,7 @@ import {
   useMantineTheme,
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
+import { IconArrowDown, IconArrowUp } from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -40,6 +43,13 @@ import {
   TRANSACTIONS_ORDERS,
   withoutPeriod,
 } from "@/lib/reports";
+import {
+  DEFAULT_COLUMNS,
+  TRANSACTION_COLUMNS,
+  TRANSACTIONS_ROWS,
+  TRANSACTIONS_VIEWS,
+  type TransactionColumn,
+} from "@/lib/transactionTable";
 import { USER_TYPES } from "@/lib/transactionList";
 
 const MAX_TITLE = 80;
@@ -303,6 +313,44 @@ function TransactionsFields({
           }}
         />
       </Input.Wrapper>
+      <Input.Wrapper label={t("stats.reports.transactions.view.label")}>
+        <SegmentedControl
+          fullWidth
+          mt={4}
+          data={TRANSACTIONS_VIEWS.map((v) => ({
+            value: v,
+            label: t(`stats.reports.transactions.view.options.${v}`),
+          }))}
+          value={s.view ?? "list"}
+          onChange={(v) => {
+            set({ view: v });
+          }}
+        />
+      </Input.Wrapper>
+      {s.view === "table" && (
+        <>
+          <ColumnsField
+            value={s.columns?.length ? s.columns : DEFAULT_COLUMNS}
+            onChange={(columns) => {
+              set({ columns });
+            }}
+          />
+          <Input.Wrapper label={t("stats.reports.transactions.rows.label")}>
+            <SegmentedControl
+              fullWidth
+              mt={4}
+              data={TRANSACTIONS_ROWS.map((r) => ({
+                value: r,
+                label: t(`stats.reports.transactions.rows.options.${r}`),
+              }))}
+              value={s.rows ?? "transaction"}
+              onChange={(r) => {
+                set({ rows: r });
+              }}
+            />
+          </Input.Wrapper>
+        </>
+      )}
       <Switch
         label={t("transactions.filters.system")}
         checked={s.system ?? false}
@@ -318,6 +366,86 @@ function TransactionsFields({
         }}
       />
     </>
+  );
+}
+
+/**
+ * A table's columns (#185): the chosen ones first, in order, with buttons to
+ * move them, then the others. At least one stays chosen.
+ */
+function ColumnsField({
+  value,
+  onChange,
+}: {
+  value: TransactionColumn[];
+  onChange: (columns: TransactionColumn[]) => void;
+}) {
+  const { t } = useTranslation();
+  const name = (c: TransactionColumn) => t(`stats.reports.transactions.table.columns.${c}`);
+  const move = (i: number, d: -1 | 1) => {
+    const list = [...value];
+    const [c] = list.splice(i, 1);
+    if (c) list.splice(i + d, 0, c);
+    onChange(list);
+  };
+  const rest = TRANSACTION_COLUMNS.filter((c) => !value.includes(c));
+  return (
+    <Input.Wrapper
+      label={t("stats.reports.transactions.table.columnsLabel")}
+      description={t("stats.reports.transactions.table.columnsHint")}
+    >
+      <Stack gap={2} mt={6}>
+        {value.map((c, i) => (
+          <Group key={c} justify="space-between" wrap="nowrap" gap="xs">
+            <Checkbox
+              label={name(c)}
+              checked
+              disabled={value.length === 1}
+              onChange={() => {
+                onChange(value.filter((x) => x !== c));
+              }}
+            />
+            <Group gap={2} wrap="nowrap">
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                size="sm"
+                aria-label={t("stats.reports.transactions.table.moveUp", { column: name(c) })}
+                disabled={i === 0}
+                onClick={() => {
+                  move(i, -1);
+                }}
+              >
+                <IconArrowUp size={14} />
+              </ActionIcon>
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                size="sm"
+                aria-label={t("stats.reports.transactions.table.moveDown", { column: name(c) })}
+                disabled={i === value.length - 1}
+                onClick={() => {
+                  move(i, 1);
+                }}
+              >
+                <IconArrowDown size={14} />
+              </ActionIcon>
+            </Group>
+          </Group>
+        ))}
+        {rest.map((c) => (
+          <Checkbox
+            key={c}
+            label={name(c)}
+            checked={false}
+            py={4}
+            onChange={() => {
+              onChange([...value, c]);
+            }}
+          />
+        ))}
+      </Stack>
+    </Input.Wrapper>
   );
 }
 
