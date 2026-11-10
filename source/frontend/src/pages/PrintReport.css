@@ -28,7 +28,8 @@
   break-inside: avoid;
 }
 
-.print-report h3 {
+.print-report h3,
+.print-report [data-group-heading] {
   break-after: avoid;
 }
 

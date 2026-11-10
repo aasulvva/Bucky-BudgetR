@@ -16,6 +16,29 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.14.00",
+    date: "2026-11-10",
+    title: {
+      en: "Reports: transactions as a table",
+      nb: "Rapporter: transaksjoner som tabell",
+      nn: "Rapportar: transaksjonar som tabell",
+    },
+    changes: {
+      en: [
+        "A transactions module can now show a table instead of the list. Choose its columns and their order: date, time, type, counterparty, account, buckets, tags, description, amount, balance after (with one account) and notes.",
+        "Each group (day, week, month or cycle) gets a subtotal, and the table a total, per currency. Show a row per transaction, with its buckets in one cell, or a row per bucket line. On a phone the table scrolls sideways with the first column in place, and in a PDF it fits the page.",
+      ],
+      nb: [
+        "En transaksjonsmodul kan nå vise en tabell i stedet for listen. Velg kolonnene og rekkefølgen: dato, tid, type, motpart, konto, bøtter, tagger, beskrivelse, beløp, saldo etter (med én konto) og merknader.",
+        "Hver gruppe (dag, uke, måned eller syklus) får en delsum, og tabellen en total, per valuta. Vis én rad per transaksjon, med bøttene i én celle, eller én rad per bøttelinje. På mobil ruller tabellen sidelengs med første kolonne på plass, og i en PDF passer den på siden.",
+      ],
+      nn: [
+        "Ein transaksjonsmodul kan no vise ein tabell i staden for lista. Vel kolonnane og rekkjefølgja: dato, tid, type, motpart, konto, bøtter, taggar, skildring, beløp, saldo etter (med éin konto) og merknader.",
+        "Kvar gruppe (dag, veke, månad eller syklus) får ein delsum, og tabellen ein total, per valuta. Vis éi rad per transaksjon, med bøttene i éi celle, eller éi rad per bøtteline. På mobil rullar tabellen sidelengs med første kolonne på plass, og i ein PDF passar han på sida.",
+      ],
+    },
+  },
+  {
     version: "v2.13.00",
     date: "2026-11-10",
     title: {

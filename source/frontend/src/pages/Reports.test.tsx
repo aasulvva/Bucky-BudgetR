@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 
 import type { components } from "@/api/schema";
 import { endAtFor, startAtFor } from "@/lib/cycles";
-import { formatDay } from "@/lib/dates";
+import { formatDate, formatDay } from "@/lib/dates";
 import { specificLabel } from "@/lib/graphs";
 import { formatMoney } from "@/lib/money";
 import { apiMock, problem, testUser, type MockRequest } from "@/test/api";
@@ -314,6 +314,95 @@ describe("Reports", () => {
     expect(await within(module).findByText("Kiwi")).toBeInTheDocument();
     expect(apiMock.calls(list).at(-1)?.query.get("cursor")).toBe("c1");
     expect(within(module).queryByRole("button", { name: "Load more" })).not.toBeInTheDocument();
+  });
+
+  it("shows a transactions module as a table with chosen columns and totals (#185)", async () => {
+    const day = `${String(year - 1)}-06-15T10:00:00Z`;
+    apiMock.on(list, {
+      body: {
+        items: [
+          transaction({
+            id: "t1",
+            at: day,
+            counterparty: "Rema 1000",
+            bank_lines: [{ account_id: "1234", amount: "-250.00" }],
+            bucket_lines: [
+              { bucket_id: "1000000001", cycle_id: "100001000001", amount: "-200.00" },
+              { bucket_id: "1000000002", cycle_id: "100001000001", amount: "-50.00" },
+            ],
+          }),
+          transaction({
+            id: "t2",
+            at: day,
+            type: "INC",
+            counterparty: "Work",
+            bank_lines: [{ account_id: "1234", amount: "1000.00" }],
+          }),
+        ],
+        next_cursor: null,
+      },
+    });
+    const { router } = renderRoute("/stats/reports");
+    await userEvent.click(await screen.findByRole("button", { name: "Add module" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add module" });
+    await userEvent.click(within(dialog).getByRole("radio", { name: "Transactions" }));
+    await userEvent.click(within(dialog).getByRole("radio", { name: "Table" }));
+    // Leave out tags, and put the amount before the account.
+    await userEvent.click(within(dialog).getByRole("checkbox", { name: "Tags" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Move Amount up" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Move Amount up" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+
+    const module = await screen.findByRole("region", { name: "Transactions" });
+    const table = await within(module).findByRole("table", { name: "Transactions" });
+    expect(
+      within(table)
+        .getAllByRole("columnheader")
+        .map((h) => h.textContent),
+    ).toEqual(["Date", "Counterparty", "Amount", "Account", "Buckets"]);
+    const rows = () =>
+      within(table)
+        .getAllByRole("row")
+        .map((r) => r.textContent);
+    const nok = (a: string) => formatMoney(a, "NOK");
+    expect(rows()).toEqual([
+      "DateCounterpartyAmountAccountBuckets",
+      formatDay(`${String(year - 1)}-06-15`),
+      `${formatDate(day)}Rema 1000${nok("-250.00")}MainFood ${nok("-200.00")} · Fun ${nok("-50.00")}`,
+      `${formatDate(day)}Work+${nok("1000.00")}Main`,
+      `Subtotal${nok("750.00")}`,
+      `Total${nok("750.00")}`,
+    ]);
+    expect(within(table).getByRole("link", { name: "Rema 1000" })).toHaveAttribute(
+      "href",
+      expect.stringContaining("open=t1") as string,
+    );
+
+    // A row per bucket line.
+    await userEvent.click(within(module).getByRole("button", { name: "Edit" }));
+    const edit = await screen.findByRole("dialog", { name: "Edit module" });
+    await userEvent.click(within(edit).getByRole("radio", { name: "One per bucket line" }));
+    await userEvent.click(within(edit).getByRole("button", { name: "Apply" }));
+    await waitFor(() => {
+      expect(rows()).toContain(`${formatDate(day)}Rema 1000${nok("-50.00")}MainFun`);
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Save report…" }));
+    const save = await screen.findByRole("dialog", { name: "Save report" });
+    await userEvent.type(within(save).getByRole("textbox", { name: "Name" }), "Table");
+    await userEvent.click(within(save).getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(router.state.location.search).toBe("?template=r-1");
+    });
+    expect(lastBody()?.report_templates?.[0]?.report.modules[3]).toEqual({
+      id: "m-4",
+      type: "transactions",
+      transactions: {
+        view: "table",
+        columns: ["date", "counterparty", "amount", "account", "buckets"],
+        rows: "bucket_line",
+      },
+    });
   });
 
   it("filters a saved transactions module by several buckets (#126)", async () => {

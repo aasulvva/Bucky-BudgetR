@@ -1215,6 +1215,45 @@
             "newest": "Newest first",
             "oldest": "Oldest first"
           }
+        },
+        "view": {
+          "label": "View",
+          "options": {
+            "list": "List",
+            "table": "Table"
+          }
+        },
+        "rows": {
+          "label": "Rows",
+          "options": {
+            "transaction": "One per transaction",
+            "bucket_line": "One per bucket line"
+          }
+        },
+        "table": {
+          "label": "Transactions",
+          "columnsLabel": "Columns",
+          "columnsHint": "Tick the columns to show and move them into order. Balance after shows only with exactly one account.",
+          "moveUp": "Move {{column}} up",
+          "moveDown": "Move {{column}} down",
+          "subtotal": "Subtotal",
+          "subtotalIn": "Subtotal ({{currency}})",
+          "total": "Total",
+          "totalIn": "Total ({{currency}})",
+          "scheduled": "Scheduled",
+          "columns": {
+            "date": "Date",
+            "time": "Time",
+            "type": "Type",
+            "counterparty": "Counterparty",
+            "account": "Account",
+            "buckets": "Buckets",
+            "tags": "Tags",
+            "description": "Description",
+            "amount": "Amount",
+            "balance": "Balance after",
+            "notes": "Notes"
+          }
         }
       },
       "flows": {

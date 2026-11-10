@@ -4227,6 +4227,36 @@ components:
           type: string
           enum: [newest, oldest]
           description: Newest first (the default) or oldest first.
+        view:
+          type: string
+          enum: [list, table]
+          description: |
+            As the Transactions list shows them (the default), or as a table
+            with `columns` (#185), with a subtotal per group and a total.
+        columns:
+          type: array
+          description: |
+            The table's columns, in order (#185). Left out, date,
+            counterparty, account, buckets, tags and amount. `balance` (the
+            balance after, #106) shows only with exactly one account.
+          minItems: 1
+          maxItems: 11
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/TransactionColumn"
+        rows:
+          type: string
+          enum: [transaction, bucket_line]
+          description: |
+            A table row per transaction, its buckets in one cell (the
+            default), or per bucket line, with that line's amount (#185).
+
+    TransactionColumn:
+      type: string
+      enum: [date, time, type, account, counterparty, description, tags, buckets, amount, balance, notes]
+      description: |
+        A column of a transactions table (#185). `notes` are the edited,
+        reversed, moved and scheduled marks.
 
     ReportGraph:
       type: object

@@ -125,6 +125,19 @@ describe("PrintReport", () => {
     });
   });
 
+  it("prints a table module with every page and no links (#185)", async () => {
+    renderRoute(
+      `/print/report#${fragment(job({ report: { period: "previous-year", modules: [{ id: "m-2", type: "transactions", transactions: { view: "table" } }] } }))}`,
+    );
+    const table = await screen.findByRole("table", { name: "Transactions" });
+    expect(await within(table).findByText("Kiwi")).toBeInTheDocument();
+    expect(within(table).getByText("Rema 1000")).toBeInTheDocument();
+    expect(screen.queryAllByRole("link")).toEqual([]);
+    await waitFor(() => {
+      expect(ready()).not.toBeNull();
+    });
+  });
+
   it("uses the job's language and locale", async () => {
     renderRoute(`/print/report#${fragment(job({ language: "nb", locale: "nb-NO" }))}`);
     const cover = await screen.findByTestId("print-cover");
