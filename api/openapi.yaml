@@ -4061,7 +4061,9 @@ components:
         A module of a report. Its `type` says which settings it has: a
         `graph` module has `graph`, a `transactions` module (#126) has
         `transactions`, a `flows` module (#126) has `flows`, a `budget` module
-        (#126) has `budget`, and none of the others (400 `invalid_request`).
+        (#126) has `budget`, a `section` module (#194) has `section`, and none
+        of the others (400 `invalid_request`). Module ids are unique across
+        the report, those in sections included.
       required: [id, type]
       properties:
         id:
@@ -4070,7 +4072,7 @@ components:
           maxLength: 40
         type:
           type: string
-          enum: [graph, transactions, flows, budget]
+          enum: [graph, transactions, flows, budget, section]
           description: What the module shows.
         title:
           type: string
@@ -4083,6 +4085,8 @@ components:
           $ref: "#/components/schemas/ReportFlows"
         budget:
           $ref: "#/components/schemas/ReportBudget"
+        section:
+          $ref: "#/components/schemas/ReportSection"
         compare:
           type: string
           enum: ["off", both, difference]
@@ -4098,6 +4102,26 @@ components:
             Graphs only. Also one small graph per month or per cycle, for
             periods of at least 60 days. Months and cycles cut by the
             period's edges are clipped. `none` by default.
+
+    ReportSection:
+      type: object
+      additionalProperties: false
+      required: [unit, modules]
+      description: |
+        A report section (#194): its modules, repeated for each month or
+        cycle of the report's period (at most 24), each over that part and
+        compared with the one before (or a year earlier) as the report
+        says. They use the report's filters unless they set their own. A
+        section can't hold a section (400 `invalid_request`).
+      properties:
+        unit:
+          type: string
+          enum: [month, cycle]
+        modules:
+          type: array
+          maxItems: 6
+          items:
+            $ref: "#/components/schemas/ReportModule"
 
     ReportFlows:
       type: object

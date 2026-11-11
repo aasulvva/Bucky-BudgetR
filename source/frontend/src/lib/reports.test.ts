@@ -14,13 +14,16 @@ import {
   moduleBudget,
   moduleFlows,
   moduleGraph,
+  moduleTitle,
   moduleTransactions,
+  newModule,
   periodCycles,
   periodParts,
   previousPeriod,
   readTemplates,
   reportContents,
   sameReport,
+  sectionParts,
   starter,
   subPeriods,
   transactionSections,
@@ -28,6 +31,7 @@ import {
   transactionsQuery,
   type BudgetRow,
   type ReportSettings,
+  type SectionModule,
 } from "./reports";
 import { SYSTEM_TYPES, USER_TYPES } from "./transactionList";
 
@@ -1023,3 +1027,195 @@ describe("Budget vs spending modules (#126)", () => {
 function fail(): never {
   throw new Error("no period");
 }
+
+describe("report sections (#194)", () => {
+  const section = (unit: "month" | "cycle" = "month", title?: string): SectionModule => ({
+    id: "m-2",
+    type: "section",
+    ...(title ? { title } : {}),
+    section: {
+      unit,
+      modules: [{ id: "m-3", type: "transactions", transactions: {} }],
+    },
+  });
+  const report = (period: string, s = section(), over: Partial<ReportSettings> = {}) =>
+    ({
+      period,
+      modules: [{ id: "m-1", type: "budget", budget: {} }, s],
+      ...over,
+    }) satisfies ReportSettings;
+  const parts = (r: ReportSettings, s = section()) => {
+    const p = sectionParts(r, s, cycles, now);
+    if (!p.ok) throw new Error(p.reason);
+    return p.parts;
+  };
+
+  it("has a part per month, oldest first, each compared with the one before", () => {
+    const list = parts(report("quarter-2026-q3"));
+    expect(list.map((p) => [p.part.period.from, p.part.period.to, p.part.partial])).toEqual([
+      ["2026-07-01", "2026-07-31", false],
+      ["2026-08-01", "2026-08-31", false],
+      ["2026-09-01", "2026-09-30", false],
+    ]);
+    expect(list.map((p) => p.compare && [p.compare.period.from, p.compare.label])).toEqual([
+      ["2026-06-01", "June 2026"],
+      ["2026-07-01", "July 2026"],
+      ["2026-08-01", "August 2026"],
+    ]);
+    expect(list[0]?.compare?.currentLabel).toBe("July 2026");
+  });
+
+  it("compares each part with the same one a year earlier, as the report does", () => {
+    const list = parts(report("quarter-2026-q3", section(), { compare_to: "last_year" }));
+    expect(list.map((p) => p.compare?.label)).toEqual([
+      "July 2025",
+      "August 2025",
+      "September 2025",
+    ]);
+  });
+
+  it("cuts parts at custom dates, partial, with nothing to compare with", () => {
+    const list = parts(report("custom-2026-07-15-2026-09-10"));
+    expect(list.map((p) => [p.part.period.from, p.part.period.to, p.part.partial])).toEqual([
+      ["2026-07-15", "2026-07-31", true],
+      ["2026-08-01", "2026-08-31", false],
+      ["2026-09-01", "2026-09-10", true],
+    ]);
+    expect(list.map((p) => p.compare)).toEqual([null, null, null]);
+  });
+
+  it("has a part per cycle, and none before the first", () => {
+    const list = parts(report("quarter-2026-q3", section("cycle")), section("cycle"));
+    expect(list.map((p) => [p.part.choice.at, p.part.partial])).toEqual([
+      ["100001000001", false],
+      ["100001000002", true],
+    ]);
+    expect(list[0]?.compare).toBeNull();
+    expect(list[1]?.compare?.label).toEqual(expect.any(String));
+  });
+
+  it("refuses more than 24 parts", () => {
+    expect(sectionParts(report("custom-2023-01-01-2026-06-30"), section(), cycles, now)).toEqual({
+      ok: false,
+      reason: "many",
+    });
+  });
+
+  it("is titled by its unit unless titled", () => {
+    expect(moduleTitle(section())).toBe("Each month");
+    expect(moduleTitle(section("cycle"))).toBe("Each cycle");
+    expect(moduleTitle(section("month", "Months"))).toBe("Months");
+  });
+
+  it("gives a new module an id no module has, in a section either", () => {
+    const r = report("previous-year");
+    expect(newModule(r).id).toBe("m-4");
+    expect(newModule(r, "section")).toEqual({
+      id: "m-4",
+      type: "section",
+      section: { unit: "month", modules: [] },
+    });
+  });
+
+  it("cleans a section's modules, and reads none in a section", () => {
+    const r: ReportSettings = {
+      period: "previous-year",
+      modules: [
+        {
+          id: "m-1",
+          type: "section",
+          title: " ",
+          section: {
+            unit: "month",
+            modules: [
+              {
+                id: "m-2",
+                type: "graph",
+                title: " ",
+                compare: "off",
+                graph: { kind: "bar", metric: "spending", resolution: "day" },
+              },
+            ],
+          },
+        },
+      ],
+    };
+    expect(cleanReport(r).modules).toEqual([
+      {
+        id: "m-1",
+        type: "section",
+        section: {
+          unit: "month",
+          modules: [
+            {
+              id: "m-2",
+              type: "graph",
+              graph: { kind: "bar", metric: "spending", resolution: "day" },
+            },
+          ],
+        },
+      },
+    ]);
+    const [read] = readTemplates([
+      {
+        id: "r-1",
+        name: "Mine",
+        report: {
+          period: "previous-year",
+          modules: [
+            {
+              id: "m-1",
+              type: "section",
+              section: {
+                unit: "cycle",
+                modules: [
+                  { id: "m-2", type: "flows", flows: {} },
+                  { id: "m-3", type: "section", section: { unit: "month", modules: [] } },
+                  { id: "m-4", type: "graph" },
+                ],
+              },
+            },
+            // Without its settings.
+            { id: "m-5", type: "section" },
+          ],
+        },
+      },
+    ]);
+    expect(read?.report.modules).toEqual([
+      {
+        id: "m-1",
+        type: "section",
+        section: { unit: "cycle", modules: [{ id: "m-2", type: "flows", flows: {} }] },
+      },
+    ]);
+  });
+
+  it("lists a section's parts in the PDF contents, oldest first", () => {
+    const choice = parsePeriod("quarter-2026-q3");
+    const period = choice && resolvePeriod(choice, cycles, now);
+    expect(reportContents(report("quarter-2026-q3"), period ?? null, cycles)).toEqual([
+      { anchor: "module-m-1", title: "Budget vs spending", sections: [] },
+      {
+        anchor: "module-m-2",
+        title: "Each month",
+        sections: [
+          { anchor: "module-m-2-2026-07-01", title: "July 2026" },
+          { anchor: "module-m-2-2026-08-01", title: "August 2026" },
+          { anchor: "module-m-2-2026-09-01", title: "September 2026" },
+        ],
+      },
+    ]);
+  });
+
+  it("has a Year by month starter with a section per month", () => {
+    const r = starter("year_by_month");
+    expect(r.modules.map((m) => m.type)).toEqual(["graph", "graph", "section"]);
+    const s = r.modules[2];
+    expect(s?.type === "section" && s.section.modules.map((m) => m.type)).toEqual([
+      "graph",
+      "flows",
+      "transactions",
+    ]);
+    expect(sameReport(cleanReport(r), r)).toBe(true);
+  });
+});

@@ -16,7 +16,6 @@ import {
   groupTransactions,
   MAX_SUB_PERIODS,
   periodParts,
-  sectionAnchor,
   sectionLabel,
   transactionSections,
   transactionsLink,
@@ -37,14 +36,17 @@ import { TransactionsTable } from "./TransactionsTable";
  * and summary, and starts a new page in a PDF.
  */
 export function TransactionsModule({
-  moduleId,
+  anchor,
+  headingLevel = 3,
   settings,
   period,
   cycles,
   isDesktop,
 }: {
-  /** For the sections' ids, which a PDF's contents link to (#193). */
-  moduleId: string;
+  /** The module's id: its sections' ids start with it (#193); none, none. */
+  anchor?: string;
+  /** Its sections' bands' level, below the module's title: 3, or 5 in a part (#194). */
+  headingLevel?: number;
   /** With the report's filters where the module has none of its own. */
   settings: ReportTransactions;
   period: Period | null;
@@ -122,7 +124,7 @@ export function TransactionsModule({
         cycles={cycles}
         names={names}
         focus={focus}
-        heading={print ? "div" : sections === null ? "h3" : "h4"}
+        heading={print ? "div" : level(sections === null ? headingLevel : headingLevel + 1)}
         link={(id) =>
           print ? undefined : (transactionsLink(settings, period, id) ?? "/transactions")
         }
@@ -141,12 +143,18 @@ export function TransactionsModule({
             return (
               <Box
                 key={s.key}
-                id={sectionAnchor(moduleId, s.key)}
+                id={anchor && `${anchor}-${s.key || "outside"}`}
                 component="section"
                 aria-label={label}
                 data-transactions-section
               >
-                <SectionHeading section={s} label={label} names={names} focus={focus} />
+                <SectionHeading
+                  section={s}
+                  label={label}
+                  names={names}
+                  focus={focus}
+                  heading={level(headingLevel)}
+                />
                 {s.items.length === 0 ? (
                   <Text size="sm" c="dimmed" px="xs" py={6}>
                     {t("stats.reports.transactions.sections.empty")}
@@ -209,6 +217,11 @@ interface Focus {
   bucketId: string | null;
 }
 
+type Heading = "h3" | "h4" | "h5" | "h6";
+
+/** A heading's element for its level, at most h6. */
+const level = (n: number): Heading => (n <= 3 ? "h3" : n === 4 ? "h4" : n === 5 ? "h5" : "h6");
+
 /** Transactions as the Transactions list shows them, under a heading per group. */
 function TransactionList({
   items,
@@ -226,7 +239,7 @@ function TransactionList({
   names: Lookups;
   focus: Focus;
   /** A div in a PDF, so the outline has only modules and sections (#193). */
-  heading: "h3" | "h4" | "div";
+  heading: Heading | "div";
   link: (id: string) => string | undefined;
   badge: boolean;
 }) {
@@ -276,11 +289,13 @@ function SectionHeading({
   label,
   names,
   focus,
+  heading,
 }: {
   section: TransactionSection;
   label: string;
   names: Lookups;
   focus: Focus;
+  heading: Heading;
 }) {
   const { t } = useTranslation();
   const { part } = section;
@@ -298,7 +313,7 @@ function SectionHeading({
       style={{ borderRadius: "var(--mantine-radius-sm)" }}
     >
       <Group gap="xs" wrap="wrap">
-        <Text component="h3" m={0} size="sm" fw={700}>
+        <Text component={heading} m={0} size="sm" fw={700}>
           {label}
         </Text>
         {dates && (

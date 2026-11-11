@@ -285,6 +285,68 @@ describe("PrintReport", () => {
     expect(pages().slice(0, 5)).toEqual(["2", "3", "3", "4", "000"]);
   });
 
+  it("prints every part of a report section, each on its own page (#194)", async () => {
+    const y = String(year - 1);
+    const month = (m: string) =>
+      specificLabel({ kind: "specific", unit: "month", at: `${y}-${m}-01` }, []);
+    renderRoute(
+      `/print/report#${fragment(
+        job({
+          report: {
+            period: `quarter-${y}-q1`,
+            modules: [
+              {
+                id: "m-1",
+                type: "section",
+                section: {
+                  unit: "month",
+                  modules: [
+                    {
+                      id: "m-2",
+                      type: "graph",
+                      title: "Spending",
+                      graph: { kind: "bar", metric: "spending", resolution: "day" },
+                    },
+                    { id: "m-3", type: "transactions", transactions: {} },
+                  ],
+                },
+              },
+            ],
+          },
+        }),
+      )}`,
+    );
+    await waitFor(() => {
+      expect(ready()).not.toBeNull();
+    });
+    const parts = [...document.querySelectorAll("[data-section-part]")];
+    expect(parts.map((p) => p.id)).toEqual(
+      ["01", "02", "03"].map((m) => `module-m-1-${y}-${m}-01`),
+    );
+    // Each part's own queries, and no buttons nor the module list.
+    const froms = apiMock.calls(stats).map((c) => c.query.get("from"));
+    expect(froms).toEqual(
+      expect.arrayContaining(["01", "02", "03"].map((m) => startAtFor(`${y}-${m}-01`))),
+    );
+    expect(screen.queryAllByRole("button")).toEqual([]);
+    expect(document.querySelector("[data-section-modules]")).toBeNull();
+    expect(appLinks()).toEqual([]);
+
+    expect(contents()).toEqual([
+      ["1. Each month", "#module-m-1"],
+      ...["01", "02", "03"].map((m) => [month(m), `#module-m-1-${y}-${m}-01`]),
+    ]);
+    expect(screen.getAllByRole("heading").map((h) => [h.tagName, h.textContent])).toEqual([
+      ["H1", "Året – food"],
+      ["H2", "Each month"],
+      ...["01", "02", "03"].flatMap((m) => [
+        ["H3", month(m)],
+        ["H4", "Spending"],
+        ["H4", "Transactions"],
+      ]),
+    ]);
+  });
+
   it("uses the job's language and locale", async () => {
     renderRoute(`/print/report#${fragment(job({ language: "nb", locale: "nb-NO" }))}`);
     const cover = await screen.findByTestId("print-cover");

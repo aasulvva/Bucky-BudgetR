@@ -1070,6 +1070,171 @@ describe("Reports", () => {
     });
   });
 
+  describe("report sections (#194)", () => {
+    const y = String(year - 1);
+    const month = (m: string) =>
+      specificLabel({ kind: "specific", unit: "month", at: `${y}-${m}-01` }, []);
+    const froms = () => apiMock.calls(stats).map((c) => c.query.get("from"));
+    const part = (section: HTMLElement, name: string) =>
+      within(section).getByRole("button", { name });
+    const listed = (section: HTMLElement) =>
+      [...section.querySelectorAll("[data-section-module-title]")].map((x) => x.textContent);
+    beforeEach(() => {
+      apiMock.on(list, { body: { items: [], next_cursor: null } });
+      prefs = {
+        ...prefs,
+        report_templates: [
+          template({
+            period: `quarter-${y}-q2`,
+            modules: [
+              {
+                id: "m-1",
+                type: "section",
+                section: {
+                  unit: "month",
+                  modules: [
+                    {
+                      id: "m-2",
+                      type: "graph",
+                      graph: { kind: "bar", metric: "spending", resolution: "day" },
+                    },
+                  ],
+                },
+              },
+            ],
+          }),
+        ],
+      };
+    });
+
+    it("shows a part per month, loading only those open, the newest at first", async () => {
+      renderRoute("/stats/reports?template=r-1");
+      const section = await screen.findByRole("region", { name: "Each month" });
+      expect(part(section, month("04"))).toHaveAttribute("aria-expanded", "false");
+      expect(part(section, month("05"))).toHaveAttribute("aria-expanded", "false");
+      expect(part(section, month("06"))).toHaveAttribute("aria-expanded", "true");
+      const graphs = () =>
+        within(section).queryAllByRole("region", { name: "Spending · Bars · Day" });
+      await waitFor(() => {
+        expect(froms()).toContain(startAtFor(`${y}-06-01`));
+      });
+      expect(graphs()).toHaveLength(1);
+      expect(froms()).not.toContain(startAtFor(`${y}-04-01`));
+      // A part's modules have no buttons: they're edited in the list.
+      const [graph] = graphs();
+      if (!graph) throw new Error("no graph");
+      expect(within(graph).queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+      expect(within(graph).getByRole("heading", { level: 4 })).toHaveTextContent(
+        "Spending · Bars · Day",
+      );
+
+      await userEvent.click(part(section, month("04")));
+      await waitFor(() => {
+        expect(froms()).toContain(startAtFor(`${y}-04-01`));
+      });
+      expect(graphs()).toHaveLength(2);
+      expect(froms()).not.toContain(startAtFor(`${y}-05-01`));
+    });
+
+    it("adds, edits, moves and removes a section's modules, and saves them", async () => {
+      renderRoute("/stats/reports?template=r-1");
+      const section = await screen.findByRole("region", { name: "Each month" });
+      await userEvent.click(
+        within(section).getByRole("button", { name: "Add a module to Each month" }),
+      );
+      let dialog = await screen.findByRole("dialog", { name: "Add module" });
+      // No section in a section, and no breakdown.
+      expect(within(dialog).queryByRole("radio", { name: "Section" })).not.toBeInTheDocument();
+      expect(within(dialog).queryByRole("radio", { name: "By month" })).not.toBeInTheDocument();
+      await userEvent.click(within(dialog).getByRole("radio", { name: "Transactions" }));
+      await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+      await waitFor(() => {
+        expect(listed(section)).toEqual(["Spending · Bars · Day", "Transactions"]);
+      });
+      // Shown in the open part, the report's own list unchanged.
+      expect(within(section).getByRole("region", { name: "Transactions" })).toBeInTheDocument();
+      expect(modules()[0]).toBe("Each month");
+
+      await userEvent.click(
+        within(section).getByRole("button", { name: "Edit Spending · Bars · Day" }),
+      );
+      dialog = await screen.findByRole("dialog", { name: "Edit module" });
+      await userEvent.click(within(dialog).getByRole("combobox", { name: "Show" }));
+      await userEvent.click(await within(dialog).findByRole("option", { name: "Income" }));
+      await userEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
+      await waitFor(() => {
+        expect(listed(section)).toEqual(["Income · Bars · Day", "Transactions"]);
+      });
+      await userEvent.click(within(section).getByRole("button", { name: "Move Transactions up" }));
+      expect(listed(section)).toEqual(["Transactions", "Income · Bars · Day"]);
+
+      await userEvent.click(screen.getByRole("button", { name: "Save" }));
+      await waitFor(() => {
+        expect(lastBody()?.report_templates?.[0]?.report.modules).toEqual([
+          {
+            id: "m-1",
+            type: "section",
+            section: {
+              unit: "month",
+              modules: [
+                { id: "m-3", type: "transactions", transactions: {} },
+                {
+                  id: "m-2",
+                  type: "graph",
+                  graph: { kind: "bar", metric: "income", resolution: "day" },
+                },
+              ],
+            },
+          },
+        ]);
+      });
+
+      await userEvent.click(
+        within(section).getByRole("button", { name: "Remove Income · Bars · Day" }),
+      );
+      expect(listed(section)).toEqual(["Transactions"]);
+    });
+
+    it("repeats for each cycle, as edited", async () => {
+      renderRoute("/stats/reports?template=r-1");
+      const section = await screen.findByRole("region", { name: "Each month" });
+      // The section's own: its parts' modules have none.
+      await userEvent.click(within(section).getByRole("button", { name: "Edit" }));
+      const dialog = await screen.findByRole("dialog", { name: "Edit module" });
+      await userEvent.click(within(dialog).getByRole("radio", { name: "Per cycle" }));
+      await userEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
+      // No cycles here.
+      expect(await screen.findByRole("region", { name: "Each cycle" })).toHaveTextContent(
+        "No months or cycles in this period.",
+      );
+    });
+
+    it("adds a section to the report", async () => {
+      renderRoute("/stats/reports?template=r-1");
+      await screen.findByRole("region", { name: "Each month" });
+      await userEvent.click(screen.getByRole("button", { name: "Add module" }));
+      const dialog = await screen.findByRole("dialog", { name: "Add module" });
+      await userEvent.click(within(dialog).getByRole("radio", { name: "Section" }));
+      await userEvent.type(within(dialog).getByRole("textbox", { name: /^Title/ }), "Months");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+      const added = await screen.findByRole("region", { name: "Months" });
+      expect(added).toHaveTextContent("Add modules to repeat them for each month or cycle.");
+      expect(modules().at(-1)).toBe("Months");
+    });
+
+    it("opens the Year by month starter at its last month", async () => {
+      renderRoute("/stats/reports?starter=year_by_month");
+      const section = await screen.findByRole("region", { name: "Each month" });
+      expect(within(section).getAllByRole("button", { expanded: false })).toHaveLength(11);
+      expect(part(section, month("12"))).toHaveAttribute("aria-expanded", "true");
+      expect(listed(section)).toEqual([
+        "Spending · Pie · Per bucket",
+        "In, out and balance",
+        "Transactions",
+      ]);
+    });
+  });
+
   describe("Export PDF (#127)", () => {
     const pdf = "POST /api/v1/reports/pdf";
     /** The previous month's name, e.g. "October 2026". */

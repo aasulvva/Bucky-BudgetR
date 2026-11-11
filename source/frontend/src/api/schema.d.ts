@@ -2353,7 +2353,9 @@ export interface components {
          * @description A module of a report. Its `type` says which settings it has: a
          *     `graph` module has `graph`, a `transactions` module (#126) has
          *     `transactions`, a `flows` module (#126) has `flows`, a `budget` module
-         *     (#126) has `budget`, and none of the others (400 `invalid_request`).
+         *     (#126) has `budget`, a `section` module (#194) has `section`, and none
+         *     of the others (400 `invalid_request`). Module ids are unique across
+         *     the report, those in sections included.
          */
         ReportModule: {
             id: string;
@@ -2361,12 +2363,13 @@ export interface components {
              * @description What the module shows.
              * @enum {string}
              */
-            type: "graph" | "transactions" | "flows" | "budget";
+            type: "graph" | "transactions" | "flows" | "budget" | "section";
             title?: string;
             graph?: components["schemas"]["ReportGraph"];
             transactions?: components["schemas"]["ReportTransactions"];
             flows?: components["schemas"]["ReportFlows"];
             budget?: components["schemas"]["ReportBudget"];
+            section?: components["schemas"]["ReportSection"];
             /**
              * @description Graphs only. Lines and bars: the previous period beside this one
              *     (`both`) or this period minus the previous (`difference`). Pies:
@@ -2382,6 +2385,18 @@ export interface components {
              * @enum {string}
              */
             breakdown?: "none" | "month" | "cycle";
+        };
+        /**
+         * @description A report section (#194): its modules, repeated for each month or
+         *     cycle of the report's period (at most 24), each over that part and
+         *     compared with the one before (or a year earlier) as the report
+         *     says. They use the report's filters unless they set their own. A
+         *     section can't hold a section (400 `invalid_request`).
+         */
+        ReportSection: {
+            /** @enum {string} */
+            unit: "month" | "cycle";
+            modules: components["schemas"]["ReportModule"][];
         };
         /**
          * @description An In/out/balance module (#126): each bucket's money in and out with
