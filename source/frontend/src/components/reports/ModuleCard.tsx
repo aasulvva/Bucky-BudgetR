@@ -15,14 +15,13 @@ import {
   moduleBudget,
   moduleGraph,
   moduleFlows,
-  moduleAnchor,
   moduleTitle,
   moduleTransactions,
   ownFilters,
   partResolution,
   subPeriods,
   type GraphModule,
-  type ReportModule,
+  type PartModule,
   type ReportSettings,
   type SubPeriod,
 } from "@/lib/reports";
@@ -33,7 +32,8 @@ import { TransactionsModule } from "./TransactionsModule";
 
 interface ModuleCardProps {
   report: ReportSettings;
-  module: ReportModule;
+  /** A section has its own card (#194). */
+  module: PartModule;
   index: number;
   count: number;
   choice: PeriodChoice;
@@ -47,6 +47,12 @@ interface ModuleCardProps {
   onEdit: () => void;
   onMove: (direction: -1 | 1) => void;
   onRemove: () => void;
+  /** The move, edit and remove buttons; not in a section's parts (#194). */
+  actions?: boolean;
+  /** Its title's heading level: 2, or 4 in a section's part. */
+  headingLevel?: 2 | 4;
+  /** Its id, which a PDF's contents link to (#193); none in a section's parts. */
+  anchor?: string;
 }
 
 /** One module of a report (#125): its graph, compared or broken down as set, or its transactions (#126). */
@@ -65,6 +71,9 @@ export function ModuleCard({
   onEdit,
   onMove,
   onRemove,
+  actions = true,
+  headingLevel = 2,
+  anchor,
 }: ModuleCardProps) {
   const { t } = useTranslation();
   const print = usePrintMode();
@@ -77,14 +86,14 @@ export function ModuleCard({
       padding="md"
       aria-label={title}
       component="section"
-      id={moduleAnchor(module.id)}
+      id={anchor}
       data-report-module
     >
       <Stack gap="sm">
         <Group justify="space-between" wrap="nowrap" align="flex-start">
           <Stack gap={2} style={{ minWidth: 0 }}>
             {/* A heading, for the PDF's outline (#193). */}
-            <Text component="h2" m={0} fw={600}>
+            <Text component={headingLevel === 2 ? "h2" : "h4"} m={0} fw={600}>
               {title}
             </Text>
             {own.length > 0 && (
@@ -97,59 +106,20 @@ export function ModuleCard({
               </Group>
             )}
           </Stack>
-          {!print && (
-            <Group gap={2} wrap="nowrap">
-              <Tooltip label={t("stats.reports.module.moveUp")}>
-                <ActionIcon
-                  variant="subtle"
-                  color="gray"
-                  aria-label={t("stats.reports.module.moveUp")}
-                  disabled={index === 0}
-                  onClick={() => {
-                    onMove(-1);
-                  }}
-                >
-                  <IconArrowUp size={16} />
-                </ActionIcon>
-              </Tooltip>
-              <Tooltip label={t("stats.reports.module.moveDown")}>
-                <ActionIcon
-                  variant="subtle"
-                  color="gray"
-                  aria-label={t("stats.reports.module.moveDown")}
-                  disabled={index === count - 1}
-                  onClick={() => {
-                    onMove(1);
-                  }}
-                >
-                  <IconArrowDown size={16} />
-                </ActionIcon>
-              </Tooltip>
-              <Tooltip label={t("stats.reports.module.edit")}>
-                <ActionIcon
-                  variant="subtle"
-                  aria-label={t("stats.reports.module.edit")}
-                  onClick={onEdit}
-                >
-                  <IconPencil size={16} />
-                </ActionIcon>
-              </Tooltip>
-              <Tooltip label={t("stats.reports.module.remove")}>
-                <ActionIcon
-                  variant="subtle"
-                  color="red"
-                  aria-label={t("stats.reports.module.remove")}
-                  onClick={onRemove}
-                >
-                  <IconTrash size={16} />
-                </ActionIcon>
-              </Tooltip>
-            </Group>
+          {!print && actions && (
+            <ModuleActions
+              first={index === 0}
+              last={index === count - 1}
+              onMove={onMove}
+              onEdit={onEdit}
+              onRemove={onRemove}
+            />
           )}
         </Group>
         {module.type === "transactions" ? (
           <TransactionsModule
-            moduleId={module.id}
+            anchor={anchor}
+            headingLevel={headingLevel + 1}
             settings={moduleTransactions(report, module)}
             period={period}
             cycles={cycles}
@@ -316,5 +286,98 @@ function Part({
         height={180}
       />
     </Stack>
+  );
+}
+
+/**
+ * A module's buttons: move up and down, edit and remove. `name` is in their
+ * labels when there are several lists of them, as in a section (#194).
+ */
+export function ModuleActions({
+  first,
+  last,
+  onMove,
+  onEdit,
+  onRemove,
+  name,
+  size = "md",
+}: {
+  first: boolean;
+  last: boolean;
+  onMove: (direction: -1 | 1) => void;
+  onEdit: () => void;
+  onRemove: () => void;
+  name?: string;
+  size?: "sm" | "md";
+}) {
+  const { t } = useTranslation();
+  const label = (plain: string, named: string) => (name ? named : plain);
+  const buttons = [
+    {
+      key: "up",
+      label: label(
+        t("stats.reports.module.moveUp"),
+        t("stats.reports.section.moveUp", { module: name }),
+      ),
+      icon: <IconArrowUp size={16} />,
+      color: "gray",
+      disabled: first,
+      onClick: () => {
+        onMove(-1);
+      },
+    },
+    {
+      key: "down",
+      label: label(
+        t("stats.reports.module.moveDown"),
+        t("stats.reports.section.moveDown", { module: name }),
+      ),
+      icon: <IconArrowDown size={16} />,
+      color: "gray",
+      disabled: last,
+      onClick: () => {
+        onMove(1);
+      },
+    },
+    {
+      key: "edit",
+      label: label(
+        t("stats.reports.module.edit"),
+        t("stats.reports.section.edit", { module: name }),
+      ),
+      icon: <IconPencil size={16} />,
+      color: undefined,
+      disabled: false,
+      onClick: onEdit,
+    },
+    {
+      key: "remove",
+      label: label(
+        t("stats.reports.module.remove"),
+        t("stats.reports.section.remove", { module: name }),
+      ),
+      icon: <IconTrash size={16} />,
+      color: "red",
+      disabled: false,
+      onClick: onRemove,
+    },
+  ];
+  return (
+    <Group gap={2} wrap="nowrap">
+      {buttons.map((b) => (
+        <Tooltip key={b.key} label={b.label}>
+          <ActionIcon
+            variant="subtle"
+            size={size}
+            color={b.color}
+            aria-label={b.label}
+            disabled={b.disabled}
+            onClick={b.onClick}
+          >
+            {b.icon}
+          </ActionIcon>
+        </Tooltip>
+      ))}
+    </Group>
   );
 }

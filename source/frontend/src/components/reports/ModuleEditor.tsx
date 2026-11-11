@@ -29,6 +29,9 @@ import {
   MAX_SUB_PERIODS,
   MODULE_COMPARES,
   MODULE_TYPES,
+  PART_MODULE_TYPES,
+  SECTION_UNITS,
+  type SectionModule,
   newModule,
   subPeriods,
   type Breakdown,
@@ -70,6 +73,8 @@ interface ModuleEditorProps {
   accounts: Account[];
   buckets: Bucket[];
   tags: string[];
+  /** In a section (#194): no sections, and no breakdowns, as a part is short. */
+  inSection?: boolean;
   onApply: (module: ReportModule) => void;
   onClose: () => void;
 }
@@ -112,7 +117,7 @@ function Editor({
             fullWidth
             orientation={phone ? "vertical" : "horizontal"}
             mt={4}
-            data={MODULE_TYPES.map((x) => ({
+            data={(rest.inSection ? PART_MODULE_TYPES : MODULE_TYPES).map((x) => ({
               value: x,
               label: t(`stats.reports.module.types.${x}`),
             }))}
@@ -145,6 +150,8 @@ function Editor({
         <FlowsFields draft={draft} onChange={setDraft} {...rest} />
       ) : draft.type === "budget" ? (
         <BudgetFields draft={draft} onChange={setDraft} {...rest} />
+      ) : draft.type === "section" ? (
+        <SectionFields draft={draft} onChange={setDraft} />
       ) : (
         <GraphFields draft={draft} onChange={setDraft} report={report} {...rest} />
       )}
@@ -179,6 +186,7 @@ function GraphFields({
   accounts,
   buckets,
   tags,
+  inSection,
 }: FieldsProps & {
   draft: GraphModule;
   onChange: (m: GraphModule) => void;
@@ -225,24 +233,26 @@ function GraphFields({
           }}
         />
       </Input.Wrapper>
-      <Input.Wrapper
-        label={t("stats.reports.breakdown.label")}
-        description={t("stats.reports.breakdown.hint", { days: BREAKDOWN_MIN_DAYS })}
-      >
-        <SegmentedControl
-          fullWidth
-          mt={4}
-          data={BREAKDOWNS.map((b) => ({
-            value: b,
-            label: t(`stats.reports.breakdown.options.${b}`),
-            disabled: b !== "none" && b !== breakdown && breakdownWhy(b) !== null,
-          }))}
-          value={breakdown}
-          onChange={(b) => {
-            onChange({ ...draft, breakdown: b });
-          }}
-        />
-      </Input.Wrapper>
+      {!inSection && (
+        <Input.Wrapper
+          label={t("stats.reports.breakdown.label")}
+          description={t("stats.reports.breakdown.hint", { days: BREAKDOWN_MIN_DAYS })}
+        >
+          <SegmentedControl
+            fullWidth
+            mt={4}
+            data={BREAKDOWNS.map((b) => ({
+              value: b,
+              label: t(`stats.reports.breakdown.options.${b}`),
+              disabled: b !== "none" && b !== breakdown && breakdownWhy(b) !== null,
+            }))}
+            value={breakdown}
+            onChange={(b) => {
+              onChange({ ...draft, breakdown: b });
+            }}
+          />
+        </Input.Wrapper>
+      )}
       {why && (
         <Text size="sm" c="dimmed">
           {why}
@@ -553,6 +563,7 @@ function FlowsFields({
   cycles,
   accounts,
   buckets,
+  inSection,
 }: FieldsProps & { draft: FlowsModule; onChange: (m: FlowsModule) => void }) {
   const { t } = useTranslation();
   const s = draft.flows;
@@ -648,29 +659,61 @@ function FlowsFields({
           set({ details: e.currentTarget.checked });
         }}
       />
-      <Input.Wrapper
-        label={t("stats.reports.breakdown.label")}
-        description={t("stats.reports.flows.breakdownHint", { days: BREAKDOWN_MIN_DAYS })}
-      >
-        <SegmentedControl
-          fullWidth
-          mt={4}
-          data={BREAKDOWNS.map((b) => ({
-            value: b,
-            label: t(`stats.reports.breakdown.options.${b}`),
-            disabled: b !== "none" && b !== breakdown && breakdownWhy(b) !== null,
-          }))}
-          value={breakdown}
-          onChange={(b) => {
-            set({ breakdown: b });
-          }}
-        />
-      </Input.Wrapper>
+      {!inSection && (
+        <Input.Wrapper
+          label={t("stats.reports.breakdown.label")}
+          description={t("stats.reports.flows.breakdownHint", { days: BREAKDOWN_MIN_DAYS })}
+        >
+          <SegmentedControl
+            fullWidth
+            mt={4}
+            data={BREAKDOWNS.map((b) => ({
+              value: b,
+              label: t(`stats.reports.breakdown.options.${b}`),
+              disabled: b !== "none" && b !== breakdown && breakdownWhy(b) !== null,
+            }))}
+            value={breakdown}
+            onChange={(b) => {
+              set({ breakdown: b });
+            }}
+          />
+        </Input.Wrapper>
+      )}
       {why && (
         <Text size="sm" c="dimmed">
           {why}
         </Text>
       )}
     </>
+  );
+}
+
+/** A section's unit (#194): its modules are repeated per month or cycle. */
+function SectionFields({
+  draft,
+  onChange,
+}: {
+  draft: SectionModule;
+  onChange: (m: SectionModule) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Input.Wrapper
+      label={t("stats.reports.section.unit.label")}
+      description={t("stats.reports.section.unit.hint", { max: MAX_SUB_PERIODS })}
+    >
+      <SegmentedControl
+        fullWidth
+        mt={4}
+        data={SECTION_UNITS.map((u) => ({
+          value: u,
+          label: t(`stats.reports.section.unit.options.${u}`),
+        }))}
+        value={draft.section.unit}
+        onChange={(unit) => {
+          onChange({ ...draft, section: { ...draft.section, unit } });
+        }}
+      />
+    </Input.Wrapper>
   );
 }

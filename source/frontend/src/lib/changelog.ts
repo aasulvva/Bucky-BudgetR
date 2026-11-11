@@ -16,6 +16,35 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.18.00",
+    date: "2026-11-11",
+    title: {
+      en: "Reports: sections per month or cycle",
+      nb: "Rapporter: seksjoner per måned eller syklus",
+      nn: "Rapportar: seksjonar per månad eller syklus",
+    },
+    changes: {
+      en: [
+        "A report module can be a section, which repeats up to 6 modules for each month or cycle of the report's period. Each month or cycle opens on its own, and only the open ones load.",
+        "Graphs in a section compare each month or cycle with the one before, or the same one a year earlier, as the report compares.",
+        "In the PDF each month or cycle starts a new page, and the contents list them.",
+        "A new built-in report, Year by month: the previous year, then a section per month with spending per bucket, in, out and balance, and the transactions.",
+      ],
+      nb: [
+        "En rapportmodul kan være en seksjon, som gjentar opptil 6 moduler for hver måned eller syklus i rapportens periode. Hver måned eller syklus åpnes for seg, og bare de åpne lastes.",
+        "Grafer i en seksjon sammenligner hver måned eller syklus med den før, eller den samme et år tidligere, slik rapporten sammenligner.",
+        "I PDF-en starter hver måned eller syklus på en ny side, og innholdet viser dem.",
+        "En ny innebygd rapport, Året måned for måned: fjoråret, så en seksjon per måned med forbruk per bøtte, inn, ut og saldo, og transaksjonene.",
+      ],
+      nn: [
+        "Ein rapportmodul kan vere ein seksjon, som gjentek opptil 6 modular for kvar månad eller syklus i perioden til rapporten. Kvar månad eller syklus vert opna for seg, og berre dei opne vert lasta.",
+        "Grafar i ein seksjon samanliknar kvar månad eller syklus med den før, eller den same eit år tidlegare, slik rapporten samanliknar.",
+        "I PDF-en startar kvar månad eller syklus på ei ny side, og innhaldet viser dei.",
+        "Ein ny innebygd rapport, Året månad for månad: fjoråret, så ein seksjon per månad med forbruk per bøtte, inn, ut og saldo, og transaksjonane.",
+      ],
+    },
+  },
+  {
     version: "v2.17.00",
     date: "2026-11-11",
     title: {

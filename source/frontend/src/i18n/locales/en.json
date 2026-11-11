@@ -1118,7 +1118,8 @@
       "versus": "{{current}} vs {{previous}}",
       "starters": {
         "yearly": "Yearly report",
-        "cycle": "Cycle summary"
+        "cycle": "Cycle summary",
+        "year_by_month": "Year by month"
       },
       "templates": {
         "label": "Report",
@@ -1186,7 +1187,8 @@
           "graph": "Graph",
           "transactions": "Transactions",
           "flows": "In/out/balance",
-          "budget": "Budget vs spending"
+          "budget": "Budget vs spending",
+          "section": "Section"
         }
       },
       "ownFilters": {
@@ -1374,6 +1376,32 @@
         },
         "loading": "Getting the report ready…",
         "nothing": "This page prints a report to PDF. Use Export PDF on a report."
+      },
+      "section": {
+        "title": {
+          "month": "Each month",
+          "cycle": "Each cycle"
+        },
+        "unit": {
+          "label": "Repeat for",
+          "hint": "The section's modules are shown for each month or cycle of the report's period, at most {{max}}.",
+          "options": {
+            "month": "Per month",
+            "cycle": "Per cycle"
+          }
+        },
+        "modules": "Modules in the section",
+        "add": "Add module",
+        "addTo": "Add a module to {{section}}",
+        "max": "At most {{max}} modules in a section.",
+        "noModules": "Add modules to repeat them for each month or cycle.",
+        "many": "More than {{max}} months or cycles: choose a shorter period.",
+        "none": "No months or cycles in this period.",
+        "moveUp": "Move {{module}} up",
+        "moveDown": "Move {{module}} down",
+        "edit": "Edit {{module}}",
+        "remove": "Remove {{module}}",
+        "parts": "Months and cycles"
       }
     },
     "graphs": {

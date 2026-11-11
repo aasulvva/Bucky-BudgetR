@@ -308,17 +308,33 @@ func checkReportTemplates(patch api.Preferences) error {
 // the settings of its type and none of the others' (#126). what names the
 // report in the error.
 func checkReportModules(what string, report api.ReportSettings) error {
-	modules := make(map[string]bool, len(report.Modules))
-	for _, m := range report.Modules {
-		if modules[m.Id] {
+	return checkModules(what, report.Modules, map[string]bool{}, false)
+}
+
+// checkModules checks modules and, in a section (#194), its modules: ids
+// unique across the report, each with its type's settings, and no section
+// in a section.
+func checkModules(what string, list []api.ReportModule, ids map[string]bool, inSection bool) error {
+	for _, m := range list {
+		if ids[m.Id] {
 			return &Error{Status: http.StatusBadRequest, Code: "invalid_request", Detail: what + " has module id " + strconv.Quote(m.Id) + " more than once."}
 		}
-		modules[m.Id] = true
+		ids[m.Id] = true
 		if (m.Graph != nil) != (m.Type == api.ReportModuleTypeGraph) ||
 			(m.Transactions != nil) != (m.Type == api.ReportModuleTypeTransactions) ||
 			(m.Flows != nil) != (m.Type == api.ReportModuleTypeFlows) ||
-			(m.Budget != nil) != (m.Type == api.ReportModuleTypeBudget) {
+			(m.Budget != nil) != (m.Type == api.ReportModuleTypeBudget) ||
+			(m.Section != nil) != (m.Type == api.ReportModuleTypeSection) {
 			return &Error{Status: http.StatusBadRequest, Code: "invalid_request", Detail: what + " module " + strconv.Quote(m.Id) + " needs the settings of its type, " + string(m.Type) + ", and no others."}
+		}
+		if m.Section == nil {
+			continue
+		}
+		if inSection {
+			return &Error{Status: http.StatusBadRequest, Code: "invalid_request", Detail: what + " module " + strconv.Quote(m.Id) + ": a section can't hold a section."}
+		}
+		if err := checkModules(what, m.Section.Modules, ids, true); err != nil {
+			return err
 		}
 	}
 	return nil

@@ -7,12 +7,19 @@ import { useAccounts, useBuckets, type Account, type Bucket } from "@/api/accoun
 import { useCycles, type Cycle } from "@/api/cycles";
 import { useSession, type User } from "@/app/session";
 import { ModuleCard } from "@/components/reports/ModuleCard";
+import { SectionCard } from "@/components/reports/SectionCard";
 import { formatDateRange } from "@/lib/cycles";
 import { formatDateTime } from "@/lib/dates";
 import { applyLanguage } from "@/lib/language";
 import { setLocale } from "@/lib/locale";
 import { parseJob, PRINT_WIDTH, PrintMode, usePrintReady, type PrintJob } from "@/lib/print";
-import { matchPages, reportContents, reportPeriods, type ContentsEntry } from "@/lib/reports";
+import {
+  matchPages,
+  moduleAnchor,
+  reportContents,
+  reportPeriods,
+  type ContentsEntry,
+} from "@/lib/reports";
 
 import "./PrintReport.css";
 
@@ -104,25 +111,47 @@ function Printed({
         buckets={buckets}
       />
       <Stack gap="md">
-        {report.modules.map((m, i) => (
-          <ModuleCard
-            key={m.id}
-            report={report}
-            module={m}
-            index={i}
-            count={report.modules.length}
-            choice={choice}
-            period={period}
-            compare={compare}
-            cycles={cycles}
-            accounts={accounts}
-            buckets={buckets}
-            isDesktop
-            onEdit={noop}
-            onMove={noop}
-            onRemove={noop}
-          />
-        ))}
+        {report.modules.map((m, i) =>
+          m.type === "section" ? (
+            <SectionCard
+              key={m.id}
+              report={report}
+              module={m}
+              index={i}
+              count={report.modules.length}
+              cycles={cycles}
+              accounts={accounts}
+              buckets={buckets}
+              isDesktop
+              onEdit={noop}
+              onMove={noop}
+              onRemove={noop}
+              onAddModule={noop}
+              onEditModule={noop}
+              onMoveModule={noop}
+              onRemoveModule={noop}
+            />
+          ) : (
+            <ModuleCard
+              key={m.id}
+              report={report}
+              module={m}
+              index={i}
+              count={report.modules.length}
+              choice={choice}
+              period={period}
+              compare={compare}
+              cycles={cycles}
+              accounts={accounts}
+              buckets={buckets}
+              isDesktop
+              anchor={moduleAnchor(m.id)}
+              onEdit={noop}
+              onMove={noop}
+              onRemove={noop}
+            />
+          ),
+        )}
       </Stack>
     </Box>
   );

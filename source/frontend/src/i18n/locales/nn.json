@@ -1118,7 +1118,8 @@
       "versus": "{{current}} mot {{previous}}",
       "starters": {
         "yearly": "Årsrapport",
-        "cycle": "Syklusoppsummering"
+        "cycle": "Syklusoppsummering",
+        "year_by_month": "Året månad for månad"
       },
       "templates": {
         "label": "Rapport",
@@ -1186,7 +1187,8 @@
           "graph": "Graf",
           "transactions": "Transaksjonar",
           "flows": "Inn/ut/saldo",
-          "budget": "Budsjett mot forbruk"
+          "budget": "Budsjett mot forbruk",
+          "section": "Seksjon"
         }
       },
       "ownFilters": {
@@ -1374,6 +1376,32 @@
         },
         "loading": "Gjer rapporten klar …",
         "nothing": "Denne sida skriv ut ein rapport til PDF. Bruk Eksporter PDF på ein rapport."
+      },
+      "section": {
+        "title": {
+          "month": "Kvar månad",
+          "cycle": "Kvar syklus"
+        },
+        "unit": {
+          "label": "Gjenta for",
+          "hint": "Modulane i seksjonen vert viste for kvar månad eller syklus i perioden til rapporten, høgst {{max}}.",
+          "options": {
+            "month": "Per månad",
+            "cycle": "Per syklus"
+          }
+        },
+        "modules": "Modular i seksjonen",
+        "add": "Legg til modul",
+        "addTo": "Legg til ein modul i {{section}}",
+        "max": "Høgst {{max}} modular i ein seksjon.",
+        "noModules": "Legg til modular for å gjenta dei for kvar månad eller syklus.",
+        "many": "Meir enn {{max}} månader eller syklusar: vel ein kortare periode.",
+        "none": "Ingen månader eller syklusar i perioden.",
+        "moveUp": "Flytt {{module}} opp",
+        "moveDown": "Flytt {{module}} ned",
+        "edit": "Rediger {{module}}",
+        "remove": "Fjern {{module}}",
+        "parts": "Månader og syklusar"
       }
     },
     "graphs": {

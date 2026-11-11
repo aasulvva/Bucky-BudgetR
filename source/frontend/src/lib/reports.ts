@@ -94,12 +94,31 @@ export interface BudgetModule {
   budget: ReportBudget;
 }
 
+export type ReportSection = components["schemas"]["ReportSection"];
+export type SectionUnit = ReportSection["unit"];
+
+/** A module a section can hold: any but a section (#194). */
+export type PartModule = GraphModule | TransactionsModule | FlowsModule | BudgetModule;
+
+/** A section (#194): its modules, repeated for each month or cycle of the period. */
+export interface SectionModule {
+  id: string;
+  type: "section";
+  title?: string;
+  section: { unit: SectionUnit; modules: PartModule[] };
+}
+
 /** The API's module, by its type: each has its own settings. */
-export type ReportModule = GraphModule | TransactionsModule | FlowsModule | BudgetModule;
+export type ReportModule = PartModule | SectionModule;
 export type ReportSettings = Omit<ApiReport, "modules"> & { modules: ReportModule[] };
 export type ReportTemplate = Omit<ApiTemplate, "report"> & { report: ReportSettings };
 
-export const MODULE_TYPES: ModuleType[] = ["graph", "transactions", "flows", "budget"];
+export const MODULE_TYPES: ModuleType[] = ["graph", "transactions", "flows", "budget", "section"];
+/** What a section can hold. */
+export const PART_MODULE_TYPES: PartModule["type"][] = ["graph", "transactions", "flows", "budget"];
+export const SECTION_UNITS: SectionUnit[] = ["month", "cycle"];
+/** The most modules a section holds (the API's limit). */
+export const MAX_SECTION_MODULES = 6;
 export type FlowsShow = NonNullable<ReportFlows["show"]>;
 export const FLOWS_SHOWS: FlowsShow[] = ["buckets", "accounts", "both"];
 export type FlowsView = NonNullable<ReportFlows["view"]>;
@@ -196,6 +215,38 @@ export const STARTERS = {
       },
     ],
   },
+  year_by_month: {
+    period: "previous-year",
+    modules: [
+      {
+        id: "m-1",
+        type: "graph",
+        graph: { kind: "pie", metric: "spending", resolution: "month", group_by: "bucket" },
+      },
+      {
+        id: "m-2",
+        type: "graph",
+        graph: { kind: "bar", metric: "spending", resolution: "month" },
+        compare: "both",
+      },
+      {
+        id: "m-3",
+        type: "section",
+        section: {
+          unit: "month",
+          modules: [
+            {
+              id: "m-4",
+              type: "graph",
+              graph: { kind: "pie", metric: "spending", resolution: "day", group_by: "bucket" },
+            },
+            { id: "m-5", type: "flows", flows: {} },
+            { id: "m-6", type: "transactions", transactions: {} },
+          ],
+        },
+      },
+    ],
+  },
 } as const satisfies Record<string, ReportSettings>;
 export type StarterId = keyof typeof STARTERS;
 export const STARTER_IDS = Object.keys(STARTERS) as StarterId[];
@@ -208,6 +259,15 @@ export function starter(id: StarterId): ReportSettings {
 /** A module from the API, by its type; null without its type's settings, which the server refuses. */
 function readModule(m: ApiModule): ReportModule | null {
   const base = { id: m.id, ...(m.title === undefined ? {} : { title: m.title }) };
+  if (m.type === "section") {
+    if (!m.section) return null;
+    // A section can't hold a section.
+    const modules = m.section.modules.flatMap((x) => {
+      const read = readModule(x);
+      return read && read.type !== "section" ? [read] : [];
+    });
+    return { ...base, type: "section", section: { unit: m.section.unit, modules } };
+  }
   if (m.type === "transactions") {
     return m.transactions ? { ...base, type: "transactions", transactions: m.transactions } : null;
   }
@@ -727,6 +787,18 @@ export function reportContents(
   cycles: CycleTimes[],
 ): ContentsEntry[] {
   return report.modules.map((m) => {
+    if (m.type === "section") {
+      // A report section's months or cycles, oldest first (#194).
+      const parts = period ? periodParts(period, m.section.unit, cycles) : null;
+      return {
+        anchor: moduleAnchor(m.id),
+        title: moduleTitle(m),
+        sections: (parts?.ok ? parts.parts : []).map((p) => ({
+          anchor: sectionAnchor(m.id, p.choice.at),
+          title: sectionLabel(p, cycles),
+        })),
+      };
+    }
     const by = m.type === "transactions" ? (m.transactions.sections ?? "off") : "off";
     const parts =
       m.type === "transactions" && by !== "off" && period ? periodParts(period, by, cycles) : null;
@@ -818,6 +890,8 @@ function periodLink(period: Period, open: string): string {
 export function ownFilters(
   module: ReportModule,
 ): ("accounts" | "buckets" | "tags" | "counterparty")[] {
+  // A section's modules have their own.
+  if (module.type === "section") return [];
   const g: Pick<ReportTransactions, "account_ids" | "bucket_ids" | "tags" | "counterparty"> =
     module.type === "graph"
       ? module.graph
@@ -845,6 +919,52 @@ function asSpecific(choice: PeriodChoice, period: Period, cycles: CycleTimes[]):
     return c?.id ? { kind: "specific", unit: "cycle", at: c.id } : null;
   }
   return { kind: "specific", unit: choice.unit as SpecificUnit, at: period.from };
+}
+
+export interface SectionPart {
+  part: SubPeriod;
+  /** What the part compares with, as the report says; null for custom dates. */
+  compare: ReportCompare | null;
+}
+
+export type SectionParts =
+  { ok: true; parts: SectionPart[] } | { ok: false; reason: "many" | "none" };
+
+/**
+ * A report section's parts (#194): each month or cycle of the report's
+ * period, oldest first and clipped to it, with what it compares with: the
+ * one before, or the same one a year earlier, as the report compares.
+ */
+export function sectionParts(
+  report: ReportSettings,
+  section: SectionModule,
+  cycles: CycleTimes[],
+  now?: Date,
+): SectionParts {
+  const { choice, period } = reportPeriods(report, cycles);
+  if (!period) return { ok: false, reason: "none" };
+  const parts = periodParts(period, section.section.unit, cycles);
+  if (!parts.ok) return { ok: false, reason: parts.reason === "many" ? "many" : "none" };
+  const compareTo = report.compare_to ?? "previous";
+  return {
+    ok: true,
+    parts: parts.parts.map((part) => {
+      const before =
+        choice.kind === "custom"
+          ? null
+          : previousPeriod(part.choice, part.period, compareTo, cycles, now);
+      return {
+        part,
+        compare: before && {
+          period: before.period,
+          label: inProgress(part.period)
+            ? formatDateRange(before.period.from, before.period.to)
+            : specificLabel(before.choice, cycles),
+          currentLabel: sectionLabel(part, cycles),
+        },
+      };
+    }),
+  };
 }
 
 /** Whether a period is still going: it was cut at now. */
@@ -1106,8 +1226,23 @@ export function cleanReport(r: ReportSettings): ReportSettings {
   if (r.bucket_ids?.length) out.bucket_ids = [...r.bucket_ids];
   if (r.tags?.length) out.tags = [...r.tags];
   if (r.counterparty?.trim()) out.counterparty = r.counterparty.trim();
-  out.modules = r.modules.map((m): ReportModule => {
+  out.modules = r.modules.map((m) => cleanModule(r, m));
+  return out;
+}
+
+/** A module without defaults and empty fields; a section's modules too. */
+function cleanModule<M extends ReportModule>(r: ReportSettings, m: M): M;
+function cleanModule(r: ReportSettings, m: ReportModule): ReportModule {
+  {
     const title = m.title?.trim() ? { title: m.title.trim() } : {};
+    if (m.type === "section") {
+      return {
+        id: m.id,
+        type: m.type,
+        ...title,
+        section: { unit: m.section.unit, modules: m.section.modules.map((x) => cleanModule(r, x)) },
+      };
+    }
     if (m.type === "transactions") {
       return { id: m.id, type: m.type, ...title, transactions: cleanTransactions(m.transactions) };
     }
@@ -1126,8 +1261,7 @@ export function cleanReport(r: ReportSettings): ReportSettings {
     if (m.compare && m.compare !== "off") clean.compare = m.compare;
     if (m.breakdown && m.breakdown !== "none") clean.breakdown = m.breakdown;
     return clean;
-  });
-  return out;
+  }
 }
 
 /** An In/out/balance module's settings without defaults and empty fields. */
@@ -1181,14 +1315,19 @@ export function newId(prefix: string, used: string[]): string {
 
 /** A module to add: spending this period as bars by month, or the period's transactions. */
 export function newModule(report: ReportSettings, type: ModuleType = "graph"): ReportModule {
-  const id = newId(
-    "m",
-    report.modules.map((m) => m.id),
-  );
+  const id = newId("m", allModuleIds(report));
+  if (type === "section") return { id, type, section: { unit: "month", modules: [] } };
   if (type === "transactions") return { id, type, transactions: {} };
   if (type === "flows") return { id, type, flows: {} };
   if (type === "budget") return { id, type, budget: {} };
   return { id, type, graph: { kind: "bar", metric: "spending", resolution: "month" } };
+}
+
+/** Every module's id, those in sections too: ids are unique across a report. */
+export function allModuleIds(report: ReportSettings): string[] {
+  return report.modules.flatMap((m) =>
+    m.type === "section" ? [m.id, ...m.section.modules.map((x) => x.id)] : [m.id],
+  );
 }
 
 /** The report's period with a different choice. */
@@ -1217,6 +1356,8 @@ export function partResolution(
 /** A module's name: its title, or what it shows ("Spending · Month · Per bucket"). */
 export function moduleTitle(module: ReportModule): string {
   if (module.title?.trim()) return module.title.trim();
+  if (module.type === "section")
+    return i18n.t(`stats.reports.section.title.${module.section.unit}`);
   if (module.type === "transactions") return i18n.t("stats.reports.transactions.title");
   if (module.type === "flows") return i18n.t("stats.reports.flows.title");
   if (module.type === "budget") return i18n.t("stats.reports.budget.title");
