@@ -22,6 +22,15 @@ export function getLocale(): string | undefined {
   return current;
 }
 
+/**
+ * The locale the formatters use, as a tag: the preference, else the
+ * browser's default for formatting (its regional format, which can differ
+ * from navigator.language, its first page language; #192).
+ */
+export function formatLocale(): string {
+  return current ?? new Intl.DateTimeFormat().resolvedOptions().locale;
+}
+
 /** Sets the locale; null or undefined means the browser's locale. */
 export function setLocale(locale: string | null | undefined): void {
   current = locale ?? undefined;

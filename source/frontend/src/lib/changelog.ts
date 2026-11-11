@@ -16,6 +16,26 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.16.01",
+    date: "2026-11-11",
+    title: {
+      en: "Report PDF: dates as on the screen",
+      nb: "Rapport-PDF: datoer som på skjermen",
+      nn: "Rapport-PDF: datoar som på skjermen",
+    },
+    changes: {
+      en: [
+        "Without a number and date format chosen in Settings, a report PDF now writes dates and numbers in the same format as the app does in your browser, on the cover too, instead of in the browser's page language.",
+      ],
+      nb: [
+        "Uten et valgt tall- og datoformat i Innstillinger skriver en rapport-PDF nå datoer og tall i samme format som appen gjør i nettleseren din, også på forsiden, i stedet for på nettleserens sidespråk.",
+      ],
+      nn: [
+        "Utan eit valt tal- og datoformat i Innstillingar skriv ein rapport-PDF no datoar og tal i same format som appen gjer i nettlesaren din, også på framsida, i staden for på sidespråket til nettlesaren.",
+      ],
+    },
+  },
+  {
     version: "v2.16.00",
     date: "2026-11-11",
     title: {

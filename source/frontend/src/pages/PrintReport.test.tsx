@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 
 import { startAtFor } from "@/lib/cycles";
+import { formatDateRange } from "@/lib/cycles";
 import { formatDateTime } from "@/lib/dates";
 import { setLocale } from "@/lib/locale";
 import type { PrintJob } from "@/lib/print";
@@ -207,9 +208,15 @@ describe("PrintReport", () => {
     renderRoute(`/print/report#${fragment(job({ language: "nb", locale: "nb-NO" }))}`);
     const cover = await screen.findByTestId("print-cover");
     expect(within(cover).getByRole("rowheader", { name: "Moduler" })).toBeInTheDocument();
-    expect(
-      within(cover).getByRole("rowheader", { name: "Generert" }).nextElementSibling,
-    ).toHaveTextContent(formatDateTime("2026-11-10T08:30:00Z", "nb-NO"));
+    const row = (label: string) =>
+      within(cover).getByRole("rowheader", { name: label }).nextElementSibling?.textContent;
+    expect(row("Generert")).toBe(formatDateTime("2026-11-10T08:30:00Z", "nb-NO"));
+    // The period's and the comparison's dates too (#192).
+    const y = (n: number) => String(year - n);
+    expect(row("Periode")).toContain(formatDateRange(`${y(1)}-01-01`, `${y(1)}-12-31`, "nb-NO"));
+    expect(row("Sammenlignet med")).toContain(
+      formatDateRange(`${y(2)}-01-01`, `${y(2)}-12-31`, "nb-NO"),
+    );
     expect(document.documentElement.lang).toBe("nb");
   });
 
