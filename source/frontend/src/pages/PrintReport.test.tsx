@@ -138,6 +138,48 @@ describe("PrintReport", () => {
     });
   });
 
+  it("prints a grid module with no links (#187)", async () => {
+    const zero = {
+      start: "0.00",
+      refills: "0.00",
+      income: "0.00",
+      opening_funds: "0.00",
+      adjustments_in: "0.00",
+      adjustments_out: "0.00",
+      transfers_in: "0.00",
+      transfers_out: "0.00",
+      spent: "0.00",
+      overflow: "0.00",
+      in: "0.00",
+      out: "0.00",
+      end: "0.00",
+    };
+    apiMock.on("GET /api/v1/stats/flows", (req) => ({
+      body: {
+        intervals: [{ start: req.query.get("from") ?? "", end: req.query.get("to") ?? "" }],
+        buckets: [
+          {
+            bucket_id: "1000000001",
+            account_id: "1234",
+            currency: "NOK",
+            values: [{ ...zero, refills: "500.00", in: "500.00", end: "500.00" }],
+          },
+        ],
+        accounts: [],
+      },
+    }));
+    renderRoute(
+      `/print/report#${fragment(job({ report: { period: "previous-year", modules: [{ id: "m-3", type: "flows", flows: { view: "grid" } }] } }))}`,
+    );
+    const card = await screen.findByRole("group", { name: "Food" });
+    expect(card.querySelector("[data-change]")?.textContent).toContain("500");
+    expect(screen.getByRole("group", { name: "Total" })).toBeInTheDocument();
+    expect(screen.queryAllByRole("link")).toEqual([]);
+    await waitFor(() => {
+      expect(ready()).not.toBeNull();
+    });
+  });
+
   it("uses the job's language and locale", async () => {
     renderRoute(`/print/report#${fragment(job({ language: "nb", locale: "nb-NO" }))}`);
     const cover = await screen.findByTestId("print-cover");

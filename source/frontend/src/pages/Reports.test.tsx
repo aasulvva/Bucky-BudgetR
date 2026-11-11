@@ -88,11 +88,14 @@ function flowsAnswer(req: MockRequest) {
         {
           account_id: "1234",
           currency: "NOK",
-          values: intervals.map(() => ({
+          // From 1000, with the transfer out in its balance.
+          values: intervals.map((_, i) => ({
+            start: (1000 + 27600 * i).toFixed(2),
             income: "30000.00",
             expenses: "400.00",
             transfers_in: "0.00",
             transfers_out: "2000.00",
+            end: (28600 + 27600 * i).toFixed(2),
           })),
         },
       ],
@@ -569,6 +572,140 @@ describe("Reports", () => {
       formatMoney("700.00", "NOK"),
       formatMoney("1300.00", "NOK"),
     ]);
+  });
+
+  describe("in/out/balance as a grid (#187)", () => {
+    const flows = (settings: Record<string, unknown>) => {
+      prefs = {
+        ...prefs,
+        report_templates: [
+          template({
+            period: "previous-year",
+            modules: [{ id: "m-1", type: "flows", flows: settings }],
+          }),
+        ],
+      };
+      renderRoute("/stats/reports?template=r-1");
+      return screen.findByRole("region", { name: "In, out and balance" });
+    };
+    const figure = (card: HTMLElement, label: string) =>
+      card.querySelector(`[data-figure="${label}"]`)?.lastElementChild?.textContent;
+    const change = (card: HTMLElement) => card.querySelector("[data-change]")?.textContent;
+    const startEnd = (start: string, end: string) =>
+      `Start ${formatMoney(start, "NOK")} → End ${formatMoney(end, "NOK")}`;
+
+    it("shows a card per bucket and account, with details, balances and totals", async () => {
+      // Fun overspends.
+      apiMock.on(flowsPath, (req) => {
+        const answer = flowsAnswer(req);
+        const fun = answer.body.buckets[1];
+        if (fun) {
+          fun.values = fun.values.map(() => ({
+            ...zero,
+            spent: "50.00",
+            out: "50.00",
+            end: "-50.00",
+          }));
+        }
+        return answer;
+      });
+      const module = await flows({ view: "grid", show: "both", details: true, balances: true });
+      const foodCard = await within(module).findByRole("group", { name: "Food" });
+      expect(within(module).queryByRole("table")).not.toBeInTheDocument();
+      expect(within(foodCard).getByRole("link", { name: "Food" }).getAttribute("href")).toMatch(
+        /^\/transactions\?.*bucket_id=1000000001/,
+      );
+      expect(change(foodCard)).toBe(`+${formatMoney("600.00", "NOK")}`);
+      expect(foodCard.querySelector("[data-balances]")?.textContent).toBe(
+        startEnd("100.00", "700.00"),
+      );
+      expect(figure(foodCard, "In")).toBe(formatMoney("1000.00", "NOK"));
+      expect(figure(foodCard, "Refills")).toBe(formatMoney("1000.00", "NOK"));
+      expect(figure(foodCard, "Spent")).toBe(formatMoney("400.00", "NOK"));
+      // Parts that are 0 aren't listed.
+      expect(figure(foodCard, "Overflow")).toBeUndefined();
+      expect(within(foodCard).queryByText("Overspent")).not.toBeInTheDocument();
+
+      const funCard = within(module).getByRole("group", { name: "Fun" });
+      expect(within(funCard).getByText("Overspent")).toBeInTheDocument();
+      expect(change(funCard)).toBe(formatMoney("-50.00", "NOK"));
+
+      const [bucketsTotal, accountsTotal] = within(module).getAllByRole("group", {
+        name: "Total",
+      });
+      if (!bucketsTotal || !accountsTotal) throw new Error("no totals");
+      expect(change(bucketsTotal)).toBe(`+${formatMoney("550.00", "NOK")}`);
+      expect(within(bucketsTotal).queryByRole("link")).not.toBeInTheDocument();
+
+      // Main's uncounted transfer out is Other, so its balances add up.
+      const mainCard = within(module).getByRole("group", { name: "Main" });
+      expect(change(mainCard)).toBe(`+${formatMoney("27600.00", "NOK")}`);
+      expect(mainCard.querySelector("[data-balances]")?.textContent).toBe(
+        startEnd("1000.00", "28600.00"),
+      );
+      expect(figure(mainCard, "In")).toBe(formatMoney("30000.00", "NOK"));
+      expect(figure(mainCard, "Out")).toBe(formatMoney("400.00", "NOK"));
+      expect(figure(mainCard, "Other")).toBe(formatMoney("-2000.00", "NOK"));
+      expect(within(module).getByText("Accounts")).toBeInTheDocument();
+    });
+
+    it("shows an account's net without balances, and a grid per month", async () => {
+      const module = await flows({ view: "grid", show: "accounts", breakdown: "month" });
+      await waitFor(() => {
+        expect(within(module).getAllByTestId("breakdown-part")).toHaveLength(12);
+      });
+      const cards = within(module).getAllByRole("group", { name: "Main" });
+      // The whole period's, then a card per month.
+      expect(cards).toHaveLength(13);
+      const [whole] = cards;
+      if (!whole) throw new Error("no card");
+      expect(change(whole)).toBe(`+${formatMoney("29600.00", "NOK")}`);
+      expect(whole.querySelector("[data-balances]")).toBeNull();
+      expect(figure(whole, "Other")).toBeUndefined();
+      expect(within(module).queryByRole("group", { name: "Food" })).not.toBeInTheDocument();
+    });
+
+    it("adds balances to the accounts table", async () => {
+      const module = await flows({ show: "accounts", balances: true });
+      const table = await within(module).findByRole("table", { name: "Accounts" });
+      expect(
+        within(table)
+          .getAllByRole("columnheader")
+          .map((c) => c.textContent),
+      ).toEqual(["Account", "Start", "In", "Out", "Net", "Other", "End"]);
+      const cells = within(within(table).getByRole("row", { name: /Main/ }))
+        .getAllByRole("cell")
+        .map((c) => c.textContent);
+      expect(cells).toEqual([
+        "Main",
+        formatMoney("1000.00", "NOK"),
+        formatMoney("30000.00", "NOK"),
+        formatMoney("400.00", "NOK"),
+        formatMoney("29600.00", "NOK"),
+        formatMoney("-2000.00", "NOK"),
+        formatMoney("28600.00", "NOK"),
+      ]);
+    });
+
+    it("chooses the grid and balances in the editor", async () => {
+      renderRoute("/stats/reports");
+      await userEvent.click(await screen.findByRole("button", { name: "Add module" }));
+      const dialog = await screen.findByRole("dialog", { name: "Add module" });
+      await userEvent.click(within(dialog).getByRole("radio", { name: "In/out/balance" }));
+      await userEvent.click(within(dialog).getByRole("radio", { name: "Grid" }));
+      expect(
+        within(dialog).queryByRole("switch", { name: /^Show balances/ }),
+      ).not.toBeInTheDocument();
+      await userEvent.click(within(dialog).getByRole("radio", { name: "Both" }));
+      await userEvent.click(within(dialog).getByRole("switch", { name: /^Show balances/ }));
+      await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+      const module = await screen.findByRole("region", { name: "In, out and balance" });
+      const mainCard = await within(module).findByRole("group", { name: "Main" });
+      expect(mainCard.querySelector("[data-balances]")?.textContent).toBe(
+        startEnd("1000.00", "28600.00"),
+      );
+      expect(within(module).getByRole("group", { name: "Food" })).toBeInTheDocument();
+    });
   });
 
   describe("budget vs spending (#126)", () => {

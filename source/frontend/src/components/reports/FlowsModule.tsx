@@ -7,11 +7,11 @@ import { useStatsFlows, type StatsFlows } from "@/api/stats";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { formatDateRange } from "@/lib/cycles";
 import { specificLabel } from "@/lib/graphs";
-import { formatMoney } from "@/lib/money";
+import { compareAmounts, formatMoney } from "@/lib/money";
 import type { Period, PeriodChoice } from "@/lib/periods";
 import {
-  ACCOUNT_DETAILS,
-  ACCOUNT_FIGURES,
+  accountColumns,
+  accountFigureLabel,
   BREAKDOWN_MIN_DAYS,
   BUCKET_DETAILS,
   BUCKET_FIGURES,
@@ -25,12 +25,14 @@ import {
   type SubPeriod,
 } from "@/lib/reports";
 
+import { FlowGrid } from "./FlowGrid";
 import { ReportLink } from "./ReportLink";
 
 /**
  * An In/out/balance module (#126): each bucket's start, in, out and end, and
- * each account's in, out and net, for the whole period and, broken down, per
- * month or cycle.
+ * each account's in, out and net (and its balances, #187), for the whole
+ * period and, broken down, per month or cycle. As tables, or as a grid of
+ * cards.
  */
 export function FlowsModule({
   settings,
@@ -163,7 +165,7 @@ function PartLabel({ part, cycles }: { part: SubPeriod; cycles: Cycle[] }) {
   );
 }
 
-/** The buckets' and accounts' tables for one interval, as the module shows them. */
+/** The buckets' and accounts' tables or grids for one interval, as the module shows them. */
 function Tables({
   result,
   index,
@@ -182,9 +184,13 @@ function Tables({
   const { t } = useTranslation();
   const show = settings.show ?? "buckets";
   const details = settings.details ?? false;
-  const tables = flowTables(result, index, accounts, buckets, settings.transfers ?? false);
   const showBuckets = show !== "accounts";
   const showAccounts = show !== "buckets";
+  const balances = showAccounts && (settings.balances ?? false);
+  const tables = flowTables(result, index, accounts, buckets, {
+    transfers: settings.transfers ?? false,
+    balances,
+  });
   const empty =
     (!showBuckets || tables.buckets.rows.length === 0) &&
     (!showAccounts || tables.accounts.rows.length === 0);
@@ -195,6 +201,27 @@ function Tables({
       </Text>
     );
   }
+  const bucketLink = (id: string) =>
+    transactionsLink({ bucket_ids: [id], system: true }, period) ?? "/transactions";
+  const accountLink = (id: string) =>
+    transactionsLink({ account_ids: [id] }, period) ?? "/transactions";
+  if (settings.view === "grid") {
+    return (
+      <FlowGrid
+        buckets={showBuckets ? tables.buckets : null}
+        accounts={showAccounts ? tables.accounts : null}
+        details={details}
+        balances={balances}
+        bucketLink={bucketLink}
+        accountLink={accountLink}
+      />
+    );
+  }
+  // The other column only when something else moved a balance.
+  const columns = accountColumns(details, balances).filter(
+    (c) =>
+      c !== "other" || tables.accounts.rows.some((r) => compareAmounts(r.values.other, "0") !== 0),
+  );
   return (
     <Stack gap="sm">
       {showBuckets && tables.buckets.rows.length > 0 && (
@@ -205,24 +232,18 @@ function Tables({
           heading={(c) => t(`stats.reports.flows.columns.${c}`)}
           rows={tables.buckets.rows}
           totals={tables.buckets.totals}
-          linkOf={(id) =>
-            transactionsLink({ bucket_ids: [id], system: true }, period) ?? "/transactions"
-          }
+          linkOf={bucketLink}
         />
       )}
       {showAccounts && tables.accounts.rows.length > 0 && (
         <FlowTable
           label={t("stats.reports.flows.accounts")}
           nameHeader={t("stats.reports.flows.account")}
-          columns={details ? ACCOUNT_DETAILS : ACCOUNT_FIGURES}
-          heading={(c) =>
-            c === "transfers_in" || c === "transfers_out"
-              ? t(`stats.reports.flows.accountColumns.${c}`)
-              : t(`stats.reports.flows.columns.${c}`)
-          }
+          columns={columns}
+          heading={accountFigureLabel}
           rows={tables.accounts.rows}
           totals={tables.accounts.totals}
-          linkOf={(id) => transactionsLink({ account_ids: [id] }, period) ?? "/transactions"}
+          linkOf={accountLink}
         />
       )}
     </Stack>

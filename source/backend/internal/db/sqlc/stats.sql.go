@@ -13,6 +13,54 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+const statsAccountStarts = `-- name: StatsAccountStarts :many
+SELECT a.id AS account_id,
+       COALESCE(SUM(l.amount) FILTER (WHERE o.transaction_at < $1), 0)::numeric AS start
+FROM bank_accounts a
+LEFT JOIN bank_transactions l ON l.account_id = a.id
+LEFT JOIN transaction_headers c ON c.id = l.transaction_id
+LEFT JOIN transaction_headers o ON o.id = COALESCE(c.parent_id, c.id)
+WHERE a.user_id = $2 AND NOT a.deleted
+  AND ($3::text[] IS NULL OR a.id = ANY($3::text[]))
+GROUP BY a.id
+ORDER BY a.id
+`
+
+type StatsAccountStartsParams struct {
+	FromAt     time.Time
+	UserID     string
+	AccountIds []string
+}
+
+type StatsAccountStartsRow struct {
+	AccountID string
+	Start     decimal.Decimal
+}
+
+// For the In/out/balance module's balances (#187): each account's balance at
+// from_at, the sum of its lines whose family's original is dated before it
+// (the dating of StatsBankNets, so start + nets = end). Every filtered
+// account that isn't deleted gets a row.
+func (q *Queries) StatsAccountStarts(ctx context.Context, arg StatsAccountStartsParams) ([]StatsAccountStartsRow, error) {
+	rows, err := q.db.Query(ctx, statsAccountStarts, arg.FromAt, arg.UserID, arg.AccountIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []StatsAccountStartsRow{}
+	for rows.Next() {
+		var i StatsAccountStartsRow
+		if err := rows.Scan(&i.AccountID, &i.Start); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const statsAccounts = `-- name: StatsAccounts :many
 SELECT id, currency FROM bank_accounts
 WHERE user_id = $1 AND NOT deleted

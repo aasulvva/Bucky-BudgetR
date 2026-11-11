@@ -16,6 +16,29 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.15.00",
+    date: "2026-11-11",
+    title: {
+      en: "Reports: in/out/balance as cards, with account balances",
+      nb: "Rapporter: inn/ut/saldo som kort, med kontosaldoer",
+      nn: "Rapportar: inn/ut/saldo som kort, med kontosaldoar",
+    },
+    changes: {
+      en: [
+        "An in, out and balance module can now show a grid of cards instead of tables: one per bucket and account, with its change, where it started and ended, its in and out, and a total card. A bucket that ends below 0 is marked overspent. On a phone the cards stack, so nothing scrolls sideways.",
+        "Show balances gives accounts their balance at the start and end of the period, in the grid and in the table. Other covers what else moved it, such as opening balances, adjustments and transfers that aren't counted, so the figures add up.",
+      ],
+      nb: [
+        "En modul for inn, ut og saldo kan nå vise et rutenett med kort i stedet for tabeller: ett per bøtte og konto, med endringen, hvor den startet og sluttet, inn og ut, og et kort med totalen. En bøtte som slutter under 0, merkes som overforbrukt. På mobil legger kortene seg under hverandre, så ingenting ruller sidelengs.",
+        "Vis saldoer gir kontoene saldoen ved start og slutt på perioden, i rutenettet og i tabellen. Annet dekker det andre som endret den, som åpningssaldoer, justeringer og overføringer som ikke telles med, så tallene går opp.",
+      ],
+      nn: [
+        "Ein modul for inn, ut og saldo kan no vise eit rutenett med kort i staden for tabellar: eitt per bøtte og konto, med endringa, kvar ho starta og slutta, inn og ut, og eit kort med totalen. Ei bøtte som sluttar under 0, vert merkt som overforbrukt. På mobil legg korta seg under kvarandre, så ingenting rullar sidelengs.",
+        "Vis saldoar gjev kontoane saldoen ved start og slutt på perioden, i rutenettet og i tabellen. Anna dekkjer det andre som endra han, som opningssaldoar, justeringar og overføringar som ikkje vert talde med, så tala går opp.",
+      ],
+    },
+  },
+  {
     version: "v2.14.00",
     date: "2026-11-10",
     title: {

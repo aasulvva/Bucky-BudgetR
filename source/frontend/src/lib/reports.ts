@@ -102,6 +102,8 @@ export type ReportTemplate = Omit<ApiTemplate, "report"> & { report: ReportSetti
 export const MODULE_TYPES: ModuleType[] = ["graph", "transactions", "flows", "budget"];
 export type FlowsShow = NonNullable<ReportFlows["show"]>;
 export const FLOWS_SHOWS: FlowsShow[] = ["buckets", "accounts", "both"];
+export type FlowsView = NonNullable<ReportFlows["view"]>;
+export const FLOWS_VIEWS: FlowsView[] = ["table", "grid"];
 export type TransactionsGroup = NonNullable<ReportTransactions["group_by"]>;
 export type TransactionsOrder = NonNullable<ReportTransactions["order"]>;
 export const TRANSACTIONS_GROUPS: TransactionsGroup[] = ["day", "week", "month", "cycle"];
@@ -318,7 +320,11 @@ export const BUCKET_DETAILS = [
   "end",
 ] as const satisfies readonly (keyof BucketFlowValues)[];
 export type BucketFigure = (typeof BUCKET_DETAILS)[number];
-/** The accounts table's columns: in and out with or without transfers, and the net. */
+/**
+ * The accounts table's columns: in and out with or without transfers, and
+ * the net; with balances (#187), the start, what else moved it (opening
+ * balances, adjustments, uncounted transfers) and the end.
+ */
 export const ACCOUNT_FIGURES = ["in", "out", "net"] as const;
 export const ACCOUNT_DETAILS = [
   "income",
@@ -329,7 +335,33 @@ export const ACCOUNT_DETAILS = [
   "out",
   "net",
 ] as const;
-export type AccountFigure = (typeof ACCOUNT_DETAILS)[number];
+export const ACCOUNT_BALANCE_FIGURES = ["start", "in", "out", "net", "other", "end"] as const;
+export const ACCOUNT_BALANCE_DETAILS = [
+  "start",
+  "income",
+  "transfers_in",
+  "in",
+  "expenses",
+  "transfers_out",
+  "out",
+  "net",
+  "other",
+  "end",
+] as const;
+export type AccountFigure = (typeof ACCOUNT_BALANCE_DETAILS)[number];
+
+/** An account figure's name: its transfers are between accounts. */
+export function accountFigureLabel(c: AccountFigure): string {
+  return c === "transfers_in" || c === "transfers_out"
+    ? i18n.t(`stats.reports.flows.accountColumns.${c}`)
+    : i18n.t(`stats.reports.flows.columns.${c}`);
+}
+
+/** The accounts' columns for the module's settings. */
+export function accountColumns(details: boolean, balances: boolean): readonly AccountFigure[] {
+  if (balances) return details ? ACCOUNT_BALANCE_DETAILS : ACCOUNT_BALANCE_FIGURES;
+  return details ? ACCOUNT_DETAILS : ACCOUNT_FIGURES;
+}
 
 export interface FlowRow<F extends string> {
   /** The bucket's or account's id; "" for a total. */
@@ -364,15 +396,18 @@ function totals<F extends string>(rows: FlowRow<F>[], keys: readonly F[]): FlowR
  * One interval of the flows as table rows: a row per bucket and per account,
  * by name, without the ones where nothing happened, and a total per
  * currency. With `transfers`, an account's transfers count as in and out.
+ * With `balances` (#187), an account with a balance at the start or end
+ * counts as something happening.
  */
 export function flowTables(
   result: StatsFlows,
   index: number,
   accounts: Account[],
   buckets: Bucket[],
-  transfers: boolean,
+  { transfers, balances }: { transfers: boolean; balances: boolean },
   locale?: string,
 ): FlowTables {
+  const shown = balances ? ACCOUNT_BALANCE_DETAILS : ACCOUNT_DETAILS;
   const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, locale);
   const bucketRows: FlowRow<BucketFigure>[] = result.buckets
     .flatMap((b) => {
@@ -394,23 +429,28 @@ export function flowTables(
       const tout = transfers ? v.transfers_out : "0.00";
       const into = addAmounts(v.income, tin);
       const out = addAmounts(v.expenses, tout);
+      const net = subtractAmounts(into, out);
       const values: Record<AccountFigure, string> = {
+        start: v.start,
         income: v.income,
         transfers_in: tin,
         in: into,
         expenses: v.expenses,
         transfers_out: tout,
         out,
-        net: subtractAmounts(into, out),
+        net,
+        // Whatever else moved the balance, so start + net + other = end.
+        other: subtractAmounts(subtractAmounts(v.end, v.start), net),
+        end: v.end,
       };
-      if (ACCOUNT_DETAILS.every((k) => isZero(values[k]))) return [];
+      if (shown.every((k) => isZero(values[k]))) return [];
       const name = accounts.find((x) => x.id === a.account_id)?.name ?? a.account_id;
       return [{ id: a.account_id, name, currency: a.currency, values }];
     })
     .sort(byName);
   return {
     buckets: { rows: bucketRows, totals: totals(bucketRows, BUCKET_DETAILS) },
-    accounts: { rows: accountRows, totals: totals(accountRows, ACCOUNT_DETAILS) },
+    accounts: { rows: accountRows, totals: totals(accountRows, ACCOUNT_BALANCE_DETAILS) },
   };
 }
 
@@ -940,8 +980,10 @@ function cleanFlows(f: ReportFlows): ReportFlows {
   const out: ReportFlows = {};
   if (f.account_ids?.length) out.account_ids = [...f.account_ids];
   if (f.bucket_ids?.length) out.bucket_ids = [...f.bucket_ids];
+  if (f.view === "grid") out.view = "grid";
   if (f.show && f.show !== "buckets") out.show = f.show;
   if (f.transfers) out.transfers = true;
+  if (f.balances) out.balances = true;
   if (f.details) out.details = true;
   if (f.breakdown && f.breakdown !== "none") out.breakdown = f.breakdown;
   return out;

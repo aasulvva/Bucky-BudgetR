@@ -880,7 +880,11 @@ paths:
           bucket's TF when the interval begins and `end` when it ends, so
           `start` + `in` − `out` = `end`.
         - **Accounts:** income (INC), expenses (EXP) and transfers (TRF) in
-          and out.
+          and out. `start` is the account's balance when the interval
+          begins and `end` when it ends (#187), dating each line by its
+          family's original as the sums do, so `start` plus every line in
+          the interval (opening balances and balance adjustments too) is
+          `end`.
         - A transaction counts on its original's date with its
           corrections, as the transaction list shows it, so a reversed one
           adds up to 0. Amounts other than `start` and `end` are positive.
@@ -4116,13 +4120,20 @@ components:
         transfers:
           type: boolean
           description: Count the accounts' transfers as money in and out.
+        view:
+          type: string
+          enum: [table, grid]
+          description: Tables (the default), or a grid with a card per bucket and account (#187).
+        balances:
+          type: boolean
+          description: Give the accounts their start and end balance, with what else moved them (#187).
         details:
           type: boolean
           description: Split in and out into their parts.
         breakdown:
           type: string
           enum: [none, month, cycle]
-          description: Also a table per month or cycle, for periods of at least 60 days. `none` by default.
+          description: Also a table or grid per month or cycle, for periods of at least 60 days. `none` by default.
 
     ReportPdfRequest:
       type: object
@@ -4429,8 +4440,12 @@ components:
     AccountFlowValues:
       type: object
       additionalProperties: false
-      required: [income, expenses, transfers_in, transfers_out]
+      required: [start, income, expenses, transfers_in, transfers_out, end]
       properties:
+        start:
+          description: The balance when the interval begins.
+          allOf:
+            - $ref: "#/components/schemas/Amount"
         income:
           $ref: "#/components/schemas/Amount"
         expenses:
@@ -4439,6 +4454,10 @@ components:
           $ref: "#/components/schemas/Amount"
         transfers_out:
           $ref: "#/components/schemas/Amount"
+        end:
+          description: The balance when the interval ends.
+          allOf:
+            - $ref: "#/components/schemas/Amount"
 
     StatsInterval:
       type: object

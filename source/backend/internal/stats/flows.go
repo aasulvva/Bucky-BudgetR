@@ -3,6 +3,7 @@ package stats
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -34,10 +35,14 @@ type BucketValues struct {
 }
 
 // AccountValues is an account's income, expenses and transfers over an
-// interval, all positive.
+// interval, all positive, with its balance at the start and end (#187).
+// Other is the net of the rest (opening balances, balance adjustments), so
+// Start + Income − Expenses + TransfersIn − TransfersOut + Other = End.
 type AccountValues struct {
+	Start                     decimal.Decimal
 	Income, Expenses          decimal.Decimal
 	TransfersIn, TransfersOut decimal.Decimal
+	Other, End                decimal.Decimal
 }
 
 // BucketFlow is a bucket's values per interval.
@@ -58,6 +63,14 @@ type FlowsResult struct {
 	Intervals []Interval
 	Buckets   []BucketFlow
 	Accounts  []AccountFlow
+}
+
+// accountTypes are every type with bank lines, so the balances add up.
+var accountTypes = []string{
+	string(sqlc.TransactionTypeOPB), string(sqlc.TransactionTypeBLA), string(sqlc.TransactionTypeINC),
+	string(sqlc.TransactionTypeEXP), string(sqlc.TransactionTypeTRF), string(sqlc.TransactionTypeINP),
+	string(sqlc.TransactionTypeOPF), string(sqlc.TransactionTypeREF), string(sqlc.TransactionTypeBUA),
+	string(sqlc.TransactionTypeBAT), string(sqlc.TransactionTypeOVF),
 }
 
 // bucketTypes are the types with bucket lines that move a bucket's TF.
@@ -178,23 +191,37 @@ func accountFlows(ctx context.Context, queries *sqlc.Queries, userID string, q F
 	if err != nil {
 		return nil, err
 	}
+	starts, err := queries.StatsAccountStarts(ctx, sqlc.StatsAccountStartsParams{UserID: userID, FromAt: q.From, AccountIds: accounts})
+	if err != nil {
+		return nil, err
+	}
 	nets, err := queries.StatsBankNets(ctx, sqlc.StatsBankNetsParams{
-		UserID: userID, FromAt: q.From, ToAt: q.To, AccountIds: accounts,
-		Types: []string{string(sqlc.TransactionTypeINC), string(sqlc.TransactionTypeEXP), string(sqlc.TransactionTypeTRF)},
+		UserID: userID, FromAt: q.From, ToAt: q.To, AccountIds: accounts, Types: accountTypes,
 	})
 	if err != nil {
 		return nil, err
 	}
 	out := make([]AccountFlow, len(list))
 	at := make(map[string]int, len(list))
+	// Lines between two cycles count in no interval, but move the next
+	// one's start balance.
+	gaps := make([][]decimal.Decimal, len(list))
 	for i, a := range list {
 		out[i] = AccountFlow{AccountID: a.ID, Currency: a.Currency, Values: make([]AccountValues, len(s.intervals))}
+		gaps[i] = make([]decimal.Decimal, len(s.intervals))
 		at[a.ID] = i
 	}
 	for _, r := range nets {
 		i, ok := at[r.AccountID]
+		if !ok {
+			continue
+		}
 		j := s.index(r.TransactionAt)
-		if !ok || j < 0 {
+		if j < 0 {
+			next := sort.Search(len(s.intervals), func(k int) bool { return s.intervals[k].Start.After(r.TransactionAt) })
+			if next < len(s.intervals) {
+				gaps[i][next] = gaps[i][next].Add(r.Net)
+			}
 			continue
 		}
 		v := &out[i].Values[j]
@@ -203,10 +230,26 @@ func accountFlows(ctx context.Context, queries *sqlc.Queries, userID string, q F
 			v.Income = v.Income.Add(net)
 		case r.TransactionType == sqlc.TransactionTypeEXP:
 			v.Expenses = v.Expenses.Sub(net)
+		case r.TransactionType != sqlc.TransactionTypeTRF:
+			v.Other = v.Other.Add(net)
 		case net.IsPositive():
 			v.TransfersIn = v.TransfersIn.Add(net)
 		default:
 			v.TransfersOut = v.TransfersOut.Sub(net)
+		}
+	}
+	start := make(map[string]decimal.Decimal, len(starts))
+	for _, r := range starts {
+		start[r.AccountID] = r.Start
+	}
+	// The balance runs on from one interval's end to the next's start.
+	for i := range out {
+		balance := start[out[i].AccountID]
+		for j := range out[i].Values {
+			v := &out[i].Values[j]
+			v.Start = balance.Add(gaps[i][j])
+			v.End = v.Start.Add(v.Income).Sub(v.Expenses).Add(v.TransfersIn).Sub(v.TransfersOut).Add(v.Other)
+			balance = v.End
 		}
 	}
 	return out, nil

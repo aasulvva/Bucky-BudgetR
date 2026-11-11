@@ -27,6 +27,8 @@ func TestFlows(t *testing.T) {
 	oct, nov, dec1 := at("2026-09-30T22:00:00Z"), at("2026-10-31T23:00:00Z"), at("2026-11-30T23:00:00Z")
 	october := ledgertest.Cycle(t, pool, user, oct, nov, "active")
 
+	// Before October's cycle, outside any: it moves the start balance (#187).
+	e.record(ledger.Entry{Type: sqlc.TransactionTypeBLA, At: at("2026-09-28T12:00:00Z"), BankLines: lines(bank{main, "500"})})
 	e.record(ledger.Entry{Type: sqlc.TransactionTypeOPB, At: at("2026-10-01T08:00:00Z"), BankLines: lines(bank{main, "10000"})})
 	// October: opening funds and a refill, spending, an adjustment down, a
 	// transfer between the buckets.
@@ -53,7 +55,7 @@ func TestFlows(t *testing.T) {
 	})
 	e.record(ledger.Entry{Type: sqlc.TransactionTypeBUA, At: at("2026-10-10T12:00:00Z"), BucketLines: bucketLines(bank{fun, "-200"})})
 	e.record(ledger.Entry{Type: sqlc.TransactionTypeBAT, At: at("2026-10-11T12:00:00Z"), BucketLines: bucketLines(bank{food, "-300"}, bank{fun, "300"})})
-	e.record(ledger.Entry{Type: sqlc.TransactionTypeINC, At: at("2026-10-15T08:00:00Z"), BankLines: lines(bank{main, "20000"})})
+	income := e.record(ledger.Entry{Type: sqlc.TransactionTypeINC, At: at("2026-10-15T08:00:00Z"), BankLines: lines(bank{main, "20000"})})
 	e.record(ledger.Entry{Type: sqlc.TransactionTypeTRF, At: at("2026-10-16T08:00:00Z"), BankLines: lines(bank{main, "-2000"}, bank{savings, "2000"})})
 
 	// November: the next cycle, with an overflow and an adjustment up.
@@ -63,6 +65,13 @@ func TestFlows(t *testing.T) {
 	ledgertest.Cycle(t, pool, user, nov, dec1, "active")
 	e.record(ledger.Entry{Type: sqlc.TransactionTypeOVF, At: at("2026-11-01T00:30:00Z"), BucketLines: bucketLines(bank{food, "-150"})})
 	e.record(ledger.Entry{Type: sqlc.TransactionTypeBUA, At: at("2026-11-02T12:00:00Z"), BucketLines: bucketLines(bank{fun, "50"})})
+	// October's income corrected to 19000 in November: it counts in October,
+	// balances too. Then a balance adjustment up.
+	e.record(ledger.Entry{
+		Type: sqlc.TransactionTypeINC, At: at("2026-11-03T12:00:00Z"), Correction: sqlc.CorrectionTypeAdjustment, ParentID: income.Header.ID,
+		BankLines: lines(bank{main, "-1000"}),
+	})
+	e.record(ledger.Entry{Type: sqlc.TransactionTypeBLA, At: at("2026-11-04T12:00:00Z"), BankLines: lines(bank{main, "100"})})
 
 	query := func(q stats.FlowsQuery) stats.FlowsResult {
 		t.Helper()
@@ -125,15 +134,50 @@ func TestFlows(t *testing.T) {
 		t.Errorf("fun in November = %v", got)
 	}
 
-	// Accounts: income, expenses and transfers, net of corrections.
-	total := query(stats.FlowsQuery{Resolution: stats.Total})
-	for _, a := range total.Accounts {
-		v := a.Values[0]
-		got := []string{v.Income.StringFixed(2), v.Expenses.StringFixed(2), v.TransfersIn.StringFixed(2), v.TransfersOut.StringFixed(2)}
-		want := map[string][]string{main: {"20000.00", "450.00", "0.00", "2000.00"}, savings: {"0.00", "0.00", "2000.00", "0.00"}}[a.AccountID]
-		if !slices.Equal(got, want) {
-			t.Errorf("account %s = %v, want %v", a.AccountID, got, want)
+	// Accounts: income, expenses and transfers, net of corrections; the
+	// opening balance and adjustments as other; and the balances.
+	accountFigures := func(res stats.FlowsResult, account string) [][]string {
+		t.Helper()
+		for _, a := range res.Accounts {
+			if a.AccountID != account {
+				continue
+			}
+			out := make([][]string, len(a.Values))
+			for i, v := range a.Values {
+				if !v.Start.Add(v.Income).Sub(v.Expenses).Add(v.TransfersIn).Sub(v.TransfersOut).Add(v.Other).Equal(v.End) {
+					t.Errorf("%s interval %d doesn't add up: %+v", account, i, v)
+				}
+				out[i] = []string{
+					v.Start.StringFixed(2), v.Income.StringFixed(2), v.Expenses.StringFixed(2),
+					v.TransfersIn.StringFixed(2), v.TransfersOut.StringFixed(2), v.Other.StringFixed(2), v.End.StringFixed(2),
+				}
+			}
+			return out
 		}
+		t.Fatalf("no account %s", account)
+		return nil
+	}
+	total := query(stats.FlowsQuery{Resolution: stats.Total})
+	for account, want := range map[string][]string{
+		main:    {"500.00", "19000.00", "450.00", "0.00", "2000.00", "10100.00", "27150.00"},
+		savings: {"0.00", "0.00", "0.00", "2000.00", "0.00", "0.00", "2000.00"},
+	} {
+		if got := accountFigures(total, account); !slices.Equal(got[0], want) {
+			t.Errorf("account %s = %v, want %v", account, got[0], want)
+		}
+	}
+	// By month, and by cycle from before October's: the adjustment outside
+	// any cycle moves October's start.
+	wantMain := [][]string{
+		{"500.00", "19000.00", "450.00", "0.00", "2000.00", "10000.00", "27050.00"},
+		{"27050.00", "0.00", "0.00", "0.00", "0.00", "100.00", "27150.00"},
+	}
+	if got := accountFigures(months, main); !slices.EqualFunc(got, wantMain, slices.Equal) {
+		t.Errorf("main by month = %v, want %v", got, wantMain)
+	}
+	cycles := query(stats.FlowsQuery{From: at("2026-09-25T00:00:00Z"), To: dec1, Resolution: stats.Cycle})
+	if got := accountFigures(cycles, main); !slices.EqualFunc(got, wantMain, slices.Equal) {
+		t.Errorf("main by cycle = %v, want %v", got, wantMain)
 	}
 
 	// Filters: one bucket, or one account's buckets and itself.

@@ -1281,11 +1281,19 @@
           "out": "Out",
           "end": "End",
           "expenses": "Expenses",
-          "net": "Net"
+          "net": "Net",
+          "other": "Other"
         },
         "accountColumns": {
           "transfers_in": "Transfers in",
           "transfers_out": "Transfers out"
+        },
+        "view": {
+          "label": "View",
+          "options": {
+            "table": "Table",
+            "grid": "Grid"
+          }
         },
         "show": {
           "label": "Show",
@@ -1296,9 +1304,16 @@
           }
         },
         "transfers": "Count transfers between accounts",
+        "balances": "Show balances",
+        "balancesHint": "Each account's balance at the start and end, with Other for opening balances, adjustments and transfers that aren't counted.",
         "details": "Show details",
         "detailsHint": "Split in and out into refills, income, adjustments, transfers, spent and overflow.",
-        "breakdownHint": "Also a table per month or cycle, for periods of at least {{days}} days."
+        "breakdownHint": "Also a table or grid per month or cycle, for periods of at least {{days}} days.",
+        "grid": {
+          "change": "Change",
+          "startEnd": "Start {{start}} → End {{end}}",
+          "overspent": "Overspent"
+        }
       },
       "budget": {
         "title": "Budget vs spending",

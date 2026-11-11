@@ -136,3 +136,19 @@ WHERE k.user_id = sqlc.arg(user_id) AND NOT k.deleted
   AND (sqlc.narg(bucket_ids)::text[] IS NULL OR k.id = ANY(sqlc.narg(bucket_ids)::text[]))
 GROUP BY k.id
 ORDER BY k.id;
+
+-- name: StatsAccountStarts :many
+-- For the In/out/balance module's balances (#187): each account's balance at
+-- from_at, the sum of its lines whose family's original is dated before it
+-- (the dating of StatsBankNets, so start + nets = end). Every filtered
+-- account that isn't deleted gets a row.
+SELECT a.id AS account_id,
+       COALESCE(SUM(l.amount) FILTER (WHERE o.transaction_at < sqlc.arg(from_at)), 0)::numeric AS start
+FROM bank_accounts a
+LEFT JOIN bank_transactions l ON l.account_id = a.id
+LEFT JOIN transaction_headers c ON c.id = l.transaction_id
+LEFT JOIN transaction_headers o ON o.id = COALESCE(c.parent_id, c.id)
+WHERE a.user_id = sqlc.arg(user_id) AND NOT a.deleted
+  AND (sqlc.narg(account_ids)::text[] IS NULL OR a.id = ANY(sqlc.narg(account_ids)::text[]))
+GROUP BY a.id
+ORDER BY a.id;

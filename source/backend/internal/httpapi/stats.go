@@ -168,8 +168,8 @@ func (s *server) GetStatsFlows(ctx context.Context, req api.GetStatsFlowsRequest
 		f := api.AccountFlowSeries{AccountId: a.AccountID, Currency: a.Currency, Values: make([]api.AccountFlowValues, len(a.Values))}
 		for j, v := range a.Values {
 			f.Values[j] = api.AccountFlowValues{
-				Income: amount(v.Income), Expenses: amount(v.Expenses),
-				TransfersIn: amount(v.TransfersIn), TransfersOut: amount(v.TransfersOut),
+				Start: amount(v.Start), Income: amount(v.Income), Expenses: amount(v.Expenses),
+				TransfersIn: amount(v.TransfersIn), TransfersOut: amount(v.TransfersOut), End: amount(v.End),
 			}
 		}
 		out.Accounts[i] = f
