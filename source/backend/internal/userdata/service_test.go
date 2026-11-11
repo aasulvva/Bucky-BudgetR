@@ -86,7 +86,8 @@ func (e env) scenario(t *testing.T, userID string) accounts.Account {
 		Amount: &amount, SetBuckets: true, Buckets: []transactions.BucketAmount{{BucketID: food.ID, Amount: amount}},
 	}))
 	prefs := fmt.Sprintf(`{"locale":"nb-NO","dashboard":{"widgets":[{"id":"w1","type":"accounts","width":"half","accounts":{"mode":"account","account_id":%[1]q}}]},`+
-		`"report_templates":[{"id":"r1","name":"Cycle","report":{"period":"cycle-%[2]s","account_ids":[%[1]q],"modules":[{"id":"m1","type":"graph","graph":{"kind":"pie","metric":"spending","resolution":"total","bucket_ids":[%[3]q]}},{"id":"m2","type":"transactions","transactions":{"account_ids":[%[1]q],"bucket_ids":[%[3]q]}},{"id":"m3","type":"flows","flows":{"bucket_ids":[%[3]q]}},{"id":"m4","type":"budget","budget":{"account_ids":[%[1]q],"bucket_ids":[%[3]q]}}]}}]}`,
+		`"report_templates":[{"id":"r1","name":"Cycle","report":{"period":"cycle-%[2]s","account_ids":[%[1]q],"modules":[{"id":"m1","type":"graph","graph":{"kind":"pie","metric":"spending","resolution":"total","bucket_ids":[%[3]q]}},{"id":"m2","type":"transactions","transactions":{"account_ids":[%[1]q],"bucket_ids":[%[3]q]}},{"id":"m3","type":"flows","flows":{"bucket_ids":[%[3]q]}},{"id":"m4","type":"budget","budget":{"account_ids":[%[1]q],"bucket_ids":[%[3]q]}},`+
+		`{"id":"m5","type":"section","section":{"unit":"month","modules":[{"id":"m6","type":"transactions","transactions":{"account_ids":[%[1]q],"bucket_ids":[%[3]q]}}]}}]}}]}`,
 		a.ID, oct.ID, food.ID)
 	if _, err := e.pool.Exec(ctx, `UPDATE users SET preferences = $2 WHERE id = $1`, userID, prefs); err != nil {
 		t.Fatal(err)
@@ -180,6 +181,14 @@ func TestExportImport(t *testing.T) {
 							AccountIDs []string `json:"account_ids"`
 							BucketIDs  []string `json:"bucket_ids"`
 						} `json:"budget"`
+						Section struct {
+							Modules []struct {
+								Transactions struct {
+									AccountIDs []string `json:"account_ids"`
+									BucketIDs  []string `json:"bucket_ids"`
+								} `json:"transactions"`
+							} `json:"modules"`
+						} `json:"section"`
 					} `json:"modules"`
 				} `json:"report"`
 			} `json:"report_templates"`
@@ -195,7 +204,10 @@ func TestExportImport(t *testing.T) {
 			r.Modules[1].Transactions.BucketIDs[0] != got.Data.Tables["buckets"][0]["id"] ||
 			r.Modules[2].Flows.BucketIDs[0] != got.Data.Tables["buckets"][0]["id"] ||
 			r.Modules[3].Budget.AccountIDs[0] != account["id"] ||
-			r.Modules[3].Budget.BucketIDs[0] != got.Data.Tables["buckets"][0]["id"] {
+			r.Modules[3].Budget.BucketIDs[0] != got.Data.Tables["buckets"][0]["id"] ||
+			// A section's modules too (#207).
+			r.Modules[4].Section.Modules[0].Transactions.AccountIDs[0] != account["id"] ||
+			r.Modules[4].Section.Modules[0].Transactions.BucketIDs[0] != got.Data.Tables["buckets"][0]["id"] {
 			t.Errorf("bob's report template %+v", r)
 		}
 		// Alice's data is untouched.

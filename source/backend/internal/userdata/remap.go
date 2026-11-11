@@ -255,15 +255,24 @@ func remapPreferences(raw json.RawMessage, m map[kind]map[string]string) (json.R
 		report, _ := r["report"].(map[string]any)
 		remapGraph(m, report)
 		modules, _ := report["modules"].([]any)
-		for _, mod := range modules {
-			mod, _ := mod.(map[string]any)
-			remapGraph(m, mod["graph"])
-			remapGraph(m, mod["transactions"]) // Its filters, as a graph's (#126).
-			remapGraph(m, mod["flows"])
-			remapGraph(m, mod["budget"])
-		}
+		remapModules(m, modules)
 	}
 	return json.Marshal(prefs)
+}
+
+// remapModules remaps report modules' filters in place, those in a
+// section's (#194) too.
+func remapModules(m map[kind]map[string]string, modules []any) {
+	for _, mod := range modules {
+		mod, _ := mod.(map[string]any)
+		remapGraph(m, mod["graph"])
+		remapGraph(m, mod["transactions"]) // Its filters, as a graph's (#126).
+		remapGraph(m, mod["flows"])
+		remapGraph(m, mod["budget"])
+		section, _ := mod["section"].(map[string]any)
+		inner, _ := section["modules"].([]any)
+		remapModules(m, inner)
+	}
 }
 
 // remapGraph remaps a graph's or report's period (cycle-<id>) and its
