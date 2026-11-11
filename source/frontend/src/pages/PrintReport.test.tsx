@@ -3,6 +3,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import { startAtFor } from "@/lib/cycles";
 import { formatDateRange } from "@/lib/cycles";
 import { formatDateTime } from "@/lib/dates";
+import { specificLabel } from "@/lib/graphs";
 import { setLocale } from "@/lib/locale";
 import type { PrintJob } from "@/lib/print";
 import { apiMock, problem, type MockRequest } from "@/test/api";
@@ -57,6 +58,15 @@ const job = (over: Partial<PrintJob> = {}): PrintJob => ({
   ...over,
 });
 
+/** Links into the app: none in a PDF, only the contents' links within it. */
+const appLinks = () =>
+  screen.queryAllByRole("link").filter((a) => !a.getAttribute("href")?.startsWith("#"));
+/** The contents' lines: their text and where they link. */
+const contents = () =>
+  [...document.querySelectorAll<HTMLAnchorElement>("[data-print-toc] a")].map((a) => [
+    a.textContent,
+    a.getAttribute("href"),
+  ]);
 const ready = () => document.querySelector("[data-print-ready]");
 const failed = () => document.querySelector("[data-print-error]");
 
@@ -93,11 +103,10 @@ describe("PrintReport", () => {
     expect(row("Filters")).toBe("Accounts: MainTags: food");
     expect(row("User")).toBe("kari");
     expect(row("Generated")).toBe(formatDateTime("2026-11-10T08:30:00Z", "en-GB"));
-    expect(
-      within(cover)
-        .getAllByRole("listitem")
-        .map((x) => x.textContent),
-    ).toEqual(["Spending", "Transactions"]);
+    expect(contents()).toEqual([
+      ["1. Spending", "#module-m-1"],
+      ["2. Transactions", "#module-m-2"],
+    ]);
 
     // Both pages of transactions, without a click; no buttons or links.
     const module = await screen.findByRole("region", { name: "Transactions" });
@@ -105,7 +114,7 @@ describe("PrintReport", () => {
     expect(within(module).getByText("Rema 1000")).toBeInTheDocument();
     expect(apiMock.calls(list).at(-1)?.query.get("cursor")).toBe("c1");
     expect(screen.queryAllByRole("button")).toEqual([]);
-    expect(screen.queryAllByRole("link")).toEqual([]);
+    expect(appLinks()).toEqual([]);
     expect(apiMock.calls(stats).map((c) => c.query.get("from"))).toContain(
       startAtFor(`${String(year - 2)}-01-01`),
     );
@@ -133,7 +142,7 @@ describe("PrintReport", () => {
     const table = await screen.findByRole("table", { name: "Transactions" });
     expect(await within(table).findByText("Kiwi")).toBeInTheDocument();
     expect(within(table).getByText("Rema 1000")).toBeInTheDocument();
-    expect(screen.queryAllByRole("link")).toEqual([]);
+    expect(appLinks()).toEqual([]);
     await waitFor(() => {
       expect(ready()).not.toBeNull();
     });
@@ -175,7 +184,7 @@ describe("PrintReport", () => {
     const card = await screen.findByRole("group", { name: "Food" });
     expect(card.querySelector("[data-change]")?.textContent).toContain("500");
     expect(screen.getByRole("group", { name: "Total" })).toBeInTheDocument();
-    expect(screen.queryAllByRole("link")).toEqual([]);
+    expect(appLinks()).toEqual([]);
     await waitFor(() => {
       expect(ready()).not.toBeNull();
     });
@@ -198,16 +207,88 @@ describe("PrintReport", () => {
     expect(await screen.findByText("Kiwi")).toBeInTheDocument();
     expect(document.querySelectorAll("[data-transactions-section]")).toHaveLength(12);
     expect(screen.getAllByText("No transactions")).toHaveLength(10);
-    expect(screen.queryAllByRole("link")).toEqual([]);
+    expect(appLinks()).toEqual([]);
     await waitFor(() => {
       expect(ready()).not.toBeNull();
     });
   });
 
+  it("numbers the contents once the server sends the pages (#193)", async () => {
+    const y = String(year - 1);
+    apiMock.on(list, {
+      body: {
+        items: [transaction({ id: "t1", counterparty: "Rema 1000", at: `${y}-03-10T10:00:00Z` })],
+        next_cursor: null,
+      },
+    });
+    const month = (m: string) =>
+      specificLabel({ kind: "specific", unit: "month", at: `${y}-${m}-01` }, []);
+    renderRoute(
+      `/print/report#${fragment(
+        job({
+          report: {
+            period: "previous-year",
+            modules: [
+              {
+                id: "m-1",
+                type: "graph",
+                title: "Spending",
+                graph: { kind: "bar", metric: "spending", resolution: "month" },
+              },
+              { id: "m-2", type: "transactions", transactions: { sections: "month" } },
+            ],
+          },
+        }),
+      )}`,
+    );
+    await waitFor(() => {
+      expect(ready()).not.toBeNull();
+    });
+    // Each module, and the sectioned one's months, newest first, linked to them.
+    const lines = contents();
+    expect(lines.slice(0, 4)).toEqual([
+      ["1. Spending", "#module-m-1"],
+      ["2. Transactions", "#module-m-2"],
+      [month("12"), `#module-m-2-${y}-12-01`],
+      [month("11"), `#module-m-2-${y}-11-01`],
+    ]);
+    expect(lines).toHaveLength(14);
+    for (const [, href] of lines) {
+      expect(document.getElementById(href?.slice(1) ?? "")).not.toBeNull();
+    }
+    // The modules' and sections' headings, for the PDF's outline; no others.
+    expect(screen.getAllByRole("heading").map((h) => [h.tagName, h.textContent])).toEqual([
+      ["H1", "Året – food"],
+      ["H2", "Spending"],
+      ["H2", "Transactions"],
+      ...Array.from({ length: 12 }, (_, i) => ["H3", month(String(12 - i).padStart(2, "0"))]),
+    ]);
+
+    const pages = () => [...document.querySelectorAll("[data-toc-page]")].map((x) => x.textContent);
+    expect(pages()[0]).toBe("000");
+    expect(document.querySelector("[data-print-paged]")).toBeNull();
+    // As the outline gives them: the name first, December with a no-break space.
+    window.dispatchEvent(
+      new CustomEvent("bucky:print-pages", {
+        detail: [
+          { title: "Året – food", page: 1 },
+          { title: "Spending", page: 2 },
+          { title: "Transactions", page: 3 },
+          { title: month("12").replace(" ", "\u00a0"), page: 3 },
+          { title: month("11"), page: 4 },
+        ],
+      }),
+    );
+    await waitFor(() => {
+      expect(document.querySelector("[data-print-paged]")).not.toBeNull();
+    });
+    expect(pages().slice(0, 5)).toEqual(["2", "3", "3", "4", "000"]);
+  });
+
   it("uses the job's language and locale", async () => {
     renderRoute(`/print/report#${fragment(job({ language: "nb", locale: "nb-NO" }))}`);
     const cover = await screen.findByTestId("print-cover");
-    expect(within(cover).getByRole("rowheader", { name: "Moduler" })).toBeInTheDocument();
+    expect(within(cover).getByRole("rowheader", { name: "Innhold" })).toBeInTheDocument();
     const row = (label: string) =>
       within(cover).getByRole("rowheader", { name: label }).nextElementSibling?.textContent;
     expect(row("Generert")).toBe(formatDateTime("2026-11-10T08:30:00Z", "nb-NO"));

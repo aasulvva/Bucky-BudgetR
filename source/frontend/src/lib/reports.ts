@@ -697,6 +697,76 @@ export function transactionSections(
   });
 }
 
+/** A section's name: its month or cycle, its dates when the period cuts it. */
+export function sectionLabel(part: SubPeriod | null, cycles: CycleTimes[]): string {
+  if (!part) return i18n.t("stats.reports.transactions.noCycle");
+  return part.partial
+    ? formatDateRange(part.period.from, part.period.to)
+    : specificLabel(part.choice, cycles);
+}
+
+/** The id a PDF's contents link to (#193): a module's, or a section's in it. */
+export const moduleAnchor = (id: string) => `module-${id}`;
+export const sectionAnchor = (id: string, key: string) => `module-${id}-${key || "outside"}`;
+
+export interface ContentsEntry {
+  anchor: string;
+  title: string;
+  /** A transactions module's months or cycles (#191). */
+  sections: { anchor: string; title: string }[];
+}
+
+/**
+ * A report PDF's contents (#193): each module, and a sectioned
+ * transactions module's months or cycles in its order. Those outside any
+ * cycle depend on the data, so they aren't listed.
+ */
+export function reportContents(
+  report: ReportSettings,
+  period: Period | null,
+  cycles: CycleTimes[],
+): ContentsEntry[] {
+  return report.modules.map((m) => {
+    const by = m.type === "transactions" ? (m.transactions.sections ?? "off") : "off";
+    const parts =
+      m.type === "transactions" && by !== "off" && period ? periodParts(period, by, cycles) : null;
+    const list = parts?.ok ? parts.parts : [];
+    const ordered =
+      m.type === "transactions" && m.transactions.order === "oldest" ? list : [...list].reverse();
+    return {
+      anchor: moduleAnchor(m.id),
+      title: moduleTitle(m),
+      sections: ordered.map((p) => ({
+        anchor: sectionAnchor(m.id, p.choice.at),
+        title: sectionLabel(p, cycles),
+      })),
+    };
+  });
+}
+
+/** Text as an outline gives it: spaces of any kind as one, trimmed. */
+const normal = (s: string) => s.replace(/\s+/g, " ").trim();
+
+/**
+ * The page of each title, in order (#193): the next mark after the last
+ * match with the same text, so extra marks (the report's name, Outside any
+ * cycle) are skipped and two modules with one title each get their own.
+ * Null where there's none.
+ */
+export function matchPages(
+  titles: string[],
+  marks: { title: string; page: number }[],
+): (number | null)[] {
+  let next = 0;
+  return titles.map((title) => {
+    const want = normal(title);
+    const i = marks.findIndex((m, j) => j >= next && normal(m.title) === want);
+    if (i < 0) return null;
+    next = i + 1;
+    return marks[i]?.page ?? null;
+  });
+}
+
 /**
  * The Transactions screen with the same list: the period, and the filters.
  * Null while a filter has several values, which that screen can't show yet

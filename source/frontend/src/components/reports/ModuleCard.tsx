@@ -15,6 +15,7 @@ import {
   moduleBudget,
   moduleGraph,
   moduleFlows,
+  moduleAnchor,
   moduleTitle,
   moduleTransactions,
   ownFilters,
@@ -71,11 +72,21 @@ export function ModuleCard({
   const own = ownFilters(module);
 
   return (
-    <Card withBorder padding="md" aria-label={title} component="section" data-report-module>
+    <Card
+      withBorder
+      padding="md"
+      aria-label={title}
+      component="section"
+      id={moduleAnchor(module.id)}
+      data-report-module
+    >
       <Stack gap="sm">
         <Group justify="space-between" wrap="nowrap" align="flex-start">
           <Stack gap={2} style={{ minWidth: 0 }}>
-            <Text fw={600}>{title}</Text>
+            {/* A heading, for the PDF's outline (#193). */}
+            <Text component="h2" m={0} fw={600}>
+              {title}
+            </Text>
             {own.length > 0 && (
               <Group gap={4}>
                 {own.map((f) => (
@@ -138,6 +149,7 @@ export function ModuleCard({
         </Group>
         {module.type === "transactions" ? (
           <TransactionsModule
+            moduleId={module.id}
             settings={moduleTransactions(report, module)}
             period={period}
             cycles={cycles}

@@ -10,6 +10,7 @@ import {
   flowsQuery,
   flowTables,
   groupTransactions,
+  matchPages,
   moduleBudget,
   moduleFlows,
   moduleGraph,
@@ -18,6 +19,7 @@ import {
   periodParts,
   previousPeriod,
   readTemplates,
+  reportContents,
   sameReport,
   starter,
   subPeriods,
@@ -411,6 +413,60 @@ describe("transaction sections (#191)", () => {
       type: "transactions",
       transactions: { sections: "cycle" },
     });
+  });
+});
+
+describe("PDF contents (#193)", () => {
+  const choice = parsePeriod("quarter-2026-q3");
+  const period = choice && resolvePeriod(choice, cycles, now);
+  if (!period) throw new Error("no period");
+
+  it("lists the modules, and a sectioned transactions module's sections in its order", () => {
+    const report: ReportSettings = {
+      period: "quarter-2026-q3",
+      modules: [
+        { id: "m-1", type: "transactions", title: "Spent", transactions: { sections: "month" } },
+        {
+          id: "m-2",
+          type: "transactions",
+          transactions: { sections: "cycle", order: "oldest" },
+        },
+        { id: "m-3", type: "budget", budget: {} },
+      ],
+    };
+    expect(reportContents(report, period, cycles)).toEqual([
+      {
+        anchor: "module-m-1",
+        title: "Spent",
+        sections: [
+          { anchor: "module-m-1-2026-09-01", title: "September 2026" },
+          { anchor: "module-m-1-2026-08-01", title: "August 2026" },
+          { anchor: "module-m-1-2026-07-01", title: "July 2026" },
+        ],
+      },
+      {
+        anchor: "module-m-2",
+        title: "Transactions",
+        sections: [
+          { anchor: "module-m-2-100001000001", title: expect.any(String) as string },
+          { anchor: "module-m-2-100001000002", title: expect.any(String) as string },
+        ],
+      },
+      { anchor: "module-m-3", title: "Budget vs spending", sections: [] },
+    ]);
+  });
+
+  it("matches titles to the outline's pages in order", () => {
+    const marks = [
+      { title: "My report", page: 1 },
+      { title: "Spending", page: 2 },
+      { title: "1\u00a0Jul\u2009–\u200930 Sept 2026", page: 3 },
+      { title: "Outside any cycle", page: 4 },
+      { title: "Spending", page: 5 },
+    ];
+    expect(
+      matchPages(["Spending", "1 Jul – 30 Sept 2026", "Spending", "Spending", "Gone"], marks),
+    ).toEqual([2, 3, 5, null, null]);
   });
 });
 

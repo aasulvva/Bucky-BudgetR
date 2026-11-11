@@ -45,6 +45,23 @@
   break-before: page;
 }
 
+/* The cover's contents (#193): links that look like text, dotted to the page. */
+.print-report .print-toc a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.print-report .print-toc-leader {
+  flex: 1;
+  min-width: 1rem;
+  border-bottom: 1px dotted var(--mantine-color-gray-5);
+  margin-bottom: 0.3em;
+}
+
+.print-report .print-toc-line {
+  break-inside: avoid;
+}
+
 @media print {
   body {
     margin: 0;

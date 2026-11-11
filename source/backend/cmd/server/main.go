@@ -164,7 +164,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, out, lo
 	notificationsSvc := notifications.NewService(pool, notifications.Options{Now: now, Schedules: schedulesSvc, Buckets: bucketsSvc})
 	var renderer pdf.Renderer
 	if cfg.PDFChromeURL != "" {
-		renderer = pdf.NewChrome(cfg.PDFChromeURL, cfg.PDFAppURL)
+		chrome := pdf.NewChrome(cfg.PDFChromeURL, cfg.PDFAppURL)
+		chrome.Logger = logger
+		renderer = chrome
 	}
 	handler, err := httpapi.NewHandler(logger, pool, httpapi.Options{
 		Auth:           authSvc,

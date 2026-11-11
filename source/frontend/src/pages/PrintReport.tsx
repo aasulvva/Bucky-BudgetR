@@ -1,5 +1,5 @@
-import { Box, Center, Group, List, Loader, Stack, Table, Text, Title } from "@mantine/core";
-import { useEffect, useMemo, type ReactNode } from "react";
+import { Box, Center, Group, Loader, Stack, Table, Text, Title } from "@mantine/core";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "react-router";
 
@@ -12,7 +12,7 @@ import { formatDateTime } from "@/lib/dates";
 import { applyLanguage } from "@/lib/language";
 import { setLocale } from "@/lib/locale";
 import { parseJob, PRINT_WIDTH, PrintMode, usePrintReady, type PrintJob } from "@/lib/print";
-import { moduleTitle, reportPeriods } from "@/lib/reports";
+import { matchPages, reportContents, reportPeriods, type ContentsEntry } from "@/lib/reports";
 
 import "./PrintReport.css";
 
@@ -95,7 +95,14 @@ function Printed({
   return (
     <Box className="print-report" w={PRINT_WIDTH}>
       <ReadyMark />
-      <Cover job={job} user={user} periods={periods} accounts={accounts} buckets={buckets} />
+      <Cover
+        job={job}
+        user={user}
+        periods={periods}
+        cycles={cycles}
+        accounts={accounts}
+        buckets={buckets}
+      />
       <Stack gap="md">
         {report.modules.map((m, i) => (
           <ModuleCard
@@ -143,12 +150,14 @@ function Cover({
   job,
   user,
   periods,
+  cycles,
   accounts,
   buckets,
 }: {
   job: PrintJob;
   user: User;
   periods: ReturnType<typeof reportPeriods>;
+  cycles: Cycle[];
   accounts: Account[];
   buckets: Bucket[];
 }) {
@@ -196,14 +205,8 @@ function Cover({
         ),
     },
     {
-      label: t("stats.reports.pdf.cover.modules"),
-      value: (
-        <List type="ordered" size="sm" spacing={2}>
-          {report.modules.map((m) => (
-            <List.Item key={m.id}>{moduleTitle(m)}</List.Item>
-          ))}
-        </List>
-      ),
+      label: t("stats.reports.pdf.cover.contents"),
+      value: <Contents entries={reportContents(report, period, cycles)} />,
     },
     { label: t("stats.reports.pdf.cover.user"), value: user.username },
     { label: t("stats.reports.pdf.cover.generated"), value: formatDateTime(job.generated_at) },
@@ -232,4 +235,72 @@ function Cover({
       </Table>
     </Stack>
   );
+}
+
+/** What the server sends once it has printed the page once (#193). */
+const PAGES_EVENT = "bucky:print-pages";
+
+/**
+ * The cover's contents (#193): each module and its sections, linked to
+ * them. The server prints the page once, sends the outline's pages in a
+ * PAGES_EVENT and prints it again once data-print-paged says they're in.
+ * Their column has its width from the start, so nothing moves.
+ */
+function Contents({ entries }: { entries: ContentsEntry[] }) {
+  const [pages, setPages] = useState<(number | null)[] | null>(null);
+  useEffect(() => {
+    const titles = entries.flatMap((e) => [e.title, ...e.sections.map((s) => s.title)]);
+    const on = (e: Event) => {
+      const marks = (e as CustomEvent<unknown>).detail;
+      setPages(matchPages(titles, Array.isArray(marks) ? (marks as Mark[]) : []));
+    };
+    window.addEventListener(PAGES_EVENT, on);
+    return () => {
+      window.removeEventListener(PAGES_EVENT, on);
+    };
+  }, [entries]);
+  let i = 0;
+  const line = (anchor: string, title: string, sub: boolean) => {
+    const page = pages?.[i++] ?? null;
+    return (
+      <Group
+        key={anchor}
+        gap={6}
+        wrap="nowrap"
+        align="flex-end"
+        pl={sub ? "md" : 0}
+        className="print-toc-line"
+      >
+        <Text size={sub ? "xs" : "sm"} component="a" href={`#${anchor}`}>
+          {title}
+        </Text>
+        <Box className="print-toc-leader" />
+        <Text
+          size={sub ? "xs" : "sm"}
+          ta="right"
+          w="4ch"
+          style={{ flexShrink: 0, fontVariantNumeric: "tabular-nums" }}
+          data-toc-page
+        >
+          {page ?? <span style={{ visibility: "hidden" }}>000</span>}
+        </Text>
+      </Group>
+    );
+  };
+  return (
+    <Stack gap={2} className="print-toc" data-print-toc>
+      {entries.map((e, n) => (
+        <Stack key={e.anchor} gap={2}>
+          {line(e.anchor, `${String(n + 1)}. ${e.title}`, false)}
+          {e.sections.map((s) => line(s.anchor, s.title, true))}
+        </Stack>
+      ))}
+      {pages && <span hidden data-print-paged />}
+    </Stack>
+  );
+}
+
+interface Mark {
+  title: string;
+  page: number;
 }
