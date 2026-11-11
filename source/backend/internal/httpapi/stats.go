@@ -153,7 +153,7 @@ func (s *server) GetStatsFlows(ctx context.Context, req api.GetStatsFlowsRequest
 		out.Intervals[i] = api.StatsInterval{Start: iv.Start.UTC(), End: iv.End.UTC()}
 	}
 	for i, b := range res.Buckets {
-		f := api.BucketFlow{BucketId: b.BucketID, AccountId: b.AccountID, Currency: b.Currency, Values: make([]api.BucketFlowValues, len(b.Values))}
+		f := api.BucketFlow{BucketId: b.BucketID, AccountId: b.AccountID, Currency: b.Currency, OpenedAt: b.OpenedAt, Values: make([]api.BucketFlowValues, len(b.Values))}
 		for j, v := range b.Values {
 			f.Values[j] = api.BucketFlowValues{
 				Start: amount(v.Start), Refills: amount(v.Refills), Income: amount(v.Income), OpeningFunds: amount(v.Opening),
@@ -165,7 +165,7 @@ func (s *server) GetStatsFlows(ctx context.Context, req api.GetStatsFlowsRequest
 		out.Buckets[i] = f
 	}
 	for i, a := range res.Accounts {
-		f := api.AccountFlowSeries{AccountId: a.AccountID, Currency: a.Currency, Values: make([]api.AccountFlowValues, len(a.Values))}
+		f := api.AccountFlowSeries{AccountId: a.AccountID, Currency: a.Currency, OpenedAt: a.OpenedAt, Values: make([]api.AccountFlowValues, len(a.Values))}
 		for j, v := range a.Values {
 			f.Values[j] = api.AccountFlowValues{
 				Start: amount(v.Start), Income: amount(v.Income), Expenses: amount(v.Expenses),

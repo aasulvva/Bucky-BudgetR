@@ -1266,6 +1266,7 @@
         "totalIn": "Totalt ({{currency}})",
         "empty": "Ingenting skjedde i perioden.",
         "filtersNote": "Taggane og motparten til rapporten gjeld ikkje for denne modulen.",
+        "openedOn": "Opna {{date}}",
         "columns": {
           "start": "Start",
           "refills": "Påfyll",
@@ -1312,7 +1313,8 @@
         "grid": {
           "change": "Endring",
           "startEnd": "Start {{start}} → Slutt {{end}}",
-          "overspent": "Overforbrukt"
+          "overspent": "Overforbrukt",
+          "opened": "Opna {{date}} med {{start}} → Slutt {{end}}"
         }
       },
       "budget": {

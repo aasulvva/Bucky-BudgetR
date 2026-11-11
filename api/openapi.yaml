@@ -885,6 +885,11 @@ paths:
           family's original as the sums do, so `start` plus every line in
           the interval (opening balances and balance adjustments too) is
           `end`.
+        - **Openings (#187):** when a bucket's opening funds (OPF) or an
+          account's opening balance (OPB) are dated in an interval, that
+          interval's `start` includes them, rather than `opening_funds` and
+          `in` (or the account's lines), and `opened_at` says when. The
+          intervals before are 0: nothing is known about them.
         - A transaction counts on its original's date with its
           corrections, as the transaction list shows it, so a reversed one
           adds up to 0. Amounts other than `start` and `end` are positive.
@@ -4370,6 +4375,10 @@ components:
       properties:
         bucket_id:
           $ref: "#/components/schemas/BucketId"
+        opened_at:
+          type: string
+          format: date-time
+          description: When its opening funds are dated, if that's in one of the intervals, which then starts with them (#187).
         account_id:
           description: The bucket's source account.
           allOf:
@@ -4429,6 +4438,10 @@ components:
       properties:
         account_id:
           $ref: "#/components/schemas/AccountId"
+        opened_at:
+          type: string
+          format: date-time
+          description: When its opening balance is dated, if that's in one of the intervals, which then starts with it (#187).
         currency:
           $ref: "#/components/schemas/Currency"
         values:

@@ -687,6 +687,38 @@ describe("Reports", () => {
       ]);
     });
 
+    it("starts a row that opened in the period with its opening", async () => {
+      const opened = startAtFor(`${String(year - 1)}-07-03`);
+      apiMock.on(flowsPath, (req) => {
+        const answer = flowsAnswer(req);
+        for (const a of answer.body.accounts) Object.assign(a, { opened_at: opened });
+        return answer;
+      });
+      const module = await flows({ view: "grid", show: "accounts", balances: true });
+      const mainCard = await within(module).findByRole("group", { name: "Main" });
+      expect(mainCard.querySelector("[data-balances]")?.textContent).toBe(
+        `Opened ${formatDate(opened)} with ${formatMoney("1000.00", "NOK")} → End ${formatMoney("28600.00", "NOK")}`,
+      );
+      // The total doesn't say it.
+      const total = within(module).getByRole("group", { name: "Total" });
+      expect(total.querySelector("[data-balances]")?.textContent).toBe(
+        startEnd("1000.00", "28600.00"),
+      );
+    });
+
+    it("notes the opening in the table", async () => {
+      const opened = startAtFor(`${String(year - 1)}-07-03`);
+      apiMock.on(flowsPath, (req) => {
+        const answer = flowsAnswer(req);
+        for (const a of answer.body.accounts) Object.assign(a, { opened_at: opened });
+        return answer;
+      });
+      const module = await flows({ show: "accounts", balances: true });
+      const table = await within(module).findByRole("table", { name: "Accounts" });
+      const [name] = within(within(table).getByRole("row", { name: /Main/ })).getAllByRole("cell");
+      expect(name?.textContent).toBe(`MainOpened ${formatDate(opened)}`);
+    });
+
     it("chooses the grid and balances in the editor", async () => {
       renderRoute("/stats/reports");
       await userEvent.click(await screen.findByRole("button", { name: "Add module" }));

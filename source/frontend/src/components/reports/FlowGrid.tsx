@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { signedMoney } from "@/components/transactions/lookups";
+import { formatDate } from "@/lib/dates";
 import { compareAmounts, formatMoney, subtractAmounts } from "@/lib/money";
 import { usePrintMode } from "@/lib/print";
 import {
@@ -46,6 +47,8 @@ interface Card {
   change: string;
   /** The start and end balance, when the card has them. */
   balances: [string, string] | null;
+  /** When it opened, if in this interval: it starts with its opening (#187). */
+  openedAt?: string;
   lines: Line[];
   overspent: boolean;
   total: boolean;
@@ -102,6 +105,7 @@ export function FlowGrid({
     changeLabel: t("stats.reports.flows.grid.change"),
     change: subtractAmounts(r.values.end, r.values.start),
     balances: [r.values.start, r.values.end],
+    openedAt: r.openedAt,
     lines: [line(r, "in", BUCKET_IN, bucketLabel), line(r, "out", BUCKET_OUT, bucketLabel)],
     overspent: total === null && compareAmounts(r.values.end, "0") < 0,
     total: total !== null,
@@ -123,6 +127,7 @@ export function FlowGrid({
         : t("stats.reports.flows.columns.net"),
       change: balances ? subtractAmounts(r.values.end, r.values.start) : r.values.net,
       balances: balances ? [r.values.start, r.values.end] : null,
+      openedAt: r.openedAt,
       lines,
       overspent: false,
       total: total !== null,
@@ -223,10 +228,16 @@ function FlowCard({ card }: { card: Card }) {
           </Text>
           {card.balances && (
             <Text size="xs" c="dimmed" style={{ fontVariantNumeric: "tabular-nums" }} data-balances>
-              {t("stats.reports.flows.grid.startEnd", {
-                start: money(card.balances[0]),
-                end: money(card.balances[1]),
-              })}
+              {card.openedAt
+                ? t("stats.reports.flows.grid.opened", {
+                    date: formatDate(card.openedAt),
+                    start: money(card.balances[0]),
+                    end: money(card.balances[1]),
+                  })
+                : t("stats.reports.flows.grid.startEnd", {
+                    start: money(card.balances[0]),
+                    end: money(card.balances[1]),
+                  })}
             </Text>
           )}
         </Box>

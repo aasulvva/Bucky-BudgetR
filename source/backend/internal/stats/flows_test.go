@@ -4,6 +4,7 @@ import (
 	"errors"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/authtest"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
@@ -108,8 +109,9 @@ func TestFlows(t *testing.T) {
 	if len(months.Intervals) != 2 {
 		t.Fatalf("intervals = %v", edges(months.Intervals, loc))
 	}
-	// Food: 100 + 3000 in; 450 spent and 300 to Fun out; then 150 overflow.
-	if got, want := figures(months, food), []row{{"0.00", "3100.00", "750.00", "2350.00"}, {"2350.00", "0.00", "150.00", "2200.00"}}; !slices.EqualFunc(got, want, slices.Equal) {
+	// Food: opened with 100 (#187), 3000 in; 450 spent and 300 to Fun out;
+	// then 150 overflow.
+	if got, want := figures(months, food), []row{{"100.00", "3000.00", "750.00", "2350.00"}, {"2350.00", "0.00", "150.00", "2200.00"}}; !slices.EqualFunc(got, want, slices.Equal) {
 		t.Errorf("food by month = %v, want %v", got, want)
 	}
 	// Fun: 1000 + 300 in, 200 adjusted out (the reversed expense is nothing); then 50 in.
@@ -118,7 +120,7 @@ func TestFlows(t *testing.T) {
 	}
 	f := months.Buckets[slices.IndexFunc(months.Buckets, func(b stats.BucketFlow) bool { return b.BucketID == food })].Values[0]
 	for name, pair := range map[string][2]string{
-		"opening": {f.Opening.StringFixed(2), "100.00"}, "refills": {f.Refills.StringFixed(2), "3000.00"},
+		"opening": {f.Opening.StringFixed(2), "0.00"}, "refills": {f.Refills.StringFixed(2), "3000.00"},
 		"spent": {f.Spent.StringFixed(2), "450.00"}, "transfers out": {f.TransfersOut.StringFixed(2), "300.00"},
 	} {
 		if pair[0] != pair[1] {
@@ -159,7 +161,7 @@ func TestFlows(t *testing.T) {
 	}
 	total := query(stats.FlowsQuery{Resolution: stats.Total})
 	for account, want := range map[string][]string{
-		main:    {"500.00", "19000.00", "450.00", "0.00", "2000.00", "10100.00", "27150.00"},
+		main:    {"10500.00", "19000.00", "450.00", "0.00", "2000.00", "100.00", "27150.00"},
 		savings: {"0.00", "0.00", "0.00", "2000.00", "0.00", "0.00", "2000.00"},
 	} {
 		if got := accountFigures(total, account); !slices.Equal(got[0], want) {
@@ -167,9 +169,9 @@ func TestFlows(t *testing.T) {
 		}
 	}
 	// By month, and by cycle from before October's: the adjustment outside
-	// any cycle moves October's start.
+	// any cycle moves October's start, and the opening balance starts it.
 	wantMain := [][]string{
-		{"500.00", "19000.00", "450.00", "0.00", "2000.00", "10000.00", "27050.00"},
+		{"10500.00", "19000.00", "450.00", "0.00", "2000.00", "0.00", "27050.00"},
 		{"27050.00", "0.00", "0.00", "0.00", "0.00", "100.00", "27150.00"},
 	}
 	if got := accountFigures(months, main); !slices.EqualFunc(got, wantMain, slices.Equal) {
@@ -178,6 +180,37 @@ func TestFlows(t *testing.T) {
 	cycles := query(stats.FlowsQuery{From: at("2026-09-25T00:00:00Z"), To: dec1, Resolution: stats.Cycle})
 	if got := accountFigures(cycles, main); !slices.EqualFunc(got, wantMain, slices.Equal) {
 		t.Errorf("main by cycle = %v, want %v", got, wantMain)
+	}
+
+	// When they opened, if it's in the period (#187).
+	openedAt := func(res stats.FlowsResult, id string) *time.Time {
+		for _, a := range res.Accounts {
+			if a.AccountID == id {
+				return a.OpenedAt
+			}
+		}
+		for _, b := range res.Buckets {
+			if b.BucketID == id {
+				return b.OpenedAt
+			}
+		}
+		t.Fatalf("no row %s", id)
+		return nil
+	}
+	for id, want := range map[string]*time.Time{
+		main: new(at("2026-10-01T08:00:00Z")), food: new(at("2026-10-01T09:00:00Z")), savings: nil, fun: nil,
+	} {
+		if got := openedAt(months, id); (got == nil) != (want == nil) || (got != nil && !got.Equal(*want)) {
+			t.Errorf("%s opened at %v, want %v", id, got, want)
+		}
+	}
+	// Opened before the period: it starts with its balance, as before.
+	november := query(stats.FlowsQuery{From: nov, To: dec1, Resolution: stats.Total})
+	if openedAt(november, main) != nil || openedAt(november, food) != nil {
+		t.Errorf("opened before November: %v, %v", openedAt(november, main), openedAt(november, food))
+	}
+	if got := accountFigures(november, main)[0]; !slices.Equal(got, wantMain[1]) {
+		t.Errorf("main in November = %v, want %v", got, wantMain[1])
 	}
 
 	// Filters: one bucket, or one account's buckets and itself.

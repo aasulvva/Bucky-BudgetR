@@ -13,6 +13,50 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+const statsAccountOpenings = `-- name: StatsAccountOpenings :many
+SELECT h.id AS transaction_id, l.account_id, h.transaction_at
+FROM transaction_headers h
+JOIN bank_transactions l ON l.transaction_id = h.id
+JOIN bank_accounts a ON a.id = l.account_id
+WHERE h.user_id = $1 AND h.correction_type = 'none' AND h.transaction_type = 'OPB'
+  AND NOT a.deleted
+  AND ($2::text[] IS NULL OR l.account_id = ANY($2::text[]))
+ORDER BY l.account_id, h.transaction_at
+`
+
+type StatsAccountOpeningsParams struct {
+	UserID     string
+	AccountIds []string
+}
+
+type StatsAccountOpeningsRow struct {
+	TransactionID string
+	AccountID     string
+	TransactionAt time.Time
+}
+
+// For the In/out/balance module (#187): when each filtered account's
+// opening balance (OPB) is dated, for the accounts that have one.
+func (q *Queries) StatsAccountOpenings(ctx context.Context, arg StatsAccountOpeningsParams) ([]StatsAccountOpeningsRow, error) {
+	rows, err := q.db.Query(ctx, statsAccountOpenings, arg.UserID, arg.AccountIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []StatsAccountOpeningsRow{}
+	for rows.Next() {
+		var i StatsAccountOpeningsRow
+		if err := rows.Scan(&i.TransactionID, &i.AccountID, &i.TransactionAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const statsAccountStarts = `-- name: StatsAccountStarts :many
 SELECT a.id AS account_id,
        COALESCE(SUM(l.amount) FILTER (WHERE o.transaction_at < $1), 0)::numeric AS start
@@ -351,6 +395,52 @@ func (q *Queries) StatsBucketNets(ctx context.Context, arg StatsBucketNetsParams
 			&i.Currency,
 			&i.Net,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const statsBucketOpenings = `-- name: StatsBucketOpenings :many
+SELECT h.id AS transaction_id, l.bucket_id, h.transaction_at
+FROM transaction_headers h
+JOIN bucket_transactions l ON l.transaction_id = h.id
+JOIN buckets k ON k.id = l.bucket_id
+WHERE h.user_id = $1 AND h.correction_type = 'none' AND h.transaction_type = 'OPF'
+  AND NOT k.deleted
+  AND ($2::text[] IS NULL OR k.source_account_id = ANY($2::text[]))
+  AND ($3::text[] IS NULL OR l.bucket_id = ANY($3::text[]))
+ORDER BY l.bucket_id, h.transaction_at
+`
+
+type StatsBucketOpeningsParams struct {
+	UserID     string
+	AccountIds []string
+	BucketIds  []string
+}
+
+type StatsBucketOpeningsRow struct {
+	TransactionID string
+	BucketID      string
+	TransactionAt time.Time
+}
+
+// For the In/out/balance module (#187): when each filtered bucket's opening
+// funds (OPF) are dated, for the buckets that have them.
+func (q *Queries) StatsBucketOpenings(ctx context.Context, arg StatsBucketOpeningsParams) ([]StatsBucketOpeningsRow, error) {
+	rows, err := q.db.Query(ctx, statsBucketOpenings, arg.UserID, arg.AccountIds, arg.BucketIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []StatsBucketOpeningsRow{}
+	for rows.Next() {
+		var i StatsBucketOpeningsRow
+		if err := rows.Scan(&i.TransactionID, &i.BucketID, &i.TransactionAt); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

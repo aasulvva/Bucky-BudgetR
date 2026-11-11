@@ -525,6 +525,42 @@ describe("In/out/balance modules (#126)", () => {
     expect(withTransfers.totals[0]?.values.net).toBe("28950.00");
   });
 
+  it("say when a row opened, only in its interval (#187)", () => {
+    const opened = {
+      ...result,
+      buckets: result.buckets.map((b) =>
+        b.bucket_id === "1000000001" ? { ...b, opened_at: "2026-07-03T10:00:00Z" } : b,
+      ),
+      accounts: result.accounts.map((a) =>
+        a.account_id === "1234"
+          ? { ...a, opened_at: "2026-07-03T10:00:00Z" }
+          : a.account_id === "2345"
+            ? { ...a, opened_at: "2027-02-01T10:00:00Z" }
+            : a,
+      ),
+    };
+    const t = flowTables(
+      opened,
+      0,
+      accounts,
+      buckets,
+      { transfers: false, balances: true },
+      "en-GB",
+    );
+    expect(t.buckets.rows.map((r) => [r.name, r.openedAt])).toEqual([
+      ["Food", "2026-07-03T10:00:00Z"],
+      ["Fun", undefined],
+      ["Travel", undefined],
+    ]);
+    expect(t.accounts.rows.map((r) => [r.name, r.openedAt])).toEqual([
+      ["Buffer", undefined],
+      ["Main", "2026-07-03T10:00:00Z"],
+      // Outside this interval.
+      ["Savings", undefined],
+    ]);
+    expect(t.accounts.totals.map((r) => r.openedAt)).toEqual([undefined]);
+  });
+
   it("give accounts their balances, with other making them add up (#187)", () => {
     const figures = (transfers: boolean) =>
       flowTables(result, 0, accounts, buckets, { transfers, balances: true }, "en-GB").accounts;

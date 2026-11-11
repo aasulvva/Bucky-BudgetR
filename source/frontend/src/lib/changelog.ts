@@ -27,14 +27,17 @@ export const CHANGELOG: ChangelogEntry[] = [
       en: [
         "An in, out and balance module can now show a grid of cards instead of tables: one per bucket and account, with its change, where it started and ended, its in and out, and a total card. A bucket that ends below 0 is marked overspent. On a phone the cards stack, so nothing scrolls sideways.",
         "Show balances gives accounts their balance at the start and end of the period, in the grid and in the table. Other covers what else moved it, such as opening balances, adjustments and transfers that aren't counted, so the figures add up.",
+        "An account or bucket opened during the period starts at its opening balance or funds, marked with when it opened, rather than at 0.",
       ],
       nb: [
         "En modul for inn, ut og saldo kan nå vise et rutenett med kort i stedet for tabeller: ett per bøtte og konto, med endringen, hvor den startet og sluttet, inn og ut, og et kort med totalen. En bøtte som slutter under 0, merkes som overforbrukt. På mobil legger kortene seg under hverandre, så ingenting ruller sidelengs.",
         "Vis saldoer gir kontoene saldoen ved start og slutt på perioden, i rutenettet og i tabellen. Annet dekker det andre som endret den, som åpningssaldoer, justeringer og overføringer som ikke telles med, så tallene går opp.",
+        "En konto eller bøtte som ble åpnet i løpet av perioden, starter på åpningssaldoen eller startmidlene, merket med når den ble åpnet, i stedet for på 0.",
       ],
       nn: [
         "Ein modul for inn, ut og saldo kan no vise eit rutenett med kort i staden for tabellar: eitt per bøtte og konto, med endringa, kvar ho starta og slutta, inn og ut, og eit kort med totalen. Ei bøtte som sluttar under 0, vert merkt som overforbrukt. På mobil legg korta seg under kvarandre, så ingenting rullar sidelengs.",
         "Vis saldoar gjev kontoane saldoen ved start og slutt på perioden, i rutenettet og i tabellen. Anna dekkjer det andre som endra han, som opningssaldoar, justeringar og overføringar som ikkje vert talde med, så tala går opp.",
+        "Ein konto eller ei bøtte som vart opna i løpet av perioden, startar på opningssaldoen eller startmidlane, merkt med når ho vart opna, i staden for på 0.",
       ],
     },
   },

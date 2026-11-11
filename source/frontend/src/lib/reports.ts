@@ -369,6 +369,11 @@ export interface FlowRow<F extends string> {
   name: string;
   currency: string;
   values: Record<F, string>;
+  /**
+   * When it opened, if in this interval (#187): its start is its opening
+   * balance or funds, as nothing is known from before.
+   */
+  openedAt?: string;
 }
 
 export interface FlowTables {
@@ -408,6 +413,14 @@ export function flowTables(
   locale?: string,
 ): FlowTables {
   const shown = balances ? ACCOUNT_BALANCE_DETAILS : ACCOUNT_DETAILS;
+  const interval = result.intervals[index];
+  const openedIn = (at: string | undefined) =>
+    at !== undefined &&
+    interval !== undefined &&
+    Date.parse(at) >= Date.parse(interval.start) &&
+    Date.parse(at) < Date.parse(interval.end)
+      ? { openedAt: at }
+      : {};
   const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, locale);
   const bucketRows: FlowRow<BucketFigure>[] = result.buckets
     .flatMap((b) => {
@@ -418,7 +431,7 @@ export function flowTables(
         BucketFigure,
         string
       >;
-      return [{ id: b.bucket_id, name, currency: b.currency, values }];
+      return [{ id: b.bucket_id, name, currency: b.currency, values, ...openedIn(b.opened_at) }];
     })
     .sort(byName);
   const accountRows: FlowRow<AccountFigure>[] = result.accounts
@@ -445,7 +458,7 @@ export function flowTables(
       };
       if (shown.every((k) => isZero(values[k]))) return [];
       const name = accounts.find((x) => x.id === a.account_id)?.name ?? a.account_id;
-      return [{ id: a.account_id, name, currency: a.currency, values }];
+      return [{ id: a.account_id, name, currency: a.currency, values, ...openedIn(a.opened_at) }];
     })
     .sort(byName);
   return {

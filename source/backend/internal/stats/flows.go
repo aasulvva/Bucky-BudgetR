@@ -45,16 +45,48 @@ type AccountValues struct {
 	Other, End                decimal.Decimal
 }
 
-// BucketFlow is a bucket's values per interval.
+// BucketFlow is a bucket's values per interval. OpenedAt is when its
+// opening funds (OPF) are dated, when that's in one of the intervals: that
+// interval starts with them rather than counting them in (#187), and the
+// intervals before are 0, as nothing is known about them.
 type BucketFlow struct {
 	BucketID, AccountID, Currency string
+	OpenedAt                      *time.Time
 	Values                        []BucketValues
 }
 
-// AccountFlow is an account's values per interval.
+// AccountFlow is an account's values per interval. OpenedAt is when its
+// opening balance (OPB) is dated, when that's in one of the intervals: that
+// interval starts with it rather than counting it in Other (#187).
 type AccountFlow struct {
 	AccountID, Currency string
+	OpenedAt            *time.Time
 	Values              []AccountValues
+}
+
+// opening is a row's opening transaction, when it's in an interval.
+type opening struct {
+	id       string
+	at       time.Time
+	interval int
+}
+
+// openings gives each row's first opening transaction that's dated in one
+// of the intervals.
+func openings(s *sums, q FlowsQuery, rows func(yield func(row, id string, at time.Time))) map[string]opening {
+	out := map[string]opening{}
+	rows(func(row, id string, at time.Time) {
+		if _, ok := out[row]; ok || at.Before(q.From) {
+			return
+		}
+		out[row] = opening{id: id, at: at, interval: s.index(at)}
+	})
+	for row, o := range out {
+		if o.interval < 0 {
+			delete(out, row)
+		}
+	}
+	return out
 }
 
 // FlowsResult is the intervals, and the buckets' and accounts' flows, sorted
@@ -128,6 +160,17 @@ func bucketFlows(ctx context.Context, queries *sqlc.Queries, userID string, q Fl
 	if err != nil {
 		return nil, err
 	}
+	opfs, err := queries.StatsBucketOpenings(ctx, sqlc.StatsBucketOpeningsParams{UserID: userID, AccountIds: accounts, BucketIds: buckets})
+	if err != nil {
+		return nil, err
+	}
+	opened := openings(s, q, func(yield func(row, id string, at time.Time)) {
+		for _, r := range opfs {
+			yield(r.BucketID, r.TransactionID, r.TransactionAt)
+		}
+	})
+	// What each bucket's opening funds start its opening interval with.
+	openingStart := map[string]decimal.Decimal{}
 	out := make([]BucketFlow, len(list))
 	at := make(map[string]int, len(list))
 	for i, b := range list {
@@ -141,6 +184,10 @@ func bucketFlows(ctx context.Context, queries *sqlc.Queries, userID string, q Fl
 			continue
 		}
 		v := &out[i].Values[j]
+		if o, ok := opened[r.BucketID]; ok && o.id == r.ID {
+			openingStart[r.BucketID] = openingStart[r.BucketID].Add(r.Net)
+			continue
+		}
 		switch net := r.Net; r.TransactionType {
 		case sqlc.TransactionTypeREF:
 			v.Refills = v.Refills.Add(net)
@@ -173,10 +220,18 @@ func bucketFlows(ctx context.Context, queries *sqlc.Queries, userID string, q Fl
 	// The TF runs on from one interval's end to the next's start. Bucket
 	// lines are always inside a cycle, so cycle intervals leave none out.
 	for i := range out {
-		tf := start[out[i].BucketID]
+		id := out[i].BucketID
+		tf := start[id]
+		o, isOpened := opened[id]
+		if isOpened {
+			out[i].OpenedAt = &o.at
+		}
 		for j := range out[i].Values {
 			v := &out[i].Values[j]
 			v.Start = tf
+			if isOpened && j == o.interval {
+				v.Start = v.Start.Add(openingStart[id])
+			}
 			v.In = v.Refills.Add(v.Income).Add(v.Opening).Add(v.AdjustmentsIn).Add(v.TransfersIn)
 			v.Out = v.Spent.Add(v.Overflow).Add(v.AdjustmentsOut).Add(v.TransfersOut)
 			v.End = v.Start.Add(v.In).Sub(v.Out)
@@ -201,6 +256,17 @@ func accountFlows(ctx context.Context, queries *sqlc.Queries, userID string, q F
 	if err != nil {
 		return nil, err
 	}
+	opbs, err := queries.StatsAccountOpenings(ctx, sqlc.StatsAccountOpeningsParams{UserID: userID, AccountIds: accounts})
+	if err != nil {
+		return nil, err
+	}
+	opened := openings(s, q, func(yield func(row, id string, at time.Time)) {
+		for _, r := range opbs {
+			yield(r.AccountID, r.TransactionID, r.TransactionAt)
+		}
+	})
+	// What each account's opening balance starts its opening interval with.
+	openingStart := map[string]decimal.Decimal{}
 	out := make([]AccountFlow, len(list))
 	at := make(map[string]int, len(list))
 	// Lines between two cycles count in no interval, but move the next
@@ -225,6 +291,10 @@ func accountFlows(ctx context.Context, queries *sqlc.Queries, userID string, q F
 			continue
 		}
 		v := &out[i].Values[j]
+		if o, ok := opened[r.AccountID]; ok && o.id == r.ID {
+			openingStart[r.AccountID] = openingStart[r.AccountID].Add(r.Net)
+			continue
+		}
 		switch net := r.Net; {
 		case r.TransactionType == sqlc.TransactionTypeINC:
 			v.Income = v.Income.Add(net)
@@ -244,10 +314,18 @@ func accountFlows(ctx context.Context, queries *sqlc.Queries, userID string, q F
 	}
 	// The balance runs on from one interval's end to the next's start.
 	for i := range out {
-		balance := start[out[i].AccountID]
+		id := out[i].AccountID
+		balance := start[id]
+		o, isOpened := opened[id]
+		if isOpened {
+			out[i].OpenedAt = &o.at
+		}
 		for j := range out[i].Values {
 			v := &out[i].Values[j]
 			v.Start = balance.Add(gaps[i][j])
+			if isOpened && j == o.interval {
+				v.Start = v.Start.Add(openingStart[id])
+			}
 			v.End = v.Start.Add(v.Income).Sub(v.Expenses).Add(v.TransfersIn).Sub(v.TransfersOut).Add(v.Other)
 			balance = v.End
 		}

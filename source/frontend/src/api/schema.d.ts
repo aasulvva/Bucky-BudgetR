@@ -498,6 +498,11 @@ export interface paths {
          *       family's original as the sums do, so `start` plus every line in
          *       the interval (opening balances and balance adjustments too) is
          *       `end`.
+         *     - **Openings (#187):** when a bucket's opening funds (OPF) or an
+         *       account's opening balance (OPB) are dated in an interval, that
+         *       interval's `start` includes them, rather than `opening_funds` and
+         *       `in` (or the account's lines), and `opened_at` says when. The
+         *       intervals before are 0: nothing is known about them.
          *     - A transaction counts on its original's date with its
          *       corrections, as the transaction list shows it, so a reversed one
          *       adds up to 0. Amounts other than `start` and `end` are positive.
@@ -2533,6 +2538,11 @@ export interface components {
         };
         BucketFlow: {
             bucket_id: components["schemas"]["BucketId"];
+            /**
+             * Format: date-time
+             * @description When its opening funds are dated, if that's in one of the intervals, which then starts with them (#187).
+             */
+            opened_at?: string;
             /** @description The bucket's source account. */
             account_id: components["schemas"]["AccountId"];
             currency: components["schemas"]["Currency"];
@@ -2560,6 +2570,11 @@ export interface components {
         };
         AccountFlowSeries: {
             account_id: components["schemas"]["AccountId"];
+            /**
+             * Format: date-time
+             * @description When its opening balance is dated, if that's in one of the intervals, which then starts with it (#187).
+             */
+            opened_at?: string;
             currency: components["schemas"]["Currency"];
             /** @description One per interval, in the same order. */
             values: components["schemas"]["AccountFlowValues"][];

@@ -1266,6 +1266,7 @@
         "totalIn": "Total ({{currency}})",
         "empty": "Nothing happened in this period.",
         "filtersNote": "The report's tags and counterparty don't apply to this module.",
+        "openedOn": "Opened {{date}}",
         "columns": {
           "start": "Start",
           "refills": "Refills",
@@ -1312,7 +1313,8 @@
         "grid": {
           "change": "Change",
           "startEnd": "Start {{start}} → End {{end}}",
-          "overspent": "Overspent"
+          "overspent": "Overspent",
+          "opened": "Opened {{date}} with {{start}} → End {{end}}"
         }
       },
       "budget": {

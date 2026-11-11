@@ -81,6 +81,7 @@ func TestStatsFlowsAPI(t *testing.T) {
 		Buckets   []json.RawMessage
 		Accounts  []struct {
 			Currency string
+			OpenedAt *string `json:"opened_at"`
 			Values   []struct{ Start, Income, Expenses, End string }
 		}
 	}
@@ -88,7 +89,8 @@ func TestStatsFlowsAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(got.Intervals) != 12 || len(got.Buckets) != 0 || len(got.Accounts) != 1 || len(got.Accounts[0].Values) != 12 ||
-		got.Accounts[0].Values[0].Income != "0.00" || got.Accounts[0].Values[11].End != "1500.00" {
+		got.Accounts[0].Values[0].Income != "0.00" || got.Accounts[0].Values[11].End != "1500.00" ||
+		got.Accounts[0].OpenedAt == nil {
 		t.Errorf("flows = %s", w.Body)
 	}
 

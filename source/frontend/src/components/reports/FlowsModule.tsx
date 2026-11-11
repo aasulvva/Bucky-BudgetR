@@ -6,6 +6,7 @@ import type { Cycle } from "@/api/cycles";
 import { useStatsFlows, type StatsFlows } from "@/api/stats";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { formatDateRange } from "@/lib/cycles";
+import { formatDate } from "@/lib/dates";
 import { specificLabel } from "@/lib/graphs";
 import { compareAmounts, formatMoney } from "@/lib/money";
 import type { Period, PeriodChoice } from "@/lib/periods";
@@ -287,6 +288,11 @@ function FlowTable<F extends string>({
             <Table.Tr key={r.id}>
               <Table.Td>
                 <ReportLink to={linkOf(r.id)}>{r.name}</ReportLink>
+                {r.openedAt && (
+                  <Text span size="xs" c="dimmed" ml={6} style={{ whiteSpace: "nowrap" }}>
+                    {t("stats.reports.flows.openedOn", { date: formatDate(r.openedAt) })}
+                  </Text>
+                )}
               </Table.Td>
               {columns.map((c) => (
                 <Table.Td key={c} ta="right" style={{ whiteSpace: "nowrap" }}>
