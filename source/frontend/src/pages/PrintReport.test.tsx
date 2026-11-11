@@ -180,6 +180,29 @@ describe("PrintReport", () => {
     });
   });
 
+  it("prints a module's sections, each on its own page (#191)", async () => {
+    const y = String(year - 1);
+    apiMock.on(list, {
+      body: {
+        items: [
+          transaction({ id: "t1", counterparty: "Rema 1000", at: `${y}-03-10T10:00:00Z` }),
+          transaction({ id: "t2", counterparty: "Kiwi", at: `${y}-01-10T10:00:00Z` }),
+        ],
+        next_cursor: null,
+      },
+    });
+    renderRoute(
+      `/print/report#${fragment(job({ report: { period: "previous-year", modules: [{ id: "m-2", type: "transactions", transactions: { sections: "month" } }] } }))}`,
+    );
+    expect(await screen.findByText("Kiwi")).toBeInTheDocument();
+    expect(document.querySelectorAll("[data-transactions-section]")).toHaveLength(12);
+    expect(screen.getAllByText("No transactions")).toHaveLength(10);
+    expect(screen.queryAllByRole("link")).toEqual([]);
+    await waitFor(() => {
+      expect(ready()).not.toBeNull();
+    });
+  });
+
   it("uses the job's language and locale", async () => {
     renderRoute(`/print/report#${fragment(job({ language: "nb", locale: "nb-NO" }))}`);
     const cover = await screen.findByTestId("print-cover");

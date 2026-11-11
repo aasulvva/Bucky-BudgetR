@@ -479,6 +479,144 @@ describe("Reports", () => {
     });
   });
 
+  describe("transactions sections (#191)", () => {
+    const y = String(year - 1);
+    const nok = (a: string) => formatMoney(a, "NOK");
+    const month = (m: string) =>
+      specificLabel({ kind: "specific", unit: "month", at: `${y}-${m}-01` }, []);
+    const rema = transaction({
+      id: "t1",
+      counterparty: "Rema 1000",
+      at: `${y}-06-15T10:00:00Z`,
+      bank_lines: [{ account_id: "1234", amount: "-250.00" }],
+    });
+    const work = transaction({
+      id: "t2",
+      type: "INC",
+      counterparty: "Work",
+      at: `${y}-06-10T10:00:00Z`,
+      bank_lines: [{ account_id: "1234", amount: "1000.00" }],
+    });
+    const kiwi = transaction({ id: "t3", counterparty: "Kiwi", at: `${y}-04-05T10:00:00Z` });
+    const sectionNames = (module: HTMLElement) =>
+      [...module.querySelectorAll("[data-transactions-section]")].map((x) =>
+        x.getAttribute("aria-label"),
+      );
+    const summary = (section: HTMLElement) =>
+      section.querySelector("[data-section-summary]")?.textContent;
+    const report = (transactions: ReportTemplate["report"]["modules"][number]) => {
+      prefs = {
+        ...prefs,
+        report_templates: [template({ period: `quarter-${y}-q2`, modules: [transactions] })],
+      };
+    };
+
+    it("shows a section per month with a summary, empty ones too", async () => {
+      apiMock.on(list, { body: { items: [rema, work, kiwi], next_cursor: null } });
+      report({ id: "m-1", type: "transactions", transactions: { sections: "month" } });
+      renderRoute("/stats/reports?template=r-1");
+      const module = await screen.findByRole("region", { name: "Transactions" });
+      const june = await within(module).findByRole("region", { name: month("06") });
+      expect(sectionNames(module)).toEqual([month("06"), month("05"), month("04")]);
+      expect(summary(june)).toBe(
+        `2 transactions · In ${nok("1000.00")} · Out ${nok("250.00")} · Net +${nok("750.00")}`,
+      );
+      // Under its days' headings.
+      expect(
+        within(june).getByRole("region", { name: formatDay(`${y}-06-15`) }),
+      ).toBeInTheDocument();
+      const may = within(module).getByRole("region", { name: month("05") });
+      expect(within(may).getByText("No transactions")).toBeInTheDocument();
+      expect(summary(may)).toBeUndefined();
+      expect(summary(within(module).getByRole("region", { name: month("04") }))).toBe(
+        `1 transaction · In ${nok("0.00")} · Out ${nok("100.00")} · Net ${nok("-100.00")}`,
+      );
+
+      // Grouped by month too: no headings inside.
+      await userEvent.click(within(module).getByRole("button", { name: "Edit" }));
+      const dialog = await screen.findByRole("dialog", { name: "Edit module" });
+      expect(within(dialog).getByRole("radio", { name: "Per month" })).toBeChecked();
+      await userEvent.click(within(dialog).getByRole("radio", { name: "Month" }));
+      await userEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
+      await waitFor(() => {
+        expect(within(module).queryAllByRole("heading", { level: 4 })).toEqual([]);
+      });
+      expect(within(module).getAllByRole("heading", { level: 3 })).toHaveLength(3);
+      expect(within(module).getByText("Rema 1000")).toBeInTheDocument();
+    });
+
+    it("shows only the sections loaded so far", async () => {
+      apiMock.on(list, (req) =>
+        req.query.get("cursor")
+          ? { body: { items: [kiwi], next_cursor: null } }
+          : { body: { items: [rema, work], next_cursor: "c1" } },
+      );
+      report({ id: "m-1", type: "transactions", transactions: { sections: "month" } });
+      renderRoute("/stats/reports?template=r-1");
+      const module = await screen.findByRole("region", { name: "Transactions" });
+      const june = await within(module).findByRole("region", { name: month("06") });
+      expect(sectionNames(module)).toEqual([month("06")]);
+      expect(within(june).getByText("More to load before the summary")).toBeInTheDocument();
+
+      await userEvent.click(within(module).getByRole("button", { name: "Load more" }));
+      expect(await within(module).findByText("Kiwi")).toBeInTheDocument();
+      expect(sectionNames(module)).toEqual([month("06"), month("05"), month("04")]);
+      expect(summary(within(module).getByRole("region", { name: month("06") }))).toContain(
+        "2 transactions",
+      );
+    });
+
+    it("shows a table per cycle, those outside any last, and a total", async () => {
+      const april = cycle({
+        id: "100001000201",
+        start_at: startAtFor(`${y}-04-10`),
+        end_at: endAtFor(`${y}-05-14`),
+        state: "finished",
+      });
+      const may = cycle({
+        id: "100001000202",
+        start_at: startAtFor(`${y}-05-15`),
+        end_at: endAtFor(`${y}-06-30`),
+        state: "finished",
+      });
+      const label = (c: { id: string }) =>
+        specificLabel({ kind: "specific", unit: "cycle", at: c.id }, [april, may]);
+      apiMock.on("GET /api/v1/cycles", { body: [april, may] });
+      apiMock.on(list, { body: { items: [rema, work, kiwi], next_cursor: null } });
+      report({
+        id: "m-1",
+        type: "transactions",
+        transactions: { sections: "cycle", view: "table", columns: ["counterparty", "amount"] },
+      });
+      renderRoute("/stats/reports?template=r-1");
+      const module = await screen.findByRole("region", { name: "Transactions" });
+      const table = await within(module).findByRole("table", { name: label(may) });
+      expect(sectionNames(module)).toEqual([label(may), label(april), "Outside any cycle"]);
+      // Subtotals per day, and no total: the summary has it.
+      expect(
+        within(table)
+          .getAllByRole("row")
+          .map((r) => r.textContent),
+      ).toEqual([
+        "CounterpartyAmount",
+        formatDay(`${y}-06-15`),
+        `Rema 1000${nok("-250.00")}`,
+        `Subtotal${nok("-250.00")}`,
+        formatDay(`${y}-06-10`),
+        `Work+${nok("1000.00")}`,
+        `Subtotal${nok("1000.00")}`,
+      ]);
+      expect(
+        within(within(module).getByRole("region", { name: label(april) })).getByText(
+          "No transactions",
+        ),
+      ).toBeInTheDocument();
+      expect(module.querySelector("[data-period-total]")?.textContent).toBe(
+        `Total for the period${nok("650.00")}`,
+      );
+    });
+  });
+
   it("adds an in/out/balance module with buckets and accounts (#126)", async () => {
     renderRoute("/stats/reports");
     await userEvent.click(await screen.findByRole("button", { name: "Add module" }));

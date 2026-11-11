@@ -16,6 +16,29 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.16.00",
+    date: "2026-11-11",
+    title: {
+      en: "Reports: transactions in sections per month or cycle",
+      nb: "Rapporter: transaksjoner i seksjoner per måned eller syklus",
+      nn: "Rapportar: transaksjonar i seksjonar per månad eller syklus",
+    },
+    changes: {
+      en: [
+        "A transactions module can put each month or cycle of the period in its own section, with a clear heading and a summary: how many transactions, and what went in and out. A month or cycle without any says so, and one cut by the period is marked partial.",
+        "In the PDF, each section starts on a new page.",
+      ],
+      nb: [
+        "En transaksjonsmodul kan legge hver måned eller syklus i perioden i sin egen seksjon, med en tydelig overskrift og et sammendrag: hvor mange transaksjoner, og hva som gikk inn og ut. En måned eller syklus uten noen sier fra om det, og en som perioden kutter, merkes som delvis.",
+        "I PDF-en starter hver seksjon på en ny side.",
+      ],
+      nn: [
+        "Ein transaksjonsmodul kan leggje kvar månad eller syklus i perioden i sin eigen seksjon, med ei tydeleg overskrift og eit samandrag: kor mange transaksjonar, og kva som gjekk inn og ut. Ein månad eller syklus utan nokon seier frå om det, og ein som perioden kuttar, vert merkt som delvis.",
+        "I PDF-en startar kvar seksjon på ei ny side.",
+      ],
+    },
+  },
+  {
     version: "v2.15.00",
     date: "2026-11-11",
     title: {

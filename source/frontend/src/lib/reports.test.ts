@@ -15,11 +15,13 @@ import {
   moduleGraph,
   moduleTransactions,
   periodCycles,
+  periodParts,
   previousPeriod,
   readTemplates,
   sameReport,
   starter,
   subPeriods,
+  transactionSections,
   transactionsLink,
   transactionsQuery,
   type BudgetRow,
@@ -317,6 +319,98 @@ describe("transactions modules (#126)", () => {
       },
     ]);
     expect(read?.report.modules).toEqual([{ id: "m-1", type: "transactions", transactions: {} }]);
+  });
+});
+
+describe("transaction sections (#191)", () => {
+  const resolved = (period: string) => {
+    const choice = parsePeriod(period);
+    const r = choice && resolvePeriod(choice, cycles, now);
+    if (!r) throw new Error(`${period} doesn't resolve`);
+    return r;
+  };
+  const noon = (id: string, day: string) =>
+    transaction({ id, at: new Date(Date.parse(startAtFor(day)) + 12 * 3600e3).toISOString() });
+
+  it("cuts any period into months or cycles, however short", () => {
+    const p = periodParts(resolved("custom-2026-10-10-2026-10-20"), "month", cycles);
+    expect(p.ok && p.parts.map((x) => [x.period.from, x.period.to, x.partial])).toEqual([
+      ["2026-10-10", "2026-10-20", true],
+    ]);
+    const c = periodParts(resolved("previous-month"), "cycle", cycles);
+    expect(c.ok && c.parts.map((x) => [x.choice.at, x.partial])).toEqual([
+      ["100001000002", true],
+      ["100001000003", true],
+    ]);
+    expect(periodParts(resolved("custom-2024-01-01-2026-02-28"), "month", cycles)).toEqual({
+      ok: false,
+      reason: "many",
+    });
+  });
+
+  const quarter = resolved("quarter-2026-q3");
+  const months = periodParts(quarter, "month", cycles);
+  if (!months.ok) throw new Error("no months");
+  const shape = (list: ReturnType<typeof transactionSections>) =>
+    list.map((s) => [s.key, s.items.map((x) => x.id), s.complete]);
+
+  it("puts each in its month, in the module's order, empty ones too", () => {
+    const items = [noon("c", "2026-09-30"), noon("b", "2026-09-01"), noon("a", "2026-07-02")];
+    expect(shape(transactionSections(items, months.parts, "newest", false))).toEqual([
+      ["2026-09-01", ["c", "b"], true],
+      ["2026-08-01", [], true],
+      ["2026-07-01", ["a"], true],
+    ]);
+    expect(shape(transactionSections([...items].reverse(), months.parts, "oldest", false))).toEqual(
+      [
+        ["2026-07-01", ["a"], true],
+        ["2026-08-01", [], true],
+        ["2026-09-01", ["b", "c"], true],
+      ],
+    );
+  });
+
+  it("shows only what's known while more are to load", () => {
+    // Newest first, the last loaded in September: July and August aren't known yet.
+    const newest = [noon("c", "2026-09-30"), noon("b", "2026-09-01")];
+    expect(shape(transactionSections(newest, months.parts, "newest", true))).toEqual([
+      ["2026-09-01", ["c", "b"], false],
+    ]);
+    // Oldest first, the last loaded in August: July is whole, and empty.
+    const oldest = [noon("b", "2026-08-03")];
+    expect(shape(transactionSections(oldest, months.parts, "oldest", true))).toEqual([
+      ["2026-07-01", [], true],
+      ["2026-08-01", ["b"], false],
+    ]);
+  });
+
+  it("puts those outside any cycle last", () => {
+    const sept = resolved("custom-2026-08-01-2026-09-30");
+    const c = periodParts(sept, "cycle", cycles);
+    if (!c.ok) throw new Error("no cycles");
+    const items = [noon("b", "2026-09-10"), noon("a", "2026-08-10")];
+    expect(shape(transactionSections(items, c.parts, "newest", false))).toEqual([
+      ["100001000002", [], true],
+      ["100001000001", ["b"], true],
+      ["", ["a"], true],
+    ]);
+  });
+
+  it("keeps the setting unless it's off", () => {
+    const r = (sections: "off" | "cycle"): ReportSettings => ({
+      period: "previous-month",
+      modules: [{ id: "m-1", type: "transactions", transactions: { sections } }],
+    });
+    expect(cleanReport(r("off")).modules[0]).toEqual({
+      id: "m-1",
+      type: "transactions",
+      transactions: {},
+    });
+    expect(cleanReport(r("cycle")).modules[0]).toEqual({
+      id: "m-1",
+      type: "transactions",
+      transactions: { sections: "cycle" },
+    });
   });
 });
 

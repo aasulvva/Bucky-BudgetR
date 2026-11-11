@@ -4266,6 +4266,14 @@ components:
           description: |
             A table row per transaction, its buckets in one cell (the
             default), or per bucket line, with that line's amount (#185).
+        sections:
+          type: string
+          enum: ["off", month, cycle]
+          description: |
+            Off (the default), or each month or cycle of the period under its
+            own heading (#191), with a count and in, out and net, empty ones
+            included and each on a new page in a PDF. `group_by` applies
+            inside each section.
 
     TransactionColumn:
       type: string

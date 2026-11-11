@@ -5,6 +5,7 @@ import { formatMoney } from "./money";
 import {
   cellText,
   DEFAULT_COLUMNS,
+  sectionSummary,
   tableColumns,
   tableRows,
   tableTotals,
@@ -124,5 +125,29 @@ describe("tableTotals", () => {
       bucketId: null,
     });
     expect(tableTotals(focused)).toEqual([{ currency: "NOK", amount: "-100.00" }]);
+  });
+});
+
+describe("sectionSummary (#191)", () => {
+  it("counts each transaction once and sums in, out and net per currency", () => {
+    const reversed = transaction({ id: "t5", reversed: true });
+    const moved = transaction({ id: "t6", replaced_by: "t7" });
+    const items = [split, transfer, income, euro, reversed, moved];
+    const summary = sectionSummary(tableRows(items, "bucket_line", names, none));
+    // The transfer without a side counts, but adds to no sum.
+    expect(summary).toEqual({
+      count: 4,
+      totals: [
+        { currency: "NOK", in: "1000.00", out: "250.00", net: "750.00" },
+        { currency: "EUR", in: "0.00", out: "5.00", net: "-5.00" },
+      ],
+    });
+    // From one account's side, the transfer is out.
+    const focused = sectionSummary(
+      tableRows([transfer], "transaction", names, { accountId: "1234", bucketId: null }),
+    );
+    expect(focused.totals).toEqual([
+      { currency: "NOK", in: "0.00", out: "100.00", net: "-100.00" },
+    ]);
   });
 });

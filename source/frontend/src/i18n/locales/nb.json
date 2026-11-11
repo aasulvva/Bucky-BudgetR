@@ -1216,6 +1216,25 @@
             "oldest": "Eldste først"
           }
         },
+        "sections": {
+          "label": "Seksjoner",
+          "hint": "Hver måned eller syklus i perioden under sin egen overskrift, med et sammendrag, på en ny side i PDF-en.",
+          "options": {
+            "off": "Av",
+            "month": "Per måned",
+            "cycle": "Per syklus"
+          },
+          "empty": "Ingen transaksjoner",
+          "many": "Mer enn {{max}} seksjoner, så de vises som én liste.",
+          "count_one": "{{count}} transaksjon",
+          "count_other": "{{count}} transaksjoner",
+          "in": "Inn {{amount}}",
+          "out": "Ut {{amount}}",
+          "net": "Netto {{amount}}",
+          "more": "Mer å laste inn før sammendraget",
+          "periodTotal": "Totalt for perioden",
+          "periodTotalIn": "Totalt for perioden ({{currency}})"
+        },
         "view": {
           "label": "Visning",
           "options": {

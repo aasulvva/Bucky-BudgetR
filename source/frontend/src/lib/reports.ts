@@ -108,6 +108,8 @@ export type TransactionsGroup = NonNullable<ReportTransactions["group_by"]>;
 export type TransactionsOrder = NonNullable<ReportTransactions["order"]>;
 export const TRANSACTIONS_GROUPS: TransactionsGroup[] = ["day", "week", "month", "cycle"];
 export const TRANSACTIONS_ORDERS: TransactionsOrder[] = ["newest", "oldest"];
+export type TransactionsSections = NonNullable<ReportTransactions["sections"]>;
+export const TRANSACTIONS_SECTIONS: TransactionsSections[] = ["off", "month", "cycle"];
 
 /** The units a report's period can have, besides custom dates. */
 export const REPORT_UNITS = ["cycle", "month", "quarter", "half_year", "year"] as const;
@@ -638,6 +640,63 @@ export function groupTransactions(
   return out;
 }
 
+export interface TransactionSection {
+  /** The month's first day or the cycle's id; "" for those outside any cycle. */
+  key: string;
+  /** The month or cycle; null for those outside any cycle. */
+  part: SubPeriod | null;
+  items: Transaction[];
+  /** All of its transactions are loaded, so its summary is whole. */
+  complete: boolean;
+}
+
+/**
+ * A transactions module's sections (#191): each of the period's months or
+ * cycles (`parts`, oldest first) in the module's order, empty ones too, and
+ * those outside any cycle last. While more pages are left, only the
+ * sections up to the last loaded transaction, since those after it aren't
+ * known yet, and the one it's in isn't complete.
+ */
+export function transactionSections(
+  items: Transaction[],
+  parts: SubPeriod[],
+  order: TransactionsOrder,
+  hasNextPage: boolean,
+): TransactionSection[] {
+  const ordered = order === "oldest" ? parts : [...parts].reverse();
+  const range = (p: SubPeriod) => [Date.parse(p.period.fromAt), Date.parse(p.period.toAt)];
+  const sections: TransactionSection[] = ordered.map((p) => ({
+    key: p.choice.at,
+    part: p,
+    items: [],
+    complete: true,
+  }));
+  const outside: TransactionSection = { key: "", part: null, items: [], complete: !hasNextPage };
+  for (const tx of items) {
+    const at = Date.parse(tx.at);
+    const s = sections.find((x) => {
+      if (!x.part) return false;
+      const [from = 0, to = 0] = range(x.part);
+      return from <= at && at < to;
+    });
+    (s ?? outside).items.push(tx);
+  }
+  if (outside.items.length > 0) sections.push(outside);
+  const last = items.at(-1);
+  if (!hasNextPage || !last) return sections;
+  // The last one loaded; those at its time may go on on the next page.
+  const at = Date.parse(last.at);
+  return sections.flatMap((x) => {
+    if (!x.part) return [x];
+    const [from = 0, to = 0] = range(x.part);
+    const after = order === "oldest" ? to <= at : from > at;
+    const holds = from <= at && at < to;
+    if (after) return [x];
+    if (holds) return [{ ...x, complete: false }];
+    return [];
+  });
+}
+
 /**
  * The Transactions screen with the same list: the period, and the filters.
  * Null while a filter has several values, which that screen can't show yet
@@ -830,6 +889,19 @@ export function subPeriods(
   if (dayjs(whole.to).diff(dayjs(whole.from), "day") + 1 < BREAKDOWN_MIN_DAYS) {
     return { ok: false, reason: "short" };
   }
+  return periodParts(period, by, cycles);
+}
+
+/**
+ * The months or cycles of a period, oldest first and clipped to it, at
+ * most MAX_SUB_PERIODS, for any length of period: a breakdown's parts, or a
+ * transactions module's sections (#191).
+ */
+export function periodParts(
+  period: Period,
+  by: Exclude<Breakdown, "none">,
+  cycles: CycleTimes[],
+): SubPeriods {
   const from = Date.parse(period.fromAt);
   const to = Date.parse(period.toAt);
   const parts: SubPeriod[] = [];
@@ -1014,6 +1086,7 @@ function cleanTransactions(t: ReportTransactions): ReportTransactions {
   if (t.reversed) out.reversed = true;
   if (t.group_by && t.group_by !== "day") out.group_by = t.group_by;
   if (t.order === "oldest") out.order = t.order;
+  if (t.sections && t.sections !== "off") out.sections = t.sections;
   if (t.view === "table") out.view = t.view;
   // The defaults are left out, so a table that keeps them stays unchanged.
   if (t.columns?.length && t.columns.join() !== DEFAULT_COLUMNS.join()) {

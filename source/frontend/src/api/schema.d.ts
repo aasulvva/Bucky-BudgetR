@@ -2490,6 +2490,14 @@ export interface components {
              * @enum {string}
              */
             rows?: "transaction" | "bucket_line";
+            /**
+             * @description Off (the default), or each month or cycle of the period under its
+             *     own heading (#191), with a count and in, out and net, empty ones
+             *     included and each on a new page in a PDF. `group_by` applies
+             *     inside each section.
+             * @enum {string}
+             */
+            sections?: "off" | "month" | "cycle";
         };
         /**
          * @description A column of a transactions table (#185). `notes` are the edited,
