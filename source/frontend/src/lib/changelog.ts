@@ -16,6 +16,26 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.18.01",
+    date: "2026-11-11",
+    title: {
+      en: "Import: report sections keep their filters",
+      nb: "Import: rapportseksjoner beholder filtrene sine",
+      nn: "Import: rapportseksjonar held på filtera sine",
+    },
+    changes: {
+      en: [
+        "Importing a data export into another account now also updates the accounts and buckets that modules inside a report section filter on, as it does for the report's other modules.",
+      ],
+      nb: [
+        "Når du importerer en dataeksport til en annen konto, oppdateres nå også kontoene og bøttene som moduler i en rapportseksjon filtrerer på, slik det gjøres for rapportens andre moduler.",
+      ],
+      nn: [
+        "Når du importerer ein dataeksport til ein annan konto, vert no også kontoane og bøttene som modular i ein rapportseksjon filtrerer på oppdaterte, slik det vert gjort for dei andre modulane i rapporten.",
+      ],
+    },
+  },
+  {
     version: "v2.18.00",
     date: "2026-11-11",
     title: {
