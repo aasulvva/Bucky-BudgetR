@@ -493,7 +493,16 @@ export interface paths {
          *       bucket's TF when the interval begins and `end` when it ends, so
          *       `start` + `in` − `out` = `end`.
          *     - **Accounts:** income (INC), expenses (EXP) and transfers (TRF) in
-         *       and out.
+         *       and out. `start` is the account's balance when the interval
+         *       begins and `end` when it ends (#187), dating each line by its
+         *       family's original as the sums do, so `start` plus every line in
+         *       the interval (opening balances and balance adjustments too) is
+         *       `end`.
+         *     - **Openings (#187):** when a bucket's opening funds (OPF) or an
+         *       account's opening balance (OPB) are dated in an interval, that
+         *       interval's `start` includes them, rather than `opening_funds` and
+         *       `in` (or the account's lines), and `opened_at` says when. The
+         *       intervals before are 0: nothing is known about them.
          *     - A transaction counts on its original's date with its
          *       corrections, as the transaction list shows it, so a reversed one
          *       adds up to 0. Amounts other than `start` and `end` are positive.
@@ -2390,10 +2399,17 @@ export interface components {
             show?: "buckets" | "accounts" | "both";
             /** @description Count the accounts' transfers as money in and out. */
             transfers?: boolean;
+            /**
+             * @description Tables (the default), or a grid with a card per bucket and account (#187).
+             * @enum {string}
+             */
+            view?: "table" | "grid";
+            /** @description Give the accounts their start and end balance, with what else moved them (#187). */
+            balances?: boolean;
             /** @description Split in and out into their parts. */
             details?: boolean;
             /**
-             * @description Also a table per month or cycle, for periods of at least 60 days. `none` by default.
+             * @description Also a table or grid per month or cycle, for periods of at least 60 days. `none` by default.
              * @enum {string}
              */
             breakdown?: "none" | "month" | "cycle";
@@ -2522,6 +2538,11 @@ export interface components {
         };
         BucketFlow: {
             bucket_id: components["schemas"]["BucketId"];
+            /**
+             * Format: date-time
+             * @description When its opening funds are dated, if that's in one of the intervals, which then starts with them (#187).
+             */
+            opened_at?: string;
             /** @description The bucket's source account. */
             account_id: components["schemas"]["AccountId"];
             currency: components["schemas"]["Currency"];
@@ -2549,15 +2570,24 @@ export interface components {
         };
         AccountFlowSeries: {
             account_id: components["schemas"]["AccountId"];
+            /**
+             * Format: date-time
+             * @description When its opening balance is dated, if that's in one of the intervals, which then starts with it (#187).
+             */
+            opened_at?: string;
             currency: components["schemas"]["Currency"];
             /** @description One per interval, in the same order. */
             values: components["schemas"]["AccountFlowValues"][];
         };
         AccountFlowValues: {
+            /** @description The balance when the interval begins. */
+            start: components["schemas"]["Amount"];
             income: components["schemas"]["Amount"];
             expenses: components["schemas"]["Amount"];
             transfers_in: components["schemas"]["Amount"];
             transfers_out: components["schemas"]["Amount"];
+            /** @description The balance when the interval ends. */
+            end: components["schemas"]["Amount"];
         };
         StatsInterval: {
             /** Format: date-time */

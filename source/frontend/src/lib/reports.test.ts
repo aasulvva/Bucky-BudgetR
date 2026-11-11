@@ -404,10 +404,13 @@ describe("In/out/balance modules (#126)", () => {
         currency: "NOK",
         values: [
           {
+            start: "5000.00",
             income: "30000.00",
             expenses: "1050.00",
             transfers_in: "0.00",
             transfers_out: "2000.00",
+            // With a balance adjustment of 100.
+            end: "32050.00",
           },
         ],
       },
@@ -415,7 +418,43 @@ describe("In/out/balance modules (#126)", () => {
         account_id: "2345",
         currency: "NOK",
         values: [
-          { income: "0.00", expenses: "0.00", transfers_in: "2000.00", transfers_out: "0.00" },
+          {
+            start: "0.00",
+            income: "0.00",
+            expenses: "0.00",
+            transfers_in: "2000.00",
+            transfers_out: "0.00",
+            end: "2000.00",
+          },
+        ],
+      },
+      // Only a balance (#187), then nothing at all.
+      {
+        account_id: "3456",
+        currency: "NOK",
+        values: [
+          {
+            start: "700.00",
+            income: "0.00",
+            expenses: "0.00",
+            transfers_in: "0.00",
+            transfers_out: "0.00",
+            end: "700.00",
+          },
+        ],
+      },
+      {
+        account_id: "4567",
+        currency: "NOK",
+        values: [
+          {
+            start: "0.00",
+            income: "0.00",
+            expenses: "0.00",
+            transfers_in: "0.00",
+            transfers_out: "0.00",
+            end: "0.00",
+          },
         ],
       },
     ],
@@ -423,6 +462,8 @@ describe("In/out/balance modules (#126)", () => {
   const accounts = [
     account({ id: "1234", name: "Main" }),
     account({ id: "2345", name: "Savings" }),
+    account({ id: "3456", name: "Buffer" }),
+    account({ id: "4567", name: "Old" }),
   ];
   const buckets = [
     bucket({ id: "1000000001", name: "Food", source_account_id: "1234" }),
@@ -432,7 +473,14 @@ describe("In/out/balance modules (#126)", () => {
   ];
 
   it("give a row per bucket by name, without empty ones, and a total per currency", () => {
-    const t = flowTables(result, 0, accounts, buckets, false, "en-GB");
+    const t = flowTables(
+      result,
+      0,
+      accounts,
+      buckets,
+      { transfers: false, balances: false },
+      "en-GB",
+    );
     expect(t.buckets.rows.map((r) => r.name)).toEqual(["Food", "Fun", "Travel"]);
     expect(
       t.buckets.totals.map((r) => [
@@ -449,11 +497,25 @@ describe("In/out/balance modules (#126)", () => {
   });
 
   it("give accounts in, out and net, with transfers only when asked", () => {
-    const without = flowTables(result, 0, accounts, buckets, false, "en-GB").accounts;
+    const without = flowTables(
+      result,
+      0,
+      accounts,
+      buckets,
+      { transfers: false, balances: false },
+      "en-GB",
+    ).accounts;
     expect(without.rows.map((r) => [r.name, r.values.in, r.values.out, r.values.net])).toEqual([
       ["Main", "30000.00", "1050.00", "28950.00"],
     ]);
-    const withTransfers = flowTables(result, 0, accounts, buckets, true, "en-GB").accounts;
+    const withTransfers = flowTables(
+      result,
+      0,
+      accounts,
+      buckets,
+      { transfers: true, balances: false },
+      "en-GB",
+    ).accounts;
     expect(
       withTransfers.rows.map((r) => [r.name, r.values.in, r.values.out, r.values.net]),
     ).toEqual([
@@ -461,6 +523,67 @@ describe("In/out/balance modules (#126)", () => {
       ["Savings", "2000.00", "0.00", "2000.00"],
     ]);
     expect(withTransfers.totals[0]?.values.net).toBe("28950.00");
+  });
+
+  it("say when a row opened, only in its interval (#187)", () => {
+    const opened = {
+      ...result,
+      buckets: result.buckets.map((b) =>
+        b.bucket_id === "1000000001" ? { ...b, opened_at: "2026-07-03T10:00:00Z" } : b,
+      ),
+      accounts: result.accounts.map((a) =>
+        a.account_id === "1234"
+          ? { ...a, opened_at: "2026-07-03T10:00:00Z" }
+          : a.account_id === "2345"
+            ? { ...a, opened_at: "2027-02-01T10:00:00Z" }
+            : a,
+      ),
+    };
+    const t = flowTables(
+      opened,
+      0,
+      accounts,
+      buckets,
+      { transfers: false, balances: true },
+      "en-GB",
+    );
+    expect(t.buckets.rows.map((r) => [r.name, r.openedAt])).toEqual([
+      ["Food", "2026-07-03T10:00:00Z"],
+      ["Fun", undefined],
+      ["Travel", undefined],
+    ]);
+    expect(t.accounts.rows.map((r) => [r.name, r.openedAt])).toEqual([
+      ["Buffer", undefined],
+      ["Main", "2026-07-03T10:00:00Z"],
+      // Outside this interval.
+      ["Savings", undefined],
+    ]);
+    expect(t.accounts.totals.map((r) => r.openedAt)).toEqual([undefined]);
+  });
+
+  it("give accounts their balances, with other making them add up (#187)", () => {
+    const figures = (transfers: boolean) =>
+      flowTables(result, 0, accounts, buckets, { transfers, balances: true }, "en-GB").accounts;
+    const pick = (r: { name: string; values: Record<string, string> }) => [
+      r.name,
+      r.values.start,
+      r.values.net,
+      r.values.other,
+      r.values.end,
+    ];
+    // Uncounted, Main's transfer out is other, with its adjustment of 100.
+    const without = figures(false);
+    expect(without.rows.map(pick)).toEqual([
+      ["Buffer", "700.00", "0.00", "0.00", "700.00"],
+      ["Main", "5000.00", "28950.00", "-1900.00", "32050.00"],
+      ["Savings", "0.00", "0.00", "2000.00", "2000.00"],
+    ]);
+    expect(figures(true).rows.map(pick)).toEqual([
+      ["Buffer", "700.00", "0.00", "0.00", "700.00"],
+      ["Main", "5000.00", "26950.00", "100.00", "32050.00"],
+      ["Savings", "0.00", "2000.00", "0.00", "2000.00"],
+    ]);
+    expect(without.totals.map(pick)).toEqual([["", "5700.00", "28950.00", "100.00", "34750.00"]]);
   });
 
   it("use only the report's accounts and buckets, and save without defaults", () => {
@@ -498,16 +621,26 @@ describe("In/out/balance modules (#126)", () => {
             id: "m-1",
             type: "flows",
             flows: {
+              view: "table",
               show: "buckets",
               breakdown: "none",
               details: false,
               transfers: true,
+              balances: false,
               bucket_ids: [],
             },
           },
+          {
+            id: "m-2",
+            type: "flows",
+            flows: { view: "grid", show: "accounts", balances: true },
+          },
         ],
       }).modules,
-    ).toEqual([{ id: "m-1", type: "flows", flows: { transfers: true } }]);
+    ).toEqual([
+      { id: "m-1", type: "flows", flows: { transfers: true } },
+      { id: "m-2", type: "flows", flows: { view: "grid", show: "accounts", balances: true } },
+    ]);
   });
 });
 

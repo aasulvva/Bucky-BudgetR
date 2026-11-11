@@ -28,6 +28,7 @@
 
 .print-report tr,
 .print-report [data-transaction-row],
+.print-report [data-flow-card],
 .print-report [data-testid="breakdown-part"],
 .print-report .recharts-wrapper {
   break-inside: avoid;

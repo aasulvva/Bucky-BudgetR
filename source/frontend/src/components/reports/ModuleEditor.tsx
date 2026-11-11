@@ -34,6 +34,7 @@ import {
   type Breakdown,
   type BudgetModule,
   FLOWS_SHOWS,
+  FLOWS_VIEWS,
   type FlowsModule,
   type GraphModule,
   type ReportModule,
@@ -547,6 +548,20 @@ function FlowsFields({
   const chosenAccounts = s.account_ids ?? [];
   return (
     <>
+      <Input.Wrapper label={t("stats.reports.flows.view.label")}>
+        <SegmentedControl
+          fullWidth
+          mt={4}
+          data={FLOWS_VIEWS.map((x) => ({
+            value: x,
+            label: t(`stats.reports.flows.view.options.${x}`),
+          }))}
+          value={s.view ?? "table"}
+          onChange={(x) => {
+            set({ view: x });
+          }}
+        />
+      </Input.Wrapper>
       <MultiSelect
         comboboxProps={{ withinPortal: false }}
         label={t("stats.graphs.accounts")}
@@ -589,13 +604,23 @@ function FlowsFields({
         />
       </Input.Wrapper>
       {show !== "buckets" && (
-        <Switch
-          label={t("stats.reports.flows.transfers")}
-          checked={s.transfers ?? false}
-          onChange={(e) => {
-            set({ transfers: e.currentTarget.checked });
-          }}
-        />
+        <>
+          <Switch
+            label={t("stats.reports.flows.transfers")}
+            checked={s.transfers ?? false}
+            onChange={(e) => {
+              set({ transfers: e.currentTarget.checked });
+            }}
+          />
+          <Switch
+            label={t("stats.reports.flows.balances")}
+            description={t("stats.reports.flows.balancesHint")}
+            checked={s.balances ?? false}
+            onChange={(e) => {
+              set({ balances: e.currentTarget.checked });
+            }}
+          />
+        </>
       )}
       <Switch
         label={t("stats.reports.flows.details")}

@@ -136,3 +136,44 @@ WHERE k.user_id = sqlc.arg(user_id) AND NOT k.deleted
   AND (sqlc.narg(bucket_ids)::text[] IS NULL OR k.id = ANY(sqlc.narg(bucket_ids)::text[]))
 GROUP BY k.id
 ORDER BY k.id;
+
+-- name: StatsAccountStarts :many
+-- For the In/out/balance module's balances (#187): each account's balance at
+-- from_at, the sum of its lines whose family's original is dated before it
+-- (the dating of StatsBankNets, so start + nets = end). Every filtered
+-- account that isn't deleted gets a row.
+SELECT a.id AS account_id,
+       COALESCE(SUM(l.amount) FILTER (WHERE o.transaction_at < sqlc.arg(from_at)), 0)::numeric AS start
+FROM bank_accounts a
+LEFT JOIN bank_transactions l ON l.account_id = a.id
+LEFT JOIN transaction_headers c ON c.id = l.transaction_id
+LEFT JOIN transaction_headers o ON o.id = COALESCE(c.parent_id, c.id)
+WHERE a.user_id = sqlc.arg(user_id) AND NOT a.deleted
+  AND (sqlc.narg(account_ids)::text[] IS NULL OR a.id = ANY(sqlc.narg(account_ids)::text[]))
+GROUP BY a.id
+ORDER BY a.id;
+
+-- name: StatsAccountOpenings :many
+-- For the In/out/balance module (#187): when each filtered account's
+-- opening balance (OPB) is dated, for the accounts that have one.
+SELECT h.id AS transaction_id, l.account_id, h.transaction_at
+FROM transaction_headers h
+JOIN bank_transactions l ON l.transaction_id = h.id
+JOIN bank_accounts a ON a.id = l.account_id
+WHERE h.user_id = sqlc.arg(user_id) AND h.correction_type = 'none' AND h.transaction_type = 'OPB'
+  AND NOT a.deleted
+  AND (sqlc.narg(account_ids)::text[] IS NULL OR l.account_id = ANY(sqlc.narg(account_ids)::text[]))
+ORDER BY l.account_id, h.transaction_at;
+
+-- name: StatsBucketOpenings :many
+-- For the In/out/balance module (#187): when each filtered bucket's opening
+-- funds (OPF) are dated, for the buckets that have them.
+SELECT h.id AS transaction_id, l.bucket_id, h.transaction_at
+FROM transaction_headers h
+JOIN bucket_transactions l ON l.transaction_id = h.id
+JOIN buckets k ON k.id = l.bucket_id
+WHERE h.user_id = sqlc.arg(user_id) AND h.correction_type = 'none' AND h.transaction_type = 'OPF'
+  AND NOT k.deleted
+  AND (sqlc.narg(account_ids)::text[] IS NULL OR k.source_account_id = ANY(sqlc.narg(account_ids)::text[]))
+  AND (sqlc.narg(bucket_ids)::text[] IS NULL OR l.bucket_id = ANY(sqlc.narg(bucket_ids)::text[]))
+ORDER BY l.bucket_id, h.transaction_at;

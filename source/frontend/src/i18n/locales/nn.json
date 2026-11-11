@@ -1266,6 +1266,7 @@
         "totalIn": "Totalt ({{currency}})",
         "empty": "Ingenting skjedde i perioden.",
         "filtersNote": "Taggane og motparten til rapporten gjeld ikkje for denne modulen.",
+        "openedOn": "Opna {{date}}",
         "columns": {
           "start": "Start",
           "refills": "Påfyll",
@@ -1281,11 +1282,19 @@
           "out": "Ut",
           "end": "Slutt",
           "expenses": "Utgifter",
-          "net": "Netto"
+          "net": "Netto",
+          "other": "Anna"
         },
         "accountColumns": {
           "transfers_in": "Overføringar inn",
           "transfers_out": "Overføringar ut"
+        },
+        "view": {
+          "label": "Vising",
+          "options": {
+            "table": "Tabell",
+            "grid": "Rutenett"
+          }
         },
         "show": {
           "label": "Vis",
@@ -1296,9 +1305,17 @@
           }
         },
         "transfers": "Tel med overføringar mellom kontoar",
+        "balances": "Vis saldoar",
+        "balancesHint": "Saldoen til kvar konto ved start og slutt, med Anna for opningssaldoar, justeringar og overføringar som ikkje vert talde med.",
         "details": "Vis detaljar",
         "detailsHint": "Del inn og ut i påfyll, inntekt, justeringar, flyttingar, brukt og overløp.",
-        "breakdownHint": "Også ein tabell per månad eller syklus, for periodar på minst {{days}} dagar."
+        "breakdownHint": "Også ein tabell eller eit rutenett per månad eller syklus, for periodar på minst {{days}} dagar.",
+        "grid": {
+          "change": "Endring",
+          "startEnd": "Start {{start}} → Slutt {{end}}",
+          "overspent": "Overforbrukt",
+          "opened": "Opna {{date}} med {{start}} → Slutt {{end}}"
+        }
       },
       "budget": {
         "title": "Budsjett mot forbruk",
