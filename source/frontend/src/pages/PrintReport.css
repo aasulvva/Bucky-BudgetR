@@ -35,8 +35,14 @@
 }
 
 .print-report h3,
-.print-report [data-group-heading] {
+.print-report [data-group-heading],
+.print-report [data-section-heading] {
   break-after: avoid;
+}
+
+/* A transactions module's month or cycle starts a new page (#191). */
+.print-report [data-transactions-section] + [data-transactions-section] {
+  break-before: page;
 }
 
 @media print {

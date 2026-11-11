@@ -1216,6 +1216,25 @@
             "oldest": "Oldest first"
           }
         },
+        "sections": {
+          "label": "Sections",
+          "hint": "Each month or cycle of the period under its own heading, with a summary, on a new page in the PDF.",
+          "options": {
+            "off": "Off",
+            "month": "Per month",
+            "cycle": "Per cycle"
+          },
+          "empty": "No transactions",
+          "many": "More than {{max}} sections, so they're shown as one list.",
+          "count_one": "{{count}} transaction",
+          "count_other": "{{count}} transactions",
+          "in": "In {{amount}}",
+          "out": "Out {{amount}}",
+          "net": "Net {{amount}}",
+          "more": "More to load before the summary",
+          "periodTotal": "Total for the period",
+          "periodTotalIn": "Total for the period ({{currency}})"
+        },
         "view": {
           "label": "View",
           "options": {

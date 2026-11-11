@@ -42,6 +42,7 @@ import {
   type TransactionsModule,
   TRANSACTIONS_GROUPS,
   TRANSACTIONS_ORDERS,
+  TRANSACTIONS_SECTIONS,
   withoutPeriod,
 } from "@/lib/reports";
 import {
@@ -286,6 +287,23 @@ function TransactionsFields({
         }}
         clearable
       />
+      <Input.Wrapper
+        label={t("stats.reports.transactions.sections.label")}
+        description={t("stats.reports.transactions.sections.hint")}
+      >
+        <SegmentedControl
+          fullWidth
+          mt={4}
+          data={TRANSACTIONS_SECTIONS.map((x) => ({
+            value: x,
+            label: t(`stats.reports.transactions.sections.options.${x}`),
+          }))}
+          value={s.sections ?? "off"}
+          onChange={(x) => {
+            set({ sections: x });
+          }}
+        />
+      </Input.Wrapper>
       <Input.Wrapper label={t("stats.reports.transactions.groupBy.label")}>
         <SegmentedControl
           fullWidth

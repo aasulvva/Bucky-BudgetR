@@ -8,7 +8,7 @@ import i18n from "@/i18n";
 
 import { formatDate } from "./dates";
 import { getLocale } from "./locale";
-import { addAmounts, formatMoney } from "./money";
+import { addAmounts, compareAmounts, formatMoney, subtractAmounts } from "./money";
 import { firstLine } from "./transactionForm";
 import {
   linesAmount,
@@ -120,6 +120,42 @@ export function tableTotals(rows: TableRow[]): { currency: string; amount: strin
     sums.set(currency, addAmounts(sums.get(currency) ?? "0.00", r.amount.amount));
   }
   return [...sums].map(([currency, amount]) => ({ currency, amount }));
+}
+
+export interface SectionSummary {
+  /** The transactions, each once, without reversed or moved ones. */
+  count: number;
+  /** In, out (as a positive amount) and net per currency, of the signed amounts. */
+  totals: { currency: string; in: string; out: string; net: string }[];
+}
+
+/**
+ * A section's summary (#191): how many transactions, and in, out and net
+ * per currency, counted as the table's totals are. A transfer without a
+ * side counts in the number but not in the sums.
+ */
+export function sectionSummary(rows: TableRow[]): SectionSummary {
+  const ids = new Set<string>();
+  const sums = new Map<string, { in: string; out: string }>();
+  for (const r of rows) {
+    if (r.tx.reversed || r.tx.replaced_by) continue;
+    ids.add(r.tx.id);
+    if (!counts(r)) continue;
+    const currency = r.currency ?? "";
+    const s = sums.get(currency) ?? { in: "0.00", out: "0.00" };
+    if (compareAmounts(r.amount.amount, "0") > 0) s.in = addAmounts(s.in, r.amount.amount);
+    else s.out = subtractAmounts(s.out, r.amount.amount);
+    sums.set(currency, s);
+  }
+  return {
+    count: ids.size,
+    totals: [...sums].map(([currency, s]) => ({
+      currency,
+      in: s.in,
+      out: s.out,
+      net: subtractAmounts(s.in, s.out),
+    })),
+  };
 }
 
 /** A transaction's marks: edited, reversed, moved and scheduled. */
