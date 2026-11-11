@@ -8,9 +8,7 @@ import { useTransactionPages, type Transaction } from "@/api/transactions";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { TransactionRow } from "@/components/transactions/TransactionRow";
 import { signedMoney, useLookups, type Lookups } from "@/components/transactions/lookups";
-import i18n from "@/i18n";
 import { formatDateRange } from "@/lib/cycles";
-import { specificLabel } from "@/lib/graphs";
 import { formatMoney } from "@/lib/money";
 import type { Period } from "@/lib/periods";
 import { usePrintMode } from "@/lib/print";
@@ -18,6 +16,8 @@ import {
   groupTransactions,
   MAX_SUB_PERIODS,
   periodParts,
+  sectionAnchor,
+  sectionLabel,
   transactionSections,
   transactionsLink,
   transactionsQuery,
@@ -37,11 +37,14 @@ import { TransactionsTable } from "./TransactionsTable";
  * and summary, and starts a new page in a PDF.
  */
 export function TransactionsModule({
+  moduleId,
   settings,
   period,
   cycles,
   isDesktop,
 }: {
+  /** For the sections' ids, which a PDF's contents link to (#193). */
+  moduleId: string;
   /** With the report's filters where the module has none of its own. */
   settings: ReportTransactions;
   period: Period | null;
@@ -119,7 +122,7 @@ export function TransactionsModule({
         cycles={cycles}
         names={names}
         focus={focus}
-        heading={sections === null ? "h3" : "h4"}
+        heading={print ? "div" : sections === null ? "h3" : "h4"}
         link={(id) =>
           print ? undefined : (transactionsLink(settings, period, id) ?? "/transactions")
         }
@@ -134,9 +137,15 @@ export function TransactionsModule({
       ) : sections ? (
         <Stack gap="md">
           {sections.map((s) => {
-            const label = sectionLabel(s, cycles);
+            const label = sectionLabel(s.part, cycles);
             return (
-              <Box key={s.key} component="section" aria-label={label} data-transactions-section>
+              <Box
+                key={s.key}
+                id={sectionAnchor(moduleId, s.key)}
+                component="section"
+                aria-label={label}
+                data-transactions-section
+              >
                 <SectionHeading section={s} label={label} names={names} focus={focus} />
                 {s.items.length === 0 ? (
                   <Text size="sm" c="dimmed" px="xs" py={6}>
@@ -216,7 +225,8 @@ function TransactionList({
   cycles: Cycle[];
   names: Lookups;
   focus: Focus;
-  heading: "h3" | "h4";
+  /** A div in a PDF, so the outline has only modules and sections (#193). */
+  heading: "h3" | "h4" | "div";
   link: (id: string) => string | undefined;
   badge: boolean;
 }) {
@@ -256,14 +266,6 @@ function TransactionList({
       ))}
     </Box>
   );
-}
-
-/** A section's name: its month or cycle, its dates when it's cut by the period. */
-function sectionLabel(s: TransactionSection, cycles: Cycle[]): string {
-  if (!s.part) return i18n.t("stats.reports.transactions.noCycle");
-  return s.part.partial
-    ? formatDateRange(s.part.period.from, s.part.period.to)
-    : specificLabel(s.part.choice, cycles);
 }
 
 const figures = { fontVariantNumeric: "tabular-nums" } as const;

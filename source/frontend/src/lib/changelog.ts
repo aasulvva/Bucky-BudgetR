@@ -16,6 +16,29 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.17.00",
+    date: "2026-11-11",
+    title: {
+      en: "Report PDF: contents with page numbers",
+      nb: "Rapport-PDF: innhold med sidetall",
+      nn: "Rapport-PDF: innhald med sidetal",
+    },
+    changes: {
+      en: [
+        "The cover of a report PDF lists its contents: each module, and the months or cycles of a transactions module in sections, with the page each starts on. Click a line to go there.",
+        "PDF readers also show the modules and sections in their sidebar, as bookmarks.",
+      ],
+      nb: [
+        "Forsiden på en rapport-PDF viser innholdet: hver modul, og månedene eller syklusene i en transaksjonsmodul med seksjoner, med siden hver starter på. Klikk på en linje for å gå dit.",
+        "PDF-lesere viser også modulene og seksjonene i sidepanelet, som bokmerker.",
+      ],
+      nn: [
+        "Framsida på ein rapport-PDF viser innhaldet: kvar modul, og månadene eller syklusane i ein transaksjonsmodul med seksjonar, med sida kvar startar på. Klikk på ei line for å gå dit.",
+        "PDF-lesarar viser også modulane og seksjonane i sidepanelet, som bokmerke.",
+      ],
+    },
+  },
+  {
     version: "v2.16.01",
     date: "2026-11-11",
     title: {

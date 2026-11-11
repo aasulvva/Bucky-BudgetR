@@ -2,15 +2,19 @@
 // server drives over the DevTools protocol (chromedp). Chrome loads the
 // app's print page itself, with a render token in a header and the asking
 // browser's time zone and locale emulated, waits until the page says it's
-// ready and prints it to A4.
+// ready and prints it to A4. A page with a table of contents (#193) is
+// printed twice: the first PDF's outline gives the page each heading is on,
+// which the page fills in before the second.
 package pdf
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/url"
 	"strings"
@@ -20,6 +24,11 @@ import (
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
 	"github.com/chromedp/chromedp/remote"
+	"github.com/pdfcpu/pdfcpu/pkg/api"
+	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu"
+	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
+
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/logging"
 )
 
 var (
@@ -56,6 +65,8 @@ type Chrome struct {
 	chromeURL, appURL string
 	timeout           time.Duration
 	slots             chan struct{}
+	// Logger gets a warning when the second pass fails; nil logs nothing.
+	Logger *slog.Logger
 }
 
 // Timeout is how long a page has to say it's ready.
@@ -115,6 +126,74 @@ func (c *Chrome) Render(ctx context.Context, job Job) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrFailed, err)
 	}
+	if !hasContents(runCtx) {
+		return out, nil
+	}
+	// Without the page numbers, the first PDF still has the links.
+	paged, err := paginate(runCtx, out)
+	if err != nil {
+		if c.Logger != nil {
+			c.Logger.WarnContext(ctx, "the report PDF's page numbers failed",
+				slog.String(logging.EventKey, "pdf.paginate_failed"), slog.Any("error", err))
+		}
+		return out, nil
+	}
+	return paged, nil
+}
+
+// Mark is a heading in a PDF's outline and the page it's on, from 1.
+type Mark struct {
+	Title string `json:"title"`
+	Page  int    `json:"page"`
+}
+
+// hasContents says whether the page has a table of contents to number.
+func hasContents(ctx context.Context) bool {
+	has, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`!!document.querySelector('[data-print-toc]')`))
+	return err == nil && has
+}
+
+// paginate gives the page the first PDF's outline marks, waits until it
+// has filled in its page numbers and prints it again. The numbers have
+// their room from the start, so nothing moves to another page.
+func paginate(ctx context.Context, first []byte) ([]byte, error) {
+	marks, err := outline(ctx, first)
+	if err != nil {
+		return nil, err
+	}
+	detail, err := json.Marshal(marks)
+	if err != nil {
+		return nil, err
+	}
+	script := `window.dispatchEvent(new CustomEvent('bucky:print-pages', {detail: ` + string(detail) + `})), true`
+	if _, err := chromedp.Run(ctx, chromedp.Evaluate[bool](script)); err != nil {
+		return nil, err
+	}
+	if _, err := chromedp.Run(ctx, chromedp.Poll[bool](
+		`!!document.querySelector('[data-print-paged]')`,
+		chromedp.WithPollingInterval(200*time.Millisecond),
+		chromedp.WithPollingTimeout(0),
+	)); err != nil {
+		return nil, err
+	}
+	return printPDF(ctx)
+}
+
+// outline is a PDF's outline, depth first: in the order of its headings.
+func outline(ctx context.Context, pdf []byte) ([]Mark, error) {
+	bms, err := api.Bookmarks(ctx, bytes.NewReader(pdf), model.NewStatelessConfiguration())
+	if err != nil {
+		return nil, err
+	}
+	var out []Mark
+	var walk func([]pdfcpu.Bookmark)
+	walk = func(list []pdfcpu.Bookmark) {
+		for _, b := range list {
+			out = append(out, Mark{Title: b.Title, Page: b.PageFrom})
+			walk(b.Kids)
+		}
+	}
+	walk(bms)
 	return out, nil
 }
 
@@ -166,13 +245,19 @@ func printPage(ctx context.Context, job Job, target string) ([]byte, error) {
 	if state != "ready" {
 		return nil, errors.New("the page reported an error")
 	}
-	// A4, 12 mm margins, with room for the page number at the bottom.
+	return printPDF(ctx)
+}
+
+// printPDF prints the tab: A4, 12 mm margins, with room for the page number
+// at the bottom, and an outline of its headings (bookmarks, #193).
+func printPDF(ctx context.Context) ([]byte, error) {
 	return chromedp.Run(ctx, chromedp.PrintToPDF(
 		chromedp.PDFPaper(chromedp.PaperA4),
 		chromedp.PDFMargins(margin, margin, 0.6, margin),
 		chromedp.PDFPrintBackground(),
 		chromedp.PDFHeaderTemplate("<span></span>"),
 		chromedp.PDFFooterTemplate(footer),
+		chromedp.PDFOutlineAndTagged(),
 	))
 }
 
