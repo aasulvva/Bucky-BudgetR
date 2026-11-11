@@ -8,7 +8,7 @@ import dayjs, { type Dayjs } from "dayjs";
 
 import { now as clockNow } from "./clock";
 import { addDays, endAtFor, firstDay, lastDay, startAtFor, today, type LocalDate } from "./cycles";
-import { getLocale } from "./locale";
+import { formatLocale, getLocale } from "./locale";
 
 export type LastUnit = "days" | "weeks" | "cycles" | "months" | "quarters" | "half_years" | "years";
 export type SpecificUnit = "day" | "week" | "cycle" | "month" | "quarter" | "half_year" | "year";
@@ -94,9 +94,7 @@ interface WeekInfo {
 /** The locale's first day of the week, 1 (Monday) to 7 (Sunday); Monday if unknown. */
 export function weekStart(locale = getLocale()): number {
   try {
-    const l = new Intl.Locale(
-      locale ?? new Intl.DateTimeFormat().resolvedOptions().locale,
-    ) as Intl.Locale & {
+    const l = new Intl.Locale(locale ?? formatLocale()) as Intl.Locale & {
       getWeekInfo?: () => WeekInfo;
       weekInfo?: WeekInfo;
     };

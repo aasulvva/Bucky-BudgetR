@@ -2424,7 +2424,11 @@ export interface components {
             report: components["schemas"]["ReportSettings"];
             /** @enum {string} */
             language: "en" | "nb" | "nn";
-            /** @description A BCP 47 tag, e.g. `nb-NO`, for numbers and dates. */
+            /**
+             * @description A BCP 47 tag, e.g. `nb-NO`, for numbers and dates: the locale
+             *     the app formats with (#192), the user's preference, else the
+             *     browser's own formatting default.
+             */
             locale: string;
             /**
              * @description An IANA time zone, e.g. `Europe/Oslo`.

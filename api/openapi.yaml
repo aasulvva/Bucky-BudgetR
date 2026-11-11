@@ -4163,7 +4163,10 @@ components:
           minLength: 2
           maxLength: 35
           pattern: "^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$"
-          description: A BCP 47 tag, e.g. `nb-NO`, for numbers and dates.
+          description: |
+            A BCP 47 tag, e.g. `nb-NO`, for numbers and dates: the locale
+            the app formats with (#192), the user's preference, else the
+            browser's own formatting default.
         time_zone:
           type: string
           minLength: 1

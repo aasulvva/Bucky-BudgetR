@@ -1107,10 +1107,24 @@ describe("Reports", () => {
         name: "Mine",
         report: template().report,
         language: "en",
-        locale: navigator.language,
+        // As the screen formats, not navigator.language (#192).
+        locale: new Intl.DateTimeFormat().resolvedOptions().locale,
         time_zone: "America/Los_Angeles",
       });
       expect(screen.getByRole("button", { name: "Export PDF" })).toBeEnabled();
+    });
+
+    it("sends the locale preference when there is one (#192)", async () => {
+      apiMock.on(pdf, { body: "%PDF" });
+      prefs = { ...prefs, locale: "nb-NO", language: "en", report_templates: [template()] };
+      renderRoute("/stats/reports?template=r-1");
+      await userEvent.click(await screen.findByRole("button", { name: "Export PDF" }));
+      await waitFor(() => {
+        expect(downloads).toHaveLength(1);
+      });
+      expect((apiMock.calls(pdf)[0]?.body as { locale?: string } | undefined)?.locale).toBe(
+        "nb-NO",
+      );
     });
 
     it("says when the server can't make PDFs", async () => {

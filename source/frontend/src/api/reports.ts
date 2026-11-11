@@ -3,7 +3,7 @@
 
 import { browserTimeZone } from "@/lib/cycleRule";
 import { downloadBlob } from "@/lib/download";
-import { getLocale } from "@/lib/locale";
+import { formatLocale } from "@/lib/locale";
 import { cleanReport, type ReportSettings } from "@/lib/reports";
 import i18n from "@/i18n";
 
@@ -20,7 +20,8 @@ export function reportPdfRequest(name: string, report: ReportSettings): ReportPd
     name: name.trim().slice(0, 80),
     report: cleanReport(report),
     language: language === "nb" || language === "nn" ? language : "en",
-    locale: getLocale() ?? navigator.language,
+    // As the screen formats, so the PDF matches it (#192).
+    locale: formatLocale(),
     time_zone: browserTimeZone(),
   };
 }
