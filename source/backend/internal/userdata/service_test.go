@@ -85,7 +85,8 @@ func (e env) scenario(t *testing.T, userID string) accounts.Account {
 	must[transactions.Transaction](t)(e.tx.Correct(ctx, userID, exp.ID, transactions.Changes{
 		Amount: &amount, SetBuckets: true, Buckets: []transactions.BucketAmount{{BucketID: food.ID, Amount: amount}},
 	}))
-	prefs := fmt.Sprintf(`{"locale":"nb-NO","dashboard":{"widgets":[{"id":"w1","type":"accounts","width":"half","accounts":{"mode":"account","account_id":%[1]q}}]},`+
+	prefs := fmt.Sprintf(`{"locale":"nb-NO","dashboard":{"widgets":[{"id":"w1","type":"accounts","width":"half","accounts":{"mode":"account","account_id":%[1]q}},{"id":"w2","type":"module","width":"full","module":{"saved_module_id":"g-1"}}]},`+
+		`"saved_modules":[{"id":"g-1","name":"Mine","period":"cycle-%[2]s","module":{"id":"m-1","type":"transactions","transactions":{"account_ids":[%[1]q],"bucket_ids":[%[3]q]}}}],`+
 		`"report_templates":[{"id":"r1","name":"Cycle","report":{"period":"cycle-%[2]s","account_ids":[%[1]q],"modules":[{"id":"m1","type":"graph","graph":{"kind":"pie","metric":"spending","resolution":"total","bucket_ids":[%[3]q]}},{"id":"m2","type":"transactions","transactions":{"account_ids":[%[1]q],"bucket_ids":[%[3]q]}},{"id":"m3","type":"flows","flows":{"bucket_ids":[%[3]q]}},{"id":"m4","type":"budget","budget":{"account_ids":[%[1]q],"bucket_ids":[%[3]q]}},`+
 		`{"id":"m5","type":"section","section":{"unit":"month","modules":[{"id":"m6","type":"transactions","transactions":{"account_ids":[%[1]q],"bucket_ids":[%[3]q]}}]}}]}}]}`,
 		a.ID, oct.ID, food.ID)
@@ -210,6 +211,29 @@ func TestExportImport(t *testing.T) {
 			r.Modules[4].Section.Modules[0].Transactions.BucketIDs[0] != got.Data.Tables["buckets"][0]["id"] {
 			t.Errorf("bob's report template %+v", r)
 		}
+		// Saved modules (#201) too: the period's cycle and the module's
+		// filters; the widget keeps its saved module's id.
+		var saved struct {
+			SavedModules []struct {
+				ID     string `json:"id"`
+				Period string `json:"period"`
+				Module struct {
+					Transactions struct {
+						AccountIDs []string `json:"account_ids"`
+						BucketIDs  []string `json:"bucket_ids"`
+					} `json:"transactions"`
+				} `json:"module"`
+			} `json:"saved_modules"`
+		}
+		if err := json.Unmarshal(got.Data.Preferences, &saved); err != nil {
+			t.Fatal(err)
+		}
+		if s := saved.SavedModules[0]; s.ID != "g-1" ||
+			s.Period != "cycle-"+fmt.Sprint(got.Data.Tables["cycles"][0]["id"]) ||
+			s.Module.Transactions.AccountIDs[0] != account["id"] ||
+			s.Module.Transactions.BucketIDs[0] != got.Data.Tables["buckets"][0]["id"] {
+			t.Errorf("bob's saved module %+v", s)
+		}
 		// Alice's data is untouched.
 		if mine, _ := e.file(t, alice.ID); asJSON(t, mine.Data) != asJSON(t, f.Data) {
 			t.Error("alice's data changed")
@@ -234,6 +258,33 @@ func TestExportImport(t *testing.T) {
 		got, _ := e.file(t, alice.ID)
 		if b := got.Data.Tables["bank_accounts"][0]["bank"]; b != "" {
 			t.Errorf("bank %v, want the default ''", b)
+		}
+		must[userdata.Counts](t)(e.svc.Import(ctx, alice.ID, f))
+	})
+
+	t.Run("a format 1 file has saved graphs and graph widgets (#201)", func(t *testing.T) {
+		old := f
+		old.Format = 1
+		old.Data.Preferences = json.RawMessage(`{"locale":"nb-NO","saved_graphs":[{"id":"g-1","name":"Food","graph":{"kind":"bar","metric":"spending","period":"last-3-months","resolution":"month"}}],` +
+			`"dashboard":{"widgets":[{"id":"w1","type":"graph","width":"full","graph":{"saved_graph_id":"g-1"}}]}}`)
+		raw, err := json.Marshal(old)
+		if err != nil {
+			t.Fatal(err)
+		}
+		read := must[userdata.File](t)(userdata.ParseFile(raw))
+		if read.Format != 2 {
+			t.Errorf("format %d", read.Format)
+		}
+		must[userdata.Counts](t)(e.svc.Import(ctx, alice.ID, read))
+		got, _ := e.file(t, alice.ID)
+		var prefs map[string]any
+		if err := json.Unmarshal(got.Data.Preferences, &prefs); err != nil {
+			t.Fatal(err)
+		}
+		want := `{"dashboard":{"widgets":[{"id":"w1","module":{"saved_module_id":"g-1"},"type":"module","width":"full"}]},"locale":"nb-NO",` +
+			`"saved_modules":[{"id":"g-1","module":{"graph":{"kind":"bar","metric":"spending","resolution":"month"},"id":"m-1","type":"graph"},"name":"Food","period":"last-3-months"}]}`
+		if asJSON(t, prefs) != want {
+			t.Errorf("preferences %s", asJSON(t, prefs))
 		}
 		must[userdata.Counts](t)(e.svc.Import(ctx, alice.ID, f))
 	})

@@ -1,5 +1,11 @@
 import { ActionIcon, Badge, Card, Group, SimpleGrid, Stack, Text, Tooltip } from "@mantine/core";
-import { IconArrowDown, IconArrowUp, IconPencil, IconTrash } from "@tabler/icons-react";
+import {
+  IconArrowDown,
+  IconArrowUp,
+  IconDeviceFloppy,
+  IconPencil,
+  IconTrash,
+} from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import type { Account, Bucket } from "@/api/accounts";
@@ -47,6 +53,8 @@ interface ModuleCardProps {
   onEdit: () => void;
   onMove: (direction: -1 | 1) => void;
   onRemove: () => void;
+  /** Saves it as a saved module (#201); no button without it. */
+  onSave?: () => void;
   /** The move, edit and remove buttons; not in a section's parts (#194). */
   actions?: boolean;
   /** Its title's heading level: 2, or 4 in a section's part. */
@@ -71,6 +79,7 @@ export function ModuleCard({
   onEdit,
   onMove,
   onRemove,
+  onSave,
   actions = true,
   headingLevel = 2,
   anchor,
@@ -113,51 +122,106 @@ export function ModuleCard({
               onMove={onMove}
               onEdit={onEdit}
               onRemove={onRemove}
+              onSave={onSave}
             />
           )}
         </Group>
-        {module.type === "transactions" ? (
-          <TransactionsModule
-            anchor={anchor}
-            headingLevel={headingLevel + 1}
-            settings={moduleTransactions(report, module)}
-            period={period}
-            cycles={cycles}
-            isDesktop={isDesktop}
-          />
-        ) : module.type === "flows" ? (
-          <FlowsModule
-            settings={moduleFlows(report, module)}
-            choice={choice}
-            period={period}
-            cycles={cycles}
-            accounts={accounts}
-            buckets={buckets}
-            filtered={(report.tags?.length ?? 0) > 0 || Boolean(report.counterparty?.trim())}
-          />
-        ) : module.type === "budget" ? (
-          <BudgetModule
-            settings={moduleBudget(report, module)}
-            period={period}
-            cycles={cycles}
-            buckets={buckets}
-            filtered={(report.tags?.length ?? 0) > 0 || Boolean(report.counterparty?.trim())}
-          />
-        ) : (
-          <GraphBody
-            report={report}
-            module={module}
-            choice={choice}
-            period={period}
-            compare={compare}
-            cycles={cycles}
-            accounts={accounts}
-            buckets={buckets}
-            isDesktop={isDesktop}
-          />
-        )}
+        <ModuleBody
+          report={report}
+          module={module}
+          choice={choice}
+          period={period}
+          compare={compare}
+          cycles={cycles}
+          accounts={accounts}
+          buckets={buckets}
+          isDesktop={isDesktop}
+          anchor={anchor}
+          headingLevel={headingLevel}
+        />
       </Stack>
     </Card>
+  );
+}
+
+type ModuleBodyProps = Pick<
+  ModuleCardProps,
+  | "report"
+  | "module"
+  | "choice"
+  | "period"
+  | "compare"
+  | "cycles"
+  | "accounts"
+  | "buckets"
+  | "isDesktop"
+  | "anchor"
+> & {
+  headingLevel?: 2 | 4;
+  /** Whether a graph draws its breakdown (not in a Dashboard widget, #201). */
+  breakdown?: boolean;
+};
+
+/**
+ * What a module shows, without its card: its graph, transactions, in/out
+ * and balance or budget vs spending, over the period. The report's filters
+ * apply where it has none of its own; a saved module (#201) shows through
+ * a report of its own.
+ */
+export function ModuleBody({
+  report,
+  module,
+  choice,
+  period,
+  compare,
+  cycles,
+  accounts,
+  buckets,
+  isDesktop,
+  anchor,
+  headingLevel = 2,
+  breakdown = true,
+}: ModuleBodyProps) {
+  return module.type === "transactions" ? (
+    <TransactionsModule
+      anchor={anchor}
+      headingLevel={headingLevel + 1}
+      settings={moduleTransactions(report, module)}
+      period={period}
+      cycles={cycles}
+      isDesktop={isDesktop}
+    />
+  ) : module.type === "flows" ? (
+    <FlowsModule
+      settings={moduleFlows(report, module)}
+      choice={choice}
+      period={period}
+      cycles={cycles}
+      accounts={accounts}
+      buckets={buckets}
+      filtered={(report.tags?.length ?? 0) > 0 || Boolean(report.counterparty?.trim())}
+    />
+  ) : module.type === "budget" ? (
+    <BudgetModule
+      settings={moduleBudget(report, module)}
+      period={period}
+      cycles={cycles}
+      buckets={buckets}
+      filtered={(report.tags?.length ?? 0) > 0 || Boolean(report.counterparty?.trim())}
+    />
+  ) : (
+    <GraphBody
+      breakdown={breakdown}
+      report={report}
+      module={module}
+      choice={choice}
+      period={period}
+      compare={compare}
+      cycles={cycles}
+      accounts={accounts}
+      buckets={buckets}
+      isDesktop={isDesktop}
+    />
   );
 }
 
@@ -172,10 +236,11 @@ function GraphBody({
   accounts,
   buckets,
   isDesktop,
+  breakdown: showBreakdown,
 }: Pick<
   ModuleCardProps,
   "report" | "choice" | "period" | "compare" | "cycles" | "accounts" | "buckets" | "isDesktop"
-> & { module: GraphModule }) {
+> & { module: GraphModule; breakdown: boolean }) {
   const { t } = useTranslation();
   const graph = moduleGraph(report, module);
   const mode = module.compare ?? "off";
@@ -189,7 +254,9 @@ function GraphBody({
       : undefined;
   const breakdown = module.breakdown ?? "none";
   const parts =
-    breakdown !== "none" && period ? subPeriods(choice, period, breakdown, cycles) : null;
+    showBreakdown && breakdown !== "none" && period
+      ? subPeriods(choice, period, breakdown, cycles)
+      : null;
 
   return (
     <>
@@ -299,6 +366,7 @@ export function ModuleActions({
   onMove,
   onEdit,
   onRemove,
+  onSave,
   name,
   size = "md",
 }: {
@@ -307,6 +375,8 @@ export function ModuleActions({
   onMove: (direction: -1 | 1) => void;
   onEdit: () => void;
   onRemove: () => void;
+  /** Saves it as a saved module (#201). */
+  onSave?: () => void;
   name?: string;
   size?: "sm" | "md";
 }) {
@@ -350,6 +420,20 @@ export function ModuleActions({
       disabled: false,
       onClick: onEdit,
     },
+    ...(onSave
+      ? [
+          {
+            key: "save",
+            label: name
+              ? t("stats.reports.module.saveNamed", { module: name })
+              : t("stats.reports.module.save"),
+            icon: <IconDeviceFloppy size={16} />,
+            color: "gray",
+            disabled: false,
+            onClick: onSave,
+          },
+        ]
+      : []),
     {
       key: "remove",
       label: label(

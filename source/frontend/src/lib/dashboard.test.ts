@@ -2,19 +2,19 @@ import { account, bucket, bucketFigures } from "@/test/fixtures";
 
 import {
   accountHealth,
-  addGraphWidget,
+  addModuleWidget,
   autoTitle,
   copyLayout,
   customTitle,
   dashboardLayout,
   dashboardLayouts,
   defaultLayout,
-  graphWidgetsFor,
   layoutToPreferences,
   layoutsToPreferences,
   mostUsed,
   moveWidget,
   moveWidgetTo,
+  moduleWidgetsFor,
   needsAttention,
   newWidget,
   removeWidget,
@@ -23,6 +23,7 @@ import {
   shownAccounts,
   shownBucketStatus,
   usedPct,
+  type DashboardPreferences,
   type Layout,
   type WidgetInstance,
 } from "./dashboard";
@@ -555,69 +556,66 @@ describe("mostUsed", () => {
   });
 });
 
-describe("the graph widget (#124)", () => {
-  const saved = [
-    {
-      id: "g-1",
-      name: "Monthly spending",
-      graph: {
-        kind: "bar" as const,
-        metric: "spending" as const,
-        period: "current-year",
-        resolution: "month" as const,
-      },
-    },
-  ];
-  const graph = (savedGraphId: string | null): WidgetInstance<"graph"> => ({
+describe("the module widget (#201; the graph widget before, #124)", () => {
+  const saved = [{ id: "g-1", name: "Monthly spending" }];
+  const shows = (savedModuleId: string | null): WidgetInstance<"module"> => ({
     id: "gw",
-    type: "graph",
+    type: "module",
     width: "full",
     title: null,
-    settings: { savedGraphId },
+    settings: { savedModuleId },
   });
 
-  it("saves the saved graph it shows, and reads it back", () => {
-    const prefs = layoutToPreferences([graph("g-1"), graph(null)]);
+  it("saves the saved module it shows, and reads it back", () => {
+    const prefs = layoutToPreferences([shows("g-1"), shows(null)]);
     expect(prefs.widgets).toEqual([
-      { id: "gw", type: "graph", width: "full", graph: { saved_graph_id: "g-1" } },
-      { id: "gw", type: "graph", width: "full" },
+      { id: "gw", type: "module", width: "full", module: { saved_module_id: "g-1" } },
+      { id: "gw", type: "module", width: "full" },
     ]);
     const back = dashboardLayout({ dashboard: prefs });
-    expect(back[0]).toEqual(graph("g-1"));
-    expect(back[1]).toEqual(graph(null));
-    expect(newWidget("graph")).toMatchObject({ width: "full", settings: { savedGraphId: null } });
+    expect(back[0]).toEqual(shows("g-1"));
+    expect(back[1]).toEqual(shows(null));
+    expect(newWidget("module")).toMatchObject({ width: "full", settings: { savedModuleId: null } });
   });
 
-  it("is named after its saved graph, and needs one that exists", () => {
-    expect(autoTitle(graph("g-1"), [], [], saved)).toBe("Monthly spending");
-    expect(autoTitle(graph("g-9"), [], [], saved)).toBeNull();
-    expect(autoTitle({ ...graph("g-1"), title: "Spending" }, [], [], saved)).toBe("Spending");
-    expect(settingsComplete(graph("g-1"), [], [], saved)).toBe(true);
-    expect(settingsComplete(graph("g-9"), [], [], saved)).toBe(false);
-    expect(settingsComplete(graph(null), [], [], saved)).toBe(false);
+  it("leaves out widgets of a type the app doesn't know", () => {
+    const widgets = [
+      { id: "a", type: "graph", width: "full", graph: { saved_graph_id: "g-1" } },
+      { id: "b", type: "health", width: "half" },
+    ] as unknown as NonNullable<DashboardPreferences["widgets"]>;
+    expect(dashboardLayout({ dashboard: { widgets } }).map((w) => w.id)).toEqual(["b"]);
+  });
+
+  it("is named after its saved module, and needs one that exists", () => {
+    expect(autoTitle(shows("g-1"), [], [], saved)).toBe("Monthly spending");
+    expect(autoTitle(shows("g-9"), [], [], saved)).toBeNull();
+    expect(autoTitle({ ...shows("g-1"), title: "Spending" }, [], [], saved)).toBe("Spending");
+    expect(settingsComplete(shows("g-1"), [], [], saved)).toBe(true);
+    expect(settingsComplete(shows("g-9"), [], [], saved)).toBe(false);
+    expect(settingsComplete(shows(null), [], [], saved)).toBe(false);
   });
 
   it("is added from Stats to one layout or both, and counted", () => {
     const layouts = { desktop: defaultLayout("desktop"), mobile: defaultLayout("mobile") };
-    const desktop = addGraphWidget(layouts, "g-1", "desktop");
+    const desktop = addModuleWidget(layouts, "g-1", "desktop");
     expect(desktop.mobile).toBe(layouts.mobile);
     expect(desktop.desktop).toHaveLength(layouts.desktop.length + 1);
     expect(desktop.desktop.at(-1)).toMatchObject({
-      type: "graph",
+      type: "module",
       width: "full",
       title: null,
-      settings: { savedGraphId: "g-1" },
+      settings: { savedModuleId: "g-1" },
     });
-    const mobile = addGraphWidget(layouts, "g-1", "mobile");
+    const mobile = addModuleWidget(layouts, "g-1", "mobile");
     expect(mobile.desktop).toBe(layouts.desktop);
     expect(mobile.mobile.at(-1)).toMatchObject({
-      type: "graph",
-      settings: { savedGraphId: "g-1" },
+      type: "module",
+      settings: { savedModuleId: "g-1" },
     });
-    const both = addGraphWidget(addGraphWidget(layouts, "g-1", "both"), "g-2", "desktop");
-    expect(graphWidgetsFor(both, "g-1")).toBe(2);
-    expect(graphWidgetsFor(both, "g-2")).toBe(1);
-    expect(graphWidgetsFor(layouts, "g-1")).toBe(0);
+    const both = addModuleWidget(addModuleWidget(layouts, "g-1", "both"), "g-2", "desktop");
+    expect(moduleWidgetsFor(both, "g-1")).toBe(2);
+    expect(moduleWidgetsFor(both, "g-2")).toBe(1);
+    expect(moduleWidgetsFor(layouts, "g-1")).toBe(0);
     // New ids don't clash with the layout's.
     const ids = both.desktop.map((w) => w.id);
     expect(new Set(ids).size).toBe(ids.length);

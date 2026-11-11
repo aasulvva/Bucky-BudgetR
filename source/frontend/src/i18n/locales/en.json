@@ -359,7 +359,7 @@
       "accounts": "Your account balances, or one account.",
       "recent_transactions": "The latest transactions.",
       "in_out": "Income, expenses and their balance for a period.",
-      "graph": "One of your saved graphs from Stats & reports.",
+      "module": "One of your saved modules from Stats & reports: a graph, transactions, in/out/balance or budget vs spending.",
       "scheduled": "Scheduled transactions waiting for approval, and what's coming up."
     },
     "inOut": {
@@ -391,15 +391,15 @@
       "leftOut_other": "{{count}} accounts in other currencies aren't included.",
       "open": "{{figure}}: {{amount}}. Show the transactions."
     },
-    "graph": {
-      "title": "Graph",
-      "savedGraph": "Saved graph",
-      "pick": "Pick a saved graph to show.",
-      "deleted": "This saved graph was deleted.",
-      "pickButton": "Pick a graph",
-      "noneSaved": "You have no saved graphs yet. Make one on <stats>Stats & reports</stats> and save it.",
+    "module": {
+      "title": "Module",
+      "savedModule": "Saved module",
+      "pick": "Pick a saved module to show.",
+      "deleted": "This saved module was deleted.",
+      "pickButton": "Pick a module",
+      "noneSaved": "You have no saved modules yet. Make one on <stats>Stats & reports</stats> and save it.",
       "open": "Open in Stats",
-      "openGraph": "Open {{name}} in Stats & reports"
+      "openModule": "Open {{name}} in Stats & reports"
     },
     "scheduled": {
       "title": "Scheduled",
@@ -1177,6 +1177,15 @@
         "apply": "Apply",
         "edit": "Edit",
         "remove": "Remove",
+        "save": "Save module…",
+        "saveNamed": "Save {{module}} as a module…",
+        "saveTitle": "Save module",
+        "saveHint": "It's saved over this report's period, with its filters. On the Graphs tab you can show it over another period, such as the last 3 months, and put it on the Dashboard.",
+        "saved": "Saved \"{{name}}\". Find it on the Graphs tab.",
+        "savedMax": "You have {{max}} saved modules, the most there can be. Delete one on the Graphs tab first.",
+        "fromSaved": "Copy a saved module",
+        "fromSavedPlaceholder": "None: set it up below",
+        "fromSavedHint": "A copy, shown over the report's period. Changing it here doesn't change the saved module.",
         "moveUp": "Move up",
         "moveDown": "Move down",
         "title": "Title",
@@ -1478,18 +1487,18 @@
       }
     },
     "saved": {
-      "label": "Saved graphs",
+      "label": "Saved modules",
       "none": "None saved yet",
-      "pick": "Pick a saved graph",
-      "save": "Save graph…",
+      "pick": "Pick a saved module",
+      "save": "Save module…",
       "saveAs": "Save as new…",
       "more": "More",
       "rename": "Rename",
       "unsaved": "Unsaved changes",
-      "saveAsTitle": "Save graph",
-      "renameTitle": "Rename graph",
-      "deleteTitle": "Delete graph",
-      "deleteText": "Delete the saved graph \"{{name}}\"? The graph's settings stay on screen.",
+      "saveAsTitle": "Save module",
+      "renameTitle": "Rename module",
+      "deleteTitle": "Delete module",
+      "deleteText": "Delete the saved module \"{{name}}\"? What it shows stays on screen.",
       "name": "Name",
       "addToDashboard": "Add to dashboard…",
       "addTitle": "Add to the Dashboard",
@@ -1499,12 +1508,15 @@
         "mobile": "Mobile",
         "both": "Both"
       },
-      "addHint": "Adds \"{{name}}\" as a full-width widget at the end. It follows changes to the saved graph.",
+      "addHint": "Adds \"{{name}}\" as a full-width widget at the end. It follows changes to the saved module.",
       "addButton": "Add",
       "added": "Added \"{{name}}\" to the Dashboard.",
-      "unsavedNote": "The widget shows the saved graph, not your unsaved changes.",
-      "onDashboard_one": "It's on the Dashboard in {{count}} widget, which will say the graph was deleted.",
-      "onDashboard_other": "It's on the Dashboard in {{count}} widgets, which will say the graph was deleted."
+      "unsavedNote": "The widget shows the saved module, not your unsaved changes.",
+      "onDashboard_one": "It's on the Dashboard in {{count}} widget, which will say the module was deleted.",
+      "onDashboard_other": "It's on the Dashboard in {{count}} widgets, which will say the module was deleted.",
+      "max": "You have {{max}} saved modules, the most there can be. Delete one to save another.",
+      "editModule": "Edit module",
+      "periodHint": "Over any period, the last N days, weeks or months too. In a report, the report's period applies."
     }
   },
   "admin": {

@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useAccounts, useBuckets, type Account, type Bucket } from "@/api/accounts";
 import { useSession } from "@/app/session";
 import { autoTitle, type WidgetInstance, type WidgetType } from "@/lib/dashboard";
-import type { SavedGraph } from "@/lib/graphs";
+import { readSavedModules, type SavedModule } from "@/lib/savedModules";
 
 const TITLE_KEYS = {
   cycle: "dashboard.cycle.title",
@@ -14,7 +14,7 @@ const TITLE_KEYS = {
   accounts: "dashboard.accounts.title",
   recent_transactions: "dashboard.recent.title",
   in_out: "dashboard.inOut.title",
-  graph: "dashboard.graph.title",
+  module: "dashboard.module.title",
   scheduled: "dashboard.scheduled.title",
 } as const satisfies Record<WidgetType, string>;
 
@@ -29,7 +29,7 @@ export function titleFor(
   widget: WidgetInstance,
   accounts: Account[],
   buckets: Bucket[],
-  saved: SavedGraph[] = [],
+  saved: SavedModule[] = [],
 ): string {
   return autoTitle(widget, accounts, buckets, saved) ?? widgetTitle(t, widget.type);
 }
@@ -38,7 +38,7 @@ export function useWidgetTitle(widget: WidgetInstance): string {
   const { t } = useTranslation();
   const accounts = useAccounts().data ?? [];
   const buckets = useBuckets().data ?? [];
-  const saved = useSession().data?.preferences.saved_graphs ?? [];
+  const saved = readSavedModules(useSession().data?.preferences.saved_modules);
   return titleFor(t, widget, accounts, buckets, saved);
 }
 

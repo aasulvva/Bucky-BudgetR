@@ -204,9 +204,10 @@ func newTagIDs(ctx context.Context, tx pgx.Tx, old []string) (map[string]string,
 	return m, nil
 }
 
-// remapPreferences changes the IDs in the dashboard settings and layout (the only
-// preferences that hold IDs) to the new ones. An ID that isn't in the
-// snapshot is left as it is; the dashboard ignores unknown IDs.
+// remapPreferences changes the IDs in the preferences that hold them (the
+// dashboard's settings and layouts, saved modules and report templates) to
+// the new ones. An ID that isn't in the snapshot is left as it is; the app
+// ignores unknown IDs.
 func remapPreferences(raw json.RawMessage, m map[kind]map[string]string) (json.RawMessage, error) {
 	var prefs map[string]any
 	if err := Decode(raw, &prefs); err != nil {
@@ -242,12 +243,14 @@ func remapPreferences(raw json.RawMessage, m map[kind]map[string]string) (json.R
 			}
 		}
 	}
-	// Saved graphs (#122) and report templates (#125) filter on lists of
-	// accounts and buckets, and may name a specific cycle.
-	graphs, _ := prefs["saved_graphs"].([]any)
-	for _, g := range graphs {
-		g, _ := g.(map[string]any)
-		remapGraph(m, g["graph"])
+	// Saved modules (#201) and report templates (#125) filter on lists of
+	// accounts and buckets, and may name a specific cycle. Module widgets
+	// name saved modules by their own ids, which stay.
+	saved, _ := prefs["saved_modules"].([]any)
+	for _, s := range saved {
+		s, _ := s.(map[string]any)
+		remapGraph(m, s) // Its period.
+		remapModules(m, []any{s["module"]})
 	}
 	templates, _ := prefs["report_templates"].([]any)
 	for _, r := range templates {

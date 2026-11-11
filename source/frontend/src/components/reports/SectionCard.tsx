@@ -39,6 +39,8 @@ interface SectionCardProps {
   onEditModule: (m: PartModule) => void;
   onMoveModule: (index: number, direction: -1 | 1) => void;
   onRemoveModule: (id: string) => void;
+  /** Save module… (#201) for one of its modules. */
+  onSaveModule?: (m: PartModule) => void;
 }
 
 const noop = () => undefined;
@@ -65,6 +67,7 @@ export function SectionCard({
   onEditModule,
   onMoveModule,
   onRemoveModule,
+  onSaveModule,
 }: SectionCardProps) {
   const { t } = useTranslation();
   const print = usePrintMode();
@@ -223,6 +226,13 @@ export function SectionCard({
                   onRemove={() => {
                     onRemoveModule(m.id);
                   }}
+                  onSave={
+                    onSaveModule
+                      ? () => {
+                          onSaveModule(m);
+                        }
+                      : undefined
+                  }
                 />
               </Group>
             ))}

@@ -4,11 +4,12 @@ import userEvent from "@testing-library/user-event";
 import type { components } from "@/api/schema";
 import type { GraphSettings } from "@/lib/graphs";
 import { apiMock, testUser, type MockRequest } from "@/test/api";
-import { account, bucket } from "@/test/fixtures";
+import { account, bucket, transaction } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
 
 type Preferences = components["schemas"]["Preferences"];
+type SavedModule = components["schemas"]["SavedModule"];
 
 const main = account({ id: "1234", name: "Main" });
 const euro = account({ id: "3456", name: "Euro", currency: "EUR" });
@@ -47,6 +48,19 @@ beforeEach(() => {
   apiMock.on("GET /api/v1/tags", { body: [{ name: "food", last_used_at: null }] });
   apiMock.on(stats, answer);
 });
+
+/** A graph saved on Stats, as the API stores it (#201): its period apart. */
+function saved(id: string, name: string, graph: GraphSettings): SavedModule {
+  const { period, ...settings } = graph;
+  return { id, name, period, module: { id: "m-1", type: "graph", graph: settings } };
+}
+
+const graph: GraphSettings = {
+  kind: "bar",
+  metric: "spending",
+  period: "current-month",
+  resolution: "day",
+};
 
 const lastQuery = () => apiMock.calls(stats).at(-1)?.query;
 
@@ -172,8 +186,8 @@ describe("Stats", () => {
 
   it("saves, changes, renames and deletes a graph", async () => {
     const { router } = renderRoute("/stats?kind=bar&metric=spending&period=current-month&res=day");
-    await userEvent.click(await screen.findByRole("button", { name: "Save graph…" }));
-    const dialog = within(await screen.findByRole("dialog", { name: "Save graph" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Save module…" }));
+    const dialog = within(await screen.findByRole("dialog", { name: "Save module" }));
     await userEvent.type(dialog.getByRole("textbox", { name: "Name" }), "Monthly spending");
     await userEvent.click(dialog.getByRole("button", { name: "Save" }));
     const graph: GraphSettings = {
@@ -184,14 +198,14 @@ describe("Stats", () => {
     };
     await waitFor(() => {
       expect(apiMock.calls("PATCH /api/v1/me/preferences").at(-1)?.body).toEqual({
-        saved_graphs: [{ id: "g-1", name: "Monthly spending", graph }],
+        saved_modules: [saved("g-1", "Monthly spending", graph)],
       });
     });
     await waitFor(() => {
       expect(router.state.location.search).toContain("saved=g-1");
     });
     await waitFor(() => {
-      expect(screen.getByRole("combobox", { name: "Saved graphs" })).toHaveValue(
+      expect(screen.getByRole("combobox", { name: "Saved modules" })).toHaveValue(
         "Monthly spending",
       );
     });
@@ -203,9 +217,7 @@ describe("Stats", () => {
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => {
       expect(apiMock.calls("PATCH /api/v1/me/preferences").at(-1)?.body).toEqual({
-        saved_graphs: [
-          { id: "g-1", name: "Monthly spending", graph: { ...graph, metric: "income" } },
-        ],
+        saved_modules: [saved("g-1", "Monthly spending", { ...graph, metric: "income" })],
       });
     });
     await waitFor(() => {
@@ -214,21 +226,21 @@ describe("Stats", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "More" }));
     await userEvent.click(await screen.findByRole("menuitem", { name: "Rename" }));
-    const rename = within(await screen.findByRole("dialog", { name: "Rename graph" }));
+    const rename = within(await screen.findByRole("dialog", { name: "Rename module" }));
     await userEvent.clear(rename.getByRole("textbox", { name: "Name" }));
     await userEvent.type(rename.getByRole("textbox", { name: "Name" }), "Income");
     await userEvent.click(rename.getByRole("button", { name: "Save" }));
     await waitFor(() => {
-      expect(prefs.saved_graphs?.[0]?.name).toBe("Income");
+      expect(prefs.saved_modules?.[0]?.name).toBe("Income");
     });
 
     await userEvent.click(screen.getByRole("button", { name: "More" }));
     await userEvent.click(await screen.findByRole("menuitem", { name: "Delete" }));
-    const del = within(await screen.findByRole("dialog", { name: "Delete graph" }));
-    expect(del.getByText(/Delete the saved graph "Income"\?/)).toBeInTheDocument();
+    const del = within(await screen.findByRole("dialog", { name: "Delete module" }));
+    expect(del.getByText(/Delete the saved module "Income"\?/)).toBeInTheDocument();
     await userEvent.click(del.getByRole("button", { name: "Delete" }));
     await waitFor(() => {
-      expect(prefs.saved_graphs).toEqual([]);
+      expect(prefs.saved_modules).toEqual([]);
     });
     await waitFor(() => {
       expect(router.state.location.search).not.toContain("saved=");
@@ -238,21 +250,17 @@ describe("Stats", () => {
   });
 
   it("opens a saved graph", async () => {
-    prefs.saved_graphs = [
-      {
-        id: "g-1",
-        name: "Food by week",
-        graph: {
-          kind: "line",
-          metric: "spending",
-          period: "last-90-days",
-          resolution: "week",
-          bucket_ids: [food.id],
-        },
-      },
+    prefs.saved_modules = [
+      saved("g-1", "Food by week", {
+        kind: "line",
+        metric: "spending",
+        period: "last-90-days",
+        resolution: "week",
+        bucket_ids: [food.id],
+      }),
     ];
     const { router } = renderRoute("/stats");
-    await pick("Saved graphs", "Food by week");
+    await pick("Saved modules", "Food by week");
     await waitFor(() => {
       expect(lastQuery()?.getAll("bucket_id")).toEqual([food.id]);
     });
@@ -482,25 +490,21 @@ describe("Stats", () => {
     });
     expect(screen.getByTestId("pie")).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "Save graph…" }));
-    const dialog = within(await screen.findByRole("dialog", { name: "Save graph" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save module…" }));
+    const dialog = within(await screen.findByRole("dialog", { name: "Save module" }));
     await userEvent.type(dialog.getByRole("textbox", { name: "Name" }), "Buckets");
     await userEvent.click(dialog.getByRole("button", { name: "Save" }));
     await waitFor(() => {
       expect(apiMock.calls("PATCH /api/v1/me/preferences").at(-1)?.body).toEqual({
-        saved_graphs: [
-          {
-            id: "g-1",
-            name: "Buckets",
-            graph: {
-              kind: "pie",
-              metric: "spending",
-              period: "current-month",
-              resolution: "day",
-              group_by: "bucket",
-              pie_labels: "slices",
-            },
-          },
+        saved_modules: [
+          saved("g-1", "Buckets", {
+            kind: "pie",
+            metric: "spending",
+            period: "current-month",
+            resolution: "day",
+            group_by: "bucket",
+            pie_labels: "slices",
+          }),
         ],
       });
     });
@@ -524,7 +528,7 @@ describe("Stats", () => {
       period: "current-month",
       resolution: "day",
     };
-    prefs = { ...prefs, saved_graphs: [{ id: "g-1", name: "Spending", graph }] };
+    prefs = { ...prefs, saved_modules: [saved("g-1", "Spending", graph)] };
     renderRoute("/stats?kind=bar&metric=spending&period=current-month&res=day&saved=g-1");
     await userEvent.click(await screen.findByRole("button", { name: "More" }));
     await userEvent.click(await screen.findByRole("menuitem", { name: "Add to dashboard…" }));
@@ -536,9 +540,9 @@ describe("Stats", () => {
     const body = apiMock.calls("PATCH /api/v1/me/preferences").at(-1)?.body as Preferences;
     const widget = {
       id: expect.stringMatching(/^[A-Za-z0-9_-]{1,40}$/) as unknown,
-      type: "graph",
+      type: "module",
       width: "full",
-      graph: { saved_graph_id: "g-1" },
+      module: { saved_module_id: "g-1" },
     };
     // Nothing was saved: the defaults, with the widget at the end of each.
     expect(body.dashboard?.widgets?.at(-1)).toEqual(widget);
@@ -550,8 +554,148 @@ describe("Stats", () => {
     await userEvent.click(await screen.findByRole("menuitem", { name: "Delete" }));
     expect(
       await screen.findByText(
-        "It's on the Dashboard in 2 widgets, which will say the graph was deleted.",
+        "It's on the Dashboard in 2 widgets, which will say the module was deleted.",
       ),
     ).toBeInTheDocument();
+  });
+  describe("saved modules other than graphs (#201)", () => {
+    const list: SavedModule = {
+      id: "g-2",
+      name: "Food list",
+      period: "previous-month",
+      module: { id: "m-1", type: "transactions", transactions: { bucket_ids: [food.id] } },
+    };
+    const txs = "GET /api/v1/transactions";
+
+    beforeEach(() => {
+      apiMock.on(txs, {
+        body: {
+          items: [transaction({ id: "100000000001", counterparty: "Rema 1000" })],
+          next_cursor: null,
+        },
+      });
+    });
+
+    it("opens over any period, the last N months too, and saves its changes", async () => {
+      prefs = { ...prefs, saved_modules: [saved("g-1", "Spending", graph), list] };
+      renderRoute("/stats?saved=g-2");
+      const module = await screen.findByRole("region", { name: "Transactions" });
+      expect(await within(module).findByText("Rema 1000")).toBeInTheDocument();
+      expect(apiMock.calls(txs).at(-1)?.query.getAll("bucket_id")).toEqual([food.id]);
+      expect(screen.getByRole("combobox", { name: "Saved modules" })).toHaveValue("Food list");
+      expect(screen.queryByText("Unsaved changes")).not.toBeInTheDocument();
+
+      await pick("Period", "Last");
+      await pick("Unit", "Months");
+      const count = screen.getByRole("textbox", { name: /Number of months/ });
+      await userEvent.clear(count);
+      await userEvent.type(count, "3");
+      await waitFor(() => {
+        const d = new Date();
+        expect(apiMock.calls(txs).at(-1)?.query.get("from")).toBe(
+          new Date(d.getFullYear(), d.getMonth() - 2, 1).toISOString(),
+        );
+      });
+      expect(await screen.findByText("Unsaved changes")).toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole("button", { name: "Edit module" }));
+      const dialog = await screen.findByRole("dialog", { name: "Edit module" });
+      await userEvent.click(within(dialog).getByRole("radio", { name: "Oldest first" }));
+      await userEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
+      await waitFor(() => {
+        expect(apiMock.calls(txs).at(-1)?.query.get("order")).toBe("oldest");
+      });
+
+      await userEvent.click(screen.getByRole("button", { name: "Save" }));
+      await waitFor(() => {
+        expect(prefs.saved_modules?.[1]).toEqual({
+          ...list,
+          period: "last-3-months",
+          module: {
+            id: "m-1",
+            type: "transactions",
+            transactions: { bucket_ids: [food.id], order: "oldest" },
+          },
+        });
+      });
+      await waitFor(() => {
+        expect(screen.queryByText("Unsaved changes")).not.toBeInTheDocument();
+      });
+    });
+
+    it("lists the saved modules by type, and goes back to the graph when cleared", async () => {
+      prefs = { ...prefs, saved_modules: [list, saved("g-1", "Spending", graph)] };
+      const { router } = renderRoute("/stats?saved=g-2");
+      await screen.findByRole("region", { name: "Transactions" });
+      await userEvent.click(screen.getByRole("combobox", { name: "Saved modules" }));
+      const listbox = await screen.findByRole("listbox");
+      expect(
+        within(listbox)
+          .getAllByRole("option")
+          .map((o) => o.textContent),
+      ).toEqual(["Spending", "Food list"]);
+      expect(within(listbox).getByText("Graph")).toBeInTheDocument();
+      expect(within(listbox).getByText("Transactions")).toBeInTheDocument();
+      await userEvent.click(within(listbox).getByRole("option", { name: "Spending" }));
+      await waitFor(() => {
+        expect(router.state.location.search).toContain("saved=g-1");
+      });
+      expect(await screen.findByRole("combobox", { name: "Show" })).toHaveValue("Spending");
+    });
+
+    it("keeps a graph module's comparison when its graph is saved again", async () => {
+      prefs = {
+        ...prefs,
+        saved_modules: [
+          {
+            ...saved("g-1", "Spending", graph),
+            compare_to: "last_year",
+            module: {
+              id: "m-1",
+              type: "graph",
+              title: "Spent",
+              compare: "both",
+              breakdown: "month",
+              graph: { kind: "bar", metric: "spending", resolution: "day" },
+            },
+          },
+        ],
+      };
+      renderRoute("/stats?kind=bar&metric=spending&period=current-month&res=day&saved=g-1");
+      await pick("Show", "Income");
+      await userEvent.click(screen.getByRole("button", { name: "Save" }));
+      await waitFor(() => {
+        expect(prefs.saved_modules?.[0]).toEqual({
+          id: "g-1",
+          name: "Spending",
+          period: "current-month",
+          compare_to: "last_year",
+          module: {
+            id: "m-1",
+            type: "graph",
+            title: "Spent",
+            compare: "both",
+            breakdown: "month",
+            graph: { kind: "bar", metric: "income", resolution: "day" },
+          },
+        });
+      });
+    });
+
+    it("saves no more than 100", async () => {
+      prefs = {
+        ...prefs,
+        saved_modules: Array.from({ length: 100 }, (_, i) =>
+          saved(`g-${String(i + 1)}`, `Graph ${String(i + 1)}`, graph),
+        ),
+      };
+      renderRoute("/stats?saved=g-1");
+      expect(
+        await screen.findByText(
+          "You have 100 saved modules, the most there can be. Delete one to save another.",
+        ),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Save as new…" })).toBeDisabled();
+    });
   });
 });

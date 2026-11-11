@@ -6,6 +6,7 @@ import {
   Input,
   MultiSelect,
   SegmentedControl,
+  Select,
   Stack,
   Switch,
   Text,
@@ -19,6 +20,7 @@ import { useTranslation } from "react-i18next";
 
 import type { Account, Bucket } from "@/api/accounts";
 import type { Cycle } from "@/api/cycles";
+import { useSession } from "@/app/session";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
 import { FilterFields } from "@/components/stats/FilterFields";
 import { GraphControls } from "@/components/stats/GraphControls";
@@ -56,6 +58,7 @@ import {
   type TransactionColumn,
 } from "@/lib/transactionTable";
 import { USER_TYPES } from "@/lib/transactionList";
+import { readSavedModules, savedModuleOptions, toReportModule } from "@/lib/savedModules";
 
 const MAX_TITLE = 80;
 
@@ -75,6 +78,8 @@ interface ModuleEditorProps {
   tags: string[];
   /** In a section (#194): no sections, and no breakdowns, as a part is short. */
   inSection?: boolean;
+  /** A saved module on its own (#201): an empty filter means all, not the report's. */
+  standalone?: boolean;
   onApply: (module: ReportModule) => void;
   onClose: () => void;
 }
@@ -104,13 +109,37 @@ function Editor({
 }: ModuleEditorProps & { module: ReportModule }) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState(module);
+  // A copied saved module's fields start over, with its settings.
+  const [copies, setCopies] = useState(0);
   const tooLong = (draft.title ?? "").trim().length > MAX_TITLE;
+  const saved = readSavedModules(useSession().data?.preferences.saved_modules);
+  const [copied, setCopied] = useState<string | null>(null);
   // The four types don't fit side by side on a phone.
   const theme = useMantineTheme();
   const phone = !useMediaQuery(`(min-width: ${theme.breakpoints.sm})`, true);
 
   return (
     <Stack gap="md">
+      {adding && !rest.standalone && saved.length > 0 && (
+        <Select
+          comboboxProps={{ withinPortal: false }}
+          label={t("stats.reports.module.fromSaved")}
+          description={t("stats.reports.module.fromSavedHint")}
+          placeholder={t("stats.reports.module.fromSavedPlaceholder")}
+          data={savedModuleOptions(saved, t)}
+          value={copied}
+          onChange={(id) => {
+            setCopied(id);
+            const s = saved.find((x) => x.id === id);
+            if (!s) return;
+            // A copy, over the report's period; the id stays the new one's.
+            setDraft({ ...toReportModule(s, report), id: draft.id });
+            setCopies((n) => n + 1);
+          }}
+          searchable
+          clearable
+        />
+      )}
       {adding && (
         <Input.Wrapper label={t("stats.reports.module.type")}>
           <SegmentedControl
@@ -124,6 +153,7 @@ function Editor({
             value={draft.type}
             onChange={(type) => {
               if (type === draft.type) return;
+              setCopied(null);
               // A new module of the other type, keeping the id and title.
               const next = newModule(report, type);
               setDraft({
@@ -144,17 +174,19 @@ function Editor({
           setDraft({ ...draft, title: e.currentTarget.value });
         }}
       />
-      {draft.type === "transactions" ? (
-        <TransactionsFields draft={draft} onChange={setDraft} {...rest} />
-      ) : draft.type === "flows" ? (
-        <FlowsFields draft={draft} onChange={setDraft} {...rest} />
-      ) : draft.type === "budget" ? (
-        <BudgetFields draft={draft} onChange={setDraft} {...rest} />
-      ) : draft.type === "section" ? (
-        <SectionFields draft={draft} onChange={setDraft} />
-      ) : (
-        <GraphFields draft={draft} onChange={setDraft} report={report} {...rest} />
-      )}
+      <Stack key={copies} gap="md">
+        {draft.type === "transactions" ? (
+          <TransactionsFields draft={draft} onChange={setDraft} {...rest} />
+        ) : draft.type === "flows" ? (
+          <FlowsFields draft={draft} onChange={setDraft} {...rest} />
+        ) : draft.type === "budget" ? (
+          <BudgetFields draft={draft} onChange={setDraft} {...rest} />
+        ) : draft.type === "section" ? (
+          <SectionFields draft={draft} onChange={setDraft} />
+        ) : (
+          <GraphFields draft={draft} onChange={setDraft} report={report} {...rest} />
+        )}
+      </Stack>
       <Group justify="flex-end" gap="xs">
         <Button variant="default" onClick={onClose}>
           {t("common.cancel")}
@@ -187,6 +219,7 @@ function GraphFields({
   buckets,
   tags,
   inSection,
+  standalone,
 }: FieldsProps & {
   draft: GraphModule;
   onChange: (m: GraphModule) => void;
@@ -215,6 +248,7 @@ function GraphFields({
         tags={tags}
         narrow
         reportPeriod={choice}
+        inherits={!standalone}
       />
       <Input.Wrapper
         label={t("stats.reports.compare.label")}
@@ -269,6 +303,7 @@ function TransactionsFields({
   accounts,
   buckets,
   tags,
+  standalone,
 }: FieldsProps & { draft: TransactionsModule; onChange: (m: TransactionsModule) => void }) {
   const { t } = useTranslation();
   const s = draft.transactions;
@@ -284,7 +319,7 @@ function TransactionsFields({
         buckets={buckets}
         tags={tags}
         inline
-        inherits
+        inherits={!standalone}
       />
       <MultiSelect
         comboboxProps={{ withinPortal: false }}
@@ -503,6 +538,7 @@ function BudgetFields({
   onChange,
   accounts,
   buckets,
+  standalone,
 }: FieldsProps & { draft: BudgetModule; onChange: (m: BudgetModule) => void }) {
   const { t } = useTranslation();
   const s = draft.budget;
@@ -515,7 +551,11 @@ function BudgetFields({
       <MultiSelect
         comboboxProps={{ withinPortal: false }}
         label={t("stats.graphs.accounts")}
-        placeholder={chosenAccounts.length ? undefined : t("stats.reports.asReport")}
+        placeholder={
+          chosenAccounts.length
+            ? undefined
+            : t(standalone ? "stats.graphs.allAccounts" : "stats.reports.asReport")
+        }
         data={accounts.map((a) => ({ value: a.id, label: a.name }))}
         value={chosenAccounts}
         onChange={(v) => {
@@ -526,7 +566,11 @@ function BudgetFields({
       <MultiSelect
         comboboxProps={{ withinPortal: false }}
         label={t("stats.graphs.buckets")}
-        placeholder={s.bucket_ids?.length ? undefined : t("stats.reports.asReport")}
+        placeholder={
+          s.bucket_ids?.length
+            ? undefined
+            : t(standalone ? "stats.graphs.allBuckets" : "stats.reports.asReport")
+        }
         data={buckets
           .filter(
             (b) => chosenAccounts.length === 0 || chosenAccounts.includes(b.source_account_id),
@@ -564,6 +608,7 @@ function FlowsFields({
   accounts,
   buckets,
   inSection,
+  standalone,
 }: FieldsProps & { draft: FlowsModule; onChange: (m: FlowsModule) => void }) {
   const { t } = useTranslation();
   const s = draft.flows;
@@ -594,7 +639,11 @@ function FlowsFields({
       <MultiSelect
         comboboxProps={{ withinPortal: false }}
         label={t("stats.graphs.accounts")}
-        placeholder={chosenAccounts.length ? undefined : t("stats.reports.asReport")}
+        placeholder={
+          chosenAccounts.length
+            ? undefined
+            : t(standalone ? "stats.graphs.allAccounts" : "stats.reports.asReport")
+        }
         data={accounts.map((a) => ({ value: a.id, label: a.name }))}
         value={chosenAccounts}
         onChange={(v) => {
@@ -605,7 +654,11 @@ function FlowsFields({
       <MultiSelect
         comboboxProps={{ withinPortal: false }}
         label={t("stats.graphs.buckets")}
-        placeholder={s.bucket_ids?.length ? undefined : t("stats.reports.asReport")}
+        placeholder={
+          s.bucket_ids?.length
+            ? undefined
+            : t(standalone ? "stats.graphs.allBuckets" : "stats.reports.asReport")
+        }
         data={buckets
           .filter(
             (b) => chosenAccounts.length === 0 || chosenAccounts.includes(b.source_account_id),

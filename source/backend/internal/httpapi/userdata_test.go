@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -75,7 +76,7 @@ func TestUserDataAPI(t *testing.T) {
 		t.Errorf("accounts after the import: %+v", list)
 	}
 
-	newer := bytes.Replace(file, []byte(`"format":1`), []byte(`"format":2`), 1)
+	newer := bytes.Replace(file, []byte(fmt.Sprintf(`"format":%d`, userdata.Format)), []byte(fmt.Sprintf(`"format":%d`, userdata.Format+1)), 1)
 	for _, tc := range []struct {
 		body []byte
 		want int

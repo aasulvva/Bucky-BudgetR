@@ -32,6 +32,7 @@ import {
   type WidgetInstance,
   type SaveWidget,
 } from "@/lib/dashboard";
+import { readSavedModules, savedModuleOptions } from "@/lib/savedModules";
 
 import { FLOW_FIGURES, FLOW_PERIODS, MAX_DAYS } from "@/lib/flows";
 
@@ -89,7 +90,7 @@ export function WidgetSettingsForm({
   const [draft, setDraft] = useState(widget);
   const [title, setTitle] = useState(widget.title ?? "");
   // What the title is when the field is left empty.
-  const saved = useSession().data?.preferences.saved_graphs ?? [];
+  const saved = readSavedModules(useSession().data?.preferences.saved_modules);
   const automatic = titleFor(t, { ...draft, title: null }, accounts, buckets, saved);
   const save = useMutation({
     mutationFn: async (w: WidgetInstance) => {
@@ -211,11 +212,11 @@ export function WidgetSettingsForm({
           accounts={accounts}
         />
       )}
-      {draft.type === "graph" &&
+      {draft.type === "module" &&
         (saved.length === 0 ? (
           <Text size="sm" c="dimmed">
             <Trans
-              i18nKey="dashboard.graph.noneSaved"
+              i18nKey="dashboard.module.noneSaved"
               components={{ stats: <Anchor component={Link} to="/stats" size="sm" /> }}
             />
           </Text>
@@ -223,18 +224,18 @@ export function WidgetSettingsForm({
           <Select
             // Inside a full-screen dialog on phones: render the list in place (#122's touch fix).
             comboboxProps={{ withinPortal: false }}
-            label={t("dashboard.graph.savedGraph")}
-            placeholder={t("dashboard.graph.pick")}
-            data={saved.map((g) => ({ value: g.id, label: g.name }))}
+            label={t("dashboard.module.savedModule")}
+            placeholder={t("dashboard.module.pick")}
+            data={savedModuleOptions(saved, t)}
             value={
-              saved.some((g) => g.id === draft.settings.savedGraphId)
-                ? draft.settings.savedGraphId
+              saved.some((g) => g.id === draft.settings.savedModuleId)
+                ? draft.settings.savedModuleId
                 : null
             }
             allowDeselect={false}
             searchable
             onChange={(id) => {
-              if (id) setDraft({ ...draft, settings: { savedGraphId: id } });
+              if (id) setDraft({ ...draft, settings: { savedModuleId: id } });
             }}
           />
         ))}

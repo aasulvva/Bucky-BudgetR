@@ -12,6 +12,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/allocation"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/preferences"
 )
 
 // App marks a file as this app's export.
@@ -19,10 +20,14 @@ const App = "bucky-budgetr"
 
 // Format is the export file's format. Bump it when a per-user table's
 // existing column is renamed, removed or changes meaning (a new column with
-// a default needs nothing: older files get the default), and teach upgrade
-// to convert the older format. TestColumns lists the columns, so a schema
-// change shows up there first.
-const Format = 1
+// a default needs nothing: older files get the default), or when the
+// preferences' shape changes, and teach upgrade to convert the older
+// format. TestColumns lists the columns, so a schema change shows up there
+// first.
+//
+// Format 2 (#201): saved modules and module widgets instead of saved graphs
+// and graph widgets.
+const Format = 2
 
 // ErrNewer means the file is from a newer version of the app, which this one
 // can't read.
@@ -106,9 +111,16 @@ func ParseFile(raw []byte) (File, error) {
 	return upgrade(f)
 }
 
-// upgrade converts a file of an older format to the current one. There is
-// only format 1 so far.
+// upgrade converts a file of an older format to the current one, as the
+// migrations converted the database.
 func upgrade(f File) (File, error) {
+	if f.Format < 2 {
+		p, _, err := preferences.ConvertJSON(f.Data.Preferences, preferences.SavedModulesUp)
+		if err != nil {
+			return File{}, fmt.Errorf("%w: %w", ErrInvalid, err)
+		}
+		f.Data.Preferences, f.Format = p, 2
+	}
 	return f, nil
 }
 

@@ -30,6 +30,7 @@ import {
   type WidgetInstance,
   type SaveWidget,
 } from "@/lib/dashboard";
+import { readSavedModules } from "@/lib/savedModules";
 
 import { titleFor } from "./frame";
 import { WidgetView } from "./WidgetView";
@@ -59,7 +60,7 @@ export function DashboardGrid({
   const { t } = useTranslation();
   const accounts = useAccounts().data ?? [];
   const buckets = useBuckets().data ?? [];
-  const saved = useSession().data?.preferences.saved_graphs ?? [];
+  const saved = readSavedModules(useSession().data?.preferences.saved_modules);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),

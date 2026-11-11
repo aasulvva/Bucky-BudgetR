@@ -153,7 +153,7 @@ func setupTemplate(ctx context.Context, url string) (string, error) {
 	return name, nil
 }
 
-// migrationsHash identifies the current set of migration files.
+// migrationsHash identifies the current set of migrations.
 func migrationsHash() (string, error) {
 	h := sha256.New()
 	err := fs.WalkDir(db.Migrations, ".", func(path string, d fs.DirEntry, err error) error {
@@ -170,6 +170,11 @@ func migrationsHash() (string, error) {
 	})
 	if err != nil {
 		return "", fmt.Errorf("hash migrations: %w", err)
+	}
+	// The Go migrations (#201) count by version: none of them changes an
+	// empty template's schema.
+	for _, v := range db.GoMigrationVersions() {
+		fmt.Fprintf(h, "go\x00%d\x00", v)
 	}
 	return hex.EncodeToString(h.Sum(nil))[:16], nil
 }

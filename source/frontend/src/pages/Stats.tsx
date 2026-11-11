@@ -25,7 +25,8 @@ import { ReportTemplates } from "@/components/reports/ReportTemplates";
 import { ReportView } from "@/components/reports/ReportView";
 import { GraphControls } from "@/components/stats/GraphControls";
 import { GraphView } from "@/components/stats/GraphView";
-import { SavedGraphs } from "@/components/stats/SavedGraphs";
+import { SavedModuleView } from "@/components/stats/SavedModuleView";
+import { SavedModules } from "@/components/stats/SavedModules";
 import { useClockVersion } from "@/lib/clock";
 import {
   defaultGraph,
@@ -33,7 +34,6 @@ import {
   graphSummary,
   graphToSearch,
   type GraphSettings,
-  type SavedGraph,
 } from "@/lib/graphs";
 import { defaultPeriod, parsePeriod, resolvePeriod } from "@/lib/periods";
 import {
@@ -46,6 +46,13 @@ import {
   type ReportSource,
   type ReportTemplate,
 } from "@/lib/reports";
+import {
+  graphAsSaved,
+  isGraphModule,
+  readSavedModules,
+  savedGraph,
+  type SavedModule,
+} from "@/lib/savedModules";
 
 const REPORTS_PATH = "/stats/reports";
 
@@ -215,11 +222,12 @@ function Graphs({
   const [params, setParams] = useSearchParams();
   const [drawer, setDrawer] = useState(false);
   const tags = (useTags().data ?? []).map((x) => x.name);
-  const saved = useSession().data?.preferences.saved_graphs ?? [];
+  const saved = readSavedModules(useSession().data?.preferences.saved_modules);
 
   const settings = graphFromSearch(params, defaultGraph(cycles));
   const period = resolvePeriod(parsePeriod(settings.period) ?? defaultPeriod(cycles), cycles);
   const selectedId = params.get("saved");
+  const selected = saved.find((s) => s.id === selectedId) ?? null;
 
   const show = (s: GraphSettings, savedId: string | null, replace: boolean) => {
     const next = graphToSearch(s);
@@ -229,10 +237,29 @@ function Graphs({
   const change = (s: GraphSettings) => {
     show(s, selectedId, true);
   };
-  const select = (g: SavedGraph | null) => {
-    if (g) show(g.graph, g.id, false);
-    else show(settings, null, true);
+  const select = (s: SavedModule | null) => {
+    if (!s) show(settings, null, true);
+    else if (isGraphModule(s)) show(savedGraph(s), s.id, false);
+    // Another kind keeps the graph in the URL, for when it's cleared.
+    else show(settings, s.id, false);
   };
+
+  // A saved module that isn't a graph (#201) has a screen of its own.
+  if (selected && !isGraphModule(selected)) {
+    return (
+      <SavedModuleView
+        key={selected.id}
+        saved={saved}
+        selected={selected}
+        onSelect={select}
+        cycles={cycles}
+        accounts={accounts}
+        buckets={buckets}
+        tags={tags}
+        isDesktop={isDesktop}
+      />
+    );
+  }
 
   const controls = (narrow: boolean) => (
     <GraphControls
@@ -248,7 +275,12 @@ function Graphs({
 
   return (
     <Stack gap="md">
-      <SavedGraphs saved={saved} current={settings} selectedId={selectedId} onSelect={select} />
+      <SavedModules
+        saved={saved}
+        current={graphAsSaved(settings, selected)}
+        selectedId={selected?.id ?? null}
+        onSelect={select}
+      />
       {isDesktop ? (
         <Paper withBorder p="md">
           {controls(false)}

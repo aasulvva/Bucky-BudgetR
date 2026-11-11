@@ -1302,4 +1302,148 @@ describe("Reports", () => {
       expect(downloads).toEqual([]);
     });
   });
+  describe("saved modules (#201)", () => {
+    it("saves a module with the report's period, compare-to and filters", async () => {
+      prefs = {
+        ...prefs,
+        report_templates: [
+          template({
+            compare_to: "last_year",
+            account_ids: ["1234"],
+            tags: ["food"],
+            modules: [
+              {
+                id: "m-3",
+                type: "graph",
+                title: "Food",
+                compare: "both",
+                graph: { kind: "bar", metric: "spending", resolution: "day" },
+              },
+            ],
+          }),
+        ],
+      };
+      renderRoute("/stats/reports?template=r-1");
+      const module = await screen.findByRole("region", { name: "Food" });
+      await userEvent.click(within(module).getByRole("button", { name: "Save module…" }));
+      const dialog = await screen.findByRole("dialog", { name: "Save module" });
+      const name = within(dialog).getByRole("textbox", { name: "Name" });
+      expect(name).toHaveValue("Food");
+      await userEvent.clear(name);
+      expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
+      await userEvent.type(name, "Food last year");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+      expect(
+        await screen.findByText('Saved "Food last year". Find it on the Graphs tab.'),
+      ).toBeInTheDocument();
+      expect(lastBody()).toEqual({
+        saved_modules: [
+          {
+            id: "g-1",
+            name: "Food last year",
+            period: "previous-month",
+            compare_to: "last_year",
+            module: {
+              id: "m-1",
+              type: "graph",
+              title: "Food",
+              compare: "both",
+              graph: {
+                kind: "bar",
+                metric: "spending",
+                resolution: "day",
+                account_ids: ["1234"],
+                tags: ["food"],
+              },
+            },
+          },
+        ],
+      });
+      // The report itself didn't change.
+      expect(screen.queryByText("Unsaved changes")).not.toBeInTheDocument();
+    });
+
+    it("saves a section's module, and no more than 100", async () => {
+      const graph = { kind: "bar", metric: "spending", resolution: "day" } as const;
+      prefs = {
+        ...prefs,
+        saved_modules: Array.from({ length: 99 }, (_, i) => ({
+          id: `g-${String(i + 1)}`,
+          name: `Graph ${String(i + 1)}`,
+          period: "current-month",
+          module: { id: "m-1", type: "graph" as const, graph },
+        })),
+        report_templates: [
+          template({
+            period: "previous-year",
+            bucket_ids: [food.id],
+            modules: [
+              {
+                id: "m-1",
+                type: "section",
+                section: {
+                  unit: "month",
+                  modules: [{ id: "m-2", type: "flows", title: "Money", flows: {} }],
+                },
+              },
+            ],
+          }),
+        ],
+      };
+      renderRoute("/stats/reports?template=r-1");
+      await userEvent.click(await screen.findByRole("button", { name: "Save Money as a module…" }));
+      const dialog = await screen.findByRole("dialog", { name: "Save module" });
+      await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+      await waitFor(() => {
+        expect(prefs.saved_modules).toHaveLength(100);
+      });
+      expect(prefs.saved_modules?.at(-1)).toEqual({
+        id: "g-100",
+        name: "Money",
+        period: "previous-year",
+        module: { id: "m-1", type: "flows", title: "Money", flows: { bucket_ids: [food.id] } },
+      });
+
+      await userEvent.click(screen.getByRole("button", { name: "Save Money as a module…" }));
+      const full = await screen.findByRole("dialog", { name: "Save module" });
+      expect(
+        within(full).getByText(
+          "You have 100 saved modules, the most there can be. Delete one on the Graphs tab first.",
+        ),
+      ).toBeInTheDocument();
+      expect(within(full).getByRole("button", { name: "Save" })).toBeDisabled();
+    });
+
+    it("copies a saved module in, over the report's period", async () => {
+      apiMock.on(list, {
+        body: {
+          items: [transaction({ id: "t1", counterparty: "Rema 1000" })],
+          next_cursor: null,
+        },
+      });
+      prefs = {
+        ...prefs,
+        saved_modules: [
+          {
+            id: "g-4",
+            name: "Food list",
+            period: "last-3-months",
+            module: { id: "m-1", type: "transactions", transactions: { bucket_ids: [food.id] } },
+          },
+        ],
+        report_templates: [template({ period: "previous-year" })],
+      };
+      renderRoute("/stats/reports?template=r-1");
+      await userEvent.click(await screen.findByRole("button", { name: "Add module" }));
+      const dialog = await screen.findByRole("dialog", { name: "Add module" });
+      await userEvent.click(within(dialog).getByRole("combobox", { name: "Copy a saved module" }));
+      await userEvent.click(await screen.findByRole("option", { name: "Food list" }));
+      await userEvent.click(within(dialog).getByRole("button", { name: "Add" }));
+      const module = await screen.findByRole("region", { name: "Food list" });
+      expect(await within(module).findByText("Rema 1000")).toBeInTheDocument();
+      const query = apiMock.calls(list).at(-1)?.query;
+      expect(query?.get("from")).toBe(startAtFor(`${String(year - 1)}-01-01`));
+      expect(query?.getAll("bucket_id")).toEqual([food.id]);
+    });
+  });
 });

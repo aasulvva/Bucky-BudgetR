@@ -1,7 +1,8 @@
 // The Dashboard's logic (spec §9), kept apart from the page: its layouts of
 // widgets (#37), one for desktop and one for mobile (#99), and their
 // settings, the budget's health per account, which buckets to show, and the
-// graph widgets that show saved graphs (#124).
+// module widgets that show saved modules (#201; graph widgets with saved
+// graphs before, #124).
 
 import type { Account, Bucket, BucketFigures } from "@/api/accounts";
 import type { components } from "@/api/schema";
@@ -11,7 +12,11 @@ import { MAX_DAYS, type FlowFigure, type FlowPeriod } from "./flows";
 import { addAmounts, compareAmounts, percentOf } from "./money";
 
 type Preferences = components["schemas"]["Preferences"];
-type SavedGraph = components["schemas"]["SavedGraph"];
+/** A saved module as a widget names it (#201). */
+interface SavedName {
+  id: string;
+  name: string;
+}
 type Schemas = components["schemas"];
 export type DashboardPreferences = Schemas["DashboardSettings"];
 type ApiWidget = Schemas["DashboardWidget"];
@@ -28,7 +33,7 @@ export const WIDGET_TYPES: WidgetType[] = [
   "accounts",
   "recent_transactions",
   "in_out",
-  "graph",
+  "module",
   "scheduled",
 ];
 export const ACCOUNTS_MODES: AccountsMode[] = ["all", "account"];
@@ -85,9 +90,9 @@ export interface ScheduledSettings {
   count: number;
 }
 
-export interface GraphWidgetSettings {
-  /** The saved graph it shows; null until one is picked. */
-  savedGraphId: string | null;
+export interface ModuleWidgetSettings {
+  /** The saved module it shows; null until one is picked. */
+  savedModuleId: string | null;
 }
 
 interface SettingsOf {
@@ -97,7 +102,7 @@ interface SettingsOf {
   accounts: AccountsSettings;
   recent_transactions: RecentSettings;
   in_out: InOutSettings;
-  graph: GraphWidgetSettings;
+  module: ModuleWidgetSettings;
   scheduled: ScheduledSettings;
 }
 
@@ -142,8 +147,8 @@ const fromApi = {
     days: s?.days ?? 30,
     accountId: s?.account_id ?? null,
   }),
-  graph: (s?: Schemas["GraphWidgetSettings"]): GraphWidgetSettings => ({
-    savedGraphId: s?.saved_graph_id ?? null,
+  module: (s?: Schemas["ModuleWidgetSettings"]): ModuleWidgetSettings => ({
+    savedModuleId: s?.saved_module_id ?? null,
   }),
   scheduled: (s?: Schemas["ScheduledWidgetSettings"]): ScheduledSettings => ({
     show: s?.show ?? "both",
@@ -167,8 +172,8 @@ export function defaultSettings(type: WidgetType): SettingsOf[WidgetType] {
       return fromApi.recent();
     case "in_out":
       return fromApi.inOut();
-    case "graph":
-      return fromApi.graph();
+    case "module":
+      return fromApi.module();
     case "scheduled":
       return fromApi.scheduled();
   }
@@ -176,7 +181,7 @@ export function defaultSettings(type: WidgetType): SettingsOf[WidgetType] {
 
 /** The width a new widget of the type gets. */
 export function defaultWidth(type: WidgetType): WidgetWidth {
-  return type === "recent_transactions" || type === "graph" ? "full" : "half";
+  return type === "recent_transactions" || type === "module" ? "full" : "half";
 }
 
 function newId(): string {
@@ -264,7 +269,7 @@ export function defaultLayout(
   ];
 }
 
-function widgetFromApi(w: ApiWidget): WidgetInstance {
+function widgetFromApi(w: ApiWidget): WidgetInstance | null {
   const base = { id: w.id, width: w.width, title: w.title ?? null };
   switch (w.type) {
     case "cycle":
@@ -279,11 +284,19 @@ function widgetFromApi(w: ApiWidget): WidgetInstance {
       return { ...base, type: w.type, settings: fromApi.recent(w.recent_transactions) };
     case "in_out":
       return { ...base, type: w.type, settings: fromApi.inOut(w.in_out) };
-    case "graph":
-      return { ...base, type: w.type, settings: fromApi.graph(w.graph) };
+    case "module":
+      return { ...base, type: w.type, settings: fromApi.module(w.module) };
     case "scheduled":
       return { ...base, type: w.type, settings: fromApi.scheduled(w.scheduled) };
+    default:
+      // A type this app doesn't know (or no longer has) isn't shown.
+      return null;
   }
+}
+
+/** A saved layout's widgets, those of unknown types left out. */
+function readWidgets(list: ApiWidget[]): Layout {
+  return list.flatMap((w) => widgetFromApi(w) ?? []);
 }
 
 /**
@@ -293,7 +306,7 @@ function widgetFromApi(w: ApiWidget): WidgetInstance {
 /** The desktop layout: the saved one, else the default with the per-type settings. */
 export function dashboardLayout(preferences: Preferences): Layout {
   const saved = preferences.dashboard;
-  return saved?.widgets ? saved.widgets.map(widgetFromApi) : defaultLayout("desktop", saved);
+  return saved?.widgets ? readWidgets(saved.widgets) : defaultLayout("desktop", saved);
 }
 
 /** The two layouts (#99): one for wide screens, one for phones. */
@@ -310,7 +323,7 @@ export function dashboardLayouts(preferences: Preferences): Layouts {
   const saved = preferences.dashboard;
   const desktop = dashboardLayout(preferences);
   const mobile = saved?.mobile_widgets
-    ? saved.mobile_widgets.map(widgetFromApi)
+    ? readWidgets(saved.mobile_widgets)
     : saved
       ? copyLayout(desktop)
       : defaultLayout("mobile");
@@ -373,9 +386,11 @@ function widgetToApi(w: WidgetInstance): ApiWidget {
         },
       };
     }
-    case "graph": {
-      const { savedGraphId } = w.settings;
-      return savedGraphId === null ? base : { ...base, graph: { saved_graph_id: savedGraphId } };
+    case "module": {
+      const { savedModuleId } = w.settings;
+      return savedModuleId === null
+        ? base
+        : { ...base, module: { saved_module_id: savedModuleId } };
     }
     case "scheduled":
       return { ...base, scheduled: { show: w.settings.show, count: w.settings.count } };
@@ -398,21 +413,21 @@ export function layoutsToPreferences(layouts: Layouts): DashboardPreferences {
   };
 }
 
-/** Where Add to dashboard puts a saved graph (#124). */
-export type GraphWidgetPlace = LayoutKind | "both";
+/** Where Add to dashboard puts a saved module (#124, #201). */
+export type ModuleWidgetPlace = LayoutKind | "both";
 
 /**
- * Both layouts with a full-width graph widget showing the saved graph added
- * at the end of one of them, or of both.
+ * Both layouts with a full-width module widget showing the saved module
+ * added at the end of one of them, or of both.
  */
-export function addGraphWidget(
+export function addModuleWidget(
   layouts: Layouts,
-  savedGraphId: string,
-  where: GraphWidgetPlace,
+  savedModuleId: string,
+  where: ModuleWidgetPlace,
 ): Layouts {
   const add = (layout: Layout): Layout => [
     ...layout,
-    { ...(newWidget("graph", layout) as WidgetInstance<"graph">), settings: { savedGraphId } },
+    { ...(newWidget("module", layout) as WidgetInstance<"module">), settings: { savedModuleId } },
   ];
   return {
     desktop: where === "mobile" ? layouts.desktop : add(layouts.desktop),
@@ -420,10 +435,10 @@ export function addGraphWidget(
   };
 }
 
-/** How many widgets, in both layouts, show the saved graph. */
-export function graphWidgetsFor(layouts: Layouts, savedGraphId: string): number {
+/** How many widgets, in both layouts, show the saved module. */
+export function moduleWidgetsFor(layouts: Layouts, savedModuleId: string): number {
   return [...layouts.desktop, ...layouts.mobile].filter(
-    (w) => w.type === "graph" && w.settings.savedGraphId === savedGraphId,
+    (w) => w.type === "module" && w.settings.savedModuleId === savedModuleId,
   ).length;
 }
 
@@ -463,17 +478,17 @@ export function customTitle(title: string): string | null {
 /**
  * A widget's title, unless it's the widget's name: its custom title, the
  * name of the bucket or account it shows (One bucket, One account), or of
- * its saved graph.
+ * its saved module.
  */
 export function autoTitle(
   widget: WidgetInstance,
   accounts: Account[],
   buckets: Bucket[],
-  saved: SavedGraph[] = [],
+  saved: SavedName[] = [],
 ): string | null {
   if (widget.title !== null) return widget.title;
-  if (widget.type === "graph") {
-    return saved.find((g) => g.id === widget.settings.savedGraphId)?.name ?? null;
+  if (widget.type === "module") {
+    return saved.find((g) => g.id === widget.settings.savedModuleId)?.name ?? null;
   }
   if (widget.type === "bucket_status" && widget.settings.mode === "bucket") {
     const { bucketId } = widget.settings;
@@ -491,16 +506,16 @@ export function autoTitle(
 
 /**
  * Whether a widget's settings can be saved: One bucket and One account need
- * a bucket or account that exists, and a graph widget a saved graph.
+ * a bucket or account that exists, and a module widget a saved module.
  */
 export function settingsComplete(
   widget: WidgetInstance,
   accounts: Account[],
   buckets: Bucket[],
-  saved: SavedGraph[] = [],
+  saved: SavedName[] = [],
 ): boolean {
-  if (widget.type === "graph") {
-    return saved.some((g) => g.id === widget.settings.savedGraphId);
+  if (widget.type === "module") {
+    return saved.some((g) => g.id === widget.settings.savedModuleId);
   }
   if (widget.type === "bucket_status" && widget.settings.mode === "bucket") {
     return buckets.some((b) => b.id === widget.settings.bucketId);
