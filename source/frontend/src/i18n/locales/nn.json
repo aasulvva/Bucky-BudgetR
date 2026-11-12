@@ -399,7 +399,22 @@
       "pickButton": "Vel ein modul",
       "noneSaved": "Du har ingen lagra modular enno. Lag ein under <stats>Statistikk og rapportar</stats> og lagre han.",
       "open": "Opne i Statistikk",
-      "openModule": "Opne {{name}} i Statistikk og rapportar"
+      "openModule": "Opne {{name}} i Statistikk og rapportar",
+      "view": {
+        "label": "Vis",
+        "compact": "Kompakt",
+        "full": "Fullstendig"
+      },
+      "compact": {
+        "count_one": "{{count}} transaksjon",
+        "count_other": "{{count}} transaksjonar",
+        "more_one": "+{{count}} til",
+        "more_other": "+{{count}} til",
+        "openTransactions": "Opne i Transaksjonar",
+        "topBuckets": "Mest brukt frå",
+        "topAccounts": "Mest brukt frå",
+        "currency": "I {{currency}}"
+      }
     },
     "scheduled": {
       "title": "Planlagde",

@@ -51,6 +51,46 @@ func (s *server) ListTransactions(ctx context.Context, req api.ListTransactionsR
 	return out, nil
 }
 
+// GetTransactionSummary counts and sums the transactions the filters match
+// (#203), for a compact transactions module on the Dashboard.
+func (s *server) GetTransactionSummary(ctx context.Context, req api.GetTransactionSummaryRequestObject) (api.GetTransactionSummaryResponseObject, error) {
+	svc, err := s.transactionService()
+	if err != nil {
+		return nil, err
+	}
+	p := req.Params
+	f := transactions.Filter{
+		AccountIDs: deref(p.AccountId), BucketIDs: deref(p.BucketId), CycleID: deref(p.CycleId),
+		Tags: deref(p.Tag), Counterparty: deref(p.Counterparty), CounterpartyIs: deref(p.CounterpartyIs),
+		Reversed: p.Reversed,
+	}
+	if p.Type != nil {
+		for _, t := range *p.Type {
+			f.Types = append(f.Types, sqlc.TransactionType(t))
+		}
+	}
+	if p.From != nil {
+		f.From = *p.From
+	}
+	if p.To != nil {
+		f.To = *p.To
+	}
+	sum, err := svc.Summary(ctx, sessionFrom(ctx).User.ID, f)
+	if err != nil {
+		return nil, transactionError(err)
+	}
+	out := api.GetTransactionSummary200JSONResponse{Count: sum.Count, Totals: make([]api.TransactionTotals, len(sum.Totals))}
+	for i, t := range sum.Totals {
+		out.Totals[i] = api.TransactionTotals{
+			Currency: t.Currency,
+			In:       t.In.StringFixed(money.Places),
+			Out:      t.Out.StringFixed(money.Places),
+			Net:      t.Net.StringFixed(money.Places),
+		}
+	}
+	return out, nil
+}
+
 func (s *server) CreateTransaction(ctx context.Context, req api.CreateTransactionRequestObject) (api.CreateTransactionResponseObject, error) {
 	svc, err := s.transactionService()
 	if err != nil {

@@ -2,6 +2,7 @@ package transactions_test
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -458,5 +459,94 @@ func TestSuggestions(t *testing.T) {
 	}
 	if _, err := e.svc.Tags(t.Context(), e.user, "", transactions.MaxTagLimit+1); !errors.Is(err, transactions.ErrInvalid) {
 		t.Errorf("tag limit: %v", err)
+	}
+}
+
+// TestSummary: counted and summed as a report's section summary (#203).
+func TestSummary(t *testing.T) {
+	e := setup(t)
+	bucket := ledgertest.Bucket(t, e.pool, e.user, e.account)
+	savings := ledgertest.Account(t, e.pool, e.user, "NOK")
+	euro := ledgertest.Account(t, e.pool, e.user, "EUR")
+	e.create(t, transactions.New{Type: sqlc.TransactionTypeINC, Amount: dec("30000"), At: now.Add(-9 * day)})
+	e.create(t, transactions.New{Type: sqlc.TransactionTypeEXP, Amount: dec("9000"), At: now.Add(-8 * day), Tags: []string{"Housing"}})
+	e.create(t, transactions.New{Type: sqlc.TransactionTypeEXP, Amount: dec("500"), At: now.Add(-2 * day),
+		Buckets: []transactions.BucketAmount{{BucketID: bucket, Amount: dec("500")}}})
+	e.create(t, transactions.New{Type: sqlc.TransactionTypeTRF, Amount: dec("2000"), At: now.Add(-day), ToAccountID: savings})
+	e.create(t, transactions.New{Type: sqlc.TransactionTypeEXP, Amount: dec("20"), At: now.Add(-day / 2), AccountID: euro})
+	// 100 corrected to 150 counts as 150; a reversed one doesn't count.
+	corrected := e.create(t, transactions.New{Type: sqlc.TransactionTypeEXP, Amount: dec("100"), At: now.Add(-4 * day)})
+	if _, err := e.ledger.Create(t.Context(), e.pool, ledger.Entry{
+		UserID: e.user, CreatedBy: e.user, Type: sqlc.TransactionTypeEXP, Correction: sqlc.CorrectionTypeAdjustment,
+		ParentID: corrected.ID, At: corrected.At,
+		BankLines: []ledger.BankLine{{AccountID: e.account, Amount: dec("-50")}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	reversed := e.create(t, transactions.New{Type: sqlc.TransactionTypeEXP, Amount: dec("70"), At: now.Add(-3 * day)})
+	if _, err := e.ledger.Create(t.Context(), e.pool, ledger.Entry{
+		UserID: e.user, CreatedBy: e.user, Type: sqlc.TransactionTypeEXP, Correction: sqlc.CorrectionTypeReversal,
+		ParentID: reversed.ID, At: reversed.At,
+		BankLines: []ledger.BankLine{{AccountID: e.account, Amount: dec("70")}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	summary := func(f transactions.Filter) string {
+		t.Helper()
+		s, err := e.svc.Summary(t.Context(), e.user, f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := fmt.Sprint(s.Count)
+		for _, x := range s.Totals {
+			out += fmt.Sprintf(" %s %s/%s/%s", x.Currency, x.In.StringFixed(2), x.Out.StringFixed(2), x.Net.StringFixed(2))
+		}
+		return out
+	}
+	for name, tc := range map[string]struct {
+		f    transactions.Filter
+		want string
+	}{
+		// The transfer counts, but adds nothing seen from neither account.
+		// Currencies come newest first: the euro expense is the newest.
+		"all": {transactions.Filter{}, "6 EUR 0.00/20.00/-20.00 NOK 30000.00/9650.00/20350.00"},
+		// Seen from one account, the transfer is out of it, or into savings.
+		"account": {transactions.Filter{AccountIDs: []string{e.account}}, "5 NOK 30000.00/11650.00/18350.00"},
+		"savings": {transactions.Filter{AccountIDs: []string{savings}}, "1 NOK 2000.00/0.00/2000.00"},
+		"both":    {transactions.Filter{AccountIDs: []string{e.account, savings}}, "5 NOK 30000.00/9650.00/20350.00"},
+		// With bank lines, those count, as a row shows them.
+		"bucket": {transactions.Filter{BucketIDs: []string{bucket}}, "1 NOK 0.00/500.00/-500.00"},
+		"tag":    {transactions.Filter{Tags: []string{"housing"}}, "1 NOK 0.00/9000.00/-9000.00"},
+		// To is exclusive: not the transfer a day ago.
+		"range": {transactions.Filter{From: now.Add(-5 * day), To: now.Add(-day)}, "2 NOK 0.00/650.00/-650.00"},
+		// The list's limit, cursor and order don't matter.
+		"paging":   {transactions.Filter{Limit: 1, Cursor: "nonsense", OldestFirst: true}, "6 EUR 0.00/20.00/-20.00 NOK 30000.00/9650.00/20350.00"},
+		"reversed": {transactions.Filter{Reversed: new(true)}, "0"},
+	} {
+		if got := summary(tc.f); got != tc.want {
+			t.Errorf("%s: %q, want %q", name, got, tc.want)
+		}
+	}
+	if _, err := e.svc.Summary(t.Context(), e.user, transactions.Filter{Types: []sqlc.TransactionType{"XYZ"}}); !errors.Is(err, transactions.ErrInvalid) {
+		t.Errorf("bad type: %v", err)
+	}
+
+	// More than a page of them.
+	bob := authtest.NewUser(t, e.pool, "bob").ID
+	account := ledgertest.Account(t, e.pool, bob, "NOK")
+	for i := range transactions.MaxLimit + 1 {
+		if _, err := e.svc.Create(t.Context(), bob, transactions.New{
+			Type: sqlc.TransactionTypeEXP, Amount: dec("1"), AccountID: account, At: now.Add(-time.Duration(i) * time.Minute),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s, err := e.svc.Summary(t.Context(), bob, transactions.Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Count != transactions.MaxLimit+1 || len(s.Totals) != 1 || !s.Totals[0].Out.Equal(dec("201")) {
+		t.Errorf("bob's summary %+v", s)
 	}
 }

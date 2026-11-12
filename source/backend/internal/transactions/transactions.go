@@ -445,27 +445,70 @@ func nonEmpty(values []string, lower bool) []string {
 // first), each merged with its corrections.
 func (s *Service) List(ctx context.Context, userID string, f Filter) (Page, error) {
 	q := sqlc.New(s.pool)
+	page, p, err := s.page(ctx, q, userID, f)
+	if err != nil {
+		return Page{}, err
+	}
+	// The balance after each (#106) is one account's, so only with one.
+	if len(p.AccountIds) == 1 {
+		if err := balancesAfter(ctx, q, userID, p.AccountIds, page.Items); err != nil {
+			return Page{}, err
+		}
+	}
+	return page, nil
+}
+
+// page is one page of List, without the balances after, and the query it
+// ran.
+func (s *Service) page(ctx context.Context, q *sqlc.Queries, userID string, f Filter) (Page, sqlc.ListTransactionsParams, error) {
+	p, err := listParams(ctx, q, userID, f)
+	if err != nil {
+		return Page{}, p, err
+	}
+	headers, err := q.ListTransactions(ctx, p)
+	if err != nil {
+		return Page{}, p, err
+	}
+	limit := int(p.RowLimit) - 1
+	var page Page
+	if len(headers) > limit {
+		headers = headers[:limit]
+		last := headers[len(headers)-1]
+		page.Next = encodeCursor(last.TransactionAt, last.ID)
+	}
+	idList := make([]string, len(headers))
+	for i, h := range headers {
+		idList[i] = h.ID
+	}
+	if page.Items, err = s.load(ctx, q, userID, idList, false); err != nil {
+		return Page{}, p, err
+	}
+	return page, p, nil
+}
+
+// listParams is the query for one page of f's transactions.
+func listParams(ctx context.Context, q *sqlc.Queries, userID string, f Filter) (sqlc.ListTransactionsParams, error) {
 	p := sqlc.ListTransactionsParams{UserID: userID, OldestFirst: f.OldestFirst}
 	switch {
 	case f.Limit == 0:
 		f.Limit = DefaultLimit
 	case f.Limit < 0 || f.Limit > MaxLimit:
-		return Page{}, fmt.Errorf("%w: the limit must be 1 to %d", ErrInvalid, MaxLimit)
+		return p, fmt.Errorf("%w: the limit must be 1 to %d", ErrInvalid, MaxLimit)
 	}
 	p.RowLimit = int32(f.Limit + 1) //nolint:gosec // at most MaxLimit + 1
 	for _, t := range f.Types {
 		if !t.Valid() {
-			return Page{}, fmt.Errorf("%w: transaction type %q", ErrInvalid, t)
+			return p, fmt.Errorf("%w: transaction type %q", ErrInvalid, t)
 		}
 		p.Types = append(p.Types, string(t))
 	}
 	if f.CycleID != "" {
 		c, err := q.GetCycle(ctx, sqlc.GetCycleParams{ID: f.CycleID, UserID: userID})
 		if errors.Is(err, pgx.ErrNoRows) {
-			return Page{}, fmt.Errorf("%w: cycle %s doesn't exist", ErrInvalid, f.CycleID)
+			return p, fmt.Errorf("%w: cycle %s doesn't exist", ErrInvalid, f.CycleID)
 		}
 		if err != nil {
-			return Page{}, err
+			return p, err
 		}
 		if f.From.IsZero() || f.From.Before(c.StartAt) {
 			f.From = c.StartAt
@@ -489,35 +532,135 @@ func (s *Service) List(ctx context.Context, userID string, f Filter) (Page, erro
 	if f.Cursor != "" {
 		at, id, err := decodeCursor(f.Cursor)
 		if err != nil {
-			return Page{}, err
+			return p, err
 		}
 		p.BeforeAt, p.BeforeID = timestamptz(at), text(id)
 	}
+	return p, nil
+}
 
-	headers, err := q.ListTransactions(ctx, p)
+// Summary is how many transactions a filter matches and what they add up
+// to (#203).
+type Summary struct {
+	// Count is the matching transactions, without reversed or moved ones.
+	Count int
+	// Totals are per currency, in the order the currencies first come
+	// (newest first).
+	Totals []Totals
+}
+
+// Totals are the in, out (positive) and net of one currency's amounts.
+type Totals struct {
+	Currency     string
+	In, Out, Net decimal.Decimal
+}
+
+// Summary counts and sums the transactions f matches (its Limit, Cursor
+// and OldestFirst aside), as a report's section summary (#191) does: each
+// is merged with its corrections; reversed and moved ones don't count; a
+// transaction's amount is its bank lines' if it has any, else its bucket
+// lines'; one line counts with its sign, and of several (a transfer) only
+// the line of the filter's one account, or one bucket, counts. A line is
+// in its account's currency, or its bucket's source account's.
+func (s *Service) Summary(ctx context.Context, userID string, f Filter) (Summary, error) {
+	q := sqlc.New(s.pool)
+	accounts, err := q.AccountCurrencies(ctx, userID)
 	if err != nil {
-		return Page{}, err
+		return Summary{}, err
 	}
-	var page Page
-	if len(headers) > f.Limit {
-		headers = headers[:f.Limit]
-		last := headers[len(headers)-1]
-		page.Next = encodeCursor(last.TransactionAt, last.ID)
+	buckets, err := q.BucketCurrencies(ctx, userID)
+	if err != nil {
+		return Summary{}, err
 	}
-	idList := make([]string, len(headers))
-	for i, h := range headers {
-		idList[i] = h.ID
+	currency := make(map[string]string, len(accounts)+len(buckets))
+	for _, a := range accounts {
+		currency["a"+a.ID] = a.Currency
 	}
-	if page.Items, err = s.load(ctx, q, userID, idList, false); err != nil {
-		return Page{}, err
+	for _, b := range buckets {
+		currency["b"+b.ID] = b.Currency
 	}
-	// The balance after each (#106) is one account's, so only with one.
-	if len(p.AccountIds) == 1 {
-		if err := balancesAfter(ctx, q, userID, p.AccountIds, page.Items); err != nil {
-			return Page{}, err
+	focusAccount, focusBucket := "", ""
+	if len(f.AccountIDs) == 1 {
+		focusAccount = f.AccountIDs[0]
+	}
+	if len(f.BucketIDs) == 1 {
+		focusBucket = f.BucketIDs[0]
+	}
+
+	var out Summary
+	index := map[string]int{}
+	add := func(cur string, amount decimal.Decimal) {
+		i, ok := index[cur]
+		if !ok {
+			i = len(out.Totals)
+			index[cur] = i
+			out.Totals = append(out.Totals, Totals{Currency: cur})
 		}
+		t := &out.Totals[i]
+		if amount.IsPositive() {
+			t.In = t.In.Add(amount)
+		} else {
+			t.Out = t.Out.Sub(amount)
+		}
+		t.Net = t.In.Sub(t.Out)
 	}
-	return page, nil
+
+	f.Limit, f.Cursor, f.OldestFirst = MaxLimit, "", false
+	for {
+		page, _, err := s.page(ctx, q, userID, f)
+		if err != nil {
+			return Summary{}, err
+		}
+		for _, t := range page.Items {
+			if t.Reversed || t.ReplacedBy != "" {
+				continue
+			}
+			out.Count++
+			type line struct {
+				key    string
+				amount decimal.Decimal
+			}
+			var lines []line
+			focus := ""
+			if len(t.BankLines) > 0 {
+				for _, l := range t.BankLines {
+					lines = append(lines, line{"a" + l.AccountID, l.Amount})
+				}
+				if focusAccount != "" {
+					focus = "a" + focusAccount
+				}
+			} else {
+				for _, l := range t.BucketLines {
+					lines = append(lines, line{"b" + l.BucketID, l.Amount})
+				}
+				if focusBucket != "" {
+					focus = "b" + focusBucket
+				}
+			}
+			if len(lines) == 0 {
+				continue
+			}
+			counted := lines[0]
+			if len(lines) > 1 {
+				found := false
+				for _, l := range lines {
+					if l.key == focus {
+						counted, found = l, true
+						break
+					}
+				}
+				if !found {
+					continue // A transfer seen from neither side adds nothing.
+				}
+			}
+			// As a row shows it: in the currency of its first line's account.
+			add(currency[lines[0].key], counted.amount)
+		}
+		if page.Next == "" {
+			return out, nil
+		}
+		f.Cursor = page.Next
+	}
 }
 
 // The page sizes of Tags and Counterparties: the default if 0, at most the

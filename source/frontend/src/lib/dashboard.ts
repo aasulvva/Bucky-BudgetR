@@ -46,6 +46,9 @@ export const BUCKET_STATUS_MODES: BucketStatusMode[] = [
 ];
 export const TRANSACTION_COUNTS = [3, 5, 10, 15, 20];
 export const SCHEDULED_SHOWS: ScheduledShow[] = ["both", "queue", "upcoming"];
+/** How a module widget shows its module (#203). */
+export type ModuleWidgetView = Schemas["ModuleWidgetView"];
+export const MODULE_VIEWS: ModuleWidgetView[] = ["compact", "full"];
 /** The most widgets a layout holds (the API's limit). */
 export const MAX_WIDGETS = 30;
 /** The longest custom title. */
@@ -93,6 +96,8 @@ export interface ScheduledSettings {
 export interface ModuleWidgetSettings {
   /** The saved module it shows; null until one is picked. */
   savedModuleId: string | null;
+  /** Compact, the Dashboard's short form (#203), or the module in full. */
+  view: ModuleWidgetView;
 }
 
 interface SettingsOf {
@@ -149,6 +154,7 @@ const fromApi = {
   }),
   module: (s?: Schemas["ModuleWidgetSettings"]): ModuleWidgetSettings => ({
     savedModuleId: s?.saved_module_id ?? null,
+    view: s?.view ?? "compact",
   }),
   scheduled: (s?: Schemas["ScheduledWidgetSettings"]): ScheduledSettings => ({
     show: s?.show ?? "both",
@@ -387,10 +393,14 @@ function widgetToApi(w: WidgetInstance): ApiWidget {
       };
     }
     case "module": {
-      const { savedModuleId } = w.settings;
+      // Compact is the default, so only Full is stored.
+      const { savedModuleId, view } = w.settings;
       return savedModuleId === null
         ? base
-        : { ...base, module: { saved_module_id: savedModuleId } };
+        : {
+            ...base,
+            module: { saved_module_id: savedModuleId, ...(view === "full" ? { view } : {}) },
+          };
     }
     case "scheduled":
       return { ...base, scheduled: { show: w.settings.show, count: w.settings.count } };
@@ -427,7 +437,10 @@ export function addModuleWidget(
 ): Layouts {
   const add = (layout: Layout): Layout => [
     ...layout,
-    { ...(newWidget("module", layout) as WidgetInstance<"module">), settings: { savedModuleId } },
+    {
+      ...(newWidget("module", layout) as WidgetInstance<"module">),
+      settings: { savedModuleId, view: "compact" },
+    },
   ];
   return {
     desktop: where === "mobile" ? layouts.desktop : add(layouts.desktop),

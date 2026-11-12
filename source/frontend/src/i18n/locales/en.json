@@ -399,7 +399,22 @@
       "pickButton": "Pick a module",
       "noneSaved": "You have no saved modules yet. Make one on <stats>Stats & reports</stats> and save it.",
       "open": "Open in Stats",
-      "openModule": "Open {{name}} in Stats & reports"
+      "openModule": "Open {{name}} in Stats & reports",
+      "view": {
+        "label": "Show",
+        "compact": "Compact",
+        "full": "Full"
+      },
+      "compact": {
+        "count_one": "{{count}} transaction",
+        "count_other": "{{count}} transactions",
+        "more_one": "+{{count}} more",
+        "more_other": "+{{count}} more",
+        "openTransactions": "Open in Transactions",
+        "topBuckets": "Most spent from",
+        "topAccounts": "Most spent from",
+        "currency": "In {{currency}}"
+      }
     },
     "scheduled": {
       "title": "Scheduled",

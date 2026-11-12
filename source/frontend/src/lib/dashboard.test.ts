@@ -558,12 +558,15 @@ describe("mostUsed", () => {
 
 describe("the module widget (#201; the graph widget before, #124)", () => {
   const saved = [{ id: "g-1", name: "Monthly spending" }];
-  const shows = (savedModuleId: string | null): WidgetInstance<"module"> => ({
+  const shows = (
+    savedModuleId: string | null,
+    view: "compact" | "full" = "compact",
+  ): WidgetInstance<"module"> => ({
     id: "gw",
     type: "module",
     width: "full",
     title: null,
-    settings: { savedModuleId },
+    settings: { savedModuleId, view },
   });
 
   it("saves the saved module it shows, and reads it back", () => {
@@ -575,7 +578,21 @@ describe("the module widget (#201; the graph widget before, #124)", () => {
     const back = dashboardLayout({ dashboard: prefs });
     expect(back[0]).toEqual(shows("g-1"));
     expect(back[1]).toEqual(shows(null));
-    expect(newWidget("module")).toMatchObject({ width: "full", settings: { savedModuleId: null } });
+    expect(newWidget("module")).toMatchObject({
+      width: "full",
+      settings: { savedModuleId: null, view: "compact" },
+    });
+  });
+
+  it("is compact unless it's set to Full, which alone is saved (#203)", () => {
+    const prefs = layoutToPreferences([shows("g-1", "full"), shows("g-2", "compact")]);
+    expect(prefs.widgets?.map((w) => w.module)).toEqual([
+      { saved_module_id: "g-1", view: "full" },
+      { saved_module_id: "g-2" },
+    ]);
+    const back = dashboardLayout({ dashboard: prefs });
+    expect(back[0]).toEqual(shows("g-1", "full"));
+    expect(back[1]).toEqual(shows("g-2"));
   });
 
   it("leaves out widgets of a type the app doesn't know", () => {

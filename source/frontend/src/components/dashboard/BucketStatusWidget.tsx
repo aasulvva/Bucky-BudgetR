@@ -1,12 +1,17 @@
-import { Anchor, Group, Progress, Stack, Text } from "@mantine/core";
+import { Anchor, Group, Stack, Text } from "@mantine/core";
 import { useContext, type ReactNode } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
 import { useBucketFigures, type Account, type Bucket, type BucketFigures } from "@/api/accounts";
 import { useCurrentCycles, type Cycle } from "@/api/cycles";
-import { BucketName, LeftFunds, UsedThisCycle } from "@/components/buckets/BucketParts";
-import { coverage, toneText, usageColor } from "@/lib/buckets";
+import {
+  BucketName,
+  CompactBucket,
+  LeftFunds,
+  UsedThisCycle,
+} from "@/components/buckets/BucketParts";
+import { coverage, toneText } from "@/lib/buckets";
 import {
   mostUsed,
   needsAttention,
@@ -115,35 +120,6 @@ function Attention({ buckets, figures }: FiguresProps) {
           </Group>
         );
       })}
-    </Stack>
-  );
-}
-
-/** A bucket on one line, with what's left and its usage bar below. */
-function CompactBucket({
-  bucket,
-  pct,
-  right,
-}: {
-  bucket: Bucket;
-  pct: number | null;
-  right: ReactNode;
-}) {
-  const { t } = useTranslation();
-  return (
-    <Stack gap={4}>
-      <Group justify="space-between" gap="xs" wrap="nowrap">
-        <BucketName bucket={bucket} />
-        {right}
-      </Group>
-      {pct !== null && (
-        <Progress
-          size="sm"
-          value={Math.min(pct, 100)}
-          color={usageColor(pct)}
-          aria-label={t("dashboard.bucketStatus.usedOf", { name: bucket.name, pct })}
-        />
-      )}
     </Stack>
   );
 }

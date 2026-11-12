@@ -3,7 +3,9 @@ import {
   Button,
   Checkbox,
   Group,
+  Input,
   NumberInput,
+  SegmentedControl,
   Select,
   Stack,
   Text,
@@ -22,6 +24,7 @@ import {
   ACCOUNTS_MODES,
   BUCKET_STATUS_MODES,
   MAX_TITLE,
+  MODULE_VIEWS,
   SCHEDULED_SHOWS,
   TRANSACTION_COUNTS,
   customTitle,
@@ -221,23 +224,39 @@ export function WidgetSettingsForm({
             />
           </Text>
         ) : (
-          <Select
-            // Inside a full-screen dialog on phones: render the list in place (#122's touch fix).
-            comboboxProps={{ withinPortal: false }}
-            label={t("dashboard.module.savedModule")}
-            placeholder={t("dashboard.module.pick")}
-            data={savedModuleOptions(saved, t)}
-            value={
-              saved.some((g) => g.id === draft.settings.savedModuleId)
-                ? draft.settings.savedModuleId
-                : null
-            }
-            allowDeselect={false}
-            searchable
-            onChange={(id) => {
-              if (id) setDraft({ ...draft, settings: { savedModuleId: id } });
-            }}
-          />
+          <>
+            <Select
+              // Inside a full-screen dialog on phones: render the list in place (#122's touch fix).
+              comboboxProps={{ withinPortal: false }}
+              label={t("dashboard.module.savedModule")}
+              placeholder={t("dashboard.module.pick")}
+              data={savedModuleOptions(saved, t)}
+              value={
+                saved.some((g) => g.id === draft.settings.savedModuleId)
+                  ? draft.settings.savedModuleId
+                  : null
+              }
+              allowDeselect={false}
+              searchable
+              onChange={(id) => {
+                if (id) setDraft({ ...draft, settings: { ...draft.settings, savedModuleId: id } });
+              }}
+            />
+            <Input.Wrapper label={t("dashboard.module.view.label")}>
+              <SegmentedControl
+                fullWidth
+                data={MODULE_VIEWS.map((v) => ({
+                  value: v,
+                  label: t(`dashboard.module.view.${v}`),
+                }))}
+                value={draft.settings.view}
+                onChange={(v) => {
+                  const view = MODULE_VIEWS.find((x) => x === v);
+                  if (view) setDraft({ ...draft, settings: { ...draft.settings, view } });
+                }}
+              />
+            </Input.Wrapper>
+          </>
         ))}
       {save.error && <ErrorAlert error={save.error} />}
       <Group justify="flex-end" gap="xs">

@@ -11,7 +11,7 @@ import { QueryState } from "@/components/QueryState";
 import { ModuleBody } from "@/components/reports/ModuleCard";
 import { GraphView, type Compare } from "@/components/stats/GraphView";
 import { useClockVersion } from "@/lib/clock";
-import type { WidgetInstance } from "@/lib/dashboard";
+import type { ModuleWidgetView, WidgetInstance } from "@/lib/dashboard";
 import {
   isGraphModule,
   readSavedModules,
@@ -22,6 +22,7 @@ import {
   type SavedModule,
 } from "@/lib/savedModules";
 
+import { CompactModule } from "./CompactModule";
 import { WidgetFrame } from "./frame";
 import { WidgetCard } from "./Widget";
 
@@ -31,9 +32,10 @@ const FULL_PX = 260;
 
 /**
  * One of the saved modules from Stats & reports (#201; a saved graph
- * before, #124), over its own period, so it follows changes to it. A graph
- * opens there when clicked; the others show in full (compact ones are
- * #203).
+ * before, #124), over its own period, so it follows changes to it.
+ * Compact by default (#203): a graph as a widget draws it, opening there
+ * when clicked, and the others in their short forms (CompactModule). Full
+ * shows the module as Stats & reports does, without a graph's breakdown.
  */
 export function ModuleWidget({
   widget,
@@ -52,7 +54,7 @@ export function ModuleWidget({
       action={action}
     >
       {shown ? (
-        <Loaded saved={shown} half={widget.width === "half"} />
+        <Loaded saved={shown} half={widget.width === "half"} view={widget.settings.view} />
       ) : (
         <Missing deleted={widget.settings.savedModuleId !== null} noneSaved={saved.length === 0} />
       )}
@@ -87,7 +89,15 @@ function Missing({ deleted, noneSaved }: { deleted: boolean; noneSaved: boolean 
   );
 }
 
-function Loaded({ saved, half }: { saved: SavedModule; half: boolean }) {
+function Loaded({
+  saved,
+  half,
+  view,
+}: {
+  saved: SavedModule;
+  half: boolean;
+  view: ModuleWidgetView;
+}) {
   const cycles = useCycles();
   const accounts = useAccounts();
   const buckets = useBuckets();
@@ -97,7 +107,9 @@ function Loaded({ saved, half }: { saved: SavedModule; half: boolean }) {
         <QueryState query={accounts}>
           {(a) => (
             <QueryState query={buckets}>
-              {(b) => <Drawn saved={saved} half={half} cycles={c} accounts={a} buckets={b} />}
+              {(b) => (
+                <Drawn saved={saved} half={half} view={view} cycles={c} accounts={a} buckets={b} />
+              )}
             </QueryState>
           )}
         </QueryState>
@@ -109,12 +121,14 @@ function Loaded({ saved, half }: { saved: SavedModule; half: boolean }) {
 function Drawn({
   saved,
   half,
+  view,
   cycles,
   accounts,
   buckets,
 }: {
   saved: SavedModule;
   half: boolean;
+  view: ModuleWidgetView;
   cycles: Cycle[];
   accounts: Account[];
   buckets: Bucket[];
@@ -132,7 +146,7 @@ function Drawn({
     [saved, cycles, clock],
   );
 
-  if (!isGraphModule(saved)) {
+  if (view === "full") {
     return (
       <ModuleBody
         report={savedModuleReport(saved)}
@@ -146,6 +160,19 @@ function Drawn({
         isDesktop={twoColumns}
         headingLevel={4}
         breakdown={false}
+      />
+    );
+  }
+  if (!isGraphModule(saved)) {
+    return (
+      <CompactModule
+        report={savedModuleReport(saved)}
+        module={saved.module}
+        period={periods.period}
+        cycles={cycles}
+        accounts={accounts}
+        buckets={buckets}
+        more={savedModuleLink(saved)}
       />
     );
   }

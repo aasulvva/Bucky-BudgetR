@@ -65,6 +65,33 @@ export function useTransactionPages(query: TransactionQuery, enabled = true) {
   });
 }
 
+export type TransactionSummary = components["schemas"]["TransactionSummary"];
+export type TransactionTotals = components["schemas"]["TransactionTotals"];
+type SummaryQuery = NonNullable<operations["getTransactionSummary"]["parameters"]["query"]>;
+
+/**
+ * How many transactions match the list's filters, and their totals (#203).
+ * Under ["transactions", "list"], so it refreshes when the list does; the
+ * list's limit, cursor and order don't apply. Off while query is null.
+ */
+export function useTransactionSummary(query: TransactionQuery | null) {
+  const filters = query && withoutPaging(query);
+  return useQuery({
+    queryKey: ["transactions", "list", "summary", filters],
+    queryFn: () =>
+      unwrap(api.GET("/api/v1/transactions/summary", { params: { query: filters ?? {} } })),
+    enabled: filters !== null,
+  });
+}
+
+function withoutPaging(query: TransactionQuery): SummaryQuery {
+  const filters: TransactionQuery = { ...query };
+  delete filters.limit;
+  delete filters.cursor;
+  delete filters.order;
+  return filters;
+}
+
 /** One transaction, merged with its corrections, with its history. */
 export function useTransaction(id: string | null) {
   return useQuery({

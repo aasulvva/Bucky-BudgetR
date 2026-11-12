@@ -16,6 +16,29 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.21.00",
+    date: "2026-11-12",
+    title: {
+      en: "Dashboard: compact modules",
+      nb: "Dashbord: kompakte moduler",
+      nn: "Dashbord: kompakte modular",
+    },
+    changes: {
+      en: [
+        "Module widgets now show a compact version of their module. Transactions shows how many there are and their total, then the 3 newest. In/out/balance shows In, Out and Net, then the buckets that spent the most. Budget vs spending shows the most used buckets with a bar, at most 6. A graph is drawn as before.",
+        "Set Show to Full in a module widget's settings to see the whole module, as on Stats & reports.",
+      ],
+      nb: [
+        "Modul på dashbordet viser nå en kompakt versjon av den lagrede modulen. Transaksjoner viser hvor mange det er og summen, så de 3 nyeste. Inn/ut/saldo viser Inn, Ut og Netto, så bøttene som brukte mest. Budsjett mot forbruk viser de mest brukte bøttene med en stolpe, høyst 6. En graf tegnes som før.",
+        "Sett Vis til Fullstendig i innstillingene til Modul for å se hele modulen, som i Statistikk og rapporter.",
+      ],
+      nn: [
+        "Modul på dashbordet viser no ein kompakt versjon av den lagra modulen. Transaksjonar viser kor mange det er og summen, så dei 3 nyaste. Inn/ut/saldo viser Inn, Ut og Netto, så bøttene som brukte mest. Budsjett mot forbruk viser dei mest brukte bøttene med ein stolpe, høgst 6. Ein graf vert teikna som før.",
+        "Set Vis til Fullstendig i innstillingane til Modul for å sjå heile modulen, som i Statistikk og rapportar.",
+      ],
+    },
+  },
+  {
     version: "v2.20.00",
     date: "2026-11-12",
     title: {
