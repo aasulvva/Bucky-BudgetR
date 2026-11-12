@@ -149,8 +149,12 @@ describe("Reports", () => {
         "Balance · Line · Month · Per account",
       ]);
     });
-    // The previous year too, for the compared module.
+    // The builder (#202) loads nothing until a module is previewed.
     const froms = () => apiMock.calls(stats).map((c) => c.query.get("from"));
+    expect(froms()).not.toContain(startAtFor(`${String(year - 1)}-01-01`));
+    await userEvent.click(screen.getByRole("radio", { name: "Full report" }));
+    expect(router.state.location.search).toBe("?view=report");
+    // The previous year too, for the compared module.
     await waitFor(() => {
       expect(froms()).toContain(startAtFor(`${String(year - 2)}-01-01`));
     });
@@ -160,7 +164,7 @@ describe("Reports", () => {
   });
 
   it("adds a module and saves the report as a template", async () => {
-    const { router } = renderRoute("/stats/reports");
+    const { router } = renderRoute("/stats/reports?view=report");
     await userEvent.click(await screen.findByRole("button", { name: "Add module" }));
     const dialog = await screen.findByRole("dialog", { name: "Add module" });
     await userEvent.click(within(dialog).getByRole("combobox", { name: "Show" }));
@@ -179,7 +183,7 @@ describe("Reports", () => {
     await userEvent.type(within(save).getByRole("textbox", { name: "Name" }), "My year");
     await userEvent.click(within(save).getByRole("button", { name: "Save" }));
     await waitFor(() => {
-      expect(router.state.location.search).toBe("?template=r-1");
+      expect(router.state.location.search).toBe("?template=r-1&view=report");
     });
     const saved = lastBody()?.report_templates?.[0];
     expect(saved?.name).toBe("My year");
@@ -198,7 +202,7 @@ describe("Reports", () => {
 
   it("saves, renames and deletes a template", async () => {
     prefs = { ...prefs, report_templates: [template()] };
-    const { router } = renderRoute("/stats/reports?template=r-1");
+    const { router } = renderRoute("/stats/reports?template=r-1&view=report");
     expect(await screen.findByRole("combobox", { name: "Report" })).toHaveValue("Mine");
     await userEvent.click(await screen.findByRole("button", { name: "Remove" }));
     // Removing the only module changes the report.
@@ -228,11 +232,11 @@ describe("Reports", () => {
     await waitFor(() => {
       expect(lastBody()?.report_templates).toEqual([]);
     });
-    expect(router.state.location.search).toBe("?starter=yearly");
+    expect(router.state.location.search).toBe("?starter=yearly&view=report");
   });
 
   it("breaks a module down by month, and not short periods", async () => {
-    renderRoute("/stats/reports");
+    renderRoute("/stats/reports?view=report");
     const balance = await screen.findByRole("region", {
       name: "Balance · Line · Month · Per account",
     });
@@ -254,7 +258,7 @@ describe("Reports", () => {
         { ...template({ period: "custom-2026-01-01-2026-01-31" }), id: "r-2", name: "Custom" },
       ],
     };
-    renderRoute("/stats/reports?template=r-1");
+    renderRoute("/stats/reports?template=r-1&view=report");
     await userEvent.click(await screen.findByRole("button", { name: "Edit" }));
     let dialog = await screen.findByRole("dialog", { name: "Edit module" });
     expect(within(dialog).getByRole("radio", { name: "By month" })).toBeDisabled();
@@ -270,7 +274,7 @@ describe("Reports", () => {
   });
 
   it("moves modules", async () => {
-    renderRoute("/stats/reports");
+    renderRoute("/stats/reports?view=report");
     await waitFor(() => {
       expect(modules()).toHaveLength(3);
     });
@@ -292,7 +296,7 @@ describe("Reports", () => {
             },
           },
     );
-    renderRoute("/stats/reports");
+    renderRoute("/stats/reports?view=report");
     await userEvent.click(await screen.findByRole("button", { name: "Add module" }));
     const dialog = await screen.findByRole("dialog", { name: "Add module" });
     await userEvent.click(within(dialog).getByRole("radio", { name: "Transactions" }));
@@ -345,7 +349,7 @@ describe("Reports", () => {
         next_cursor: null,
       },
     });
-    const { router } = renderRoute("/stats/reports");
+    const { router } = renderRoute("/stats/reports?view=report");
     await userEvent.click(await screen.findByRole("button", { name: "Add module" }));
     const dialog = await screen.findByRole("dialog", { name: "Add module" });
     await userEvent.click(within(dialog).getByRole("radio", { name: "Transactions" }));
@@ -395,7 +399,7 @@ describe("Reports", () => {
     await userEvent.type(within(save).getByRole("textbox", { name: "Name" }), "Table");
     await userEvent.click(within(save).getByRole("button", { name: "Save" }));
     await waitFor(() => {
-      expect(router.state.location.search).toBe("?template=r-1");
+      expect(router.state.location.search).toBe("?template=r-1&view=report");
     });
     expect(lastBody()?.report_templates?.[0]?.report.modules[3]).toEqual({
       id: "m-4",
@@ -427,7 +431,7 @@ describe("Reports", () => {
         }),
       ],
     };
-    renderRoute("/stats/reports?template=r-1");
+    renderRoute("/stats/reports?template=r-1&view=report");
     const module = await screen.findByRole("region", { name: "Food and fun" });
     expect(await within(module).findByText("Rema 1000")).toBeInTheDocument();
     expect(within(module).getByText("Own buckets")).toBeInTheDocument();
@@ -462,7 +466,7 @@ describe("Reports", () => {
         template({ modules: [{ id: "m-1", type: "transactions", transactions: {} }] }),
       ],
     };
-    renderRoute("/stats/reports?template=r-1");
+    renderRoute("/stats/reports?template=r-1&view=report");
     const module = await screen.findByRole("region", { name: "Transactions" });
     // Under the day's heading, as the locale writes it (CI runs in en-US).
     expect(
@@ -514,7 +518,7 @@ describe("Reports", () => {
     it("shows a section per month with a summary, empty ones too", async () => {
       apiMock.on(list, { body: { items: [rema, work, kiwi], next_cursor: null } });
       report({ id: "m-1", type: "transactions", transactions: { sections: "month" } });
-      renderRoute("/stats/reports?template=r-1");
+      renderRoute("/stats/reports?template=r-1&view=report");
       const module = await screen.findByRole("region", { name: "Transactions" });
       const june = await within(module).findByRole("region", { name: month("06") });
       expect(sectionNames(module)).toEqual([month("06"), month("05"), month("04")]);
@@ -552,7 +556,7 @@ describe("Reports", () => {
           : { body: { items: [rema, work], next_cursor: "c1" } },
       );
       report({ id: "m-1", type: "transactions", transactions: { sections: "month" } });
-      renderRoute("/stats/reports?template=r-1");
+      renderRoute("/stats/reports?template=r-1&view=report");
       const module = await screen.findByRole("region", { name: "Transactions" });
       const june = await within(module).findByRole("region", { name: month("06") });
       expect(sectionNames(module)).toEqual([month("06")]);
@@ -588,7 +592,7 @@ describe("Reports", () => {
         type: "transactions",
         transactions: { sections: "cycle", view: "table", columns: ["counterparty", "amount"] },
       });
-      renderRoute("/stats/reports?template=r-1");
+      renderRoute("/stats/reports?template=r-1&view=report");
       const module = await screen.findByRole("region", { name: "Transactions" });
       const table = await within(module).findByRole("table", { name: label(may) });
       expect(sectionNames(module)).toEqual([label(may), label(april), "Outside any cycle"]);
@@ -618,7 +622,7 @@ describe("Reports", () => {
   });
 
   it("adds an in/out/balance module with buckets and accounts (#126)", async () => {
-    renderRoute("/stats/reports");
+    renderRoute("/stats/reports?view=report");
     await userEvent.click(await screen.findByRole("button", { name: "Add module" }));
     const dialog = await screen.findByRole("dialog", { name: "Add module" });
     await userEvent.click(within(dialog).getByRole("radio", { name: "In/out/balance" }));
@@ -684,7 +688,7 @@ describe("Reports", () => {
         }),
       ],
     };
-    renderRoute("/stats/reports?template=r-1");
+    renderRoute("/stats/reports?template=r-1&view=report");
     const module = await screen.findByRole("region", { name: "In, out and balance" });
     await waitFor(() => {
       expect(within(module).getAllByTestId("breakdown-part")).toHaveLength(12);
@@ -723,7 +727,7 @@ describe("Reports", () => {
           }),
         ],
       };
-      renderRoute("/stats/reports?template=r-1");
+      renderRoute("/stats/reports?template=r-1&view=report");
       return screen.findByRole("region", { name: "In, out and balance" });
     };
     const figure = (card: HTMLElement, label: string) =>
@@ -858,7 +862,7 @@ describe("Reports", () => {
     });
 
     it("chooses the grid and balances in the editor", async () => {
-      renderRoute("/stats/reports");
+      renderRoute("/stats/reports?view=report");
       await userEvent.click(await screen.findByRole("button", { name: "Add module" }));
       const dialog = await screen.findByRole("dialog", { name: "Add module" });
       await userEvent.click(within(dialog).getByRole("radio", { name: "In/out/balance" }));
@@ -955,7 +959,7 @@ describe("Reports", () => {
     });
 
     it("adds a module with a summary and a table per cycle", async () => {
-      renderRoute("/stats/reports");
+      renderRoute("/stats/reports?view=report");
       await userEvent.click(await screen.findByRole("button", { name: "Add module" }));
       const dialog = await screen.findByRole("dialog", { name: "Add module" });
       await userEvent.click(within(dialog).getByRole("radio", { name: "Budget vs spending" }));
@@ -1026,7 +1030,7 @@ describe("Reports", () => {
           }),
         ],
       };
-      renderRoute("/stats/reports?template=r-1");
+      renderRoute("/stats/reports?template=r-1&view=report");
       const module = await screen.findByRole("region", { name: "Budget vs spending" });
       const summary = await within(module).findByRole("table", { name: "All cycles" });
       expect(within(summary).getByRole("row", { name: /Food/ })).toBeInTheDocument();
@@ -1045,7 +1049,7 @@ describe("Reports", () => {
           }),
         ],
       };
-      renderRoute("/stats/reports?template=r-1");
+      renderRoute("/stats/reports?template=r-1&view=report");
       const module = await screen.findByRole("region", { name: "Budget vs spending" });
       expect(await within(module).findByRole("table", { name: "All cycles" })).toBeInTheDocument();
       expect(within(module).queryByTestId("budget-cycle")).not.toBeInTheDocument();
@@ -1062,7 +1066,7 @@ describe("Reports", () => {
           }),
         ],
       };
-      renderRoute("/stats/reports?template=r-1");
+      renderRoute("/stats/reports?template=r-1&view=report");
       const module = await screen.findByRole("region", { name: "Budget vs spending" });
       expect(
         await within(module).findByText("No cycles have begun in this period."),
@@ -1108,7 +1112,7 @@ describe("Reports", () => {
     });
 
     it("shows a part per month, loading only those open, the newest at first", async () => {
-      renderRoute("/stats/reports?template=r-1");
+      renderRoute("/stats/reports?template=r-1&view=report");
       const section = await screen.findByRole("region", { name: "Each month" });
       expect(part(section, month("04"))).toHaveAttribute("aria-expanded", "false");
       expect(part(section, month("05"))).toHaveAttribute("aria-expanded", "false");
@@ -1137,7 +1141,7 @@ describe("Reports", () => {
     });
 
     it("adds, edits, moves and removes a section's modules, and saves them", async () => {
-      renderRoute("/stats/reports?template=r-1");
+      renderRoute("/stats/reports?template=r-1&view=report");
       const section = await screen.findByRole("region", { name: "Each month" });
       await userEvent.click(
         within(section).getByRole("button", { name: "Add a module to Each month" }),
@@ -1196,7 +1200,7 @@ describe("Reports", () => {
     });
 
     it("repeats for each cycle, as edited", async () => {
-      renderRoute("/stats/reports?template=r-1");
+      renderRoute("/stats/reports?template=r-1&view=report");
       const section = await screen.findByRole("region", { name: "Each month" });
       // The section's own: its parts' modules have none.
       await userEvent.click(within(section).getByRole("button", { name: "Edit" }));
@@ -1210,7 +1214,7 @@ describe("Reports", () => {
     });
 
     it("adds a section to the report", async () => {
-      renderRoute("/stats/reports?template=r-1");
+      renderRoute("/stats/reports?template=r-1&view=report");
       await screen.findByRole("region", { name: "Each month" });
       await userEvent.click(screen.getByRole("button", { name: "Add module" }));
       const dialog = await screen.findByRole("dialog", { name: "Add module" });
@@ -1223,7 +1227,7 @@ describe("Reports", () => {
     });
 
     it("opens the Year by month starter at its last month", async () => {
-      renderRoute("/stats/reports?starter=year_by_month");
+      renderRoute("/stats/reports?starter=year_by_month&view=report");
       const section = await screen.findByRole("region", { name: "Each month" });
       expect(within(section).getAllByRole("button", { expanded: false })).toHaveLength(11);
       expect(part(section, month("12"))).toHaveAttribute("aria-expanded", "true");
@@ -1263,7 +1267,7 @@ describe("Reports", () => {
     it("sends the report on screen in this browser's language and time zone, and downloads it", async () => {
       apiMock.on(pdf, { body: "%PDF" });
       prefs = { ...prefs, report_templates: [template()] };
-      renderRoute("/stats/reports?template=r-1");
+      renderRoute("/stats/reports?template=r-1&view=report");
       await userEvent.click(await screen.findByRole("button", { name: "Export PDF" }));
       await waitFor(() => {
         expect(downloads).toEqual([`Mine – ${lastMonth()}.pdf`]);
@@ -1282,7 +1286,7 @@ describe("Reports", () => {
     it("sends the locale preference when there is one (#192)", async () => {
       apiMock.on(pdf, { body: "%PDF" });
       prefs = { ...prefs, locale: "nb-NO", language: "en", report_templates: [template()] };
-      renderRoute("/stats/reports?template=r-1");
+      renderRoute("/stats/reports?template=r-1&view=report");
       await userEvent.click(await screen.findByRole("button", { name: "Export PDF" }));
       await waitFor(() => {
         expect(downloads).toHaveLength(1);
@@ -1294,7 +1298,7 @@ describe("Reports", () => {
 
     it("says when the server can't make PDFs", async () => {
       apiMock.on(pdf, problem(503, "pdf_unavailable", "PDF export isn't set up on this server."));
-      renderRoute("/stats/reports");
+      renderRoute("/stats/reports?view=report");
       await userEvent.click(await screen.findByRole("button", { name: "Export PDF" }));
       expect(
         await screen.findByText(/PDF export isn't set up on this server, or its renderer/),
@@ -1323,7 +1327,7 @@ describe("Reports", () => {
           }),
         ],
       };
-      renderRoute("/stats/reports?template=r-1");
+      renderRoute("/stats/reports?template=r-1&view=report");
       const module = await screen.findByRole("region", { name: "Food" });
       await userEvent.click(within(module).getByRole("button", { name: "Save module…" }));
       const dialog = await screen.findByRole("dialog", { name: "Save module" });
@@ -1390,7 +1394,7 @@ describe("Reports", () => {
           }),
         ],
       };
-      renderRoute("/stats/reports?template=r-1");
+      renderRoute("/stats/reports?template=r-1&view=report");
       await userEvent.click(await screen.findByRole("button", { name: "Save Money as a module…" }));
       const dialog = await screen.findByRole("dialog", { name: "Save module" });
       await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
@@ -1433,7 +1437,7 @@ describe("Reports", () => {
         ],
         report_templates: [template({ period: "previous-year" })],
       };
-      renderRoute("/stats/reports?template=r-1");
+      renderRoute("/stats/reports?template=r-1&view=report");
       await userEvent.click(await screen.findByRole("button", { name: "Add module" }));
       const dialog = await screen.findByRole("dialog", { name: "Add module" });
       await userEvent.click(within(dialog).getByRole("combobox", { name: "Copy a saved module" }));
@@ -1444,6 +1448,193 @@ describe("Reports", () => {
       const query = apiMock.calls(list).at(-1)?.query;
       expect(query?.get("from")).toBe(startAtFor(`${String(year - 1)}-01-01`));
       expect(query?.getAll("bucket_id")).toEqual([food.id]);
+    });
+  });
+  describe("report builder (#202)", () => {
+    const december = () =>
+      specificLabel({ kind: "specific", unit: "month", at: `${String(year - 1)}-12-01` }, []);
+    const foodModule: ReportTemplate["report"]["modules"][number] = {
+      id: "m-1",
+      type: "graph",
+      title: "Food",
+      graph: { kind: "bar", metric: "spending", resolution: "month", bucket_ids: [food.id] },
+    };
+    const moneyModule: ReportTemplate["report"]["modules"][number] = {
+      id: "m-3",
+      type: "flows",
+      title: "Money",
+      flows: {},
+    };
+    const builder = (modules: ReportTemplate["report"]["modules"]) => {
+      prefs = {
+        ...prefs,
+        report_templates: [template({ period: "previous-year", modules })],
+      };
+      return renderRoute("/stats/reports?template=r-1");
+    };
+    const row = async (name: string) => within(await screen.findByRole("region", { name }));
+
+    it("lists the modules by title, loading one only when it's previewed", async () => {
+      builder([
+        foodModule,
+        { id: "m-2", type: "section", section: { unit: "month", modules: [moneyModule] } },
+      ]);
+      const graph = await row("Food");
+      expect(graph.getByText("Graph")).toBeInTheDocument();
+      expect(graph.getByText("Own buckets")).toBeInTheDocument();
+      const section = await row("Each month");
+      expect(section.getByText("Section")).toBeInTheDocument();
+      expect(section.getByText("Per month")).toBeInTheDocument();
+      expect(section.getByText("Money")).toBeInTheDocument();
+      expect(screen.getByRole("radio", { name: "Builder" })).toBeChecked();
+      expect(apiMock.calls(stats)).toHaveLength(0);
+      expect(apiMock.calls(flowsPath)).toHaveLength(0);
+
+      const preview = graph.getByRole("button", { name: "Preview" });
+      expect(preview).toHaveAttribute("aria-pressed", "false");
+      await userEvent.click(preview);
+      expect(graph.getByTestId("module-preview")).toBeInTheDocument();
+      await waitFor(() => {
+        expect(apiMock.calls(stats)).not.toHaveLength(0);
+      });
+      expect(apiMock.calls(stats)[0]?.query.getAll("bucket_id")).toEqual([food.id]);
+      expect(apiMock.calls(stats)[0]?.query.get("from")).toBe(
+        startAtFor(`${String(year - 1)}-01-01`),
+      );
+      const hide = graph.getByRole("button", { name: "Hide preview" });
+      expect(hide).toHaveAttribute("aria-pressed", "true");
+      await userEvent.click(hide);
+      expect(graph.queryByTestId("module-preview")).not.toBeInTheDocument();
+    });
+
+    it("previews a section's module over its newest part, and the section as its parts", async () => {
+      builder([{ id: "m-2", type: "section", section: { unit: "month", modules: [moneyModule] } }]);
+      const section = await row("Each month");
+      await userEvent.click(section.getByRole("button", { name: "Preview Money" }));
+      expect(
+        await section.findByText(`Shown for ${december()}, the section's newest month or cycle.`),
+      ).toBeInTheDocument();
+      await waitFor(() => {
+        expect(apiMock.calls(flowsPath).map((c) => c.query.get("from"))).toContain(
+          startAtFor(`${String(year - 1)}-12-01`),
+        );
+      });
+      await userEvent.click(section.getByRole("button", { name: "Hide the preview of Money" }));
+
+      await userEvent.click(section.getByRole("button", { name: "Preview" }));
+      const parts = within(section.getByTestId("section-preview"));
+      expect(parts.getAllByRole("button", { name: /\d{4}/ })).toHaveLength(12);
+      expect(parts.getByRole("button", { name: december() })).toHaveAttribute(
+        "aria-expanded",
+        "true",
+      );
+    });
+
+    it("moves modules with the arrows and the keyboard, as unsaved changes", async () => {
+      builder([
+        foodModule,
+        moneyModule,
+        { id: "m-4", type: "budget", title: "Budget", budget: {} },
+      ]);
+      await row("Food");
+      expect(modules()).toEqual(["Food", "Money", "Budget"]);
+      await userEvent.click((await row("Food")).getByRole("button", { name: "Move down" }));
+      expect(modules()).toEqual(["Money", "Food", "Budget"]);
+      expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+      expect((await row("Money")).getByRole("button", { name: "Move up" })).toBeDisabled();
+
+      // Dragged with the keyboard: pick up, move down, drop.
+      const handle = (await row("Money")).getByRole("button", { name: "Drag Money" });
+      handle.focus();
+      await userEvent.keyboard("[Space]");
+      await userEvent.keyboard("[ArrowDown]");
+      await userEvent.keyboard("[Space]");
+      await waitFor(() => {
+        expect(modules()).toEqual(["Food", "Money", "Budget"]);
+      });
+    });
+
+    it("moves a module into a section and out again, not into a full one", async () => {
+      const full = ["m-10", "m-11", "m-12", "m-13", "m-14", "m-15"].map((id) => ({
+        id,
+        type: "flows" as const,
+        title: `Flows ${id}`,
+        flows: {},
+      }));
+      builder([
+        foodModule,
+        { id: "m-2", type: "section", section: { unit: "month", modules: [moneyModule] } },
+        { id: "m-5", type: "section", title: "Full", section: { unit: "cycle", modules: full } },
+      ]);
+      await userEvent.click((await row("Food")).getByRole("button", { name: "Move to…" }));
+      expect(await screen.findByRole("menuitem", { name: "Into Full" })).toBeDisabled();
+      await userEvent.click(screen.getByRole("menuitem", { name: "Into Each month" }));
+      await waitFor(() => {
+        expect(screen.queryByRole("region", { name: "Food" })).not.toBeInTheDocument();
+      });
+      const section = await row("Each month");
+      expect(section.getByText("Food")).toBeInTheDocument();
+
+      await userEvent.click(section.getByRole("button", { name: "Move Food to…" }));
+      await userEvent.click(await screen.findByRole("menuitem", { name: "Out of the section" }));
+      await waitFor(() => {
+        expect(modules()).toEqual(["Each month", "Full", "Food"]);
+      });
+      expect(
+        within(screen.getByRole("region", { name: "Each month" })).queryByText("Food"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("edits, saves and removes a module from its row", async () => {
+      builder([foodModule, moneyModule]);
+      const graph = await row("Food");
+      await userEvent.click(graph.getByRole("button", { name: "Edit" }));
+      const dialog = await screen.findByRole("dialog", { name: "Edit module" });
+      await userEvent.clear(within(dialog).getByRole("textbox", { name: /^Title/ }));
+      await userEvent.type(within(dialog).getByRole("textbox", { name: /^Title/ }), "Groceries");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
+      await row("Groceries");
+
+      await userEvent.click((await row("Groceries")).getByRole("button", { name: "Save module…" }));
+      const save = await screen.findByRole("dialog", { name: "Save module" });
+      expect(within(save).getByRole("textbox", { name: "Name" })).toHaveValue("Groceries");
+      await userEvent.click(within(save).getByRole("button", { name: "Cancel" }));
+
+      await userEvent.click((await row("Money")).getByRole("button", { name: "Remove" }));
+      await waitFor(() => {
+        expect(modules()).toEqual(["Groceries"]);
+      });
+    });
+
+    it("keeps the full report when another report is picked, and goes back", async () => {
+      prefs = { ...prefs, report_templates: [template()] };
+      const { router } = renderRoute("/stats/reports?view=report");
+      expect(await screen.findByRole("radio", { name: "Full report" })).toBeChecked();
+      await userEvent.click(screen.getByRole("combobox", { name: "Report" }));
+      await userEvent.click(await screen.findByRole("option", { name: "Mine" }));
+      await waitFor(() => {
+        expect(router.state.location.search).toBe("?template=r-1&view=report");
+      });
+      await userEvent.click(screen.getByRole("radio", { name: "Builder" }));
+      await waitFor(() => {
+        expect(router.state.location.search).toBe("?template=r-1");
+      });
+      expect(await screen.findByRole("button", { name: "Preview" })).toBeInTheDocument();
+    });
+
+    it("puts the other buttons in a menu on a phone", async () => {
+      viewport.width = 375;
+      builder([foodModule, moneyModule]);
+      const graph = await row("Food");
+      expect(graph.getByRole("button", { name: "Preview" })).toBeInTheDocument();
+      expect(graph.getByRole("button", { name: "Edit" })).toBeInTheDocument();
+      expect(graph.queryByRole("button", { name: "Remove" })).not.toBeInTheDocument();
+      await userEvent.click(graph.getByRole("button", { name: "More" }));
+      expect(await screen.findByRole("menuitem", { name: "Move up" })).toBeDisabled();
+      await userEvent.click(screen.getByRole("menuitem", { name: "Move down" }));
+      await waitFor(() => {
+        expect(modules()).toEqual(["Money", "Food"]);
+      });
     });
   });
 });

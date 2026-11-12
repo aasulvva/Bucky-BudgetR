@@ -1,4 +1,14 @@
-import { Button, Drawer, Group, Paper, Select, SimpleGrid, Stack, Text } from "@mantine/core";
+import {
+  Button,
+  Drawer,
+  Group,
+  Paper,
+  SegmentedControl,
+  Select,
+  SimpleGrid,
+  Stack,
+  Text,
+} from "@mantine/core";
 import { IconAdjustmentsHorizontal, IconPlus } from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -15,15 +25,19 @@ import {
   REPORT_UNITS,
   moduleAnchor,
   reportPeriods,
+  REPORT_VIEW_MODES,
+  readViewMode,
   sectionParts,
   type PartModule,
   type ReportModule,
   type ReportSettings,
+  type ReportViewMode,
   type SectionModule,
 } from "@/lib/reports";
 
 import { ModuleCard } from "./ModuleCard";
 import { ModuleEditor } from "./ModuleEditor";
+import { ReportBuilder } from "./ReportBuilder";
 import { SaveModuleDialog } from "./SaveModuleDialog";
 import { SectionCard } from "./SectionCard";
 
@@ -50,6 +64,8 @@ function put<T extends { id: string }>(list: T[], m: T): T[] {
 interface ReportViewProps {
   report: ReportSettings;
   onChange: (report: ReportSettings) => void;
+  view: ReportViewMode;
+  onView: (view: ReportViewMode) => void;
   cycles: Cycle[];
   accounts: Account[];
   buckets: Bucket[];
@@ -57,10 +73,15 @@ interface ReportViewProps {
   isDesktop: boolean;
 }
 
-/** A report on screen (#125): its period, compare-to and filters, then its modules. */
+/**
+ * A report on screen (#125): its period, compare-to and filters, then its
+ * modules, in the report builder (#202) or in full.
+ */
 export function ReportView({
   report,
   onChange,
+  view,
+  onView,
   cycles,
   accounts,
   buckets,
@@ -197,73 +218,103 @@ export function ReportView({
         </Group>
       )}
       {period === null && <Text c="dimmed">{t("stats.graphs.noPeriod")}</Text>}
+      <SegmentedControl
+        aria-label={t("stats.reports.view.label")}
+        data={REPORT_VIEW_MODES.map((v) => ({ value: v, label: t(`stats.reports.view.${v}`) }))}
+        value={view}
+        onChange={(v) => {
+          onView(readViewMode(v));
+        }}
+        style={{ alignSelf: "flex-start" }}
+      />
       {report.modules.length === 0 && <Text c="dimmed">{t("stats.reports.noModules")}</Text>}
-      {report.modules.map((m, i) =>
-        m.type === "section" ? (
-          <SectionCard
-            // New parts with a new period or unit: the newest open again.
-            key={`${m.id}:${report.period}:${m.section.unit}`}
-            report={report}
-            module={m}
-            index={i}
-            count={report.modules.length}
-            cycles={cycles}
-            accounts={accounts}
-            buckets={buckets}
-            isDesktop={isDesktop}
-            onEdit={() => {
-              setEditing({ module: m, adding: false });
-            }}
-            onMove={(d) => {
-              move(i, d);
-            }}
-            onRemove={() => {
-              setModules(report.modules.filter((x) => x.id !== m.id));
-            }}
-            onAddModule={() => {
-              setEditing({ module: newModule(report), adding: true, parent: m.id });
-            }}
-            onEditModule={(x) => {
-              setEditing({ module: x, adding: false, parent: m.id });
-            }}
-            onMoveModule={(j, d) => {
-              setSection(m.id, (list) => moved(list, j, d));
-            }}
-            onRemoveModule={(id) => {
-              setSection(m.id, (list) => list.filter((x) => x.id !== id));
-            }}
-            onSaveModule={setSaving}
-          />
-        ) : (
-          <ModuleCard
-            key={m.id}
-            report={report}
-            module={m}
-            index={i}
-            count={report.modules.length}
-            choice={choice}
-            period={period}
-            compare={compare}
-            cycles={cycles}
-            accounts={accounts}
-            buckets={buckets}
-            isDesktop={isDesktop}
-            anchor={moduleAnchor(m.id)}
-            onEdit={() => {
-              setEditing({ module: m, adding: false });
-            }}
-            onMove={(d) => {
-              move(i, d);
-            }}
-            onRemove={() => {
-              setModules(report.modules.filter((x) => x.id !== m.id));
-            }}
-            onSave={() => {
-              setSaving(m);
-            }}
-          />
-        ),
+      {view === "builder" && (
+        <ReportBuilder
+          report={report}
+          onChange={onChange}
+          choice={choice}
+          period={period}
+          compare={compare}
+          cycles={cycles}
+          accounts={accounts}
+          buckets={buckets}
+          isDesktop={isDesktop}
+          onEdit={(m, section) => {
+            setEditing({ module: m, adding: false, parent: section });
+          }}
+          onAddTo={(section) => {
+            setEditing({ module: newModule(report), adding: true, parent: section });
+          }}
+          onSave={setSaving}
+        />
       )}
+      {view === "report" &&
+        report.modules.map((m, i) =>
+          m.type === "section" ? (
+            <SectionCard
+              // New parts with a new period or unit: the newest open again.
+              key={`${m.id}:${report.period}:${m.section.unit}`}
+              report={report}
+              module={m}
+              index={i}
+              count={report.modules.length}
+              cycles={cycles}
+              accounts={accounts}
+              buckets={buckets}
+              isDesktop={isDesktop}
+              onEdit={() => {
+                setEditing({ module: m, adding: false });
+              }}
+              onMove={(d) => {
+                move(i, d);
+              }}
+              onRemove={() => {
+                setModules(report.modules.filter((x) => x.id !== m.id));
+              }}
+              onAddModule={() => {
+                setEditing({ module: newModule(report), adding: true, parent: m.id });
+              }}
+              onEditModule={(x) => {
+                setEditing({ module: x, adding: false, parent: m.id });
+              }}
+              onMoveModule={(j, d) => {
+                setSection(m.id, (list) => moved(list, j, d));
+              }}
+              onRemoveModule={(id) => {
+                setSection(m.id, (list) => list.filter((x) => x.id !== id));
+              }}
+              onSaveModule={setSaving}
+            />
+          ) : (
+            <ModuleCard
+              key={m.id}
+              report={report}
+              module={m}
+              index={i}
+              count={report.modules.length}
+              choice={choice}
+              period={period}
+              compare={compare}
+              cycles={cycles}
+              accounts={accounts}
+              buckets={buckets}
+              isDesktop={isDesktop}
+              anchor={moduleAnchor(m.id)}
+              onEdit={() => {
+                setEditing({ module: m, adding: false });
+              }}
+              onMove={(d) => {
+                move(i, d);
+              }}
+              onRemove={() => {
+                setModules(report.modules.filter((x) => x.id !== m.id));
+              }}
+              onSave={() => {
+                setSaving(m);
+              }}
+            />
+          ),
+        )}
       <Group>
         <Button
           variant="default"

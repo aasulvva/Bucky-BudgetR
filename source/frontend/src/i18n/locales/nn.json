@@ -1411,6 +1411,26 @@
         "edit": "Rediger {{module}}",
         "remove": "Fjern {{module}}",
         "parts": "Månader og syklusar"
+      },
+      "view": {
+        "label": "Vising",
+        "builder": "Byggjar",
+        "report": "Heile rapporten"
+      },
+      "builder": {
+        "hint": "Modulane etter tittel: førehandsvis ein for å sjå han, eller byt til Heile rapporten for å sjå alle.",
+        "preview": "Førehandsvis",
+        "hidePreview": "Skjul førehandsvising",
+        "previewNamed": "Førehandsvis {{module}}",
+        "hidePreviewNamed": "Skjul førehandsvisinga av {{module}}",
+        "previewPart": "Vist for {{part}}, den nyaste månaden eller perioden i seksjonen.",
+        "drag": "Dra {{module}}",
+        "moveTo": "Flytt til…",
+        "moveToNamed": "Flytt {{module}} til…",
+        "moveOut": "Ut av seksjonen",
+        "moveInto": "Inn i {{section}}",
+        "more": "Meir",
+        "moreNamed": "Meir for {{module}}"
       }
     },
     "graphs": {

@@ -4,6 +4,12 @@ import { account, bucket, bucketFigures, transaction } from "@/test/fixtures";
 import { endAtFor, startAtFor } from "./cycles";
 import { parsePeriod, resolvePeriod } from "./periods";
 import {
+  MAX_MODULES,
+  moveModuleTo,
+  moveTargets,
+  readViewMode,
+  removeModule,
+  type PartModule,
   budgetRows,
   budgetSummary,
   cleanReport,
@@ -1217,5 +1223,90 @@ describe("report sections (#194)", () => {
       "transactions",
     ]);
     expect(sameReport(cleanReport(r), r)).toBe(true);
+  });
+});
+
+describe("report builder (#202)", () => {
+  const flows = (id: string): PartModule => ({ id, type: "flows", flows: {} });
+  const report: ReportSettings = {
+    period: "previous-year",
+    modules: [
+      flows("m-1"),
+      { id: "m-2", type: "section", section: { unit: "month", modules: [flows("m-3")] } },
+      {
+        id: "m-4",
+        type: "section",
+        section: {
+          unit: "cycle",
+          modules: ["m-5", "m-6", "m-7", "m-8", "m-9", "m-10"].map(flows),
+        },
+      },
+    ],
+  };
+  const ids = (r: ReportSettings) =>
+    r.modules.map((m) =>
+      m.type === "section" ? [m.id, m.section.modules.map((x) => x.id)] : m.id,
+    );
+
+  it("offers moving into sections with room, and out of one", () => {
+    expect(moveTargets(report, "m-1")).toEqual([
+      { section: "m-2", disabled: false },
+      { section: "m-4", disabled: true },
+    ]);
+    expect(moveTargets(report, "m-3")).toEqual([
+      { section: null, disabled: false },
+      { section: "m-4", disabled: true },
+    ]);
+    expect(moveTargets(report, "m-5")).toEqual([
+      { section: null, disabled: false },
+      { section: "m-2", disabled: false },
+    ]);
+    // Sections don't nest, and unknown ids go nowhere.
+    expect(moveTargets(report, "m-2")).toEqual([]);
+    expect(moveTargets(report, "m-99")).toEqual([]);
+    const full: ReportSettings = {
+      ...report,
+      modules: [
+        ...report.modules,
+        ...Array.from({ length: MAX_MODULES - 3 }, (_, i) => flows(`m-${String(20 + i)}`)),
+      ],
+    };
+    expect(moveTargets(full, "m-3")[0]).toEqual({ section: null, disabled: true });
+  });
+
+  it("moves a module to the end of a section or of the report", () => {
+    const into = moveModuleTo(report, "m-1", "m-2");
+    expect(ids(into)).toEqual([
+      ["m-2", ["m-3", "m-1"]],
+      ["m-4", ["m-5", "m-6", "m-7", "m-8", "m-9", "m-10"]],
+    ]);
+    expect(ids(moveModuleTo(into, "m-1", null))).toEqual([
+      ["m-2", ["m-3"]],
+      ["m-4", ["m-5", "m-6", "m-7", "m-8", "m-9", "m-10"]],
+      "m-1",
+    ]);
+    expect(ids(moveModuleTo(report, "m-5", "m-2"))).toEqual([
+      "m-1",
+      ["m-2", ["m-3", "m-5"]],
+      ["m-4", ["m-6", "m-7", "m-8", "m-9", "m-10"]],
+    ]);
+    // Not into a full section, nor a section into one.
+    expect(moveModuleTo(report, "m-1", "m-4")).toBe(report);
+    expect(moveModuleTo(report, "m-2", "m-4")).toBe(report);
+  });
+
+  it("removes a module, one in a section too", () => {
+    expect(ids(removeModule(report, "m-3"))).toEqual([
+      "m-1",
+      ["m-2", []],
+      ["m-4", ["m-5", "m-6", "m-7", "m-8", "m-9", "m-10"]],
+    ]);
+    expect(ids(removeModule(report, "m-4"))).toEqual(["m-1", ["m-2", ["m-3"]]]);
+  });
+
+  it("reads the view from the URL", () => {
+    expect(readViewMode("report")).toBe("report");
+    expect(readViewMode(null)).toBe("builder");
+    expect(readViewMode("x")).toBe("builder");
   });
 });

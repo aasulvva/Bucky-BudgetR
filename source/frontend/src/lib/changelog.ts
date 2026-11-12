@@ -16,6 +16,32 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.20.00",
+    date: "2026-11-12",
+    title: {
+      en: "Reports: the report builder",
+      nb: "Rapporter: rapportbyggeren",
+      nn: "Rapportar: rapportbyggjaren",
+    },
+    changes: {
+      en: [
+        "Reports now open in a builder that lists the modules by title, which makes larger reports easier to arrange. Preview shows one module under its row, and only then loads it. A section's module is previewed over the section's newest month or cycle.",
+        "Drag a module by its handle, or use the arrows, to move it within the report or its section. Move to… puts a module into a section or takes it out.",
+        "Full report shows every module, as before. Export PDF works the same from both.",
+      ],
+      nb: [
+        "Rapporter åpnes nå i en bygger som viser modulene etter tittel, slik at større rapporter blir enklere å ordne. Forhåndsvis viser én modul under raden sin, og laster den først da. En modul i en seksjon forhåndsvises over seksjonens nyeste måned eller periode.",
+        "Dra en modul etter håndtaket, eller bruk pilene, for å flytte den i rapporten eller seksjonen. Flytt til… legger en modul inn i en seksjon eller tar den ut.",
+        "Hele rapporten viser alle modulene, som før. Eksporter PDF virker likt fra begge.",
+      ],
+      nn: [
+        "Rapportar vert no opna i ein byggjar som viser modulane etter tittel, slik at større rapportar vert enklare å ordne. Førehandsvis viser éin modul under rada si, og lastar han først då. Ein modul i ein seksjon vert førehandsvist over den nyaste månaden eller perioden i seksjonen.",
+        "Dra ein modul etter handtaket, eller bruk pilene, for å flytte han i rapporten eller seksjonen. Flytt til… legg ein modul inn i ein seksjon eller tek han ut.",
+        "Heile rapporten viser alle modulane, som før. Eksporter PDF verkar likt frå begge.",
+      ],
+    },
+  },
+  {
     version: "v2.19.00",
     date: "2026-11-12",
     title: {
