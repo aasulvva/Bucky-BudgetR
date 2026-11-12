@@ -38,6 +38,7 @@ import {
 import { defaultPeriod, parsePeriod, resolvePeriod } from "@/lib/periods";
 import {
   readTemplates,
+  readViewMode,
   sameReport,
   sourceValue,
   starter,
@@ -45,6 +46,7 @@ import {
   type ReportSettings,
   type ReportSource,
   type ReportTemplate,
+  type ReportViewMode,
 } from "@/lib/reports";
 import {
   graphAsSaved,
@@ -119,8 +121,23 @@ function Reports({
   const source: ReportSource = template
     ? { kind: "template", id: template.id }
     : { kind: "starter", id: starterId };
+  const view = readViewMode(params.get("view"));
   const select = (next: ReportSource) => {
-    setParams(new URLSearchParams({ [next.kind]: next.id }));
+    // The full report stays the full report (#202).
+    setParams(
+      new URLSearchParams({ [next.kind]: next.id, ...(view === "report" ? { view } : {}) }),
+    );
+  };
+  const setView = (next: ReportViewMode) => {
+    setParams(
+      (prev) => {
+        const p = new URLSearchParams(prev);
+        if (next === "report") p.set("view", next);
+        else p.delete("view");
+        return p;
+      },
+      { replace: true },
+    );
   };
   return (
     <Report
@@ -130,6 +147,8 @@ function Reports({
       saved={template?.report ?? starter(starterId)}
       templates={templates}
       onSelect={select}
+      view={view}
+      onView={setView}
       cycles={cycles}
       accounts={accounts}
       buckets={buckets}
@@ -142,6 +161,8 @@ function Report({
   saved,
   templates,
   onSelect,
+  view,
+  onView,
   cycles,
   accounts,
   buckets,
@@ -150,6 +171,8 @@ function Report({
   saved: ReportSettings;
   templates: ReportTemplate[];
   onSelect: (source: ReportSource) => void;
+  view: ReportViewMode;
+  onView: (view: ReportViewMode) => void;
   cycles: Cycle[];
   accounts: Account[];
   buckets: Bucket[];
@@ -177,6 +200,8 @@ function Report({
       <ReportView
         report={report}
         onChange={setReport}
+        view={view}
+        onView={onView}
         cycles={cycles}
         accounts={accounts}
         buckets={buckets}

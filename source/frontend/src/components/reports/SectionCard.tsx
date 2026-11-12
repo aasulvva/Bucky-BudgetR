@@ -73,87 +73,6 @@ export function SectionCard({
   const print = usePrintMode();
   const title = moduleTitle(module);
   const modules = module.section.modules;
-  // Once per change: a part that's still going ends now, and a new now on
-  // every render would be new queries on every render.
-  const parts = useMemo(() => sectionParts(report, module, cycles), [report, module, cycles]);
-  // Null: as at first, the newest part open.
-  const [opened, setOpened] = useState<string[] | null>(null);
-  const newest = parts.ok ? parts.parts.at(-1)?.part.choice.at : undefined;
-  const open = opened ?? (newest === undefined ? [] : [newest]);
-
-  const body = (p: SectionPart) => (
-    <Stack gap="sm">
-      {modules.map((m) => (
-        <ModuleCard
-          key={m.id}
-          report={report}
-          module={m}
-          index={0}
-          count={1}
-          choice={p.part.choice}
-          period={p.part.period}
-          compare={p.compare}
-          cycles={cycles}
-          accounts={accounts}
-          buckets={buckets}
-          isDesktop={isDesktop}
-          onEdit={noop}
-          onMove={noop}
-          onRemove={noop}
-          actions={false}
-          headingLevel={4}
-        />
-      ))}
-    </Stack>
-  );
-
-  let content;
-  if (modules.length === 0) {
-    content = (
-      <Text size="sm" c="dimmed">
-        {t("stats.reports.section.noModules")}
-      </Text>
-    );
-  } else if (!parts.ok) {
-    content = (
-      <Text size="sm" c="dimmed">
-        {parts.reason === "many"
-          ? t("stats.reports.section.many", { max: MAX_SUB_PERIODS })
-          : t("stats.reports.section.none")}
-      </Text>
-    );
-  } else if (print) {
-    content = parts.parts.map((p) => (
-      <Box key={p.part.choice.at} id={sectionAnchor(module.id, p.part.choice.at)} data-section-part>
-        <PartTitle part={p} cycles={cycles} heading />
-        {body(p)}
-      </Box>
-    ));
-  } else {
-    content = (
-      <Accordion
-        multiple
-        variant="separated"
-        order={3}
-        value={open}
-        onChange={setOpened}
-        aria-label={t("stats.reports.section.parts")}
-      >
-        {parts.parts.map((p) => {
-          const key = p.part.choice.at;
-          return (
-            <Accordion.Item key={key} value={key} data-section-part>
-              <Accordion.Control>
-                <PartTitle part={p} cycles={cycles} />
-              </Accordion.Control>
-              {/* Only an open part's modules, so only they load. */}
-              <Accordion.Panel>{open.includes(key) && body(p)}</Accordion.Panel>
-            </Accordion.Item>
-          );
-        })}
-      </Accordion>
-    );
-  }
 
   return (
     <Card
@@ -255,10 +174,126 @@ export function SectionCard({
             </Group>
           </Stack>
         )}
-        {content}
+        <SectionParts
+          report={report}
+          module={module}
+          cycles={cycles}
+          accounts={accounts}
+          buckets={buckets}
+          isDesktop={isDesktop}
+        />
       </Stack>
     </Card>
   );
+}
+
+/**
+ * A section's parts (#194), a month or cycle each with the section's
+ * modules over it: on screen in an accordion whose parts load only while
+ * open, the newest at first; in a PDF all of them, each on a new page. The
+ * report builder (#202) previews a section with them. Give it a key per
+ * period and unit, so the newest opens again when they change.
+ */
+export function SectionParts({
+  report,
+  module,
+  cycles,
+  accounts,
+  buckets,
+  isDesktop,
+}: {
+  report: ReportSettings;
+  module: SectionModule;
+  cycles: Cycle[];
+  accounts: Account[];
+  buckets: Bucket[];
+  isDesktop: boolean;
+}) {
+  const { t } = useTranslation();
+  const print = usePrintMode();
+  const modules = module.section.modules;
+  // Once per change: a part that's still going ends now, and a new now on
+  // every render would be new queries on every render.
+  const parts = useMemo(() => sectionParts(report, module, cycles), [report, module, cycles]);
+  // Null: as at first, the newest part open.
+  const [opened, setOpened] = useState<string[] | null>(null);
+  const newest = parts.ok ? parts.parts.at(-1)?.part.choice.at : undefined;
+  const open = opened ?? (newest === undefined ? [] : [newest]);
+
+  const body = (p: SectionPart) => (
+    <Stack gap="sm">
+      {modules.map((m) => (
+        <ModuleCard
+          key={m.id}
+          report={report}
+          module={m}
+          index={0}
+          count={1}
+          choice={p.part.choice}
+          period={p.part.period}
+          compare={p.compare}
+          cycles={cycles}
+          accounts={accounts}
+          buckets={buckets}
+          isDesktop={isDesktop}
+          onEdit={noop}
+          onMove={noop}
+          onRemove={noop}
+          actions={false}
+          headingLevel={4}
+        />
+      ))}
+    </Stack>
+  );
+
+  let content;
+  if (modules.length === 0) {
+    content = (
+      <Text size="sm" c="dimmed">
+        {t("stats.reports.section.noModules")}
+      </Text>
+    );
+  } else if (!parts.ok) {
+    content = (
+      <Text size="sm" c="dimmed">
+        {parts.reason === "many"
+          ? t("stats.reports.section.many", { max: MAX_SUB_PERIODS })
+          : t("stats.reports.section.none")}
+      </Text>
+    );
+  } else if (print) {
+    content = parts.parts.map((p) => (
+      <Box key={p.part.choice.at} id={sectionAnchor(module.id, p.part.choice.at)} data-section-part>
+        <PartTitle part={p} cycles={cycles} heading />
+        {body(p)}
+      </Box>
+    ));
+  } else {
+    content = (
+      <Accordion
+        multiple
+        variant="separated"
+        order={3}
+        value={open}
+        onChange={setOpened}
+        aria-label={t("stats.reports.section.parts")}
+      >
+        {parts.parts.map((p) => {
+          const key = p.part.choice.at;
+          return (
+            <Accordion.Item key={key} value={key} data-section-part>
+              <Accordion.Control>
+                <PartTitle part={p} cycles={cycles} />
+              </Accordion.Control>
+              {/* Only an open part's modules, so only they load. */}
+              <Accordion.Panel>{open.includes(key) && body(p)}</Accordion.Panel>
+            </Accordion.Item>
+          );
+        })}
+      </Accordion>
+    );
+  }
+  return content;
 }
 
 /** A part's name, and *partial* where the period cuts it or it's still going. */

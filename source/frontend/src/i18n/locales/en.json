@@ -1411,6 +1411,26 @@
         "edit": "Edit {{module}}",
         "remove": "Remove {{module}}",
         "parts": "Months and cycles"
+      },
+      "view": {
+        "label": "View",
+        "builder": "Builder",
+        "report": "Full report"
+      },
+      "builder": {
+        "hint": "The modules by title: preview one to see it, or switch to Full report to see them all.",
+        "preview": "Preview",
+        "hidePreview": "Hide preview",
+        "previewNamed": "Preview {{module}}",
+        "hidePreviewNamed": "Hide the preview of {{module}}",
+        "previewPart": "Shown for {{part}}, the section's newest month or cycle.",
+        "drag": "Drag {{module}}",
+        "moveTo": "Move to…",
+        "moveToNamed": "Move {{module}} to…",
+        "moveOut": "Out of the section",
+        "moveInto": "Into {{section}}",
+        "more": "More",
+        "moreNamed": "More for {{module}}"
       }
     },
     "graphs": {

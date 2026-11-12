@@ -1,11 +1,26 @@
-import { ActionIcon, Badge, Card, Group, SimpleGrid, Stack, Text, Tooltip } from "@mantine/core";
+import {
+  ActionIcon,
+  Badge,
+  Card,
+  Group,
+  Menu,
+  SimpleGrid,
+  Stack,
+  Text,
+  Tooltip,
+} from "@mantine/core";
 import {
   IconArrowDown,
   IconArrowUp,
   IconDeviceFloppy,
+  IconDots,
+  IconEye,
+  IconEyeOff,
+  IconFolderSymlink,
   IconPencil,
   IconTrash,
 } from "@tabler/icons-react";
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { Account, Bucket } from "@/api/accounts";
@@ -356,9 +371,19 @@ function Part({
   );
 }
 
+/** A place Move to… (#202) offers, labelled. */
+export interface MoveToItem {
+  key: string;
+  label: string;
+  disabled: boolean;
+  onClick: () => void;
+}
+
 /**
  * A module's buttons: move up and down, edit and remove. `name` is in their
- * labels when there are several lists of them, as in a section (#194).
+ * labels when there are several lists of them, as in a section (#194). In
+ * the report builder (#202) there's also Preview and Move to…, and on a
+ * phone (`compact`) all but Preview and Edit go in a menu.
  */
 export function ModuleActions({
   first,
@@ -367,6 +392,10 @@ export function ModuleActions({
   onEdit,
   onRemove,
   onSave,
+  onPreview,
+  previewing = false,
+  moveTo = [],
+  compact = false,
   name,
   size = "md",
 }: {
@@ -377,91 +406,197 @@ export function ModuleActions({
   onRemove: () => void;
   /** Saves it as a saved module (#201). */
   onSave?: () => void;
+  /** Shows or hides its preview (#202). */
+  onPreview?: () => void;
+  previewing?: boolean;
+  /** Where Move to… can put it (#202); none, no Move to…. */
+  moveTo?: MoveToItem[];
+  compact?: boolean;
   name?: string;
   size?: "sm" | "md";
 }) {
   const { t } = useTranslation();
   const label = (plain: string, named: string) => (name ? named : plain);
-  const buttons = [
-    {
-      key: "up",
-      label: label(
-        t("stats.reports.module.moveUp"),
-        t("stats.reports.section.moveUp", { module: name }),
-      ),
-      icon: <IconArrowUp size={16} />,
-      color: "gray",
-      disabled: first,
-      onClick: () => {
-        onMove(-1);
-      },
+  interface Action {
+    key: string;
+    label: string;
+    icon: ReactNode;
+    color: string | undefined;
+    disabled: boolean;
+    onClick: () => void;
+  }
+  const up: Action = {
+    key: "up",
+    label: label(
+      t("stats.reports.module.moveUp"),
+      t("stats.reports.section.moveUp", { module: name }),
+    ),
+    icon: <IconArrowUp size={16} />,
+    color: "gray",
+    disabled: first,
+    onClick: () => {
+      onMove(-1);
     },
-    {
-      key: "down",
-      label: label(
-        t("stats.reports.module.moveDown"),
-        t("stats.reports.section.moveDown", { module: name }),
-      ),
-      icon: <IconArrowDown size={16} />,
-      color: "gray",
-      disabled: last,
-      onClick: () => {
-        onMove(1);
-      },
+  };
+  const down: Action = {
+    key: "down",
+    label: label(
+      t("stats.reports.module.moveDown"),
+      t("stats.reports.section.moveDown", { module: name }),
+    ),
+    icon: <IconArrowDown size={16} />,
+    color: "gray",
+    disabled: last,
+    onClick: () => {
+      onMove(1);
     },
-    {
-      key: "edit",
-      label: label(
-        t("stats.reports.module.edit"),
-        t("stats.reports.section.edit", { module: name }),
-      ),
-      icon: <IconPencil size={16} />,
-      color: undefined,
-      disabled: false,
-      onClick: onEdit,
-    },
-    ...(onSave
-      ? [
-          {
-            key: "save",
-            label: name
-              ? t("stats.reports.module.saveNamed", { module: name })
-              : t("stats.reports.module.save"),
-            icon: <IconDeviceFloppy size={16} />,
-            color: "gray",
-            disabled: false,
-            onClick: onSave,
-          },
-        ]
-      : []),
-    {
-      key: "remove",
-      label: label(
-        t("stats.reports.module.remove"),
-        t("stats.reports.section.remove", { module: name }),
-      ),
-      icon: <IconTrash size={16} />,
-      color: "red",
-      disabled: false,
-      onClick: onRemove,
-    },
-  ];
+  };
+  const edit: Action = {
+    key: "edit",
+    label: label(t("stats.reports.module.edit"), t("stats.reports.section.edit", { module: name })),
+    icon: <IconPencil size={16} />,
+    color: undefined,
+    disabled: false,
+    onClick: onEdit,
+  };
+  const save: Action[] = onSave
+    ? [
+        {
+          key: "save",
+          label: name
+            ? t("stats.reports.module.saveNamed", { module: name })
+            : t("stats.reports.module.save"),
+          icon: <IconDeviceFloppy size={16} />,
+          color: "gray",
+          disabled: false,
+          onClick: onSave,
+        },
+      ]
+    : [];
+  const remove: Action = {
+    key: "remove",
+    label: label(
+      t("stats.reports.module.remove"),
+      t("stats.reports.section.remove", { module: name }),
+    ),
+    icon: <IconTrash size={16} />,
+    color: "red",
+    disabled: false,
+    onClick: onRemove,
+  };
+  const previewLabel = previewing
+    ? label(
+        t("stats.reports.builder.hidePreview"),
+        t("stats.reports.builder.hidePreviewNamed", { module: name }),
+      )
+    : label(
+        t("stats.reports.builder.preview"),
+        t("stats.reports.builder.previewNamed", { module: name }),
+      );
+  const moveToLabel = label(
+    t("stats.reports.builder.moveTo"),
+    t("stats.reports.builder.moveToNamed", { module: name }),
+  );
+
+  const button = (b: Action) => (
+    <Tooltip key={b.key} label={b.label}>
+      <ActionIcon
+        variant="subtle"
+        size={size}
+        color={b.color}
+        aria-label={b.label}
+        disabled={b.disabled}
+        onClick={b.onClick}
+      >
+        {b.icon}
+      </ActionIcon>
+    </Tooltip>
+  );
+  const preview = onPreview && (
+    <Tooltip label={previewLabel}>
+      <ActionIcon
+        variant={previewing ? "light" : "subtle"}
+        size={size}
+        aria-label={previewLabel}
+        aria-pressed={previewing}
+        onClick={onPreview}
+      >
+        {previewing ? <IconEyeOff size={16} /> : <IconEye size={16} />}
+      </ActionIcon>
+    </Tooltip>
+  );
+  const moveToItems = moveTo.map((x) => (
+    <Menu.Item key={x.key} disabled={x.disabled} onClick={x.onClick}>
+      {x.label}
+    </Menu.Item>
+  ));
+
+  if (compact) {
+    const moreLabel = label(
+      t("stats.reports.builder.more"),
+      t("stats.reports.builder.moreNamed", { module: name }),
+    );
+    return (
+      <Group gap={2} wrap="nowrap">
+        {preview}
+        {button(edit)}
+        <Menu position="bottom-end" withinPortal>
+          <Menu.Target>
+            <ActionIcon
+              variant="subtle"
+              color="gray"
+              size={size}
+              aria-label={moreLabel}
+              title={moreLabel}
+            >
+              <IconDots size={16} />
+            </ActionIcon>
+          </Menu.Target>
+          <Menu.Dropdown>
+            {[up, down, ...save].map((b) => (
+              <Menu.Item key={b.key} leftSection={b.icon} disabled={b.disabled} onClick={b.onClick}>
+                {b.label}
+              </Menu.Item>
+            ))}
+            {moveToItems.length > 0 && (
+              <>
+                <Menu.Label>{moveToLabel}</Menu.Label>
+                {moveToItems}
+              </>
+            )}
+            <Menu.Divider />
+            <Menu.Item color="red" leftSection={remove.icon} onClick={remove.onClick}>
+              {remove.label}
+            </Menu.Item>
+          </Menu.Dropdown>
+        </Menu>
+      </Group>
+    );
+  }
   return (
     <Group gap={2} wrap="nowrap">
-      {buttons.map((b) => (
-        <Tooltip key={b.key} label={b.label}>
-          <ActionIcon
-            variant="subtle"
-            size={size}
-            color={b.color}
-            aria-label={b.label}
-            disabled={b.disabled}
-            onClick={b.onClick}
-          >
-            {b.icon}
-          </ActionIcon>
-        </Tooltip>
-      ))}
+      {preview}
+      {[up, down, edit, ...save].map(button)}
+      {moveToItems.length > 0 && (
+        <Menu position="bottom-end" withinPortal>
+          <Menu.Target>
+            <ActionIcon
+              variant="subtle"
+              color="gray"
+              size={size}
+              aria-label={moveToLabel}
+              title={moveToLabel}
+            >
+              <IconFolderSymlink size={16} />
+            </ActionIcon>
+          </Menu.Target>
+          <Menu.Dropdown>
+            <Menu.Label>{moveToLabel}</Menu.Label>
+            {moveToItems}
+          </Menu.Dropdown>
+        </Menu>
+      )}
+      {button(remove)}
     </Group>
   );
 }

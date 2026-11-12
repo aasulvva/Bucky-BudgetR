@@ -1348,6 +1348,107 @@ export function allModuleIds(report: ReportSettings): string[] {
   );
 }
 
+/** A module that isn't a section, and the section it's in, if any. */
+function findPartModule(
+  report: ReportSettings,
+  id: string,
+): { module: PartModule; section: SectionModule | null } | null {
+  for (const m of report.modules) {
+    if (m.type === "section") {
+      const found = m.section.modules.find((x) => x.id === id);
+      if (found) return { module: found, section: m };
+    } else if (m.id === id) {
+      return { module: m, section: null };
+    }
+  }
+  return null;
+}
+
+/** Where Move to… (#202) can put a module: out of its section (null), or into a section. */
+export interface MoveTarget {
+  section: string | null;
+  disabled: boolean;
+}
+
+/**
+ * The places a module can move to: out of the section it's in, unless the
+ * report is full, and into each other section, unless that's full. A
+ * section moves nowhere, as sections don't nest.
+ */
+export function moveTargets(report: ReportSettings, id: string): MoveTarget[] {
+  const found = findPartModule(report, id);
+  if (!found) return [];
+  const out: MoveTarget[] = found.section
+    ? [{ section: null, disabled: report.modules.length >= MAX_MODULES }]
+    : [];
+  return [
+    ...out,
+    ...report.modules.flatMap((m) =>
+      m.type === "section" && m.id !== found.section?.id
+        ? [{ section: m.id, disabled: m.section.modules.length >= MAX_SECTION_MODULES }]
+        : [],
+    ),
+  ];
+}
+
+/** The report with a module moved to the end of a section, or of the report (null); as it was if it can't. */
+export function moveModuleTo(
+  report: ReportSettings,
+  id: string,
+  section: string | null,
+): ReportSettings {
+  const found = findPartModule(report, id);
+  if (!found || !moveTargets(report, id).some((x) => x.section === section && !x.disabled)) {
+    return report;
+  }
+  const without = report.modules.flatMap((m): ReportModule[] => {
+    if (m.id === id) return [];
+    if (m.type === "section" && m.id === found.section?.id) {
+      return [
+        { ...m, section: { ...m.section, modules: m.section.modules.filter((x) => x.id !== id) } },
+      ];
+    }
+    return [m];
+  });
+  if (section === null) return { ...report, modules: [...without, found.module] };
+  return {
+    ...report,
+    modules: without.map((m) =>
+      m.type === "section" && m.id === section
+        ? { ...m, section: { ...m.section, modules: [...m.section.modules, found.module] } }
+        : m,
+    ),
+  };
+}
+
+/** The report without a module, one in a section too. */
+export function removeModule(report: ReportSettings, id: string): ReportSettings {
+  return {
+    ...report,
+    modules: report.modules.flatMap((m): ReportModule[] =>
+      m.id === id
+        ? []
+        : m.type === "section"
+          ? [
+              {
+                ...m,
+                section: { ...m.section, modules: m.section.modules.filter((x) => x.id !== id) },
+              },
+            ]
+          : [m],
+    ),
+  };
+}
+
+/** The report builder (#202), or the whole report as it prints (`view=report` in the URL). */
+export type ReportViewMode = "builder" | "report";
+export const REPORT_VIEW_MODES: ReportViewMode[] = ["builder", "report"];
+
+/** A view from the URL: the builder unless it says the full report. */
+export function readViewMode(value: string | null): ReportViewMode {
+  return value === "report" ? "report" : "builder";
+}
+
 /** The report's period with a different choice. */
 export function withPeriod(report: ReportSettings, choice: PeriodChoice): ReportSettings {
   return { ...report, period: formatPeriod(choice) };
