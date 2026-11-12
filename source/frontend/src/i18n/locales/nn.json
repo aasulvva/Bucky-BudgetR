@@ -413,7 +413,44 @@
         "openTransactions": "Opne i Transaksjonar",
         "topBuckets": "Mest brukt frå",
         "topAccounts": "Mest brukt frå",
-        "currency": "I {{currency}}"
+        "currency": "I {{currency}}",
+        "noneNear": "Inga bøtte er over 90 % brukt eller over budsjett."
+      },
+      "options": {
+        "showPeriod": "Vis perioden",
+        "graphHeight": "Grafhøgd",
+        "heights": {
+          "small": "Liten",
+          "medium": "Middels",
+          "large": "Stor"
+        },
+        "summary": "Samandrag",
+        "summaries": {
+          "net": "Antal og netto",
+          "in_out": "Antal, inn, ut og netto",
+          "off": "Ingen"
+        },
+        "rows": "Transaksjonar i lista",
+        "none": "Ingen",
+        "all": "Alle",
+        "figures": "Tal",
+        "figuresRequired": "Vel minst eitt tal.",
+        "top": "Kvar mest vart brukt",
+        "topOf": "Av",
+        "topOfOptions": {
+          "module": "Som modulen viser",
+          "buckets": "Bøtter",
+          "accounts": "Kontoar"
+        },
+        "buckets": "Bøtter i lista",
+        "order": "Rekkjefølgje",
+        "orders": {
+          "share": "Del brukt, høgast først",
+          "used": "Beløp brukt, mest først",
+          "name": "Namn"
+        },
+        "attention": "Berre dei som er over 90 % brukte eller over budsjett",
+        "total": "Vis totalen først"
       }
     },
     "scheduled": {

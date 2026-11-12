@@ -23,6 +23,14 @@ import { ResponsiveModal } from "@/components/ResponsiveModal";
 import {
   ACCOUNTS_MODES,
   BUCKET_STATUS_MODES,
+  COMPACT_BUDGET_ORDERS,
+  COMPACT_BUDGET_ROWS,
+  COMPACT_FIGURES,
+  COMPACT_ROWS,
+  COMPACT_SUMMARIES,
+  COMPACT_TOP_OF,
+  COMPACT_TOPS,
+  GRAPH_HEIGHTS,
   MAX_TITLE,
   MODULE_VIEWS,
   SCHEDULED_SHOWS,
@@ -32,10 +40,12 @@ import {
   type AccountsSettings,
   type BucketStatusSettings,
   type InOutSettings,
+  type ModuleWidgetSettings,
   type WidgetInstance,
   type SaveWidget,
 } from "@/lib/dashboard";
-import { readSavedModules, savedModuleOptions } from "@/lib/savedModules";
+import { accountFigureLabel } from "@/lib/reports";
+import { readSavedModules, savedModuleOptions, type SavedModule } from "@/lib/savedModules";
 
 import { FLOW_FIGURES, FLOW_PERIODS, MAX_DAYS } from "@/lib/flows";
 
@@ -224,39 +234,13 @@ export function WidgetSettingsForm({
             />
           </Text>
         ) : (
-          <>
-            <Select
-              // Inside a full-screen dialog on phones: render the list in place (#122's touch fix).
-              comboboxProps={{ withinPortal: false }}
-              label={t("dashboard.module.savedModule")}
-              placeholder={t("dashboard.module.pick")}
-              data={savedModuleOptions(saved, t)}
-              value={
-                saved.some((g) => g.id === draft.settings.savedModuleId)
-                  ? draft.settings.savedModuleId
-                  : null
-              }
-              allowDeselect={false}
-              searchable
-              onChange={(id) => {
-                if (id) setDraft({ ...draft, settings: { ...draft.settings, savedModuleId: id } });
-              }}
-            />
-            <Input.Wrapper label={t("dashboard.module.view.label")}>
-              <SegmentedControl
-                fullWidth
-                data={MODULE_VIEWS.map((v) => ({
-                  value: v,
-                  label: t(`dashboard.module.view.${v}`),
-                }))}
-                value={draft.settings.view}
-                onChange={(v) => {
-                  const view = MODULE_VIEWS.find((x) => x === v);
-                  if (view) setDraft({ ...draft, settings: { ...draft.settings, view } });
-                }}
-              />
-            </Input.Wrapper>
-          </>
+          <ModuleForm
+            value={draft.settings}
+            saved={saved}
+            onChange={(settings) => {
+              setDraft({ ...draft, settings });
+            }}
+          />
         ))}
       {save.error && <ErrorAlert error={save.error} />}
       <Group justify="flex-end" gap="xs">
@@ -453,6 +437,216 @@ function InOutForm({
           onChange({ ...value, accountId: v && v !== ALL ? v : null });
         }}
       />
+    </>
+  );
+}
+
+/** A select in the settings dialog, its list in place inside a full-screen dialog on phones (#122). */
+function ChoiceSelect<V extends string | number>({
+  label,
+  choices,
+  value,
+  onChange,
+}: {
+  label: string;
+  choices: { value: V; label: string }[];
+  value: V;
+  onChange: (value: V) => void;
+}) {
+  return (
+    <Select
+      comboboxProps={{ withinPortal: false }}
+      label={label}
+      data={choices.map((c) => ({ value: String(c.value), label: c.label }))}
+      value={String(value)}
+      allowDeselect={false}
+      onChange={(v) => {
+        const picked = choices.find((c) => String(c.value) === v);
+        if (picked) onChange(picked.value);
+      }}
+    />
+  );
+}
+
+/**
+ * A module widget's settings: the saved module, compact or full, the
+ * period line, and the compact form's options for the module's type (#203).
+ */
+function ModuleForm({
+  value,
+  saved,
+  onChange,
+}: {
+  value: ModuleWidgetSettings;
+  saved: SavedModule[];
+  onChange: (value: ModuleWidgetSettings) => void;
+}) {
+  const { t } = useTranslation();
+  const type = saved.find((g) => g.id === value.savedModuleId)?.module.type;
+  const compact = value.view === "compact";
+  const count = (n: number, zero: string) => (n === 0 ? zero : String(n));
+  const { transactions, flows, budget } = value;
+  return (
+    <>
+      <Select
+        // Inside a full-screen dialog on phones: render the list in place (#122's touch fix).
+        comboboxProps={{ withinPortal: false }}
+        maxDropdownHeight={360}
+        label={t("dashboard.module.savedModule")}
+        placeholder={t("dashboard.module.pick")}
+        data={savedModuleOptions(saved, t)}
+        value={type ? value.savedModuleId : null}
+        allowDeselect={false}
+        searchable
+        onChange={(id) => {
+          if (id) onChange({ ...value, savedModuleId: id });
+        }}
+      />
+      <Input.Wrapper label={t("dashboard.module.view.label")}>
+        <SegmentedControl
+          fullWidth
+          data={MODULE_VIEWS.map((v) => ({ value: v, label: t(`dashboard.module.view.${v}`) }))}
+          value={value.view}
+          onChange={(v) => {
+            const view = MODULE_VIEWS.find((x) => x === v);
+            if (view) onChange({ ...value, view });
+          }}
+        />
+      </Input.Wrapper>
+      <Checkbox
+        label={t("dashboard.module.options.showPeriod")}
+        checked={value.showPeriod}
+        onChange={(e) => {
+          onChange({ ...value, showPeriod: e.currentTarget.checked });
+        }}
+      />
+      {compact && type === "graph" && (
+        <Input.Wrapper label={t("dashboard.module.options.graphHeight")}>
+          <SegmentedControl
+            fullWidth
+            data={GRAPH_HEIGHTS.map((h) => ({
+              value: h,
+              label: t(`dashboard.module.options.heights.${h}`),
+            }))}
+            value={value.graphHeight}
+            onChange={(v) => {
+              const graphHeight = GRAPH_HEIGHTS.find((x) => x === v);
+              if (graphHeight) onChange({ ...value, graphHeight });
+            }}
+          />
+        </Input.Wrapper>
+      )}
+      {compact && type === "transactions" && (
+        <>
+          <ChoiceSelect
+            label={t("dashboard.module.options.summary")}
+            choices={COMPACT_SUMMARIES.map((v) => ({
+              value: v,
+              label: t(`dashboard.module.options.summaries.${v}`),
+            }))}
+            value={transactions.summary}
+            onChange={(summary) => {
+              onChange({ ...value, transactions: { ...transactions, summary } });
+            }}
+          />
+          <ChoiceSelect
+            label={t("dashboard.module.options.rows")}
+            choices={COMPACT_ROWS.map((n) => ({
+              value: n,
+              label: count(n, t("dashboard.module.options.none")),
+            }))}
+            value={transactions.rows}
+            onChange={(rows) => {
+              onChange({ ...value, transactions: { ...transactions, rows } });
+            }}
+          />
+        </>
+      )}
+      {compact && type === "flows" && (
+        <>
+          <Checkbox.Group
+            label={t("dashboard.module.options.figures")}
+            value={flows.figures}
+            error={
+              flows.figures.length === 0 ? t("dashboard.module.options.figuresRequired") : undefined
+            }
+            onChange={(picked) => {
+              const figures = COMPACT_FIGURES.filter((f) => picked.includes(f));
+              onChange({ ...value, flows: { ...flows, figures } });
+            }}
+          >
+            <Group gap="md" mt={4}>
+              {COMPACT_FIGURES.map((f) => (
+                <Checkbox key={f} value={f} label={accountFigureLabel(f)} />
+              ))}
+            </Group>
+          </Checkbox.Group>
+          <ChoiceSelect
+            label={t("dashboard.module.options.top")}
+            choices={COMPACT_TOPS.map((n) => ({
+              value: n,
+              label: count(n, t("dashboard.module.options.none")),
+            }))}
+            value={flows.top}
+            onChange={(top) => {
+              onChange({ ...value, flows: { ...flows, top } });
+            }}
+          />
+          {flows.top > 0 && (
+            <ChoiceSelect
+              label={t("dashboard.module.options.topOf")}
+              choices={COMPACT_TOP_OF.map((v) => ({
+                value: v,
+                label: t(`dashboard.module.options.topOfOptions.${v}`),
+              }))}
+              value={flows.topOf}
+              onChange={(topOf) => {
+                onChange({ ...value, flows: { ...flows, topOf } });
+              }}
+            />
+          )}
+        </>
+      )}
+      {compact && type === "budget" && (
+        <>
+          <ChoiceSelect
+            label={t("dashboard.module.options.buckets")}
+            choices={COMPACT_BUDGET_ROWS.map((n) => ({
+              value: n,
+              label: count(n, t("dashboard.module.options.all")),
+            }))}
+            value={budget.rows}
+            onChange={(rows) => {
+              onChange({ ...value, budget: { ...budget, rows } });
+            }}
+          />
+          <ChoiceSelect
+            label={t("dashboard.module.options.order")}
+            choices={COMPACT_BUDGET_ORDERS.map((v) => ({
+              value: v,
+              label: t(`dashboard.module.options.orders.${v}`),
+            }))}
+            value={budget.order}
+            onChange={(order) => {
+              onChange({ ...value, budget: { ...budget, order } });
+            }}
+          />
+          <Checkbox
+            label={t("dashboard.module.options.attention")}
+            checked={budget.attention}
+            onChange={(e) => {
+              onChange({ ...value, budget: { ...budget, attention: e.currentTarget.checked } });
+            }}
+          />
+          <Checkbox
+            label={t("dashboard.module.options.total")}
+            checked={budget.total}
+            onChange={(e) => {
+              onChange({ ...value, budget: { ...budget, total: e.currentTarget.checked } });
+            }}
+          />
+        </>
+      )}
     </>
   );
 }

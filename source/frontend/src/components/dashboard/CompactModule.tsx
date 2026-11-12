@@ -1,4 +1,4 @@
-import { Anchor, Box, Center, Group, Loader, Stack, Text } from "@mantine/core";
+import { Anchor, Box, Center, Group, Loader, Progress, Stack, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
@@ -15,7 +15,8 @@ import { ErrorAlert } from "@/components/ErrorAlert";
 import { QueryState } from "@/components/QueryState";
 import { signedMoney, useLookups } from "@/components/transactions/lookups";
 import { TransactionRow } from "@/components/transactions/TransactionRow";
-import { toneText } from "@/lib/buckets";
+import { toneText, usageColor } from "@/lib/buckets";
+import { COMPACT_FIGURES, type ModuleWidgetSettings } from "@/lib/dashboard";
 import { compareAmounts, formatMoney } from "@/lib/money";
 import type { Period } from "@/lib/periods";
 import {
@@ -41,18 +42,15 @@ import {
 
 import { FlowFigures } from "./FlowFigures";
 
-/** A compact transactions module's newest rows. */
-const COMPACT_ROWS = 3;
-/** A compact In/out/balance module's top buckets or accounts. */
-const COMPACT_TOP = 3;
-/** A compact budget module's buckets; the rest are "+N more". */
-const COMPACT_BUDGET = 6;
+/** Used more than this share, a bucket is near its budget (as Bucket status's Needs attention). */
+const NEAR_PCT = 90;
 
 /**
  * A saved module's compact form on the Dashboard (#203), over its own
  * period: a transactions module's count and total and its newest rows; an
  * In/out/balance module's In, Out and Net and where most was spent; a
- * budget module's most used buckets. `more` is where the rest is.
+ * budget module's most used buckets. `options` are the widget's (how many
+ * rows, which figures and so on); `more` is where the rest is.
  */
 export function CompactModule({
   report,
@@ -61,6 +59,7 @@ export function CompactModule({
   cycles,
   accounts,
   buckets,
+  options,
   more,
 }: {
   report: ReportSettings;
@@ -70,6 +69,7 @@ export function CompactModule({
   cycles: Cycle[];
   accounts: Account[];
   buckets: Bucket[];
+  options: ModuleWidgetSettings;
   more: string;
 }) {
   const { t } = useTranslation();
@@ -82,7 +82,13 @@ export function CompactModule({
   }
   switch (module.type) {
     case "transactions":
-      return <CompactTransactions settings={moduleTransactions(report, module)} period={period} />;
+      return (
+        <CompactTransactions
+          settings={moduleTransactions(report, module)}
+          period={period}
+          options={options.transactions}
+        />
+      );
     case "flows":
       return (
         <CompactFlows
@@ -90,6 +96,7 @@ export function CompactModule({
           period={period}
           accounts={accounts}
           buckets={buckets}
+          options={options.flows}
         />
       );
     case "budget":
@@ -99,6 +106,7 @@ export function CompactModule({
           period={period}
           cycles={cycles}
           buckets={buckets}
+          options={options.budget}
           more={more}
         />
       );
@@ -113,60 +121,90 @@ const only = (list: string[] | undefined) => (list?.length === 1 ? (list[0] ?? n
 function CompactTransactions({
   settings,
   period,
+  options,
 }: {
   settings: ReportTransactions;
   period: Period;
+  options: ModuleWidgetSettings["transactions"];
 }) {
   const { t } = useTranslation();
   const names = useLookups();
   const query = transactionsQuery(settings, period);
-  const summary = useTransactionSummary(query);
+  const summarised = options.summary !== "off";
+  const summary = useTransactionSummary(summarised ? query : null);
   // The newest, whichever order the module lists them in.
-  const newest: TransactionQuery = { ...query, limit: COMPACT_ROWS };
+  const newest: TransactionQuery = { ...query, limit: Math.max(options.rows, 1) };
   delete newest.order;
-  const pages = useTransactionPages(newest);
+  const pages = useTransactionPages(newest, options.rows > 0);
   const link = transactionsLink(settings, period);
   // Signed from the account's or bucket's side when there's one, as the module.
   const focus = { accountId: only(settings.account_ids), bucketId: only(settings.bucket_ids) };
+  const empty = (
+    <Text size="sm" c="dimmed">
+      {t("stats.reports.transactions.empty")}
+    </Text>
+  );
+  const open = link && (
+    <Anchor component={Link} to={link} size="sm">
+      {t("dashboard.module.compact.openTransactions")}
+    </Anchor>
+  );
+  const rows =
+    options.rows > 0 ? (
+      <QueryState query={pages}>
+        {(p) => {
+          const items = p.pages[0]?.items ?? [];
+          if (items.length === 0) return summarised ? null : empty;
+          return (
+            <Box mx="calc(var(--mantine-spacing-md) * -1)">
+              {items.map((tx) => (
+                <TransactionRow
+                  key={tx.id}
+                  tx={tx}
+                  names={names}
+                  filter={focus}
+                  to={transactionsLink(settings, period, tx.id) ?? `/transactions?open=${tx.id}`}
+                  selected={false}
+                  badge={false}
+                />
+              ))}
+            </Box>
+          );
+        }}
+      </QueryState>
+    ) : null;
+  if (!summarised) {
+    return (
+      <Stack gap="xs">
+        {rows}
+        {open}
+      </Stack>
+    );
+  }
   return (
     <QueryState query={summary}>
       {(s) =>
         s.count === 0 ? (
-          <Text size="sm" c="dimmed">
-            {t("stats.reports.transactions.empty")}
-          </Text>
+          empty
         ) : (
           <Stack gap="xs">
             <Text size="sm" fw={500} data-testid="compact-summary">
               {[
                 t("dashboard.module.compact.count", { count: s.count }),
-                ...s.totals.map((x) => signedMoney({ amount: x.net, signed: true }, x.currency)),
+                ...s.totals.flatMap((x) => {
+                  const net = signedMoney({ amount: x.net, signed: true }, x.currency);
+                  if (options.summary === "net") return [net];
+                  const money = (a: string) => formatMoney(a, x.currency);
+                  return [
+                    t("stats.reports.transactions.sections.in", { amount: money(x.in) }),
+                    t("stats.reports.transactions.sections.out", { amount: money(x.out) }),
+                    t("stats.reports.transactions.sections.net", { amount: net }),
+                  ];
+                }),
               ].join(" · ")}
             </Text>
-            <QueryState query={pages}>
-              {(p) => (
-                <Box mx="calc(var(--mantine-spacing-md) * -1)">
-                  {(p.pages[0]?.items ?? []).map((tx) => (
-                    <TransactionRow
-                      key={tx.id}
-                      tx={tx}
-                      names={names}
-                      filter={focus}
-                      to={
-                        transactionsLink(settings, period, tx.id) ?? `/transactions?open=${tx.id}`
-                      }
-                      selected={false}
-                      badge={false}
-                    />
-                  ))}
-                </Box>
-              )}
-            </QueryState>
-            {link && (
-              <Anchor component={Link} to={link} size="sm">
-                {t("dashboard.module.compact.openTransactions")}
-              </Anchor>
-            )}
+            {rows}
+            {open}
           </Stack>
         )
       }
@@ -179,11 +217,13 @@ function CompactFlows({
   period,
   accounts,
   buckets,
+  options,
 }: {
   settings: ReportFlows;
   period: Period;
   accounts: Account[];
   buckets: Bucket[];
+  options: ModuleWidgetSettings["flows"];
 }) {
   const { t } = useTranslation();
   const flows = useStatsFlows(flowsQuery(settings, period, "total"));
@@ -201,9 +241,14 @@ function CompactFlows({
             </Text>
           );
         }
-        const byAccount = settings.show === "accounts";
+        const byAccount =
+          options.topOf === "module" ? settings.show === "accounts" : options.topOf === "accounts";
         const top: { id: string; name: string; currency: string; values: { out: string } }[] =
-          byAccount ? topSpending(tables.accounts.rows) : topSpending(tables.buckets.rows);
+          byAccount
+            ? topSpending(tables.accounts.rows, options.top)
+            : topSpending(tables.buckets.rows, options.top);
+        // In the order In, Out, Net, whichever are picked.
+        const shown = COMPACT_FIGURES.filter((k) => options.figures.includes(k));
         const several = tables.accounts.totals.length > 1;
         return (
           <Stack gap="sm">
@@ -215,7 +260,7 @@ function CompactFlows({
                   </Text>
                 )}
                 <FlowFigures
-                  figures={(["in", "out", "net"] as const).map((k) => ({
+                  figures={shown.map((k) => ({
                     key: k,
                     label: accountFigureLabel(k),
                     amount:
@@ -268,11 +313,11 @@ function CompactFlows({
 }
 
 /** The rows that spent the most, most first. */
-function topSpending<R extends { values: { out: string } }>(rows: R[]): R[] {
+function topSpending<R extends { values: { out: string } }>(rows: R[], count: number): R[] {
   return rows
     .filter((r) => compareAmounts(r.values.out, "0") > 0)
     .sort((a, b) => compareAmounts(b.values.out, a.values.out))
-    .slice(0, COMPACT_TOP);
+    .slice(0, count);
 }
 
 function signColor(amount: string): string | undefined {
@@ -289,12 +334,14 @@ function CompactBudget({
   period,
   cycles,
   buckets,
+  options,
   more,
 }: {
   settings: ReportBudget;
   period: Period;
   cycles: Cycle[];
   buckets: Bucket[];
+  options: ModuleWidgetSettings["budget"];
   more: string;
 }) {
   const { t } = useTranslation();
@@ -329,43 +376,72 @@ function CompactBudget({
       </Center>
     );
   }
-  // Summed over the period's cycles, the most used first.
-  const rows = mostUsedFirst(budgetRows(budgetSummary(figures), buckets, settings).rows);
-  if (rows.length === 0) {
+  // Summed over the period's cycles, in the widget's order.
+  const table = budgetRows(budgetSummary(figures), buckets, settings);
+  if (table.rows.length === 0) {
     return (
       <Text size="sm" c="dimmed">
         {t("stats.reports.budget.empty")}
       </Text>
     );
   }
-  const rest = rows.length - COMPACT_BUDGET;
+  const rows = ordered(table.rows, options.order).filter(
+    (r) => !options.attention || nearBudget(r),
+  );
+  const limit = options.rows === 0 ? rows.length : options.rows;
+  const rest = rows.length - limit;
+  const usedOf = (r: BudgetRow) =>
+    t("buckets.usedOf", {
+      used: formatMoney(r.values.used, r.currency),
+      budget: formatMoney(r.values.budget, r.currency),
+    });
+  const amount = (r: BudgetRow) => (
+    <Text
+      size="sm"
+      fw={600}
+      c={compareAmounts(r.values.unspent, "0") < 0 ? toneText("alert") : undefined}
+      style={{ whiteSpace: "nowrap" }}
+    >
+      {usedOf(r)}
+    </Text>
+  );
+  const several = table.totals.length > 1;
   return (
     <Stack gap="xs">
-      {rows.slice(0, COMPACT_BUDGET).flatMap((r) => {
+      {options.total &&
+        table.totals.map((r) => {
+          const label = several
+            ? t("stats.reports.budget.totalIn", { currency: r.currency })
+            : t("stats.reports.budget.total");
+          return (
+            <Stack key={r.currency} gap={4} data-testid="compact-budget-total">
+              <Group justify="space-between" gap="xs" wrap="nowrap">
+                <Text size="sm" fw={600}>
+                  {label}
+                </Text>
+                {amount(r)}
+              </Group>
+              {r.usedPct !== null && (
+                <Progress
+                  size="sm"
+                  value={Math.min(r.usedPct, 100)}
+                  color={usageColor(r.usedPct)}
+                  aria-label={t("dashboard.bucketStatus.usedOf", { name: label, pct: r.usedPct })}
+                />
+              )}
+            </Stack>
+          );
+        })}
+      {rows.length === 0 && (
+        <Text size="sm" c="dimmed">
+          {t("dashboard.module.compact.noneNear")}
+        </Text>
+      )}
+      {rows.slice(0, limit).flatMap((r) => {
         const bucket = buckets.find((b) => b.id === r.id);
-        if (!bucket) return [];
-        const money = (a: string) => formatMoney(a, r.currency);
-        const over = compareAmounts(r.values.unspent, "0") < 0;
-        return [
-          <CompactBucket
-            key={r.id}
-            bucket={bucket}
-            pct={r.usedPct}
-            right={
-              <Text
-                size="sm"
-                fw={600}
-                c={over ? toneText("alert") : undefined}
-                style={{ whiteSpace: "nowrap" }}
-              >
-                {t("buckets.usedOf", {
-                  used: money(r.values.used),
-                  budget: money(r.values.budget),
-                })}
-              </Text>
-            }
-          />,
-        ];
+        return bucket
+          ? [<CompactBucket key={r.id} bucket={bucket} pct={r.usedPct} right={amount(r)} />]
+          : [];
       })}
       {rest > 0 && (
         <Anchor component={Link} to={more} size="sm">
@@ -376,14 +452,26 @@ function CompactBudget({
   );
 }
 
-/** By used share, highest first; those without a budget last, by what they used. */
-function mostUsedFirst(rows: BudgetRow[]): BudgetRow[] {
+/** More than NEAR_PCT of its budget used, or over it. */
+function nearBudget(r: BudgetRow): boolean {
+  return compareAmounts(r.values.unspent, "0") < 0 || (r.usedPct !== null && r.usedPct > NEAR_PCT);
+}
+
+/**
+ * In the widget's order: the share used, highest first, those without a
+ * budget last; the amount used, most first; or by name (budgetRows' own).
+ * Ties go by the amount used.
+ */
+function ordered(rows: BudgetRow[], order: ModuleWidgetSettings["budget"]["order"]): BudgetRow[] {
+  if (order === "name") return rows;
+  const byUsed = (a: BudgetRow, b: BudgetRow) => compareAmounts(b.values.used, a.values.used);
+  if (order === "used") return [...rows].sort(byUsed);
   return [...rows].sort((a, b) => {
     if (a.usedPct !== b.usedPct) {
       if (a.usedPct === null) return 1;
       if (b.usedPct === null) return -1;
       return b.usedPct - a.usedPct;
     }
-    return compareAmounts(b.values.used, a.values.used);
+    return byUsed(a, b);
   });
 }

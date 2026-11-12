@@ -1945,6 +1945,83 @@ export interface components {
         ModuleWidgetSettings: {
             saved_module_id: string;
             view?: components["schemas"]["ModuleWidgetView"];
+            /**
+             * @description A line under the title with the module's period and its dates
+             *     (#203). Missing means true.
+             */
+            show_period?: boolean;
+            /**
+             * @description A compact graph's height (#203): small, medium (missing; about
+             *     200 px on half width, 260 on full) or large.
+             * @enum {string}
+             */
+            graph_height?: "small" | "medium" | "large";
+            transactions?: components["schemas"]["ModuleWidgetTransactions"];
+            flows?: components["schemas"]["ModuleWidgetFlows"];
+            budget?: components["schemas"]["ModuleWidgetBudget"];
+        };
+        /**
+         * @description A compact transactions module's options (#203); each left out is
+         *     its default. They only apply while the saved module is one.
+         */
+        ModuleWidgetTransactions: {
+            /**
+             * @description How many of the newest it lists; 0 for none. 3 by default.
+             * @enum {integer}
+             */
+            rows?: 0 | 3 | 5 | 10 | 15 | 20;
+            /**
+             * @description The line above them: the count and net per currency (`net`, the
+             *     default), the count with in, out and net (`in_out`), or none.
+             * @enum {string}
+             */
+            summary?: "net" | "in_out" | "off";
+        };
+        /**
+         * @description A compact In/out/balance module's options (#203); each left out is
+         *     its default.
+         */
+        ModuleWidgetFlows: {
+            /** @description The accounts' figures it shows, in this order. All three by default. */
+            figures?: ("in" | "out" | "net")[];
+            /**
+             * @description How many of those that spent the most it lists; 0 for none. 3 by default.
+             * @enum {integer}
+             */
+            top?: 0 | 3 | 5 | 10;
+            /**
+             * @description Whether those are buckets or accounts. Missing follows the
+             *     module: accounts when it shows accounts only, else buckets.
+             * @enum {string}
+             */
+            top_of?: "buckets" | "accounts";
+        };
+        /**
+         * @description A compact budget vs spending module's options (#203); each left
+         *     out is its default.
+         */
+        ModuleWidgetBudget: {
+            /**
+             * @description How many buckets it lists before "+N more"; 0 for all. 6 by default.
+             * @enum {integer}
+             */
+            rows?: 0 | 3 | 6 | 10;
+            /**
+             * @description The share of the budget used, highest first (the default), the
+             *     amount used, most first, or the name.
+             * @enum {string}
+             */
+            order?: "share" | "used" | "name";
+            /**
+             * @description Only buckets more than 90 % used or over budget, as Bucket
+             *     status's Needs attention. Missing means false.
+             */
+            attention?: boolean;
+            /**
+             * @description A first line with the total used of the total budget, per
+             *     currency. Missing means false.
+             */
+            total?: boolean;
         };
         /**
          * @description How a module widget shows its module (#203): `compact` (left out,

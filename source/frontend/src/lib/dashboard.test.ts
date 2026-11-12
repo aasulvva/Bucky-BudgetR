@@ -1,6 +1,7 @@
 import { account, bucket, bucketFigures } from "@/test/fixtures";
 
 import {
+  defaultSettings,
   accountHealth,
   addModuleWidget,
   autoTitle,
@@ -566,7 +567,7 @@ describe("the module widget (#201; the graph widget before, #124)", () => {
     type: "module",
     width: "full",
     title: null,
-    settings: { savedModuleId, view },
+    settings: { ...defaultSettings("module"), savedModuleId, view },
   });
 
   it("saves the saved module it shows, and reads it back", () => {
@@ -593,6 +594,38 @@ describe("the module widget (#201; the graph widget before, #124)", () => {
     const back = dashboardLayout({ dashboard: prefs });
     expect(back[0]).toEqual(shows("g-1", "full"));
     expect(back[1]).toEqual(shows("g-2"));
+  });
+
+  it("saves only the compact options that differ from the defaults (#203)", () => {
+    const w = shows("g-1");
+    const set = (settings: Partial<WidgetInstance<"module">["settings"]>) =>
+      layoutToPreferences([{ ...w, settings: { ...w.settings, ...settings } }]).widgets?.[0]
+        ?.module;
+    expect(set({})).toEqual({ saved_module_id: "g-1" });
+    const changed: Partial<WidgetInstance<"module">["settings"]> = {
+      showPeriod: false,
+      graphHeight: "large",
+      transactions: { rows: 10, summary: "in_out" },
+      flows: { figures: ["net"], top: 3, topOf: "accounts" },
+      budget: { rows: 0, order: "name", attention: true, total: false },
+    };
+    const api = set(changed);
+    expect(api).toEqual({
+      saved_module_id: "g-1",
+      show_period: false,
+      graph_height: "large",
+      transactions: { rows: 10, summary: "in_out" },
+      flows: { figures: ["net"], top_of: "accounts" },
+      budget: { rows: 0, order: "name", attention: true },
+    });
+    // Following the module stores nothing.
+    expect(set({ flows: { ...w.settings.flows, topOf: "module" } })).toEqual({
+      saved_module_id: "g-1",
+    });
+    const back = dashboardLayout({
+      dashboard: { widgets: [{ id: "gw", type: "module", width: "full", module: api }] },
+    });
+    expect(back[0]?.settings).toEqual({ ...w.settings, ...changed });
   });
 
   it("leaves out widgets of a type the app doesn't know", () => {

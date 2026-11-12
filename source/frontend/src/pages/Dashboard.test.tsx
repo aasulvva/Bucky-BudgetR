@@ -1120,7 +1120,7 @@ describe("Module widget (#201)", () => {
       graph: { kind: "bar", metric: "spending", resolution: "month", group_by: "bucket" },
     },
   };
-  const moduleWidget = (savedId: string | null, saved = [spending]) => {
+  const moduleWidget = (savedId: string | null, saved = [spending], options: object = {}) => {
     withPreferences({
       saved_modules: saved,
       dashboard: {
@@ -1129,7 +1129,7 @@ describe("Module widget (#201)", () => {
             id: "gw",
             type: "module",
             width: "full",
-            ...(savedId ? { module: { saved_module_id: savedId } } : {}),
+            ...(savedId ? { module: { saved_module_id: savedId, ...options } } : {}),
           },
         ],
       },
@@ -1290,7 +1290,8 @@ describe("Module widget (#201)", () => {
     expect(box.queryByTestId("compact-summary")).not.toBeInTheDocument();
   });
 
-  it("shows an In/out/balance module's figures and where most went (#203)", async () => {
+  /** Groceries, Rent, Fun and a deleted bucket spent; Main took 30 000 in and 1 260 out. */
+  const mockFlows = () => {
     const zero = Object.fromEntries(
       [
         "start",
@@ -1342,6 +1343,40 @@ describe("Module widget (#201)", () => {
         ],
       },
     }));
+  };
+  const flowsModule: components["schemas"]["SavedModule"] = {
+    id: "g-3",
+    name: "Flows",
+    period: "last-3-months",
+    module: { id: "m-1", type: "flows", flows: {} },
+  };
+  /** Each bucket at its share: Hobby 150 %, Fun 95 %, Groceries 35 %, Rent 0 %, four more 10 %. */
+  const mockBudget = () => {
+    const more = ["Car", "Gifts", "Travel", "Pets"].map((name, i) =>
+      bucket({ ...base, id: `100000001${String(i)}`, name }),
+    );
+    apiMock.on("GET /api/v1/buckets", { body: [groceries, rent, hobby, fun, ...more] });
+    apiMock.on("GET /api/v1/cycles/100001000001/bucket-figures", {
+      body: [
+        bucketFigures({ bucket_id: groceries.id, budget: "1000.00", used: "350.00" }),
+        bucketFigures({ bucket_id: rent.id, budget: "800.00", used: "0.00" }),
+        bucketFigures({ bucket_id: hobby.id, budget: "100.00", used: "150.00" }),
+        bucketFigures({ bucket_id: fun.id, budget: "1000.00", used: "950.00" }),
+        ...more.map((b) => bucketFigures({ bucket_id: b.id, budget: "100.00", used: "10.00" })),
+      ],
+    });
+  };
+  const budgetModule: components["schemas"]["SavedModule"] = {
+    id: "g-4",
+    name: "Budget",
+    period: "cycle-100001000001",
+    module: { id: "m-1", type: "budget", budget: {} },
+  };
+  const bars = (box: Awaited<ReturnType<typeof widget>>) =>
+    box.getAllByRole("progressbar").map((p) => p.getAttribute("aria-label"));
+
+  it("shows an In/out/balance module's figures and where most went (#203)", async () => {
+    mockFlows();
     moduleWidget("g-3", [
       {
         id: "g-3",
@@ -1365,31 +1400,12 @@ describe("Module widget (#201)", () => {
   });
 
   it("shows a budget module's most used buckets, and how many more (#203)", async () => {
-    const more = ["Car", "Gifts", "Travel", "Pets"].map((name, i) =>
-      bucket({ ...base, id: `100000001${String(i)}`, name }),
-    );
-    apiMock.on("GET /api/v1/buckets", { body: [groceries, rent, hobby, fun, ...more] });
-    apiMock.on("GET /api/v1/cycles/100001000001/bucket-figures", {
-      body: [
-        bucketFigures({ bucket_id: groceries.id, budget: "1000.00", used: "350.00" }),
-        bucketFigures({ bucket_id: rent.id, budget: "800.00", used: "0.00" }),
-        bucketFigures({ bucket_id: hobby.id, budget: "100.00", used: "150.00" }),
-        bucketFigures({ bucket_id: fun.id, budget: "1000.00", used: "950.00" }),
-        ...more.map((b) => bucketFigures({ bucket_id: b.id, budget: "100.00", used: "10.00" })),
-      ],
-    });
-    moduleWidget("g-4", [
-      {
-        id: "g-4",
-        name: "Budget",
-        period: "cycle-100001000001",
-        module: { id: "m-1", type: "budget", budget: {} },
-      },
-    ]);
+    mockBudget();
+    moduleWidget("g-4", [budgetModule]);
     renderRoute("/");
     const box = await widget("Budget");
     await box.findByRole("progressbar", { name: "Hobby: 150% used" });
-    expect(box.getAllByRole("progressbar").map((p) => p.getAttribute("aria-label"))).toEqual([
+    expect(bars(box)).toEqual([
       "Hobby: 150% used",
       "Fun: 95% used",
       "Groceries: 35% used",
@@ -1399,6 +1415,117 @@ describe("Module widget (#201)", () => {
     ]);
     expect(box.getByText(`${m("150.00")} of ${m("100.00")}`)).toBeInTheDocument();
     expect(box.getByRole("link", { name: "+2 more" })).toHaveAttribute("href", "/stats?saved=g-4");
+  });
+
+  it("follows a budget module's options: all, by name, near budget, the total (#203)", async () => {
+    mockBudget();
+    moduleWidget("g-4", [budgetModule], { budget: { rows: 0, order: "name" } });
+    const view = renderRoute("/");
+    let box = await widget("Budget");
+    await box.findByRole("progressbar", { name: "Car: 10% used" });
+    expect(bars(box)).toEqual([
+      "Car: 10% used",
+      "Fun: 95% used",
+      "Gifts: 10% used",
+      "Groceries: 35% used",
+      "Hobby: 150% used",
+      "Pets: 10% used",
+      "Rent: 0% used",
+      "Travel: 10% used",
+    ]);
+    expect(box.queryByRole("link", { name: /more/ })).not.toBeInTheDocument();
+    view.unmount();
+
+    moduleWidget("g-4", [budgetModule], {
+      budget: { attention: true, total: true, order: "used" },
+    });
+    renderRoute("/");
+    box = await widget("Budget");
+    await box.findByTestId("compact-budget-total");
+    expect(bars(box)).toEqual(["Total: 45% used", "Fun: 95% used", "Hobby: 150% used"]);
+    expect(
+      within(box.getByTestId("compact-budget-total")).getByText(
+        `${m("1490.00")} of ${m("3300.00")}`,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("follows an In/out/balance module's options: figures, top rows, accounts (#203)", async () => {
+    mockFlows();
+    moduleWidget("g-3", [flowsModule], {
+      flows: { figures: ["net"], top: 5, top_of: "accounts" },
+    });
+    renderRoute("/");
+    const box = await widget("Flows");
+    expect(await box.findByText(`+${m("28740.00")}`)).toBeInTheDocument();
+    expect(box.queryByText(m("30000.00"))).not.toBeInTheDocument();
+    expect(box.getByText("Net")).toBeInTheDocument();
+    expect(box.queryByText("Out")).not.toBeInTheDocument();
+    expect(box.getByRole("link", { name: "Main account" })).toBeInTheDocument();
+    expect(box.queryByRole("link", { name: "Rent" })).not.toBeInTheDocument();
+  });
+
+  it("follows a transactions module's options: more rows, in and out, or no summary (#203)", async () => {
+    apiMock.on(summaryPath, {
+      body: {
+        count: 27,
+        totals: [{ currency: "NOK", in: "1000.00", out: "7410.00", net: "-6410.00" }],
+      },
+    });
+    moduleWidget("g-2", [latestFood], { transactions: { rows: 10, summary: "in_out" } });
+    const view = renderRoute("/");
+    let box = await widget("Latest food");
+    expect(plain((await box.findByTestId("compact-summary")).textContent)).toBe(
+      `27 transactions · In ${m("1000.00")} · Out ${m("7410.00")} · Net ${m("-6410.00")}`,
+    );
+    await waitFor(() => {
+      expect(apiMock.calls("GET /api/v1/transactions").at(-1)?.query.get("limit")).toBe("10");
+    });
+    view.unmount();
+
+    const summaries = apiMock.calls(summaryPath).length;
+    moduleWidget("g-2", [latestFood], { transactions: { summary: "off" } });
+    renderRoute("/");
+    box = await widget("Latest food");
+    expect(await box.findByText("Rema 1000")).toBeInTheDocument();
+    expect(box.queryByTestId("compact-summary")).not.toBeInTheDocument();
+    expect(apiMock.calls(summaryPath)).toHaveLength(summaries);
+  });
+
+  it("shows its period, unless set not to, and saves the options from its settings (#203)", async () => {
+    apiMock.on(summaryPath, { body: { count: 2, totals: [] } });
+    apiMock.on("PATCH /api/v1/me/preferences", (req) => ({
+      body: { ...testUser.preferences, saved_modules: [latestFood], ...(req.body as object) },
+    }));
+    moduleWidget("g-2", [latestFood]);
+    renderRoute("/");
+    const box = await widget("Latest food");
+    expect((await box.findByTestId("module-period")).textContent).toMatch(/^Last 3 months · /);
+    await userEvent.click(box.getByRole("button", { name: "Settings for Latest food" }));
+    const dialog = await screen.findByRole("dialog", { name: /settings/ });
+    await userEvent.click(within(dialog).getByRole("checkbox", { name: "Show the period" }));
+    await choose(dialog, "Transactions to list", "None");
+    await choose(dialog, "Summary", "Count, in, out and net");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(apiMock.calls("PATCH /api/v1/me/preferences").at(-1)?.body).toMatchObject({
+        dashboard: {
+          widgets: [
+            {
+              id: "gw",
+              module: {
+                saved_module_id: "g-2",
+                show_period: false,
+                transactions: { rows: 0, summary: "in_out" },
+              },
+            },
+          ],
+        },
+      });
+    });
+    await waitFor(() => {
+      expect(box.queryByTestId("module-period")).not.toBeInTheDocument();
+    });
   });
 
   it("says when its saved module was deleted, offering to pick another", async () => {
