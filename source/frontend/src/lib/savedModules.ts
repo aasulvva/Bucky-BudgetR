@@ -174,6 +174,25 @@ export function newSavedModuleId(saved: SavedModule[]): string {
   );
 }
 
+/**
+ * A new, unsaved module of the type over the period (#204), as the Stats
+ * tab starts one: the defaults a report's Add module gives it.
+ */
+export function newSavedModule(
+  type: Exclude<PartModule["type"], "graph">,
+  period: string,
+): SavedModule {
+  // As newModule makes them, with a saved module's one id.
+  const id = "m-1";
+  const module: PartModule =
+    type === "transactions"
+      ? { id, type, transactions: {} }
+      : type === "flows"
+        ? { id, type, flows: {} }
+        : { id, type, budget: {} };
+  return { id: "", name: "", period, module };
+}
+
 /** Stats & reports with the saved module picked, as the Dashboard opens it. */
 export function savedModuleLink(s: SavedModule): string {
   const params = isGraphModule(s) ? graphToSearch(savedGraph(s)) : new URLSearchParams();

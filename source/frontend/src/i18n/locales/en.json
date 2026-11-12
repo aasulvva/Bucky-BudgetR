@@ -1157,9 +1157,10 @@
       }
     },
     "tabs": {
-      "graphs": "Graphs",
+      "stats": "Stats",
       "reports": "Reports"
     },
+    "type": "Type",
     "reports": {
       "asReport": "As the report",
       "settings": "Report settings",
@@ -1232,9 +1233,9 @@
         "save": "Save module…",
         "saveNamed": "Save {{module}} as a module…",
         "saveTitle": "Save module",
-        "saveHint": "It's saved over this report's period, with its filters. On the Graphs tab you can show it over another period, such as the last 3 months, and put it on the Dashboard.",
-        "saved": "Saved \"{{name}}\". Find it on the Graphs tab.",
-        "savedMax": "You have {{max}} saved modules, the most there can be. Delete one on the Graphs tab first.",
+        "saveHint": "It's saved over this report's period, with its filters. On the Stats tab you can show it over another period, such as the last 3 months, and put it on the Dashboard.",
+        "saved": "Saved \"{{name}}\". Find it on the Stats tab.",
+        "savedMax": "You have {{max}} saved modules, the most there can be. Delete one on the Stats tab first.",
         "fromSaved": "Copy a saved module",
         "fromSavedPlaceholder": "None: set it up below",
         "fromSavedHint": "A copy, shown over the report's period. Changing it here doesn't change the saved module.",

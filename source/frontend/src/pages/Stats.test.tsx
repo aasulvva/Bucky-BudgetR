@@ -72,7 +72,7 @@ async function pick(label: string | RegExp, option: string) {
 describe("Stats", () => {
   it("shows this cycle's spending as bars, in the app's currency", async () => {
     const { router } = renderRoute("/stats");
-    expect(await screen.findByRole("tab", { name: "Graphs", selected: true })).toBeInTheDocument();
+    expect(await screen.findByRole("tab", { name: "Stats", selected: true })).toBeInTheDocument();
     await waitFor(() => {
       expect(apiMock.calls(stats)).toHaveLength(1);
     });
@@ -680,6 +680,111 @@ describe("Stats", () => {
           },
         });
       });
+    });
+
+    it("makes a module of another type over the graph's period, and saves it as new (#204)", async () => {
+      const { router } = renderRoute(
+        "/stats?kind=bar&metric=spending&period=last-3-months&res=month",
+      );
+      await userEvent.click(await screen.findByRole("radio", { name: "Transactions" }));
+      const module = await screen.findByRole("region", { name: "Transactions" });
+      expect(await within(module).findByText("Rema 1000")).toBeInTheDocument();
+      const params = () => new URLSearchParams(router.state.location.search);
+      expect(params().get("type")).toBe("transactions");
+      expect(params().get("period")).toBe("last-3-months");
+      const d = new Date();
+      expect(apiMock.calls(txs).at(-1)?.query.get("from")).toBe(
+        new Date(d.getFullYear(), d.getMonth() - 2, 1).toISOString(),
+      );
+
+      await userEvent.click(screen.getByRole("button", { name: "Edit module" }));
+      const edit = await screen.findByRole("dialog", { name: "Edit module" });
+      await userEvent.click(within(edit).getByRole("radio", { name: "Oldest first" }));
+      await userEvent.click(within(edit).getByRole("button", { name: "Apply" }));
+      await waitFor(() => {
+        expect(apiMock.calls(txs).at(-1)?.query.get("order")).toBe("oldest");
+      });
+
+      await userEvent.click(screen.getByRole("button", { name: "Save module…" }));
+      const dialog = within(await screen.findByRole("dialog", { name: "Save module" }));
+      await userEvent.type(dialog.getByRole("textbox", { name: "Name" }), "Food");
+      await userEvent.click(dialog.getByRole("button", { name: "Save" }));
+      await waitFor(() => {
+        expect(prefs.saved_modules?.at(-1)).toEqual({
+          id: expect.stringMatching(/^g-\d+$/) as unknown,
+          name: "Food",
+          period: "last-3-months",
+          module: { id: "m-1", type: "transactions", transactions: { order: "oldest" } },
+        });
+      });
+      await waitFor(() => {
+        expect(params().get("saved")).toBe(prefs.saved_modules?.at(-1)?.id);
+      });
+      expect(screen.getByRole("radio", { name: "Transactions" })).toBeChecked();
+
+      // Back to a graph, over the same period.
+      await userEvent.click(screen.getByRole("radio", { name: "Graph" }));
+      await waitFor(() => {
+        expect(params().has("saved")).toBe(false);
+      });
+      expect(params().has("type")).toBe(false);
+      expect(params().get("period")).toBe("last-3-months");
+      expect(await screen.findByRole("combobox", { name: "Show" })).toHaveValue("Spending");
+    });
+
+    it("opens another type from the URL, and a saved one sets the type (#204)", async () => {
+      apiMock.on("GET /api/v1/stats/flows", (req) => ({
+        body: {
+          intervals: [{ start: req.query.get("from") ?? "", end: req.query.get("to") ?? "" }],
+          buckets: [],
+          accounts: [],
+        },
+      }));
+      const view = renderRoute("/stats?type=flows&period=last-3-months");
+      expect(await screen.findByText("Nothing happened in this period.")).toBeInTheDocument();
+      expect(screen.getByRole("radio", { name: "In/out/balance" })).toBeChecked();
+      const d = new Date();
+      expect(apiMock.calls("GET /api/v1/stats/flows").at(-1)?.query.get("from")).toBe(
+        new Date(d.getFullYear(), d.getMonth() - 2, 1).toISOString(),
+      );
+      view.unmount();
+
+      prefs = { ...prefs, saved_modules: [list] };
+      renderRoute("/stats?type=flows&saved=g-2");
+      expect(await screen.findByRole("region", { name: "Transactions" })).toBeInTheDocument();
+      expect(screen.getByRole("radio", { name: "Transactions" })).toBeChecked();
+    });
+
+    it("keeps a deleted module on screen, unsaved (#204)", async () => {
+      prefs = { ...prefs, saved_modules: [list] };
+      const { router } = renderRoute("/stats?saved=g-2");
+      const module = await screen.findByRole("region", { name: "Transactions" });
+      await within(module).findByText("Rema 1000");
+      await userEvent.click(screen.getByRole("button", { name: "More" }));
+      await userEvent.click(await screen.findByRole("menuitem", { name: "Delete" }));
+      const dialog = within(await screen.findByRole("dialog", { name: "Delete module" }));
+      await userEvent.click(dialog.getByRole("button", { name: "Delete" }));
+      await waitFor(() => {
+        expect(router.state.location.search).not.toContain("saved=");
+      });
+      const params = new URLSearchParams(router.state.location.search);
+      expect(params.get("type")).toBe("transactions");
+      expect(params.get("period")).toBe("previous-month");
+      expect(prefs.saved_modules).toEqual([]);
+      // Still its own bucket filter.
+      expect(await screen.findByText("Rema 1000")).toBeInTheDocument();
+      expect(apiMock.calls(txs).at(-1)?.query.getAll("bucket_id")).toEqual([food.id]);
+    });
+
+    it("picks the type from a select on phones (#204)", async () => {
+      viewport.width = 375;
+      const { router } = renderRoute("/stats");
+      expect(await screen.findByRole("combobox", { name: "Type" })).toHaveValue("Graph");
+      await pick("Type", "Budget vs spending");
+      await waitFor(() => {
+        expect(router.state.location.search).toContain("type=budget");
+      });
+      expect(await screen.findByRole("region", { name: "Budget vs spending" })).toBeInTheDocument();
     });
 
     it("saves no more than 100", async () => {

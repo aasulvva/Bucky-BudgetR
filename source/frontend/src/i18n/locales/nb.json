@@ -1157,9 +1157,10 @@
       }
     },
     "tabs": {
-      "graphs": "Grafer",
+      "stats": "Statistikk",
       "reports": "Rapporter"
     },
+    "type": "Type",
     "reports": {
       "asReport": "Som rapporten",
       "settings": "Rapportinnstillinger",
@@ -1232,9 +1233,9 @@
         "save": "Lagre modul…",
         "saveNamed": "Lagre {{module}} som modul…",
         "saveTitle": "Lagre modul",
-        "saveHint": "Den lagres over denne rapportens periode, med filtrene. På Grafer-fanen kan du vise den over en annen periode, for eksempel de siste 3 månedene, og legge den på oversikten.",
-        "saved": "Lagret «{{name}}». Du finner den på Grafer-fanen.",
-        "savedMax": "Du har {{max}} lagrede moduler, som er det meste. Slett en på Grafer-fanen først.",
+        "saveHint": "Den lagres over denne rapportens periode, med filtrene. På Statistikk-fanen kan du vise den over en annen periode, for eksempel de siste 3 månedene, og legge den på oversikten.",
+        "saved": "Lagret «{{name}}». Du finner den på Statistikk-fanen.",
+        "savedMax": "Du har {{max}} lagrede moduler, som er det meste. Slett en på Statistikk-fanen først.",
         "fromSaved": "Kopier en lagret modul",
         "fromSavedPlaceholder": "Ingen: sett den opp nedenfor",
         "fromSavedHint": "En kopi, vist over rapportens periode. Endrer du den her, endres ikke den lagrede modulen.",

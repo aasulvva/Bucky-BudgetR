@@ -1338,7 +1338,7 @@ describe("Reports", () => {
       await userEvent.type(name, "Food last year");
       await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
       expect(
-        await screen.findByText('Saved "Food last year". Find it on the Graphs tab.'),
+        await screen.findByText('Saved "Food last year". Find it on the Stats tab.'),
       ).toBeInTheDocument();
       expect(lastBody()).toEqual({
         saved_modules: [
@@ -1412,7 +1412,7 @@ describe("Reports", () => {
       const full = await screen.findByRole("dialog", { name: "Save module" });
       expect(
         within(full).getByText(
-          "You have 100 saved modules, the most there can be. Delete one on the Graphs tab first.",
+          "You have 100 saved modules, the most there can be. Delete one on the Stats tab first.",
         ),
       ).toBeInTheDocument();
       expect(within(full).getByRole("button", { name: "Save" })).toBeDisabled();

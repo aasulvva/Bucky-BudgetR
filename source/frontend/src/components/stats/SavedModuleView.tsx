@@ -14,33 +14,67 @@ import { savedModulePeriods, savedModuleReport, type SavedModule } from "@/lib/s
 import { PeriodPicker } from "./PeriodPicker";
 import { SavedModules } from "./SavedModules";
 
-/**
- * A saved module that isn't a graph (#201), on Stats & reports: its own
- * period, any a graph has (the last N days, weeks and so on too, which
- * reports don't have), and the module, which Edit changes as a report's
- * module is. Save keeps both; graphs have the Graphs screen itself.
- */
-export function SavedModuleView({
-  saved,
-  selected,
-  onSelect,
-  cycles,
-  accounts,
-  buckets,
-  tags,
-  isDesktop,
-}: {
+interface ModuleViewProps {
   saved: SavedModule[];
-  selected: SavedModule;
   onSelect: (s: SavedModule | null) => void;
   cycles: Cycle[];
   accounts: Account[];
   buckets: Bucket[];
   tags: string[];
   isDesktop: boolean;
+}
+
+/**
+ * A saved module that isn't a graph (#201), on the Stats tab, changed on
+ * screen until saved. Picking none (or deleting it) gives `onSelect` null
+ * and what's on screen, which stays as an unsaved module.
+ */
+export function SavedModuleView({
+  selected,
+  onSelect,
+  ...props
+}: Omit<ModuleViewProps, "onSelect"> & {
+  selected: SavedModule;
+  onSelect: (s: SavedModule | null, shown: SavedModule) => void;
+}) {
+  const [draft, setDraft] = useState(selected);
+  return (
+    <ModuleView
+      {...props}
+      selected={selected}
+      draft={draft}
+      onDraft={setDraft}
+      onSelect={(s) => {
+        onSelect(s, draft);
+      }}
+    />
+  );
+}
+
+/**
+ * A module that isn't a graph on the Stats tab (#201, #204): its own
+ * period, any a graph has (the last N days, weeks and so on too, which
+ * reports don't have), and the module, which Edit changes as a report's
+ * module is. A saved one (`selected`) saves both; an unsaved one is saved
+ * as new.
+ */
+export function ModuleView({
+  saved,
+  selected,
+  draft,
+  onDraft: setDraft,
+  onSelect,
+  cycles,
+  accounts,
+  buckets,
+  tags,
+  isDesktop,
+}: ModuleViewProps & {
+  selected: SavedModule | null;
+  draft: SavedModule;
+  onDraft: (draft: SavedModule) => void;
 }) {
   const { t } = useTranslation();
-  const [draft, setDraft] = useState(selected);
   const [editing, setEditing] = useState(false);
   const report = useMemo(() => savedModuleReport(draft), [draft]);
   // Once per change: a period that's still going ends now.
@@ -49,7 +83,12 @@ export function SavedModuleView({
 
   return (
     <Stack gap="md">
-      <SavedModules saved={saved} current={draft} selectedId={selected.id} onSelect={onSelect} />
+      <SavedModules
+        saved={saved}
+        current={draft}
+        selectedId={selected?.id ?? null}
+        onSelect={onSelect}
+      />
       <Paper withBorder p="md">
         <Stack gap="xs">
           <PeriodPicker

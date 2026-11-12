@@ -16,6 +16,32 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.22.00",
+    date: "2026-11-12",
+    title: {
+      en: "Stats: any module over any period",
+      nb: "Statistikk: alle moduler over alle perioder",
+      nn: "Statistikk: alle modular over alle periodar",
+    },
+    changes: {
+      en: [
+        "The Graphs tab in Stats & reports is now called Stats.",
+        "A Type switch at the top makes a graph, a transactions list, an in/out/balance table or a budget vs spending module, over any period: the last 30 days or 3 months too, which reports don't have. Edit module changes it, and Save module… saves it to use again or put on the Dashboard.",
+        "The period stays when you switch type.",
+      ],
+      nb: [
+        "Grafer-fanen i Statistikk og rapporter heter nå Statistikk.",
+        "En Type-velger øverst lager en graf, en transaksjonsliste, en inn/ut/saldo-tabell eller en budsjett mot forbruk-modul, over hvilken som helst periode: også de siste 30 dagene eller 3 månedene, som rapporter ikke har. Rediger modul endrer den, og Lagre modul… lagrer den så du kan bruke den igjen eller legge den på dashbordet.",
+        "Perioden blir værende når du bytter type.",
+      ],
+      nn: [
+        "Grafar-fana i Statistikk og rapportar heiter no Statistikk.",
+        "Ein Type-veljar øvst lagar ein graf, ei transaksjonsliste, ein inn/ut/saldo-tabell eller ein budsjett mot forbruk-modul, over kva periode som helst: òg dei siste 30 dagane eller 3 månadene, som rapportar ikkje har. Rediger modul endrar han, og Lagre modul… lagrar han så du kan bruke han att eller leggje han på dashbordet.",
+        "Perioden vert verande når du byter type.",
+      ],
+    },
+  },
+  {
     version: "v2.21.00",
     date: "2026-11-12",
     title: {
