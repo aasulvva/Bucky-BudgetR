@@ -1557,7 +1557,9 @@
         "list": "Liste",
         "slices": "På sektorane",
         "both": "Begge"
-      }
+      },
+      "compare": "Samanlikn",
+      "compareWith": "Samanliknar med {{period}}."
     },
     "saved": {
       "label": "Lagra modular",
@@ -1588,7 +1590,7 @@
       "onDashboard_one": "Han er på oversikta i {{count}} modul, som då viser at modulen er sletta.",
       "onDashboard_other": "Han er på oversikta i {{count}} modular, som då viser at modulen er sletta.",
       "max": "Du har {{max}} lagra modular, som er det meste. Slett ein for å lagre ein annan.",
-      "editModule": "Rediger modul",
+      "settings": "Modulinnstillingar",
       "periodHint": "Over kva periode som helst, også dei siste N dagane, vekene eller månadene. I ein rapport gjeld perioden til rapporten."
     }
   },

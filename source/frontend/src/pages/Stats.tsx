@@ -23,8 +23,9 @@ import { QueryState } from "@/components/QueryState";
 import { ExportPdfButton } from "@/components/reports/ExportPdfButton";
 import { ReportTemplates } from "@/components/reports/ReportTemplates";
 import { ReportView } from "@/components/reports/ReportView";
+import { GraphCompareFields } from "@/components/stats/GraphCompareFields";
 import { GraphControls } from "@/components/stats/GraphControls";
-import { GraphView } from "@/components/stats/GraphView";
+import { GraphView, type Compare } from "@/components/stats/GraphView";
 import { ModuleTypeSwitch } from "@/components/stats/ModuleTypeSwitch";
 import { ModuleView, SavedModuleView } from "@/components/stats/SavedModuleView";
 import { SavedModules } from "@/components/stats/SavedModules";
@@ -36,13 +37,16 @@ import {
   graphToSearch,
   type GraphSettings,
 } from "@/lib/graphs";
-import { defaultPeriod, parsePeriod, resolvePeriod } from "@/lib/periods";
+import { defaultPeriod, parsePeriod } from "@/lib/periods";
 import {
+  periodsOf,
   readTemplates,
   readViewMode,
   sameReport,
   sourceValue,
   starter,
+  COMPARE_TOS,
+  MODULE_COMPARES,
   PART_MODULE_TYPES,
   STARTER_IDS,
   type ReportSettings,
@@ -53,10 +57,12 @@ import {
 } from "@/lib/reports";
 import {
   graphAsSaved,
+  graphCompare,
   isGraphModule,
   newSavedModule,
   readSavedModules,
   savedGraph,
+  type GraphCompare,
   type SavedModule,
 } from "@/lib/savedModules";
 
@@ -245,7 +251,8 @@ const OTHER_TYPES = PART_MODULE_TYPES.filter(
  * period, or a saved module. The type is the saved module's, else `type`
  * in the URL; the period is `period` for every type, so it stays when the
  * type changes. An unsaved module of another type is kept on screen until
- * the page is left.
+ * the page is left. A graph's comparison is `compare` and `compare_to`
+ * when they aren't its saved graph's.
  */
 function StatsScreen({
   cycles,
@@ -269,26 +276,44 @@ function StatsScreen({
   const [drafts, setDrafts] = useState<Partial<Record<PartModule["type"], PartModule>>>({});
 
   const settings = graphFromSearch(params, defaultGraph(cycles));
-  const period = resolvePeriod(parsePeriod(settings.period) ?? defaultPeriod(cycles), cycles);
   const selectedId = params.get("saved");
   const selected = saved.find((s) => s.id === selectedId) ?? null;
   const urlType = OTHER_TYPES.find((x) => x === params.get("type")) ?? "graph";
   const type = selected ? selected.module.type : urlType;
+  const savedCompare = graphCompare(selected);
+  const comparison: GraphCompare = {
+    mode: MODULE_COMPARES.find((x) => x === params.get("compare")) ?? savedCompare.mode,
+    to: COMPARE_TOS.find((x) => x === params.get("compare_to")) ?? savedCompare.to,
+  };
+  const periods = periodsOf(
+    parsePeriod(settings.period) ?? defaultPeriod(cycles),
+    comparison.to,
+    cycles,
+  );
 
-  /** The graph (or, for another type, its period) in the URL, with the type and saved module. */
+  /**
+   * The graph (or, for another type, its period) in the URL, with the type
+   * and saved module, and a graph's comparison where it isn't the saved one's.
+   */
   const show = (
     s: GraphSettings,
     savedId: string | null,
     replace: boolean,
     to: PartModule["type"] = "graph",
+    c?: GraphCompare,
   ) => {
     const next = graphToSearch(s);
     if (to !== "graph") next.set("type", to);
     if (savedId) next.set("saved", savedId);
+    if (to === "graph" && c) {
+      const base = graphCompare(saved.find((x) => x.id === savedId) ?? null);
+      if (c.mode !== base.mode) next.set("compare", c.mode);
+      if (c.to !== base.to) next.set("compare_to", c.to);
+    }
     setParams(next, { replace });
   };
   const change = (s: GraphSettings) => {
-    show(s, selectedId, true);
+    show(s, selectedId, true, "graph", comparison);
   };
   const select = (s: SavedModule | null, shown?: SavedModule) => {
     if (!s) {
@@ -298,7 +323,7 @@ function StatsScreen({
         setDrafts((d) => ({ ...d, [kept.type]: kept }));
         show({ ...settings, period: shown.period }, null, true, kept.type);
       } else {
-        show(settings, null, true, type);
+        show(settings, null, true, type, comparison);
       }
     } else if (isGraphModule(s)) {
       show(savedGraph(s), s.id, false);
@@ -350,6 +375,7 @@ function StatsScreen({
     );
   }
 
+  const pie = settings.kind === "pie";
   const controls = (narrow: boolean) => (
     <GraphControls
       value={settings}
@@ -359,15 +385,36 @@ function StatsScreen({
       buckets={buckets}
       tags={tags}
       narrow={narrow}
+      belowPeriod={
+        <GraphCompareFields
+          value={comparison}
+          onChange={(c) => {
+            show(settings, selectedId, true, "graph", c);
+          }}
+          pie={pie}
+          choice={periods.choice}
+          compare={periods.compare}
+          inline={narrow}
+        />
+      }
     />
   );
+  // As a saved graph shows it on the Dashboard: a pie's difference is both.
+  const compare: Compare | undefined =
+    comparison.mode !== "off" && periods.compare
+      ? {
+          period: periods.compare.period,
+          mode: pie ? "both" : comparison.mode,
+          labels: { current: periods.compare.currentLabel, previous: periods.compare.label },
+        }
+      : undefined;
 
   return (
     <Stack gap="md">
       {typeSwitch}
       <SavedModules
         saved={saved}
-        current={graphAsSaved(settings, selected)}
+        current={graphAsSaved(settings, selected, comparison)}
         selectedId={selected?.id ?? null}
         onSelect={select}
       />
@@ -393,13 +440,26 @@ function StatsScreen({
           </Button>
         </Group>
       )}
+      {comparison.mode !== "off" && (
+        <Text size="sm" c="dimmed" data-testid="graph-compared">
+          {periods.compare
+            ? t(
+                comparison.mode === "difference" && !pie
+                  ? "stats.reports.compare.differenceWith"
+                  : "stats.reports.compare.comparedWith",
+                { period: periods.compare.label },
+              )
+            : t("stats.reports.compare.unavailable")}
+        </Text>
+      )}
       <GraphView
         settings={settings}
-        period={period}
+        period={periods.period}
         cycles={cycles}
         accounts={accounts}
         buckets={buckets}
         height={isDesktop ? 360 : 280}
+        compare={compare}
       />
       {!isDesktop && (
         <Drawer

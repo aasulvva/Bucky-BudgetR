@@ -1,7 +1,7 @@
 import type { BucketFlowValues, StatsFlows } from "@/api/stats";
 import { account, bucket, bucketFigures, transaction } from "@/test/fixtures";
 
-import { endAtFor, startAtFor } from "./cycles";
+import { addDays, endAtFor, startAtFor } from "./cycles";
 import { parsePeriod, resolvePeriod } from "./periods";
 import {
   MAX_MODULES,
@@ -104,6 +104,30 @@ describe("previousPeriod", () => {
     expect(previous("current-cycle")).toMatchObject({ from: "2026-09-25", to: "2026-10-10" });
     // The first cycle has none before it.
     expect(previous("cycle-100001000001")).toBeNull();
+  });
+
+  it("compares the last N with the N before, as far into them (#204)", () => {
+    // 9 Nov at noon: 1 Sep to now, against 1 Jun to 9 Aug at noon.
+    expect(previous("last-3-months")).toEqual({
+      from: "2026-06-01",
+      to: "2026-08-09",
+      choice: null,
+    });
+    expect(previous("last-3-months", "last_year")).toMatchObject({
+      from: "2025-09-01",
+      to: "2025-11-09",
+    });
+    expect(previous("last-30-days")).toMatchObject({ from: "2026-09-11", to: "2026-10-10" });
+    // Two weeks from the locale's first weekday, against the two before.
+    const twoWeeks = parsePeriod("last-2-weeks");
+    const weeks = twoWeeks && resolvePeriod(twoWeeks, cycles, now);
+    if (!weeks) throw new Error("last-2-weeks doesn't resolve");
+    expect(previous("last-2-weeks")).toMatchObject({ from: addDays(weeks.from, -14) });
+    // The latest cycle (from 25 Oct) against the one before, as long as it has run.
+    expect(previous("last-1-cycles")).toMatchObject({ from: "2026-09-25", to: "2026-10-10" });
+    expect(previous("last-1-cycles", "last_year")).toMatchObject({ from: "2026-09-25" });
+    // Two cycles back from 25 Sep: only one is there.
+    expect(previous("last-2-cycles")).toBeNull();
   });
 
   it("doesn't compare custom dates", () => {

@@ -1557,7 +1557,9 @@
         "list": "List",
         "slices": "On the slices",
         "both": "Both"
-      }
+      },
+      "compare": "Compare",
+      "compareWith": "Compares with {{period}}."
     },
     "saved": {
       "label": "Saved modules",
@@ -1588,7 +1590,7 @@
       "onDashboard_one": "It's on the Dashboard in {{count}} widget, which will say the module was deleted.",
       "onDashboard_other": "It's on the Dashboard in {{count}} widgets, which will say the module was deleted.",
       "max": "You have {{max}} saved modules, the most there can be. Delete one to save another.",
-      "editModule": "Edit module",
+      "settings": "Module settings",
       "periodHint": "Over any period, the last N days, weeks or months too. In a report, the report's period applies."
     }
   },

@@ -200,12 +200,15 @@ describe("periodsOf (#201)", () => {
     return periodsOf(choice, "previous", []);
   };
 
-  it("resolves the last N, with nothing to compare with", () => {
+  it("compares the last N with the N before (#204), but not custom dates", () => {
     for (const p of ["last-30-days", "last-3-months"]) {
       const r = of(p);
       expect(r.period).not.toBeNull();
-      expect(r.compare).toBeNull();
+      expect(Date.parse(r.compare?.period.toAt ?? "")).toBeLessThanOrEqual(
+        Date.parse(r.period?.fromAt ?? ""),
+      );
     }
+    expect(of("custom-2026-01-01-2026-03-31").compare).toBeNull();
   });
 
   it("compares this week with the one before", () => {

@@ -558,6 +558,121 @@ describe("Stats", () => {
       ),
     ).toBeInTheDocument();
   });
+  describe("a graph's comparison (#204)", () => {
+    const fromCalls = () => apiMock.calls(stats).map((c) => c.query.get("from"));
+    const params = (router: { state: { location: { search: string } } }) =>
+      new URLSearchParams(router.state.location.search);
+
+    it("compares with the period before or last year, kept in the URL, and saves it", async () => {
+      const { router } = renderRoute(
+        "/stats?kind=bar&metric=spending&period=current-month&res=day",
+      );
+      const d = new Date();
+      await userEvent.click(await screen.findByRole("radio", { name: "Both" }));
+      await waitFor(() => {
+        expect(fromCalls()).toContain(new Date(d.getFullYear(), d.getMonth() - 1, 1).toISOString());
+      });
+      expect(params(router).get("compare")).toBe("both");
+      expect(params(router).has("compare_to")).toBe(false);
+      expect(screen.getByTestId("graph-compared")).toHaveTextContent(/^Compared with /);
+
+      await pick("Compare with", "The same period last year");
+      await waitFor(() => {
+        expect(fromCalls()).toContain(new Date(d.getFullYear() - 1, d.getMonth(), 1).toISOString());
+      });
+      expect(params(router).get("compare_to")).toBe("last_year");
+
+      await userEvent.click(screen.getByRole("button", { name: "Save module…" }));
+      const dialog = within(await screen.findByRole("dialog", { name: "Save module" }));
+      await userEvent.type(dialog.getByRole("textbox", { name: "Name" }), "Spending");
+      await userEvent.click(dialog.getByRole("button", { name: "Save" }));
+      await waitFor(() => {
+        expect(prefs.saved_modules?.at(-1)).toEqual({
+          id: expect.stringMatching(/^g-\d+$/) as unknown,
+          name: "Spending",
+          period: "current-month",
+          compare_to: "last_year",
+          module: {
+            id: "m-1",
+            type: "graph",
+            compare: "both",
+            graph: { kind: "bar", metric: "spending", resolution: "day" },
+          },
+        });
+      });
+    });
+
+    it("compares the last 7 days with the 7 days before", async () => {
+      renderRoute("/stats?kind=bar&metric=spending&period=last-7-days&res=day&compare=difference");
+      const d = new Date();
+      await waitFor(() => {
+        expect(fromCalls()).toContain(
+          new Date(d.getFullYear(), d.getMonth(), d.getDate() - 13).toISOString(),
+        );
+      });
+      expect(await screen.findByTestId("graph-compared")).toHaveTextContent(/^This period minus /);
+      expect(screen.getByRole("radio", { name: "Difference" })).toBeChecked();
+    });
+
+    it("opens a saved graph's comparison, and a change to it is unsaved", async () => {
+      prefs = {
+        ...prefs,
+        saved_modules: [
+          {
+            ...saved("g-1", "Spending", graph),
+            compare_to: "last_year",
+            module: {
+              id: "m-1",
+              type: "graph",
+              compare: "both",
+              graph: { kind: "bar", metric: "spending", resolution: "day" },
+            },
+          },
+        ],
+      };
+      const { router } = renderRoute(
+        "/stats?saved=g-1&kind=bar&metric=spending&period=current-month&res=day",
+      );
+      expect(await screen.findByRole("radio", { name: "Both" })).toBeChecked();
+      expect(screen.getByRole("combobox", { name: "Compare with" })).toHaveValue(
+        "The same period last year",
+      );
+      expect(params(router).has("compare")).toBe(false);
+      expect(screen.queryByText("Unsaved changes")).not.toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole("radio", { name: "Off" }));
+      expect(await screen.findByText("Unsaved changes")).toBeInTheDocument();
+      expect(params(router).get("compare")).toBe("off");
+      expect(screen.queryByTestId("graph-compared")).not.toBeInTheDocument();
+    });
+
+    it("has no difference for a pie, and nothing to compare custom dates with", async () => {
+      const { router } = renderRoute(
+        "/stats?kind=pie&metric=spending&period=current-month&res=day&group=bucket",
+      );
+      // Its labels' Both, and the comparison's.
+      expect(await screen.findAllByRole("radio", { name: "Both" })).toHaveLength(2);
+      expect(screen.queryByRole("radio", { name: "Difference" })).not.toBeInTheDocument();
+      await router.navigate(
+        "/stats?kind=bar&metric=spending&period=custom-2026-01-01-2026-01-31&res=day&compare=both",
+      );
+      expect(await screen.findByText("Custom dates don't compare.")).toBeInTheDocument();
+      expect(screen.getByRole("radio", { name: "Both" })).toBeDisabled();
+      expect(screen.getByTestId("graph-compared")).toHaveTextContent(
+        "There's no period before this one to compare with.",
+      );
+    });
+
+    it("puts the comparison in the mobile drawer", async () => {
+      viewport.width = 375;
+      renderRoute("/stats?kind=bar&metric=spending&period=current-month&res=day");
+      await userEvent.click(await screen.findByRole("button", { name: "Graph settings" }));
+      const drawer = within(await screen.findByRole("dialog", { name: "Graph settings" }));
+      await userEvent.click(drawer.getByRole("radio", { name: "Both" }));
+      expect(await screen.findByTestId("graph-compared")).toHaveTextContent(/^Compared with /);
+    });
+  });
+
   describe("saved modules other than graphs (#201)", () => {
     const list: SavedModule = {
       id: "g-2",
@@ -598,10 +713,9 @@ describe("Stats", () => {
       });
       expect(await screen.findByText("Unsaved changes")).toBeInTheDocument();
 
-      await userEvent.click(screen.getByRole("button", { name: "Edit module" }));
-      const dialog = await screen.findByRole("dialog", { name: "Edit module" });
-      await userEvent.click(within(dialog).getByRole("radio", { name: "Oldest first" }));
-      await userEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
+      // Its settings apply as they change, as a graph's do (#204).
+      const panel = within(screen.getByTestId("module-settings"));
+      await userEvent.click(panel.getByRole("radio", { name: "Oldest first" }));
       await waitFor(() => {
         expect(apiMock.calls(txs).at(-1)?.query.get("order")).toBe("oldest");
       });
@@ -697,10 +811,8 @@ describe("Stats", () => {
         new Date(d.getFullYear(), d.getMonth() - 2, 1).toISOString(),
       );
 
-      await userEvent.click(screen.getByRole("button", { name: "Edit module" }));
-      const edit = await screen.findByRole("dialog", { name: "Edit module" });
-      await userEvent.click(within(edit).getByRole("radio", { name: "Oldest first" }));
-      await userEvent.click(within(edit).getByRole("button", { name: "Apply" }));
+      const panel = within(screen.getByTestId("module-settings"));
+      await userEvent.click(panel.getByRole("radio", { name: "Oldest first" }));
       await waitFor(() => {
         expect(apiMock.calls(txs).at(-1)?.query.get("order")).toBe("oldest");
       });
@@ -785,6 +897,23 @@ describe("Stats", () => {
         expect(router.state.location.search).toContain("type=budget");
       });
       expect(await screen.findByRole("region", { name: "Budget vs spending" })).toBeInTheDocument();
+    });
+
+    it("puts a module's settings in a drawer on phones, summarised (#204)", async () => {
+      viewport.width = 375;
+      renderRoute("/stats?type=transactions&period=last-3-months");
+      expect(await screen.findByTestId("module-summary")).toHaveTextContent(
+        "Transactions · Last 3 months",
+      );
+      expect(screen.queryByTestId("module-settings")).not.toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "Module settings" }));
+      const drawer = within(await screen.findByRole("dialog", { name: "Module settings" }));
+      await userEvent.click(drawer.getByRole("radio", { name: "Oldest first" }));
+      await waitFor(() => {
+        expect(apiMock.calls(txs).at(-1)?.query.get("order")).toBe("oldest");
+      });
+      await userEvent.type(drawer.getByRole("textbox", { name: /Title/ }), "Food");
+      expect(await screen.findByRole("region", { name: "Food" })).toBeInTheDocument();
     });
 
     it("saves no more than 100", async () => {

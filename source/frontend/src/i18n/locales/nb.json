@@ -1557,7 +1557,9 @@
         "list": "Liste",
         "slices": "På sektorene",
         "both": "Begge"
-      }
+      },
+      "compare": "Sammenlign",
+      "compareWith": "Sammenligner med {{period}}."
     },
     "saved": {
       "label": "Lagrede moduler",
@@ -1588,7 +1590,7 @@
       "onDashboard_one": "Den er på oversikten i {{count}} modul, som da viser at modulen er slettet.",
       "onDashboard_other": "Den er på oversikten i {{count}} moduler, som da viser at modulen er slettet.",
       "max": "Du har {{max}} lagrede moduler, som er det meste. Slett en for å lagre en annen.",
-      "editModule": "Rediger modul",
+      "settings": "Modulinnstillinger",
       "periodHint": "Over hvilken som helst periode, også de siste N dagene, ukene eller månedene. I en rapport gjelder rapportens periode."
     }
   },
