@@ -7,6 +7,7 @@ import {
   Stack,
   Switch,
 } from "@mantine/core";
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { Account, Bucket } from "@/api/accounts";
@@ -46,6 +47,8 @@ interface GraphControlsProps {
   reportPeriod?: PeriodChoice;
   /** Whether an empty filter uses the report's; a report module's unless said (#201). */
   inherits?: boolean;
+  /** Shown under the period: the Stats tab's comparison (#204). */
+  belowPeriod?: ReactNode;
 }
 
 /** What a graph shows and how (#122, pies #123). Each change is a whole new value. */
@@ -59,6 +62,7 @@ export function GraphControls({
   narrow = false,
   reportPeriod,
   inherits,
+  belowPeriod,
 }: GraphControlsProps) {
   const { t } = useTranslation();
   // The drawer locks page scrolling and lets touches through only inside
@@ -125,14 +129,17 @@ export function GraphControls({
         />
       </Stack>
       {!reportPeriod && (
-        <PeriodPicker
-          inline={narrow}
-          value={choice}
-          cycles={cycles}
-          onChange={(choice) => {
-            set({ period: formatPeriod(choice) });
-          }}
-        />
+        <Stack gap="sm">
+          <PeriodPicker
+            inline={narrow}
+            value={choice}
+            cycles={cycles}
+            onChange={(choice) => {
+              set({ period: formatPeriod(choice) });
+            }}
+          />
+          {belowPeriod}
+        </Stack>
       )}
       <Stack gap="sm">
         {!whole && (

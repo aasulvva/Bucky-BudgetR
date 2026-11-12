@@ -957,9 +957,10 @@ export function sectionParts(
         part,
         compare: before && {
           period: before.period,
-          label: inProgress(part.period)
-            ? formatDateRange(before.period.from, before.period.to)
-            : specificLabel(before.choice, cycles),
+          label:
+            before.choice && !inProgress(part.period)
+              ? specificLabel(before.choice, cycles)
+              : formatDateRange(before.period.from, before.period.to),
           currentLabel: sectionLabel(part, cycles),
         },
       };
@@ -1002,8 +1003,8 @@ export function reportPeriods(
 /**
  * A period's resolution, names and comparison, as reportPeriods gives a
  * report's, for any choice: a saved module's own period (#201) may be the
- * last N days, weeks and so on, which reports don't have. Those, and custom
- * dates, have nothing to compare with.
+ * last N days, weeks and so on, which reports don't have; those compare
+ * with the N before (#204). Custom dates have nothing to compare with.
  */
 export function periodsOf(
   choice: PeriodChoice,
@@ -1023,9 +1024,10 @@ export function periodsOf(
     previous && period
       ? {
           period: previous.period,
-          label: inProgress(period)
-            ? formatDateRange(previous.period.from, previous.period.to)
-            : specificLabel(previous.choice, cycles),
+          label:
+            previous.choice && !inProgress(period)
+              ? specificLabel(previous.choice, cycles)
+              : formatDateRange(previous.period.from, previous.period.to),
           currentLabel: label,
         }
       : null;
@@ -1051,7 +1053,8 @@ export function previousPeriod(
   compareTo: CompareTo,
   cycles: CycleTimes[],
   now?: Date,
-): { choice: Specific; period: Period } | null {
+): { choice: Specific | null; period: Period } | null {
+  if (choice.kind === "last") return previousLast(choice, period, compareTo, cycles);
   const specific = asSpecific(choice, period, cycles);
   if (!specific) return null;
   const before: Specific | null =
@@ -1068,6 +1071,69 @@ export function previousPeriod(
   return {
     choice: before,
     period: { ...whole, toAt, to: localDate(new Date(end - 1)) },
+  };
+}
+
+/**
+ * What the last N compare with (#204): the N days, weeks, months and so on
+ * before (the last 3 months against the 3 before), or the same span a year
+ * earlier, with each end moved as far back, so it has run as long as this
+ * one; the last N cycles against the N cycles before. Null when there are
+ * no N cycles before.
+ */
+function previousLast(
+  choice: Extract<PeriodChoice, { kind: "last" }>,
+  period: Period,
+  compareTo: CompareTo,
+  cycles: CycleTimes[],
+): { choice: null; period: Period } | null {
+  const start = Date.parse(period.fromAt);
+  const ran = Date.parse(period.toAt) - start;
+  let fromAt: number;
+  let toAt: number;
+  if (choice.unit === "cycles") {
+    const started = cycles
+      .filter((c) => c.state !== "future")
+      .sort((a, b) => Date.parse(a.start_at) - Date.parse(b.start_at));
+    const first = started.findIndex((c) => Date.parse(c.start_at) === start);
+    const before = first >= choice.count ? started[first - choice.count] : undefined;
+    if (!before) return null;
+    fromAt = Date.parse(before.start_at);
+    toAt = Math.min(fromAt + ran, start);
+  } else {
+    const back = (at: string) => {
+      const d = dayjs(at);
+      if (compareTo === "last_year") return d.subtract(1, "year");
+      const n = choice.count;
+      switch (choice.unit) {
+        case "days":
+          return d.subtract(n, "day");
+        case "weeks":
+          return d.subtract(7 * n, "day");
+        case "months":
+          return d.subtract(n, "month");
+        case "quarters":
+          return d.subtract(3 * n, "month");
+        case "half_years":
+          return d.subtract(6 * n, "month");
+        case "years":
+          return d.subtract(n, "year");
+        case "cycles":
+          return d; // Handled above.
+      }
+    };
+    const from = back(period.fromAt);
+    fromAt = Date.parse(startAtFor(from.format("YYYY-MM-DD")));
+    toAt = Math.min(back(period.toAt).valueOf(), start);
+  }
+  return {
+    choice: null,
+    period: {
+      from: localDate(new Date(fromAt)),
+      to: localDate(new Date(toAt - 1)),
+      fromAt: new Date(fromAt).toISOString(),
+      toAt: new Date(toAt).toISOString(),
+    },
   };
 }
 

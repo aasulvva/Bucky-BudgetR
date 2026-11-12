@@ -1157,9 +1157,10 @@
       }
     },
     "tabs": {
-      "graphs": "Grafar",
+      "stats": "Statistikk",
       "reports": "Rapportar"
     },
+    "type": "Type",
     "reports": {
       "asReport": "Som rapporten",
       "settings": "Rapportinnstillingar",
@@ -1232,9 +1233,9 @@
         "save": "Lagre modul…",
         "saveNamed": "Lagre {{module}} som modul…",
         "saveTitle": "Lagre modul",
-        "saveHint": "Han vert lagra over perioden til denne rapporten, med filtera. På Grafar-fana kan du vise han over ein annan periode, til dømes dei siste 3 månadene, og leggje han på oversikta.",
-        "saved": "Lagra «{{name}}». Du finn han på Grafar-fana.",
-        "savedMax": "Du har {{max}} lagra modular, som er det meste. Slett ein på Grafar-fana først.",
+        "saveHint": "Han vert lagra over perioden til denne rapporten, med filtera. På Statistikk-fana kan du vise han over ein annan periode, til dømes dei siste 3 månadene, og leggje han på oversikta.",
+        "saved": "Lagra «{{name}}». Du finn han på Statistikk-fana.",
+        "savedMax": "Du har {{max}} lagra modular, som er det meste. Slett ein på Statistikk-fana først.",
         "fromSaved": "Kopier ein lagra modul",
         "fromSavedPlaceholder": "Ingen: set han opp nedanfor",
         "fromSavedHint": "Ein kopi, vist over perioden til rapporten. Endrar du han her, vert ikkje den lagra modulen endra.",
@@ -1556,7 +1557,9 @@
         "list": "Liste",
         "slices": "På sektorane",
         "both": "Begge"
-      }
+      },
+      "compare": "Samanlikn",
+      "compareWith": "Samanliknar med {{period}}."
     },
     "saved": {
       "label": "Lagra modular",
@@ -1587,7 +1590,7 @@
       "onDashboard_one": "Han er på oversikta i {{count}} modul, som då viser at modulen er sletta.",
       "onDashboard_other": "Han er på oversikta i {{count}} modular, som då viser at modulen er sletta.",
       "max": "Du har {{max}} lagra modular, som er det meste. Slett ein for å lagre ein annan.",
-      "editModule": "Rediger modul",
+      "settings": "Modulinnstillingar",
       "periodHint": "Over kva periode som helst, også dei siste N dagane, vekene eller månadene. I ein rapport gjeld perioden til rapporten."
     }
   },

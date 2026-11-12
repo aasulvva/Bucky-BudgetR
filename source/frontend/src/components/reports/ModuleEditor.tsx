@@ -60,7 +60,9 @@ import {
 import { USER_TYPES } from "@/lib/transactionList";
 import { readSavedModules, savedModuleOptions, toReportModule } from "@/lib/savedModules";
 
-const MAX_TITLE = 80;
+/** A module title's most characters. */
+export const MAX_MODULE_TITLE = 80;
+const MAX_TITLE = MAX_MODULE_TITLE;
 
 interface ModuleEditorProps {
   /** The module to edit, or null when closed. */
@@ -206,6 +208,33 @@ function Editor({
 
 type FieldsProps = Omit<ModuleEditorProps, "module" | "adding" | "report" | "onApply" | "onClose">;
 
+/** A module that isn't a graph or a section: what the Stats tab edits in place (#204). */
+export type PlainModule = TransactionsModule | FlowsModule | BudgetModule;
+
+/**
+ * A transactions, in/out/balance or budget module's fields, applied as
+ * they change: the Stats tab shows them in place (#204), as a graph's
+ * controls are. Each group of fields is one element, so a grid can lay
+ * them out side by side.
+ */
+export function ModuleFields({
+  module,
+  onChange,
+  ...rest
+}: Omit<FieldsProps, "comparable"> & {
+  module: PlainModule;
+  onChange: (module: PlainModule) => void;
+}) {
+  const props = { ...rest, comparable: false };
+  return module.type === "transactions" ? (
+    <TransactionsFields draft={module} onChange={onChange} {...props} />
+  ) : module.type === "flows" ? (
+    <FlowsFields draft={module} onChange={onChange} {...props} />
+  ) : (
+    <BudgetFields draft={module} onChange={onChange} {...props} />
+  );
+}
+
 /** A graph module's graph, comparison and breakdown (#125). */
 function GraphFields({
   draft,
@@ -321,114 +350,120 @@ function TransactionsFields({
         inline
         inherits={!standalone}
       />
-      <MultiSelect
-        comboboxProps={{ withinPortal: false }}
-        label={t("transactions.filters.type")}
-        placeholder={s.types?.length ? undefined : t("transactions.filters.all")}
-        data={USER_TYPES.map((x) => ({ value: x, label: t(`transactionTypes.${x}`) }))}
-        value={s.types ?? []}
-        onChange={(v) => {
-          set({ types: USER_TYPES.filter((x) => v.includes(x)) });
-        }}
-        clearable
-      />
-      <Input.Wrapper
-        label={t("stats.reports.transactions.sections.label")}
-        description={t("stats.reports.transactions.sections.hint")}
-      >
-        <SegmentedControl
-          fullWidth
-          mt={4}
-          data={TRANSACTIONS_SECTIONS.map((x) => ({
-            value: x,
-            label: t(`stats.reports.transactions.sections.options.${x}`),
-          }))}
-          value={s.sections ?? "off"}
-          onChange={(x) => {
-            set({ sections: x });
-          }}
-        />
-      </Input.Wrapper>
-      <Input.Wrapper label={t("stats.reports.transactions.groupBy.label")}>
-        <SegmentedControl
-          fullWidth
-          mt={4}
-          data={TRANSACTIONS_GROUPS.map((g) => ({
-            value: g,
-            label: t(`stats.reports.transactions.groupBy.options.${g}`),
-          }))}
-          value={s.group_by ?? "day"}
-          onChange={(g) => {
-            set({ group_by: g });
-          }}
-        />
-      </Input.Wrapper>
-      <Input.Wrapper label={t("stats.reports.transactions.order.label")}>
-        <SegmentedControl
-          fullWidth
-          mt={4}
-          data={TRANSACTIONS_ORDERS.map((o) => ({
-            value: o,
-            label: t(`stats.reports.transactions.order.options.${o}`),
-          }))}
-          value={s.order ?? "newest"}
-          onChange={(o) => {
-            set({ order: o });
-          }}
-        />
-      </Input.Wrapper>
-      <Input.Wrapper label={t("stats.reports.transactions.view.label")}>
-        <SegmentedControl
-          fullWidth
-          mt={4}
-          data={TRANSACTIONS_VIEWS.map((v) => ({
-            value: v,
-            label: t(`stats.reports.transactions.view.options.${v}`),
-          }))}
-          value={s.view ?? "list"}
+      <Stack gap="sm">
+        <MultiSelect
+          comboboxProps={{ withinPortal: false }}
+          label={t("transactions.filters.type")}
+          placeholder={s.types?.length ? undefined : t("transactions.filters.all")}
+          data={USER_TYPES.map((x) => ({ value: x, label: t(`transactionTypes.${x}`) }))}
+          value={s.types ?? []}
           onChange={(v) => {
-            set({ view: v });
+            set({ types: USER_TYPES.filter((x) => v.includes(x)) });
+          }}
+          clearable
+        />
+        <Switch
+          label={t("transactions.filters.system")}
+          checked={s.system ?? false}
+          onChange={(e) => {
+            set({ system: e.currentTarget.checked });
           }}
         />
-      </Input.Wrapper>
-      {s.view === "table" && (
-        <>
-          <ColumnsField
-            value={s.columns?.length ? s.columns : DEFAULT_COLUMNS}
-            onChange={(columns) => {
-              set({ columns });
+        <Switch
+          label={t("transactions.filters.reversed")}
+          checked={s.reversed ?? false}
+          onChange={(e) => {
+            set({ reversed: e.currentTarget.checked });
+          }}
+        />
+      </Stack>
+      <Stack gap="sm">
+        <Input.Wrapper
+          label={t("stats.reports.transactions.sections.label")}
+          description={t("stats.reports.transactions.sections.hint")}
+        >
+          <SegmentedControl
+            fullWidth
+            mt={4}
+            data={TRANSACTIONS_SECTIONS.map((x) => ({
+              value: x,
+              label: t(`stats.reports.transactions.sections.options.${x}`),
+            }))}
+            value={s.sections ?? "off"}
+            onChange={(x) => {
+              set({ sections: x });
             }}
           />
-          <Input.Wrapper label={t("stats.reports.transactions.rows.label")}>
-            <SegmentedControl
-              fullWidth
-              mt={4}
-              data={TRANSACTIONS_ROWS.map((r) => ({
-                value: r,
-                label: t(`stats.reports.transactions.rows.options.${r}`),
-              }))}
-              value={s.rows ?? "transaction"}
-              onChange={(r) => {
-                set({ rows: r });
+        </Input.Wrapper>
+        <Input.Wrapper label={t("stats.reports.transactions.groupBy.label")}>
+          <SegmentedControl
+            fullWidth
+            mt={4}
+            data={TRANSACTIONS_GROUPS.map((g) => ({
+              value: g,
+              label: t(`stats.reports.transactions.groupBy.options.${g}`),
+            }))}
+            value={s.group_by ?? "day"}
+            onChange={(g) => {
+              set({ group_by: g });
+            }}
+          />
+        </Input.Wrapper>
+      </Stack>
+      <Stack gap="sm">
+        <Input.Wrapper label={t("stats.reports.transactions.order.label")}>
+          <SegmentedControl
+            fullWidth
+            mt={4}
+            data={TRANSACTIONS_ORDERS.map((o) => ({
+              value: o,
+              label: t(`stats.reports.transactions.order.options.${o}`),
+            }))}
+            value={s.order ?? "newest"}
+            onChange={(o) => {
+              set({ order: o });
+            }}
+          />
+        </Input.Wrapper>
+        <Input.Wrapper label={t("stats.reports.transactions.view.label")}>
+          <SegmentedControl
+            fullWidth
+            mt={4}
+            data={TRANSACTIONS_VIEWS.map((v) => ({
+              value: v,
+              label: t(`stats.reports.transactions.view.options.${v}`),
+            }))}
+            value={s.view ?? "list"}
+            onChange={(v) => {
+              set({ view: v });
+            }}
+          />
+        </Input.Wrapper>
+        {s.view === "table" && (
+          <>
+            <ColumnsField
+              value={s.columns?.length ? s.columns : DEFAULT_COLUMNS}
+              onChange={(columns) => {
+                set({ columns });
               }}
             />
-          </Input.Wrapper>
-        </>
-      )}
-      <Switch
-        label={t("transactions.filters.system")}
-        checked={s.system ?? false}
-        onChange={(e) => {
-          set({ system: e.currentTarget.checked });
-        }}
-      />
-      <Switch
-        label={t("transactions.filters.reversed")}
-        checked={s.reversed ?? false}
-        onChange={(e) => {
-          set({ reversed: e.currentTarget.checked });
-        }}
-      />
+            <Input.Wrapper label={t("stats.reports.transactions.rows.label")}>
+              <SegmentedControl
+                fullWidth
+                mt={4}
+                data={TRANSACTIONS_ROWS.map((r) => ({
+                  value: r,
+                  label: t(`stats.reports.transactions.rows.options.${r}`),
+                }))}
+                value={s.rows ?? "transaction"}
+                onChange={(r) => {
+                  set({ rows: r });
+                }}
+              />
+            </Input.Wrapper>
+          </>
+        )}
+      </Stack>
     </>
   );
 }
@@ -548,52 +583,56 @@ function BudgetFields({
   const chosenAccounts = s.account_ids ?? [];
   return (
     <>
-      <MultiSelect
-        comboboxProps={{ withinPortal: false }}
-        label={t("stats.graphs.accounts")}
-        placeholder={
-          chosenAccounts.length
-            ? undefined
-            : t(standalone ? "stats.graphs.allAccounts" : "stats.reports.asReport")
-        }
-        data={accounts.map((a) => ({ value: a.id, label: a.name }))}
-        value={chosenAccounts}
-        onChange={(v) => {
-          set({ account_ids: v });
-        }}
-        clearable
-      />
-      <MultiSelect
-        comboboxProps={{ withinPortal: false }}
-        label={t("stats.graphs.buckets")}
-        placeholder={
-          s.bucket_ids?.length
-            ? undefined
-            : t(standalone ? "stats.graphs.allBuckets" : "stats.reports.asReport")
-        }
-        data={buckets
-          .filter(
-            (b) => chosenAccounts.length === 0 || chosenAccounts.includes(b.source_account_id),
-          )
-          .map((b) => ({ value: b.id, label: b.name }))}
-        value={s.bucket_ids ?? []}
-        onChange={(v) => {
-          set({ bucket_ids: v });
-        }}
-        clearable
-        searchable
-      />
-      <Switch
-        label={t("stats.reports.budget.perCycle")}
-        description={t("stats.reports.budget.perCycleHint")}
-        checked={s.per_cycle !== false}
-        onChange={(e) => {
-          set({ per_cycle: e.currentTarget.checked });
-        }}
-      />
-      <Text size="sm" c="dimmed">
-        {t("stats.reports.budget.hint")}
-      </Text>
+      <Stack gap="sm">
+        <MultiSelect
+          comboboxProps={{ withinPortal: false }}
+          label={t("stats.graphs.accounts")}
+          placeholder={
+            chosenAccounts.length
+              ? undefined
+              : t(standalone ? "stats.graphs.allAccounts" : "stats.reports.asReport")
+          }
+          data={accounts.map((a) => ({ value: a.id, label: a.name }))}
+          value={chosenAccounts}
+          onChange={(v) => {
+            set({ account_ids: v });
+          }}
+          clearable
+        />
+        <MultiSelect
+          comboboxProps={{ withinPortal: false }}
+          label={t("stats.graphs.buckets")}
+          placeholder={
+            s.bucket_ids?.length
+              ? undefined
+              : t(standalone ? "stats.graphs.allBuckets" : "stats.reports.asReport")
+          }
+          data={buckets
+            .filter(
+              (b) => chosenAccounts.length === 0 || chosenAccounts.includes(b.source_account_id),
+            )
+            .map((b) => ({ value: b.id, label: b.name }))}
+          value={s.bucket_ids ?? []}
+          onChange={(v) => {
+            set({ bucket_ids: v });
+          }}
+          clearable
+          searchable
+        />
+      </Stack>
+      <Stack gap="sm">
+        <Switch
+          label={t("stats.reports.budget.perCycle")}
+          description={t("stats.reports.budget.perCycleHint")}
+          checked={s.per_cycle !== false}
+          onChange={(e) => {
+            set({ per_cycle: e.currentTarget.checked });
+          }}
+        />
+        <Text size="sm" c="dimmed">
+          {t("stats.reports.budget.hint")}
+        </Text>
+      </Stack>
     </>
   );
 }
@@ -622,120 +661,128 @@ function FlowsFields({
   const chosenAccounts = s.account_ids ?? [];
   return (
     <>
-      <Input.Wrapper label={t("stats.reports.flows.view.label")}>
-        <SegmentedControl
-          fullWidth
-          mt={4}
-          data={FLOWS_VIEWS.map((x) => ({
-            value: x,
-            label: t(`stats.reports.flows.view.options.${x}`),
-          }))}
-          value={s.view ?? "table"}
-          onChange={(x) => {
-            set({ view: x });
-          }}
-        />
-      </Input.Wrapper>
-      <MultiSelect
-        comboboxProps={{ withinPortal: false }}
-        label={t("stats.graphs.accounts")}
-        placeholder={
-          chosenAccounts.length
-            ? undefined
-            : t(standalone ? "stats.graphs.allAccounts" : "stats.reports.asReport")
-        }
-        data={accounts.map((a) => ({ value: a.id, label: a.name }))}
-        value={chosenAccounts}
-        onChange={(v) => {
-          set({ account_ids: v });
-        }}
-        clearable
-      />
-      <MultiSelect
-        comboboxProps={{ withinPortal: false }}
-        label={t("stats.graphs.buckets")}
-        placeholder={
-          s.bucket_ids?.length
-            ? undefined
-            : t(standalone ? "stats.graphs.allBuckets" : "stats.reports.asReport")
-        }
-        data={buckets
-          .filter(
-            (b) => chosenAccounts.length === 0 || chosenAccounts.includes(b.source_account_id),
-          )
-          .map((b) => ({ value: b.id, label: b.name }))}
-        value={s.bucket_ids ?? []}
-        onChange={(v) => {
-          set({ bucket_ids: v });
-        }}
-        clearable
-        searchable
-      />
-      <Input.Wrapper label={t("stats.reports.flows.show.label")}>
-        <SegmentedControl
-          fullWidth
-          mt={4}
-          data={FLOWS_SHOWS.map((x) => ({
-            value: x,
-            label: t(`stats.reports.flows.show.options.${x}`),
-          }))}
-          value={show}
-          onChange={(x) => {
-            set({ show: x });
-          }}
-        />
-      </Input.Wrapper>
-      {show !== "buckets" && (
-        <>
-          <Switch
-            label={t("stats.reports.flows.transfers")}
-            checked={s.transfers ?? false}
-            onChange={(e) => {
-              set({ transfers: e.currentTarget.checked });
-            }}
-          />
-          <Switch
-            label={t("stats.reports.flows.balances")}
-            description={t("stats.reports.flows.balancesHint")}
-            checked={s.balances ?? false}
-            onChange={(e) => {
-              set({ balances: e.currentTarget.checked });
-            }}
-          />
-        </>
-      )}
-      <Switch
-        label={t("stats.reports.flows.details")}
-        description={t("stats.reports.flows.detailsHint")}
-        checked={s.details ?? false}
-        onChange={(e) => {
-          set({ details: e.currentTarget.checked });
-        }}
-      />
-      {!inSection && (
-        <Input.Wrapper
-          label={t("stats.reports.breakdown.label")}
-          description={t("stats.reports.flows.breakdownHint", { days: BREAKDOWN_MIN_DAYS })}
-        >
+      <Stack gap="sm">
+        <Input.Wrapper label={t("stats.reports.flows.view.label")}>
           <SegmentedControl
             fullWidth
             mt={4}
-            data={BREAKDOWNS.map((b) => ({
-              value: b,
-              label: t(`stats.reports.breakdown.options.${b}`),
-              disabled: b !== "none" && b !== breakdown && breakdownWhy(b) !== null,
+            data={FLOWS_VIEWS.map((x) => ({
+              value: x,
+              label: t(`stats.reports.flows.view.options.${x}`),
             }))}
-            value={breakdown}
-            onChange={(b) => {
-              set({ breakdown: b });
+            value={s.view ?? "table"}
+            onChange={(x) => {
+              set({ view: x });
             }}
           />
         </Input.Wrapper>
-      )}
-      {why && (
-        <Text size="sm" c="dimmed">
-          {why}
-        </Text>
+        <Input.Wrapper label={t("stats.reports.flows.show.label")}>
+          <SegmentedControl
+            fullWidth
+            mt={4}
+            data={FLOWS_SHOWS.map((x) => ({
+              value: x,
+              label: t(`stats.reports.flows.show.options.${x}`),
+            }))}
+            value={show}
+            onChange={(x) => {
+              set({ show: x });
+            }}
+          />
+        </Input.Wrapper>
+      </Stack>
+      <Stack gap="sm">
+        <MultiSelect
+          comboboxProps={{ withinPortal: false }}
+          label={t("stats.graphs.accounts")}
+          placeholder={
+            chosenAccounts.length
+              ? undefined
+              : t(standalone ? "stats.graphs.allAccounts" : "stats.reports.asReport")
+          }
+          data={accounts.map((a) => ({ value: a.id, label: a.name }))}
+          value={chosenAccounts}
+          onChange={(v) => {
+            set({ account_ids: v });
+          }}
+          clearable
+        />
+        <MultiSelect
+          comboboxProps={{ withinPortal: false }}
+          label={t("stats.graphs.buckets")}
+          placeholder={
+            s.bucket_ids?.length
+              ? undefined
+              : t(standalone ? "stats.graphs.allBuckets" : "stats.reports.asReport")
+          }
+          data={buckets
+            .filter(
+              (b) => chosenAccounts.length === 0 || chosenAccounts.includes(b.source_account_id),
+            )
+            .map((b) => ({ value: b.id, label: b.name }))}
+          value={s.bucket_ids ?? []}
+          onChange={(v) => {
+            set({ bucket_ids: v });
+          }}
+          clearable
+          searchable
+        />
+      </Stack>
+      <Stack gap="sm">
+        {show !== "buckets" && (
+          <>
+            <Switch
+              label={t("stats.reports.flows.transfers")}
+              checked={s.transfers ?? false}
+              onChange={(e) => {
+                set({ transfers: e.currentTarget.checked });
+              }}
+            />
+            <Switch
+              label={t("stats.reports.flows.balances")}
+              description={t("stats.reports.flows.balancesHint")}
+              checked={s.balances ?? false}
+              onChange={(e) => {
+                set({ balances: e.currentTarget.checked });
+              }}
+            />
+          </>
+        )}
+        <Switch
+          label={t("stats.reports.flows.details")}
+          description={t("stats.reports.flows.detailsHint")}
+          checked={s.details ?? false}
+          onChange={(e) => {
+            set({ details: e.currentTarget.checked });
+          }}
+        />
+      </Stack>
+      {!inSection && (
+        <Stack gap="sm">
+          <Input.Wrapper
+            label={t("stats.reports.breakdown.label")}
+            description={t("stats.reports.flows.breakdownHint", { days: BREAKDOWN_MIN_DAYS })}
+          >
+            <SegmentedControl
+              fullWidth
+              mt={4}
+              data={BREAKDOWNS.map((b) => ({
+                value: b,
+                label: t(`stats.reports.breakdown.options.${b}`),
+                disabled: b !== "none" && b !== breakdown && breakdownWhy(b) !== null,
+              }))}
+              value={breakdown}
+              onChange={(b) => {
+                set({ breakdown: b });
+              }}
+            />
+          </Input.Wrapper>
+          {why && (
+            <Text size="sm" c="dimmed">
+              {why}
+            </Text>
+          )}
+        </Stack>
       )}
     </>
   );

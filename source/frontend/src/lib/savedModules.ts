@@ -24,6 +24,7 @@ import {
   withoutPeriod,
   type CompareTo,
   type GraphModule,
+  type ModuleCompare,
   type PartModule,
   type ReportSettings,
 } from "./reports";
@@ -117,16 +118,35 @@ export function isGraphModule(s: SavedModule): s is SavedModule & { module: Grap
  * and period, keeping what Stats doesn't change (its comparison, breakdown,
  * title and compare-to), or a new one.
  */
-export function graphAsSaved(settings: GraphSettings, selected: SavedModule | null): SavedModule {
+export function graphAsSaved(
+  settings: GraphSettings,
+  selected: SavedModule | null,
+  compare?: GraphCompare,
+): SavedModule {
   const graph = withoutPeriod(cleanGraph(settings));
   const base = selected?.module.type === "graph" ? selected.module : null;
+  const shown = compare ?? graphCompare(selected);
   return cleanSavedModule({
     id: selected?.id ?? "",
     name: selected?.name ?? "",
     period: settings.period,
-    ...(selected?.compare_to === undefined ? {} : { compare_to: selected.compare_to }),
-    module: base ? { ...base, graph } : { id: "m-1", type: "graph", graph },
+    compare_to: shown.to,
+    module: { ...(base ?? { id: "m-1", type: "graph" }), graph, compare: shown.mode },
   });
+}
+
+/** A graph's comparison on the Stats tab (#204): how, and with what. */
+export interface GraphCompare {
+  mode: ModuleCompare;
+  to: CompareTo;
+}
+
+/** A saved module's comparison, or none. */
+export function graphCompare(s: SavedModule | null): GraphCompare {
+  return {
+    mode: s?.module.type === "graph" ? (s.module.compare ?? "off") : "off",
+    to: s?.compare_to ?? "previous",
+  };
 }
 
 /**
@@ -172,6 +192,25 @@ export function newSavedModuleId(saved: SavedModule[]): string {
     "g",
     saved.map((s) => s.id),
   );
+}
+
+/**
+ * A new, unsaved module of the type over the period (#204), as the Stats
+ * tab starts one: the defaults a report's Add module gives it.
+ */
+export function newSavedModule(
+  type: Exclude<PartModule["type"], "graph">,
+  period: string,
+): SavedModule {
+  // As newModule makes them, with a saved module's one id.
+  const id = "m-1";
+  const module: PartModule =
+    type === "transactions"
+      ? { id, type, transactions: {} }
+      : type === "flows"
+        ? { id, type, flows: {} }
+        : { id, type, budget: {} };
+  return { id: "", name: "", period, module };
 }
 
 /** Stats & reports with the saved module picked, as the Dashboard opens it. */
