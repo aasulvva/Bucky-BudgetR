@@ -558,6 +558,89 @@ describe("Stats", () => {
       ),
     ).toBeInTheDocument();
   });
+  describe("per day, week, month or cycle, and the average line (#182)", () => {
+    // A whole October and November so far.
+    const months = (req: MockRequest) => ({
+      body: {
+        intervals: [
+          { start: req.query.get("from") ?? "", end: new Date(2026, 10, 1).toISOString() },
+          { start: new Date(2026, 10, 1).toISOString(), end: req.query.get("to") ?? "" },
+        ],
+        series: [{ currency: "NOK", values: ["310.00", "100.00"] }],
+      },
+    });
+    const params = (router: { state: { location: { search: string } } }) =>
+      new URLSearchParams(router.state.location.search);
+
+    it("shows a graph per day with an average line, kept in the URL and saved", async () => {
+      apiMock.on(stats, months);
+      const { router } = renderRoute(
+        "/stats?kind=bar&metric=spending&period=custom-2026-10-01-2026-11-10&res=month",
+      );
+      await pick("Show as", "Per day");
+      expect(params(router).get("per")).toBe("day");
+      expect(
+        await screen.findByText(/^An amount per day, week, month or cycle/),
+      ).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("switch", { name: /Average line/ }));
+      expect(params(router).get("avg")).toBe("1");
+      // A rate counts every interval: no note.
+      expect(screen.queryByText(/whole month/)).not.toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole("button", { name: "Save module…" }));
+      const dialog = within(await screen.findByRole("dialog", { name: "Save module" }));
+      await userEvent.type(dialog.getByRole("textbox", { name: "Name" }), "Daily");
+      await userEvent.click(dialog.getByRole("button", { name: "Save" }));
+      await waitFor(() => {
+        expect(prefs.saved_modules?.at(-1)?.module).toEqual({
+          id: "m-1",
+          type: "graph",
+          graph: {
+            kind: "bar",
+            metric: "spending",
+            resolution: "month",
+            show_as: "day",
+            average: true,
+          },
+        });
+      });
+
+      // As totals, the average leaves out the partial month.
+      await pick("Show as", "Totals");
+      expect(
+        await screen.findByText("The average is of 1 whole month; partial ones don't count."),
+      ).toBeInTheDocument();
+      expect(params(router).has("per")).toBe(false);
+    });
+
+    it("has no Show as for a balance, nor per hour, and no average with a running total", async () => {
+      const { router } = renderRoute(
+        "/stats?kind=line&metric=balance&period=current-month&res=day",
+      );
+      expect(await screen.findByRole("switch", { name: /Average line/ })).toBeEnabled();
+      expect(screen.queryByRole("combobox", { name: "Show as" })).not.toBeInTheDocument();
+
+      await router.navigate("/stats?kind=line&metric=spending&period=current-day&res=hour");
+      expect(await screen.findByRole("combobox", { name: "Show as" })).toBeDisabled();
+      expect(screen.getByText("Per hour shows totals.")).toBeInTheDocument();
+
+      await router.navigate(
+        "/stats?kind=line&metric=spending&period=current-month&res=day&cum=1&avg=1",
+      );
+      expect(await screen.findByText("Not with a running total.")).toBeInTheDocument();
+      expect(screen.getByRole("switch", { name: /Average line/ })).toBeDisabled();
+      expect(params(router).get("avg")).toBe("1");
+    });
+
+    it("puts the unit in the mobile summary", async () => {
+      viewport.width = 375;
+      renderRoute("/stats?kind=bar&metric=spending&period=current-month&res=day&per=week&avg=1");
+      expect(await screen.findByTestId("graph-summary")).toHaveTextContent(
+        "Spending · This month · Day · Per week · Average line",
+      );
+    });
+  });
+
   describe("a graph's comparison (#204)", () => {
     const fromCalls = () => apiMock.calls(stats).map((c) => c.query.get("from"));
     const params = (router: { state: { location: { search: string } } }) =>

@@ -2440,6 +2440,18 @@ export interface components {
             pie_labels?: components["schemas"]["PieLabels"];
             /** @description How many series get their own colour (at most 8, the graph palette); the rest add up to Other. 5 by default. */
             top?: number;
+            /**
+             * @description Spending and income only, not per hour (#182): each interval's sum
+             *     as an amount per day, week, month (365.25 / 12 days) or cycle (the
+             *     average length of the user's cycles in the period), divided by the
+             *     days it covers so far. Left out for `total`, the default.
+             */
+            show_as?: components["schemas"]["GraphShowAs"];
+            /**
+             * @description Lines and bars only, not running totals (#182): a dashed line at
+             *     the average of the intervals shown.
+             */
+            average?: boolean;
         };
         /**
          * @description A pie grouped by `account` or `bucket` has a slice per series over
@@ -2457,6 +2469,8 @@ export interface components {
         GraphGroupBy: "none" | "account" | "bucket" | "counterparty";
         /** @enum {string} */
         PieLabels: "list" | "slices" | "both";
+        /** @enum {string} */
+        GraphShowAs: "total" | "day" | "week" | "month" | "cycle";
         ReportTemplate: {
             id: string;
             name: string;
@@ -2689,6 +2703,18 @@ export interface components {
             pie_labels?: components["schemas"]["PieLabels"];
             /** @description How many series get their own colour (at most 8, the graph palette); the rest add up to Other. 5 by default. */
             top?: number;
+            /**
+             * @description Spending and income only, not per hour (#182): each interval's sum
+             *     as an amount per day, week, month (365.25 / 12 days) or cycle (the
+             *     average length of the user's cycles in the period), divided by the
+             *     days it covers so far. Left out for `total`, the default.
+             */
+            show_as?: components["schemas"]["GraphShowAs"];
+            /**
+             * @description Lines and bars only, not running totals (#182): a dashed line at
+             *     the average of the intervals shown.
+             */
+            average?: boolean;
         };
         /** @description A period cut into intervals, and one value per interval in each series. */
         StatsSeries: {

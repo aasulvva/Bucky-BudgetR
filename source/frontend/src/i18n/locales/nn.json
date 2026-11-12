@@ -1559,7 +1559,43 @@
         "both": "Begge"
       },
       "compare": "Samanlikn",
-      "compareWith": "Samanliknar med {{period}}."
+      "compareWith": "Samanliknar med {{period}}.",
+      "showAs": "Vis som",
+      "showAsOptions": {
+        "total": "Summar",
+        "day": "Per dag",
+        "week": "Per veke",
+        "month": "Per månad",
+        "cycle": "Per periode"
+      },
+      "showAsHint": "Eit beløp per dag, veke, månad eller periode, etter dagane kvart intervall dekkjer så langt, så periodar av ulik lengd kan samanliknast rettferdig.",
+      "showAsHour": "Per time viser summar.",
+      "noCycles": "Per periode krev periodar: vert vist som summar.",
+      "perUnit": {
+        "day": "{{amount}} / dag",
+        "week": "{{amount}} / veke",
+        "month": "{{amount}} / månad",
+        "cycle": "{{amount}} / periode"
+      },
+      "averageLine": "Gjennomsnittsline",
+      "averageHint": "Ei stipla line ved gjennomsnittet av intervalla.",
+      "averageCumulative": "Ikkje med løpande sum.",
+      "averageLabel": "Snitt {{amount}}",
+      "averages": "Gjennomsnitt: {{list}}",
+      "averageWhole": {
+        "hour_one": "Gjennomsnittet er av {{count}} heil time; delvise tel ikkje.",
+        "hour_other": "Gjennomsnittet er av {{count}} heile timar; delvise tel ikkje.",
+        "day_one": "Gjennomsnittet er av {{count}} heil dag; delvise tel ikkje.",
+        "day_other": "Gjennomsnittet er av {{count}} heile dagar; delvise tel ikkje.",
+        "week_one": "Gjennomsnittet er av {{count}} heil veke; delvise tel ikkje.",
+        "week_other": "Gjennomsnittet er av {{count}} heile veker; delvise tel ikkje.",
+        "month_one": "Gjennomsnittet er av {{count}} heil månad; delvise tel ikkje.",
+        "month_other": "Gjennomsnittet er av {{count}} heile månader; delvise tel ikkje.",
+        "year_one": "Gjennomsnittet er av {{count}} heilt år; delvise tel ikkje.",
+        "year_other": "Gjennomsnittet er av {{count}} heile år; delvise tel ikkje.",
+        "cycle_one": "Gjennomsnittet er av {{count}} heil periode; delvise tel ikkje.",
+        "cycle_other": "Gjennomsnittet er av {{count}} heile periodar; delvise tel ikkje."
+      }
     },
     "saved": {
       "label": "Lagra modular",

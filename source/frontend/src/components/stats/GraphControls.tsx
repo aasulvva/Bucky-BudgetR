@@ -25,6 +25,7 @@ import {
   type GraphKind,
   type GraphSettings,
 } from "@/lib/graphs";
+import { SHOW_AS } from "@/lib/graphRates";
 import { defaultPeriod, formatPeriod, parsePeriod, type PeriodChoice } from "@/lib/periods";
 
 import { FilterFields } from "./FilterFields";
@@ -75,6 +76,8 @@ export function GraphControls({
   const balance = s.metric === "balance";
   const group = groupBy(s);
   const pie = s.kind === "pie";
+  // A rate per hour isn't offered (#182).
+  const hourly = s.resolution === "hour";
   // A pie per bucket or account covers the whole period: no resolution.
   const whole = pie && pieSlicing(s) !== "interval";
   const setKind = (kind: GraphKind) => {
@@ -127,6 +130,30 @@ export function GraphControls({
           }}
           allowDeselect={false}
         />
+        {!balance && (
+          <Select
+            comboboxProps={dropdown}
+            label={t("stats.graphs.showAs")}
+            description={
+              hourly
+                ? t("stats.graphs.showAsHour")
+                : s.show_as
+                  ? t("stats.graphs.showAsHint")
+                  : undefined
+            }
+            data={SHOW_AS.map((v) => ({
+              value: v,
+              label: t(`stats.graphs.showAsOptions.${v}`),
+              disabled: v === "cycle" && cycles.length === 0,
+            }))}
+            value={s.show_as ?? "total"}
+            disabled={hourly}
+            onChange={(v) => {
+              if (v) set({ show_as: v });
+            }}
+            allowDeselect={false}
+          />
+        )}
       </Stack>
       {!reportPeriod && (
         <Stack gap="sm">
@@ -248,6 +275,19 @@ export function GraphControls({
             checked={s.cumulative ?? false}
             onChange={(e) => {
               set({ cumulative: e.currentTarget.checked });
+            }}
+          />
+        )}
+        {!pie && (
+          <Switch
+            label={t("stats.graphs.averageLine")}
+            description={
+              s.cumulative ? t("stats.graphs.averageCumulative") : t("stats.graphs.averageHint")
+            }
+            checked={s.average ?? false}
+            disabled={s.cumulative ?? false}
+            onChange={(e) => {
+              set({ average: e.currentTarget.checked });
             }}
           />
         )}

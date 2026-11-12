@@ -4199,6 +4199,19 @@ components:
           minimum: 1
           maximum: 8
           description: How many series get their own colour (at most 8, the graph palette); the rest add up to Other. 5 by default.
+        show_as:
+          allOf:
+            - $ref: "#/components/schemas/GraphShowAs"
+          description: |
+            Spending and income only, not per hour (#182): each interval's sum
+            as an amount per day, week, month (365.25 / 12 days) or cycle (the
+            average length of the user's cycles in the period), divided by the
+            days it covers so far. Left out for `total`, the default.
+        average:
+          type: boolean
+          description: |
+            Lines and bars only, not running totals (#182): a dashed line at
+            the average of the intervals shown.
 
     GraphKind:
       type: string
@@ -4224,6 +4237,10 @@ components:
     PieLabels:
       type: string
       enum: [list, slices, both]
+
+    GraphShowAs:
+      type: string
+      enum: [total, day, week, month, cycle]
 
     ReportTemplate:
       type: object
@@ -4603,6 +4620,19 @@ components:
           minimum: 1
           maximum: 8
           description: How many series get their own colour (at most 8, the graph palette); the rest add up to Other. 5 by default.
+        show_as:
+          allOf:
+            - $ref: "#/components/schemas/GraphShowAs"
+          description: |
+            Spending and income only, not per hour (#182): each interval's sum
+            as an amount per day, week, month (365.25 / 12 days) or cycle (the
+            average length of the user's cycles in the period), divided by the
+            days it covers so far. Left out for `total`, the default.
+        average:
+          type: boolean
+          description: |
+            Lines and bars only, not running totals (#182): a dashed line at
+            the average of the intervals shown.
 
 
     StatsSeries:

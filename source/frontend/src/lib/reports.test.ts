@@ -221,6 +221,20 @@ describe("moduleGraph", () => {
     expect(g.bucket_ids).toEqual(["1000000001"]);
     expect(g.tags).toEqual(["fun"]);
   });
+  it("keeps the module's Show as and average line (#182)", () => {
+    const g = moduleGraph(report, {
+      id: "m-1",
+      type: "graph",
+      graph: {
+        kind: "bar",
+        metric: "spending",
+        resolution: "month",
+        show_as: "cycle",
+        average: true,
+      },
+    });
+    expect(g).toMatchObject({ show_as: "cycle", average: true, period: "previous-year" });
+  });
 });
 
 describe("cleanReport", () => {

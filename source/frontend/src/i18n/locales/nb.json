@@ -1559,7 +1559,43 @@
         "both": "Begge"
       },
       "compare": "Sammenlign",
-      "compareWith": "Sammenligner med {{period}}."
+      "compareWith": "Sammenligner med {{period}}.",
+      "showAs": "Vis som",
+      "showAsOptions": {
+        "total": "Summer",
+        "day": "Per dag",
+        "week": "Per uke",
+        "month": "Per måned",
+        "cycle": "Per periode"
+      },
+      "showAsHint": "Et beløp per dag, uke, måned eller periode, etter dagene hvert intervall dekker så langt, så perioder av ulik lengde kan sammenlignes rettferdig.",
+      "showAsHour": "Per time viser summer.",
+      "noCycles": "Per periode krever perioder: vises som summer.",
+      "perUnit": {
+        "day": "{{amount}} / dag",
+        "week": "{{amount}} / uke",
+        "month": "{{amount}} / måned",
+        "cycle": "{{amount}} / periode"
+      },
+      "averageLine": "Gjennomsnittslinje",
+      "averageHint": "En stiplet linje ved gjennomsnittet av intervallene.",
+      "averageCumulative": "Ikke med løpende sum.",
+      "averageLabel": "Snitt {{amount}}",
+      "averages": "Gjennomsnitt: {{list}}",
+      "averageWhole": {
+        "hour_one": "Gjennomsnittet er av {{count}} hel time; delvise teller ikke.",
+        "hour_other": "Gjennomsnittet er av {{count}} hele timer; delvise teller ikke.",
+        "day_one": "Gjennomsnittet er av {{count}} hel dag; delvise teller ikke.",
+        "day_other": "Gjennomsnittet er av {{count}} hele dager; delvise teller ikke.",
+        "week_one": "Gjennomsnittet er av {{count}} hel uke; delvise teller ikke.",
+        "week_other": "Gjennomsnittet er av {{count}} hele uker; delvise teller ikke.",
+        "month_one": "Gjennomsnittet er av {{count}} hel måned; delvise teller ikke.",
+        "month_other": "Gjennomsnittet er av {{count}} hele måneder; delvise teller ikke.",
+        "year_one": "Gjennomsnittet er av {{count}} helt år; delvise teller ikke.",
+        "year_other": "Gjennomsnittet er av {{count}} hele år; delvise teller ikke.",
+        "cycle_one": "Gjennomsnittet er av {{count}} hel periode; delvise teller ikke.",
+        "cycle_other": "Gjennomsnittet er av {{count}} hele perioder; delvise teller ikke."
+      }
     },
     "saved": {
       "label": "Lagrede moduler",

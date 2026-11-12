@@ -1559,7 +1559,43 @@
         "both": "Both"
       },
       "compare": "Compare",
-      "compareWith": "Compares with {{period}}."
+      "compareWith": "Compares with {{period}}.",
+      "showAs": "Show as",
+      "showAsOptions": {
+        "total": "Totals",
+        "day": "Per day",
+        "week": "Per week",
+        "month": "Per month",
+        "cycle": "Per cycle"
+      },
+      "showAsHint": "An amount per day, week, month or cycle, by the days each interval covers so far, so periods of different lengths compare fairly.",
+      "showAsHour": "Per hour shows totals.",
+      "noCycles": "Per cycle needs cycles: shown as totals.",
+      "perUnit": {
+        "day": "{{amount}} / day",
+        "week": "{{amount}} / week",
+        "month": "{{amount}} / month",
+        "cycle": "{{amount}} / cycle"
+      },
+      "averageLine": "Average line",
+      "averageHint": "A dashed line at the average of the intervals.",
+      "averageCumulative": "Not with a running total.",
+      "averageLabel": "Avg {{amount}}",
+      "averages": "Averages: {{list}}",
+      "averageWhole": {
+        "hour_one": "The average is of {{count}} whole hour; partial ones don't count.",
+        "hour_other": "The average is of {{count}} whole hours; partial ones don't count.",
+        "day_one": "The average is of {{count}} whole day; partial ones don't count.",
+        "day_other": "The average is of {{count}} whole days; partial ones don't count.",
+        "week_one": "The average is of {{count}} whole week; partial ones don't count.",
+        "week_other": "The average is of {{count}} whole weeks; partial ones don't count.",
+        "month_one": "The average is of {{count}} whole month; partial ones don't count.",
+        "month_other": "The average is of {{count}} whole months; partial ones don't count.",
+        "year_one": "The average is of {{count}} whole year; partial ones don't count.",
+        "year_other": "The average is of {{count}} whole years; partial ones don't count.",
+        "cycle_one": "The average is of {{count}} whole cycle; partial ones don't count.",
+        "cycle_other": "The average is of {{count}} whole cycles; partial ones don't count."
+      }
     },
     "saved": {
       "label": "Saved modules",
