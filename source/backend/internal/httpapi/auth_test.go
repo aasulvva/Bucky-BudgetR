@@ -395,10 +395,10 @@ func TestPreferences(t *testing.T) {
 	if w := patch(both); w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != both {
 		t.Errorf("both layouts: %d %s", w.Code, w.Body)
 	}
-	// A graph widget (#124) points to a saved graph, which needn't exist (it says it was deleted).
-	graph := `{"dashboard":{"mobile_widgets":[{"graph":{"saved_graph_id":"g-1"},"id":"c-1","type":"graph","width":"full"}],"widgets":[{"graph":{"saved_graph_id":"g-9"},"id":"c-1","type":"graph","width":"half"}]}}`
-	if w := patch(graph); w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != graph {
-		t.Errorf("graph widgets: %d %s", w.Code, w.Body)
+	// A module widget (#201) points to a saved module, which needn't exist (it says it was deleted).
+	module := `{"dashboard":{"mobile_widgets":[{"id":"c-1","module":{"saved_module_id":"g-1"},"type":"module","width":"full"}],"widgets":[{"id":"c-1","module":{"saved_module_id":"g-9"},"type":"module","width":"half"}]}}`
+	if w := patch(module); w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != module {
+		t.Errorf("module widgets: %d %s", w.Code, w.Body)
 	}
 	// A scheduled widget (#155).
 	scheduled := `{"dashboard":{"widgets":[{"id":"s-1","scheduled":{"count":10,"show":"queue"},"type":"scheduled","width":"half"}]}}`
@@ -411,13 +411,20 @@ func TestPreferences(t *testing.T) {
 	if w := patch(`{"dashboard":null}`); strings.TrimSpace(w.Body.String()) != `{}` {
 		t.Errorf("dashboard reset: %d %s", w.Code, w.Body)
 	}
-	// Saved graphs (#122, pies #123) are kept as given, and null removes them.
-	graphs := `{"saved_graphs":[{"graph":{"account_ids":["1234"],"group_by":"bucket","kind":"bar","metric":"spending","period":"last-4-quarters","resolution":"day","tags":["food"],"top":5},"id":"g-1","name":"Food"},{"graph":{"fit_y_axis":true,"kind":"line","metric":"balance","period":"last-3-cycles","resolution":"week","stepped":true},"id":"g-2","name":"Balance"},{"graph":{"group_by":"bucket","kind":"pie","metric":"spending","period":"current-year","pie_labels":"both","resolution":"month"},"id":"g-3","name":"Pie"}]}`
-	if w := patch(graphs); w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != graphs {
-		t.Errorf("saved graphs: %d %s", w.Code, w.Body)
+	// Saved modules (#201; saved graphs before, #122, pies #123) of each
+	// type, over any graph period (the last N too), are kept as given, and
+	// null removes them.
+	saved := `{"saved_modules":[` +
+		`{"compare_to":"last_year","id":"g-1","module":{"compare":"both","graph":{"account_ids":["1234"],"group_by":"bucket","kind":"bar","metric":"spending","resolution":"day","tags":["food"],"top":5},"id":"m-1","title":"Food","type":"graph"},"name":"Food","period":"last-4-quarters"},` +
+		`{"id":"g-2","module":{"graph":{"fit_y_axis":true,"kind":"line","metric":"balance","resolution":"week","stepped":true},"id":"m-1","type":"graph"},"name":"Balance","period":"last-3-cycles"},` +
+		`{"id":"g-3","module":{"id":"m-1","transactions":{"bucket_ids":["1000000007"],"view":"table"},"type":"transactions"},"name":"List","period":"last-30-days"},` +
+		`{"id":"g-4","module":{"flows":{"show":"both"},"id":"m-1","type":"flows"},"name":"Flows","period":"current-year"},` +
+		`{"id":"g-5","module":{"budget":{"per_cycle":false},"id":"m-1","type":"budget"},"name":"Budget","period":"previous-cycle"}]}`
+	if w := patch(saved); w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != saved {
+		t.Errorf("saved modules: %d %s", w.Code, w.Body)
 	}
-	if w := patch(`{"saved_graphs":null}`); strings.TrimSpace(w.Body.String()) != `{}` {
-		t.Errorf("saved graphs reset: %d %s", w.Code, w.Body)
+	if w := patch(`{"saved_modules":null}`); strings.TrimSpace(w.Body.String()) != `{}` {
+		t.Errorf("saved modules reset: %d %s", w.Code, w.Body)
 	}
 	// Report templates (#125) too.
 	reports := `{"report_templates":[{"id":"r-1","name":"Year","report":{"bucket_ids":["1000000007"],"compare_to":"last_year","modules":[{"breakdown":"cycle","compare":"difference","graph":{"account_ids":["1234"],"group_by":"bucket","kind":"bar","metric":"spending","resolution":"month"},"id":"m-1","title":"Food","type":"graph"},{"compare":"off","graph":{"kind":"pie","metric":"spending","resolution":"total"},"id":"m-2","type":"graph"}],"period":"previous-year"}},{"id":"r-2","name":"Q3","report":{"modules":[{"id":"m-1","title":"Food","transactions":{"bucket_ids":["1000000007"],"columns":["date","amount","balance"],"counterparty":"rema","reversed":true,"rows":"bucket_line","sections":"cycle","system":true,"tags":["food"],"types":["EXP","TRF"],"view":"table"},"type":"transactions"},{"flows":{"account_ids":["1234"],"balances":true,"breakdown":"cycle","details":true,"show":"both","transfers":true,"view":"grid"},"id":"m-2","type":"flows"},{"budget":{"account_ids":["1234"],"bucket_ids":["1000000007"],"per_cycle":false},"id":"m-3","type":"budget"},{"id":"m-4","section":{"modules":[{"graph":{"kind":"pie","metric":"spending","resolution":"total"},"id":"m-5","type":"graph"},{"id":"m-6","transactions":{"view":"table"},"type":"transactions"}],"unit":"month"},"title":"Each month","type":"section"}],"period":"quarter-2026-q3"}}]}`
@@ -447,9 +454,12 @@ func TestPreferences(t *testing.T) {
 		`{"dashboard":{"widgets":[{"id":"a","type":"cycle","width":"half","scheduled":{"show":"both","count":5}}]}}`,
 		`{"dashboard":{"widgets":[{"id":"a","type":"scheduled","width":"half","scheduled":{"show":"all","count":5}}]}}`,
 		`{"dashboard":{"widgets":[{"id":"a","type":"scheduled","width":"half","scheduled":{"show":"both","count":21}}]}}`,
-		`{"dashboard":{"widgets":[{"id":"a","type":"cycle","width":"half","graph":{"saved_graph_id":"g-1"}}]}}`,
-		`{"dashboard":{"widgets":[{"id":"a","type":"graph","width":"half","graph":{"saved_graph_id":""}}]}}`,
-		`{"dashboard":{"widgets":[{"id":"a","type":"graph","width":"half","graph":{}}]}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"cycle","width":"half","module":{"saved_module_id":"g-1"}}]}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"module","width":"half","module":{"saved_module_id":""}}]}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"module","width":"half","module":{}}]}}`,
+		// Graph widgets became module widgets (#201).
+		`{"dashboard":{"widgets":[{"id":"a","type":"graph","width":"half"}]}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"module","width":"half","graph":{"saved_graph_id":"g-1"}}]}}`,
 		`{"dashboard":{"widgets":[{"id":"a","type":"health","width":"third"}]}}`,
 		`{"dashboard":{"widgets":[{"id":"a b","type":"health","width":"half"}]}}`,
 		`{"dashboard":{"widgets":[{"type":"health","width":"half"}]}}`,
@@ -461,14 +471,20 @@ func TestPreferences(t *testing.T) {
 		`{"dashboard":{"widgets":[{"id":"a","type":"cycle","width":"half","in_out":{"figures":["income"],"period":"month"}}]}}`,
 		`{"dashboard":{"widgets":[{"id":"a","type":"health","width":"half","title":""}]}}`,
 		`{"dashboard":{"widgets":[{"id":"a","type":"health","width":"half","title":"` + strings.Repeat("x", 41) + `"}]}}`,
-		`{"saved_graphs":[{"id":"a","name":"A","graph":{"kind":"bar","metric":"spending","period":"current-month","resolution":"day"}},{"id":"a","name":"B","graph":{"kind":"bar","metric":"spending","period":"current-month","resolution":"day"}}]}`,
-		`{"saved_graphs":[{"id":"a","name":"  ","graph":{"kind":"bar","metric":"spending","period":"current-month","resolution":"day"}}]}`,
-		`{"saved_graphs":[{"id":"a","name":"A","graph":{"kind":"donut","metric":"spending","period":"current-month","resolution":"day"}}]}`,
-		`{"saved_graphs":[{"id":"a","name":"A","graph":{"kind":"pie","metric":"spending","period":"current-month","resolution":"day","pie_labels":"inside"}}]}`,
-		`{"saved_graphs":[{"id":"a","name":"A","graph":{"kind":"bar","metric":"spending","period":"current-decade","resolution":"day"}}]}`,
-		`{"saved_graphs":[{"id":"a","name":"A","graph":{"kind":"bar","metric":"spending","period":"current-month","resolution":"day","top":9}}]}`,
-		`{"saved_graphs":[{"id":"a","name":"A","graph":{"kind":"bar","metric":"spending","period":"current-month","resolution":"day","colour":"red"}}]}`,
-		`{"saved_graphs":[{"id":"a","name":"A"}]}`,
+		`{"saved_graphs":[{"id":"a","name":"A","graph":{"kind":"bar","metric":"spending","period":"current-month","resolution":"day"}}]}`,
+		`{"saved_modules":[{"id":"a","name":"A","period":"current-month","module":{"id":"m-1","type":"graph","graph":{"kind":"bar","metric":"spending","resolution":"day"}}},{"id":"a","name":"B","period":"current-month","module":{"id":"m-1","type":"graph","graph":{"kind":"bar","metric":"spending","resolution":"day"}}}]}`,
+		`{"saved_modules":[{"id":"a","name":"  ","period":"current-month","module":{"id":"m-1","type":"graph","graph":{"kind":"bar","metric":"spending","resolution":"day"}}}]}`,
+		`{"saved_modules":[{"id":"a","name":"A","period":"current-month","module":{"id":"m-1","type":"graph","graph":{"kind":"donut","metric":"spending","resolution":"day"}}}]}`,
+		`{"saved_modules":[{"id":"a","name":"A","period":"current-decade","module":{"id":"m-1","type":"graph","graph":{"kind":"bar","metric":"spending","resolution":"day"}}}]}`,
+		`{"saved_modules":[{"id":"a","name":"A","period":"current-month","compare_to":"next_year","module":{"id":"m-1","type":"graph","graph":{"kind":"bar","metric":"spending","resolution":"day"}}}]}`,
+		`{"saved_modules":[{"id":"a","name":"A","period":"current-month","module":{"id":"m-1","type":"graph","graph":{"kind":"bar","metric":"spending","resolution":"day","top":9}}}]}`,
+		`{"saved_modules":[{"id":"a","name":"A","period":"current-month","module":{"id":"m-1","type":"graph","graph":{"kind":"bar","metric":"spending","resolution":"day","period":"current-month"}}}]}`,
+		`{"saved_modules":[{"id":"a","name":"A","period":"current-month","module":{"id":"m-1","type":"graph"}}]}`,
+		`{"saved_modules":[{"id":"a","name":"A","period":"current-month","module":{"id":"m-1","type":"transactions","transactions":{},"graph":{"kind":"bar","metric":"spending","resolution":"day"}}}]}`,
+		`{"saved_modules":[{"id":"a","name":"A","period":"current-month","module":{"id":"m-1","type":"section","section":{"unit":"month","modules":[]}}}]}`,
+		`{"saved_modules":[{"id":"a","name":"A","module":{"id":"m-1","type":"graph","graph":{"kind":"bar","metric":"spending","resolution":"day"}}}]}`,
+		`{"saved_modules":[{"id":"a","name":"A","period":"current-month"}]}`,
+		`{"saved_modules":[` + strings.Repeat(`{"id":"a","name":"A","period":"current-month","module":{"id":"m-1","type":"graph","graph":{"kind":"bar","metric":"spending","resolution":"day"}}},`, 100) + `{"id":"b","name":"B","period":"current-month","module":{"id":"m-1","type":"graph","graph":{"kind":"bar","metric":"spending","resolution":"day"}}}]}`,
 		`{"report_templates":[{"id":"a","name":"A","report":{"period":"current-year","modules":[]}},{"id":"a","name":"B","report":{"period":"current-year","modules":[]}}]}`,
 		`{"report_templates":[{"id":"a","name":" ","report":{"period":"current-year","modules":[]}}]}`,
 		`{"report_templates":[{"id":"a","name":"A","report":{"period":"current-year","modules":[{"id":"m","type":"graph","graph":{"kind":"bar","metric":"spending","resolution":"day"}},{"id":"m","type":"graph","graph":{"kind":"bar","metric":"spending","resolution":"day"}}]}}]}`,

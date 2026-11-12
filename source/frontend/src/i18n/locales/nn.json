@@ -359,7 +359,7 @@
       "accounts": "Saldoane på kontoane dine, eller éin konto.",
       "recent_transactions": "Dei siste transaksjonane.",
       "in_out": "Inntekter, utgifter og netto for eit tidsrom.",
-      "graph": "Ein av dei lagra grafane dine frå Statistikk og rapportar.",
+      "module": "Ein av dei lagra modulane dine frå Statistikk og rapportar: ein graf, transaksjonar, inn/ut/saldo eller budsjett mot forbruk.",
       "scheduled": "Planlagde transaksjonar som ventar på godkjenning, og det som kjem."
     },
     "inOut": {
@@ -391,15 +391,15 @@
       "leftOut_other": "{{count}} kontoar i andre valutaer er ikkje tekne med.",
       "open": "{{figure}}: {{amount}}. Vis transaksjonane."
     },
-    "graph": {
-      "title": "Graf",
-      "savedGraph": "Lagra graf",
-      "pick": "Vel ein lagra graf å vise.",
-      "deleted": "Denne lagra grafen er sletta.",
-      "pickButton": "Vel ein graf",
-      "noneSaved": "Du har ingen lagra grafar enno. Lag ein under <stats>Statistikk og rapportar</stats> og lagre han.",
+    "module": {
+      "title": "Modul",
+      "savedModule": "Lagra modul",
+      "pick": "Vel ein lagra modul å vise.",
+      "deleted": "Denne lagra modulen er sletta.",
+      "pickButton": "Vel ein modul",
+      "noneSaved": "Du har ingen lagra modular enno. Lag ein under <stats>Statistikk og rapportar</stats> og lagre han.",
       "open": "Opne i Statistikk",
-      "openGraph": "Opne {{name}} i Statistikk og rapportar"
+      "openModule": "Opne {{name}} i Statistikk og rapportar"
     },
     "scheduled": {
       "title": "Planlagde",
@@ -1177,6 +1177,15 @@
         "apply": "Bruk",
         "edit": "Rediger",
         "remove": "Fjern",
+        "save": "Lagre modul…",
+        "saveNamed": "Lagre {{module}} som modul…",
+        "saveTitle": "Lagre modul",
+        "saveHint": "Han vert lagra over perioden til denne rapporten, med filtera. På Grafar-fana kan du vise han over ein annan periode, til dømes dei siste 3 månadene, og leggje han på oversikta.",
+        "saved": "Lagra «{{name}}». Du finn han på Grafar-fana.",
+        "savedMax": "Du har {{max}} lagra modular, som er det meste. Slett ein på Grafar-fana først.",
+        "fromSaved": "Kopier ein lagra modul",
+        "fromSavedPlaceholder": "Ingen: set han opp nedanfor",
+        "fromSavedHint": "Ein kopi, vist over perioden til rapporten. Endrar du han her, vert ikkje den lagra modulen endra.",
         "moveUp": "Flytt opp",
         "moveDown": "Flytt ned",
         "title": "Tittel",
@@ -1478,18 +1487,18 @@
       }
     },
     "saved": {
-      "label": "Lagra grafar",
+      "label": "Lagra modular",
       "none": "Ingen lagra enno",
-      "pick": "Vel ein lagra graf",
-      "save": "Lagre graf…",
+      "pick": "Vel ein lagra modul",
+      "save": "Lagre modul…",
       "saveAs": "Lagre som ny…",
       "more": "Meir",
       "rename": "Gje nytt namn",
       "unsaved": "Ulagra endringar",
-      "saveAsTitle": "Lagre graf",
-      "renameTitle": "Gje grafen nytt namn",
-      "deleteTitle": "Slett graf",
-      "deleteText": "Slette den lagra grafen «{{name}}»? Innstillingane vert ståande på skjermen.",
+      "saveAsTitle": "Lagre modul",
+      "renameTitle": "Gje modulen nytt namn",
+      "deleteTitle": "Slett modul",
+      "deleteText": "Slette den lagra modulen «{{name}}»? Det han viser, vert ståande på skjermen.",
       "name": "Namn",
       "addToDashboard": "Legg til på oversikta …",
       "addTitle": "Legg til på oversikta",
@@ -1499,12 +1508,15 @@
         "mobile": "Mobil",
         "both": "Begge"
       },
-      "addHint": "Legg til «{{name}}» som ein modul i full breidd nedst. Han følgjer endringar i den lagra grafen.",
+      "addHint": "Legg til «{{name}}» som ein modul i full breidd nedst. Han følgjer endringar i den lagra modulen.",
       "addButton": "Legg til",
       "added": "La til «{{name}}» på oversikta.",
-      "unsavedNote": "Modulen viser den lagra grafen, ikkje endringane du ikkje har lagra.",
-      "onDashboard_one": "Han er på oversikta i {{count}} modul, som då viser at grafen er sletta.",
-      "onDashboard_other": "Han er på oversikta i {{count}} modular, som då viser at grafen er sletta."
+      "unsavedNote": "Oversikta viser den lagra modulen, ikkje endringane du ikkje har lagra.",
+      "onDashboard_one": "Han er på oversikta i {{count}} modul, som då viser at modulen er sletta.",
+      "onDashboard_other": "Han er på oversikta i {{count}} modular, som då viser at modulen er sletta.",
+      "max": "Du har {{max}} lagra modular, som er det meste. Slett ein for å lagre ein annan.",
+      "editModule": "Rediger modul",
+      "periodHint": "Over kva periode som helst, også dei siste N dagane, vekene eller månadene. I ein rapport gjeld perioden til rapporten."
     }
   },
   "admin": {

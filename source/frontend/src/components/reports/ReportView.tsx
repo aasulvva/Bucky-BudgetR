@@ -24,6 +24,7 @@ import {
 
 import { ModuleCard } from "./ModuleCard";
 import { ModuleEditor } from "./ModuleEditor";
+import { SaveModuleDialog } from "./SaveModuleDialog";
 import { SectionCard } from "./SectionCard";
 
 /** The module being edited, and the section it's in (#194), if any. */
@@ -69,6 +70,7 @@ export function ReportView({
   const { t } = useTranslation();
   const [drawer, setDrawer] = useState(false);
   const [editing, setEditing] = useState<Editing | null>(null);
+  const [saving, setSaving] = useState<PartModule | null>(null);
   const { choice, period, label: current, compare } = reportPeriods(report, cycles);
   const compareTo = report.compare_to ?? "previous";
 
@@ -230,6 +232,7 @@ export function ReportView({
             onRemoveModule={(id) => {
               setSection(m.id, (list) => list.filter((x) => x.id !== id));
             }}
+            onSaveModule={setSaving}
           />
         ) : (
           <ModuleCard
@@ -255,6 +258,9 @@ export function ReportView({
             onRemove={() => {
               setModules(report.modules.filter((x) => x.id !== m.id));
             }}
+            onSave={() => {
+              setSaving(m);
+            }}
           />
         ),
       )}
@@ -275,6 +281,14 @@ export function ReportView({
           </Text>
         )}
       </Group>
+      <SaveModuleDialog
+        key={saving?.id ?? ""}
+        report={report}
+        module={saving}
+        onClose={() => {
+          setSaving(null);
+        }}
+      />
       <ModuleEditor
         module={editing?.module ?? null}
         adding={editing?.adding ?? false}

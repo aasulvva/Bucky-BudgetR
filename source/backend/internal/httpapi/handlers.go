@@ -152,7 +152,7 @@ func (s *server) UpdatePreferences(ctx context.Context, req api.UpdatePreference
 	if err := checkDashboard(*req.Body); err != nil {
 		return nil, err
 	}
-	if err := checkSavedGraphs(*req.Body); err != nil {
+	if err := checkSavedModules(*req.Body); err != nil {
 		return nil, err
 	}
 	if err := checkReportTemplates(*req.Body); err != nil {
@@ -245,7 +245,7 @@ func checkWidgets(widgets []api.DashboardWidget) error {
 			api.DashboardWidgetTypeBucketStatus:       w.BucketStatus != nil,
 			api.DashboardWidgetTypeRecentTransactions: w.RecentTransactions != nil,
 			api.DashboardWidgetTypeInOut:              w.InOut != nil,
-			api.DashboardWidgetTypeGraph:              w.Graph != nil,
+			api.DashboardWidgetTypeModule:             w.Module != nil,
 			api.DashboardWidgetTypeScheduled:          w.Scheduled != nil,
 		}
 		for t, given := range settings {
@@ -257,21 +257,32 @@ func checkWidgets(widgets []api.DashboardWidget) error {
 	return nil
 }
 
-// checkSavedGraphs checks a preferences patch's saved graphs (#122): ids
-// are unique and names aren't blank.
-func checkSavedGraphs(patch api.Preferences) error {
-	graphs, err := patch.SavedGraphs.Get()
+// checkSavedModules checks a preferences patch's saved modules (#201):
+// ids are unique, names aren't blank, and each module has its type's
+// settings and isn't a section.
+func checkSavedModules(patch api.Preferences) error {
+	saved, err := patch.SavedModules.Get()
 	if err != nil {
 		return nil // Not given, or null.
 	}
-	seen := make(map[string]bool, len(graphs))
-	for _, g := range graphs {
-		if seen[g.Id] {
-			return &Error{Status: http.StatusBadRequest, Code: "invalid_request", Detail: "Saved graph id " + strconv.Quote(g.Id) + " is used more than once."}
+	bad := func(detail string) error {
+		return &Error{Status: http.StatusBadRequest, Code: "invalid_request", Detail: detail}
+	}
+	seen := make(map[string]bool, len(saved))
+	for _, m := range saved {
+		what := "Saved module " + strconv.Quote(m.Id)
+		if seen[m.Id] {
+			return bad("Saved module id " + strconv.Quote(m.Id) + " is used more than once.")
 		}
-		seen[g.Id] = true
-		if strings.TrimSpace(g.Name) == "" {
-			return &Error{Status: http.StatusBadRequest, Code: "invalid_request", Detail: "Saved graph " + strconv.Quote(g.Id) + " has a blank name."}
+		seen[m.Id] = true
+		if strings.TrimSpace(m.Name) == "" {
+			return bad(what + " has a blank name.")
+		}
+		if m.Module.Type == api.Section {
+			return bad(what + " can't be a section.")
+		}
+		if err := checkModules(what, []api.ReportModule{m.Module}, map[string]bool{}, false); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -320,11 +331,11 @@ func checkModules(what string, list []api.ReportModule, ids map[string]bool, inS
 			return &Error{Status: http.StatusBadRequest, Code: "invalid_request", Detail: what + " has module id " + strconv.Quote(m.Id) + " more than once."}
 		}
 		ids[m.Id] = true
-		if (m.Graph != nil) != (m.Type == api.ReportModuleTypeGraph) ||
-			(m.Transactions != nil) != (m.Type == api.ReportModuleTypeTransactions) ||
-			(m.Flows != nil) != (m.Type == api.ReportModuleTypeFlows) ||
-			(m.Budget != nil) != (m.Type == api.ReportModuleTypeBudget) ||
-			(m.Section != nil) != (m.Type == api.ReportModuleTypeSection) {
+		if (m.Graph != nil) != (m.Type == api.Graph) ||
+			(m.Transactions != nil) != (m.Type == api.Transactions) ||
+			(m.Flows != nil) != (m.Type == api.Flows) ||
+			(m.Budget != nil) != (m.Type == api.Budget) ||
+			(m.Section != nil) != (m.Type == api.Section) {
 			return &Error{Status: http.StatusBadRequest, Code: "invalid_request", Detail: what + " module " + strconv.Quote(m.Id) + " needs the settings of its type, " + string(m.Type) + ", and no others."}
 		}
 		if m.Section == nil {

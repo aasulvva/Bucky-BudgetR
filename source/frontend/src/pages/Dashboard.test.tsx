@@ -1108,33 +1108,38 @@ describe("In/out widget", () => {
   });
 });
 
-describe("Graph widget (#124)", () => {
+describe("Module widget (#201)", () => {
   const stats = "GET /api/v1/stats/series";
-  const spending: components["schemas"]["SavedGraph"] = {
+  const spending: components["schemas"]["SavedModule"] = {
     id: "g-1",
     name: "Monthly spending",
-    graph: {
-      kind: "bar",
-      metric: "spending",
-      period: "last-6-months",
-      resolution: "month",
-      group_by: "bucket",
+    period: "last-6-months",
+    module: {
+      id: "m-1",
+      type: "graph",
+      graph: { kind: "bar", metric: "spending", resolution: "month", group_by: "bucket" },
     },
   };
-  const graphWidget = (savedGraphId: string | null, saved = [spending]) => {
+  const moduleWidget = (savedId: string | null, saved = [spending]) => {
     withPreferences({
-      saved_graphs: saved,
+      saved_modules: saved,
       dashboard: {
         widgets: [
           {
             id: "gw",
-            type: "graph",
+            type: "module",
             width: "full",
-            ...(savedGraphId ? { graph: { saved_graph_id: savedGraphId } } : {}),
+            ...(savedId ? { module: { saved_module_id: savedId } } : {}),
           },
         ],
       },
     });
+  };
+  /** The first day of the month n months before this one, as a date. */
+  const monthsAgo = (n: number) => {
+    const d = new Date();
+    const first = new Date(d.getFullYear(), d.getMonth() - n, 1);
+    return `${String(first.getFullYear())}-${String(first.getMonth() + 1).padStart(2, "0")}-01`;
   };
 
   beforeEach(() => {
@@ -1149,7 +1154,7 @@ describe("Graph widget (#124)", () => {
   });
 
   it("shows its saved graph under its name, and opens it on Stats", async () => {
-    graphWidget("g-1");
+    moduleWidget("g-1");
     const { router } = renderRoute("/");
     const box = await widget("Monthly spending");
     await waitFor(() => {
@@ -1158,6 +1163,7 @@ describe("Graph widget (#124)", () => {
     const q = apiMock.calls(stats).at(-1)?.query;
     expect(q?.get("metric")).toBe("spending");
     expect(q?.get("group_by")).toBe("bucket");
+    expect(q?.get("from")).toBe(startAtFor(monthsAgo(5)));
     const open = box.getByRole("link", { name: "Open in Stats" });
     expect(open).toHaveAttribute(
       "href",
@@ -1170,12 +1176,43 @@ describe("Graph widget (#124)", () => {
     expect(router.state.location.search).toContain("saved=g-1");
   });
 
+  it("draws a graph module's comparison, but not its breakdown", async () => {
+    moduleWidget("g-1", [
+      {
+        ...spending,
+        period: "previous-month",
+        compare_to: "last_year",
+        module: { ...spending.module, compare: "both", breakdown: "month" },
+      },
+    ]);
+    renderRoute("/");
+    await widget("Monthly spending");
+    const prev = monthsAgo(1);
+    const lastYear = `${String(Number(prev.slice(0, 4)) - 1)}${prev.slice(4)}`;
+    await waitFor(() => {
+      const froms = apiMock.calls(stats).map((c) => c.query.get("from"));
+      expect(froms).toContain(startAtFor(prev));
+      expect(froms).toContain(startAtFor(lastYear));
+    });
+    // One graph and its comparison; no months to break it down by.
+    expect(new Set(apiMock.calls(stats).map((c) => c.query.get("from"))).size).toBe(2);
+  });
+
   it("draws a pie compactly, without links to transactions", async () => {
     const pie = {
       ...spending,
-      graph: { ...spending.graph, kind: "pie" as const },
+      module: {
+        id: "m-1",
+        type: "graph" as const,
+        graph: {
+          kind: "pie" as const,
+          metric: "spending" as const,
+          resolution: "month" as const,
+          group_by: "bucket" as const,
+        },
+      },
     };
-    graphWidget("g-1", [pie]);
+    moduleWidget("g-1", [pie]);
     renderRoute("/");
     const box = await widget("Monthly spending");
     const list = within(await box.findByTestId("pie-list"));
@@ -1183,43 +1220,71 @@ describe("Graph widget (#124)", () => {
     expect(list.queryAllByRole("link")).toHaveLength(0);
   });
 
-  it("says when its saved graph was deleted, offering to pick another", async () => {
+  it("shows a transactions module in full, over its own last N months", async () => {
+    moduleWidget("g-2", [
+      {
+        id: "g-2",
+        name: "Latest food",
+        period: "last-3-months",
+        module: { id: "m-1", type: "transactions", transactions: { bucket_ids: [groceries.id] } },
+      },
+    ]);
+    const { router } = renderRoute("/");
+    const box = await widget("Latest food");
+    expect(await box.findByText("Rema 1000")).toBeInTheDocument();
+    const q = apiMock.calls("GET /api/v1/transactions").at(-1)?.query;
+    expect(q?.get("from")).toBe(startAtFor(monthsAgo(2)));
+    expect(q?.getAll("bucket_id")).toEqual([groceries.id]);
+    expect(box.getByRole("link", { name: "Open in Stats" })).toHaveAttribute(
+      "href",
+      "/stats?saved=g-2",
+    );
+    expect(router.state.location.pathname).toBe("/");
+  });
+
+  it("says when its saved module was deleted, offering to pick another", async () => {
     const other = { ...spending, id: "g-2", name: "Income" };
-    graphWidget("g-9", [other]);
+    const list = {
+      ...spending,
+      id: "g-3",
+      name: "List",
+      module: { id: "m-1", type: "transactions" as const, transactions: {} },
+    };
+    moduleWidget("g-9", [other, list]);
     renderRoute("/");
-    const box = await widget("Graph");
-    expect(box.getByText("This saved graph was deleted.")).toBeInTheDocument();
+    const box = await widget("Module");
+    expect(box.getByText("This saved module was deleted.")).toBeInTheDocument();
     expect(apiMock.calls(stats)).toHaveLength(0);
-    await userEvent.click(box.getByRole("button", { name: "Pick a graph" }));
-    const dialog = await screen.findByRole("dialog", { name: "Graph settings" });
+    await userEvent.click(box.getByRole("button", { name: "Pick a module" }));
+    const dialog = await screen.findByRole("dialog", { name: "Module settings" });
     expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
-    await choose(dialog, "Saved graph", "Income");
+    await choose(dialog, "Saved module", "List");
     await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() => {
       expect(apiMock.calls("PATCH /api/v1/me/preferences").at(-1)?.body).toMatchObject({
-        dashboard: { widgets: [{ id: "gw", type: "graph", graph: { saved_graph_id: "g-2" } }] },
+        dashboard: { widgets: [{ id: "gw", type: "module", module: { saved_module_id: "g-3" } }] },
       });
     });
   });
 
   it("points to the Stats screen when nothing is saved yet", async () => {
-    graphWidget(null, []);
+    moduleWidget(null, []);
     renderRoute("/");
-    const box = await widget("Graph");
+    const box = await widget("Module");
     expect(box.getByRole("link", { name: "Stats & reports" })).toHaveAttribute("href", "/stats");
   });
 
-  it("is added from Add widget by picking a saved graph", async () => {
-    withPreferences({ saved_graphs: [spending] });
+  it("is added from Add widget by picking a saved module", async () => {
+    withPreferences({ saved_modules: [spending] });
     renderRoute("/");
     await userEvent.click(await screen.findByRole("button", { name: "Edit dashboard" }));
     const bar = within(await screen.findByRole("region", { name: "Edit dashboard" }));
     await userEvent.click(bar.getByRole("button", { name: "Add widget" }));
     const picker = await screen.findByRole("dialog", { name: "Add widget" });
-    await userEvent.click(within(picker).getByRole("button", { name: /^Graph/ }));
-    const box = await screen.findByRole("dialog", { name: "Add widget: Graph" });
+    await userEvent.click(within(picker).getByRole("button", { name: /^Module/ }));
+    const box = await screen.findByRole("dialog", { name: "Add widget: Module" });
     expect(within(box).getByRole("button", { name: "Add" })).toBeDisabled();
-    await choose(box, "Saved graph", "Monthly spending");
+    await choose(box, "Saved module", "Monthly spending");
     await userEvent.click(within(box).getByRole("button", { name: "Add" }));
     await userEvent.click(bar.getByRole("button", { name: "Done" }));
     await waitFor(() => {
@@ -1228,9 +1293,9 @@ describe("Graph widget (#124)", () => {
       };
       expect(body.dashboard.widgets.at(-1)).toEqual({
         id: expect.stringMatching(/^[A-Za-z0-9_-]{1,40}$/) as unknown,
-        type: "graph",
+        type: "module",
         width: "full",
-        graph: { saved_graph_id: "g-1" },
+        module: { saved_module_id: "g-1" },
       });
     });
   });

@@ -1809,12 +1809,12 @@ export interface components {
             /** @description Whether What's New pops up after an update. Null means true. */
             whats_new_popup?: boolean | null;
             /**
-             * @description The graphs saved on Stats & reports (#122), in the order the
-             *     user sees them. Each id is unique and each name is not blank
-             *     (400 `invalid_request` otherwise). Replaced as a whole on update.
-             *     Null means none.
+             * @description The modules saved on Stats & reports (#201; saved graphs before,
+             *     #122), in the order the user sees them. Each id is unique, each
+             *     name is not blank, and none is a section (400 `invalid_request`
+             *     otherwise). Replaced as a whole on update. Null means none.
              */
-            saved_graphs?: components["schemas"]["SavedGraph"][] | null;
+            saved_modules?: components["schemas"]["SavedModule"][] | null;
             /**
              * @description The report templates saved on Stats & reports (#125), in the
              *     order the user sees them. Template ids are unique, names are not
@@ -1855,7 +1855,7 @@ export interface components {
             /** @description Made by the web app; unique in the layout. */
             id: string;
             /** @enum {string} */
-            type: "cycle" | "health" | "bucket_status" | "accounts" | "recent_transactions" | "in_out" | "graph" | "scheduled";
+            type: "cycle" | "health" | "bucket_status" | "accounts" | "recent_transactions" | "in_out" | "module" | "scheduled";
             /**
              * @description Half or the full width of the Dashboard on wide screens.
              * @enum {string}
@@ -1872,7 +1872,7 @@ export interface components {
             bucket_status?: components["schemas"]["BucketStatusWidgetSettings"];
             recent_transactions?: components["schemas"]["RecentWidgetSettings"];
             in_out?: components["schemas"]["InOutWidgetSettings"];
-            graph?: components["schemas"]["GraphWidgetSettings"];
+            module?: components["schemas"]["ModuleWidgetSettings"];
             scheduled?: components["schemas"]["ScheduledWidgetSettings"];
         };
         CycleWidgetSettings: {
@@ -1904,12 +1904,13 @@ export interface components {
             show_mode?: boolean;
         };
         /**
-         * @description A graph widget (#124) shows one of the user's saved graphs
-         *     (`saved_graphs`), so it follows changes to it. An id that isn't
-         *     among them means the saved graph was deleted; the widget says so.
+         * @description A module widget (#201; a graph widget before, #124) shows one of
+         *     the user's saved modules (`saved_modules`), so it follows changes
+         *     to it. An id that isn't among them means the saved module was
+         *     deleted; the widget says so.
          */
-        GraphWidgetSettings: {
-            saved_graph_id: string;
+        ModuleWidgetSettings: {
+            saved_module_id: string;
         };
         /**
          * @description The In/out widget (#90): income, expenses and their balance over a
@@ -2258,10 +2259,29 @@ export interface components {
             /** @description Transfers out of the account (TRF), as a positive amount. */
             transfers_out: components["schemas"]["Amount"];
         };
-        SavedGraph: {
+        /**
+         * @description A module saved on Stats & reports (#201): a graph, transactions,
+         *     in/out/balance or budget vs spending module (not a section) with a
+         *     period of its own, which Stats and the Dashboard show it over. Its
+         *     filters are its own. Added to a report, it's copied, and the
+         *     report's period applies there.
+         */
+        SavedModule: {
             id: string;
             name: string;
-            graph: components["schemas"]["GraphSettings"];
+            /**
+             * @description As a graph's (GraphSettings): the last N days, weeks, cycles,
+             *     months, quarters, half-years or years too, which reports don't
+             *     have.
+             * @example last-3-months
+             */
+            period: string;
+            /**
+             * @description What a compared graph module compares with, as a report's. Previous by default.
+             * @enum {string}
+             */
+            compare_to?: "previous" | "last_year";
+            module: components["schemas"]["ReportModule"];
         };
         /**
          * @description A line, bar or pie graph on Stats & reports (#122, #123): what it

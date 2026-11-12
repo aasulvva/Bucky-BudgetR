@@ -16,6 +16,35 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.19.00",
+    date: "2026-11-12",
+    title: {
+      en: "Saved modules",
+      nb: "Lagrede moduler",
+      nn: "Lagra modular",
+    },
+    changes: {
+      en: [
+        "Saved graphs are now saved modules, and yours were converted automatically. Besides graphs, you can save transactions, in/out/balance and budget vs spending modules: use Save module… on a module in a report. It's saved over the report's period, with the report's filters.",
+        "The Graphs tab lists all your saved modules, grouped by type. A module that isn't a graph opens there with its own period, which can be any period a graph has, such as the last 3 months, and Edit module to change it.",
+        "Any saved module can go on the Dashboard: the Graph widget is now the Module widget. A graph shows its comparison there too; other modules show in full.",
+        "Add module in a report can copy a saved module in. The copy is shown over the report's period.",
+      ],
+      nb: [
+        "Lagrede grafer er nå lagrede moduler, og dine ble gjort om automatisk. I tillegg til grafer kan du lagre moduler for transaksjoner, inn/ut/saldo og budsjett mot forbruk: bruk Lagre modul… på en modul i en rapport. Den lagres over rapportens tidsrom, med rapportens filtre.",
+        "Grafer-fanen viser alle de lagrede modulene dine, gruppert etter type. En modul som ikke er en graf, åpnes der med sitt eget tidsrom, som kan være et hvilket som helst tidsrom en graf kan ha, for eksempel de siste 3 månedene, og Rediger modul for å endre den.",
+        "Alle lagrede moduler kan legges på oversikten: Graf-modulen heter nå Modul. En graf viser også sammenligningen sin der; andre moduler vises i full størrelse.",
+        "Legg til modul i en rapport kan kopiere inn en lagret modul. Kopien vises over rapportens tidsrom.",
+      ],
+      nn: [
+        "Lagra grafar er no lagra modular, og dine vart gjorde om automatisk. I tillegg til grafar kan du lagre modular for transaksjonar, inn/ut/saldo og budsjett mot forbruk: bruk Lagre modul… på ein modul i ein rapport. Han vert lagra over tidsrommet til rapporten, med filtera til rapporten.",
+        "Grafar-fana viser alle dei lagra modulane dine, gruppert etter type. Ein modul som ikkje er ein graf, vert opna der med sitt eige tidsrom, som kan vere kva tidsrom som helst ein graf kan ha, til dømes dei siste 3 månadene, og Rediger modul for å endre han.",
+        "Alle lagra modular kan leggjast på oversikta: Graf-modulen heiter no Modul. Ein graf viser òg samanlikninga si der; andre modular vert viste i full storleik.",
+        "Legg til modul i ein rapport kan kopiere inn ein lagra modul. Kopien vert vist over tidsrommet til rapporten.",
+      ],
+    },
+  },
+  {
     version: "v2.18.01",
     date: "2026-11-11",
     title: {

@@ -14,7 +14,6 @@ import {
   groupBy,
   intervalLabel,
   intervalLink,
-  newGraphId,
   periodLabel,
   pieData,
   pieSlicing,
@@ -23,7 +22,6 @@ import {
   sameGraph,
   shownCurrency,
   showDots,
-  statsLink,
   statsQuery,
   yDomain,
   type GraphSettings,
@@ -150,17 +148,6 @@ describe("URL settings", () => {
     expect(at("half_year", "2026-07-01")).toBe("H2 2026");
     expect(at("year", "2026-01-01")).toBe("2026");
     expect(at("cycle", "100001000001")).toBe("A deleted cycle");
-  });
-
-  it("give new ids that aren't taken", () => {
-    expect(newGraphId([])).toBe("g-1");
-    expect(newGraphId([{ id: "g-2", name: "A", graph: base }])).toBe("g-3");
-    expect(
-      newGraphId([
-        { id: "g-3", name: "A", graph: base },
-        { id: "g-1", name: "B", graph: base },
-      ]),
-    ).toBe("g-4");
   });
 });
 
@@ -750,14 +737,6 @@ describe("pies", () => {
       resolution: "week",
       coarsened: null,
     });
-  });
-});
-
-describe("statsLink", () => {
-  it("opens a saved graph on Stats, picked", () => {
-    expect(
-      statsLink({ id: "g-3", name: "Pie", graph: { ...base, kind: "pie", group_by: "account" } }),
-    ).toBe("/stats?kind=pie&metric=spending&period=current-month&res=day&group=account&saved=g-3");
   });
 });
 

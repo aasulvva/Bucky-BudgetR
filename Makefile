@@ -3,7 +3,6 @@
 
 BACKEND    := source/backend
 FRONTEND   := source/frontend
-MIGRATIONS := internal/db/migrations
 SPEC       := api/openapi.yaml
 REDOCLY    := npx --yes @redocly/cli@2.62.1
 # Generated files, committed so CI can check that they are up to date.
@@ -72,9 +71,9 @@ db-reset: ## Delete the database volume, start a fresh database and migrate it
 psql: ## Open a psql shell in the database container
 	docker compose exec db psql -U "$(POSTGRES_USER)" -d "$(POSTGRES_DB)"
 
-migrate: ## Apply all pending migrations (goose)
+migrate: ## Apply all pending migrations (the server's migrate command: SQL and Go migrations)
 ifneq ($(HAS_BACKEND),)
-	cd $(BACKEND) && go tool goose -dir $(MIGRATIONS) postgres "$(DATABASE_URL)" up
+	cd $(BACKEND) && go run ./cmd/server migrate
 else
 	$(call skip,backend)
 endif

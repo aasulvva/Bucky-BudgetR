@@ -44,6 +44,8 @@ interface GraphControlsProps {
    * shown, and an empty filter uses the report's.
    */
   reportPeriod?: PeriodChoice;
+  /** Whether an empty filter uses the report's; a report module's unless said (#201). */
+  inherits?: boolean;
 }
 
 /** What a graph shows and how (#122, pies #123). Each change is a whole new value. */
@@ -56,6 +58,7 @@ export function GraphControls({
   tags,
   narrow = false,
   reportPeriod,
+  inherits,
 }: GraphControlsProps) {
   const { t } = useTranslation();
   // The drawer locks page scrolling and lets touches through only inside
@@ -250,7 +253,7 @@ export function GraphControls({
         tags={tags}
         accountsOnly={balance}
         inline={narrow}
-        inherits={reportPeriod !== undefined}
+        inherits={inherits ?? reportPeriod !== undefined}
       />
     </SimpleGrid>
   );

@@ -257,7 +257,7 @@ export function starter(id: StarterId): ReportSettings {
 }
 
 /** A module from the API, by its type; null without its type's settings, which the server refuses. */
-function readModule(m: ApiModule): ReportModule | null {
+export function readModule(m: ApiModule): ReportModule | null {
   const base = { id: m.id, ...(m.title === undefined ? {} : { title: m.title }) };
   if (m.type === "section") {
     if (!m.section) return null;
@@ -996,10 +996,28 @@ export function reportPeriods(
   compare: ReportCompare | null;
 } {
   const choice = parseReportPeriod(report.period) ?? { kind: "previous", unit: "year" };
+  return periodsOf(choice, report.compare_to ?? "previous", cycles);
+}
+
+/**
+ * A period's resolution, names and comparison, as reportPeriods gives a
+ * report's, for any choice: a saved module's own period (#201) may be the
+ * last N days, weeks and so on, which reports don't have. Those, and custom
+ * dates, have nothing to compare with.
+ */
+export function periodsOf(
+  choice: PeriodChoice,
+  compareTo: CompareTo,
+  cycles: CycleTimes[],
+): {
+  choice: PeriodChoice;
+  period: Period | null;
+  label: string;
+  name: string;
+  compare: ReportCompare | null;
+} {
   const period = resolvePeriod(choice, cycles);
-  const previous = period
-    ? previousPeriod(choice, period, report.compare_to ?? "previous", cycles)
-    : null;
+  const previous = period ? previousPeriod(choice, period, compareTo, cycles) : null;
   const label = periodLabel(choice, cycles);
   const compare =
     previous && period

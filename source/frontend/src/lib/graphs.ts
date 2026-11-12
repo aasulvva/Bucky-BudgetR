@@ -28,7 +28,6 @@ import {
 import { ALL_CYCLES } from "./transactionList";
 
 export type GraphSettings = components["schemas"]["GraphSettings"];
-export type SavedGraph = components["schemas"]["SavedGraph"];
 export type GraphKind = GraphSettings["kind"];
 export type GraphMetric = GraphSettings["metric"];
 export type GroupBy = NonNullable<GraphSettings["group_by"]>;
@@ -779,22 +778,6 @@ export function intervalLink(
   if (s.tags?.length === 1 && s.tags[0]) params.set("tag", s.tags[0]);
   if (s.counterparty) params.set("q", s.counterparty);
   return `/transactions?${params.toString()}`;
-}
-
-/** A saved graph on Stats & reports, picked, as the graph widget opens it (#124). */
-export function statsLink(saved: SavedGraph): string {
-  const params = graphToSearch(saved.graph);
-  params.set("saved", saved.id);
-  return `/stats?${params.toString()}`;
-}
-
-/** A new id for a saved graph, not used by the others. */
-export function newGraphId(saved: SavedGraph[]): string {
-  const used = new Set(saved.map((g) => g.id));
-  for (let i = saved.length + 1; ; i++) {
-    const id = `g-${String(i)}`;
-    if (!used.has(id)) return id;
-  }
 }
 
 /** A specific period's name: its date, "2–8 Nov 2026", "November 2026", "Q4 2026", "2026" or a cycle's dates. */
