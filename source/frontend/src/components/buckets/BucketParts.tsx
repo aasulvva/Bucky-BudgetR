@@ -3,6 +3,7 @@
 
 import { Anchor, Badge, Group, Progress, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
@@ -190,6 +191,38 @@ export function UsedThisCycle({
             ))
           : breakdownText(figures, bucket.currency)}
       </Text>
+    </Stack>
+  );
+}
+
+/**
+ * A bucket on one line, with an amount on the right and its usage bar
+ * below, as Bucket status and a compact budget module (#203) show them.
+ */
+export function CompactBucket({
+  bucket,
+  pct,
+  right,
+}: {
+  bucket: Bucket;
+  pct: number | null;
+  right: ReactNode;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Stack gap={4}>
+      <Group justify="space-between" gap="xs" wrap="nowrap">
+        <BucketName bucket={bucket} />
+        {right}
+      </Group>
+      {pct !== null && (
+        <Progress
+          size="sm"
+          value={Math.min(pct, 100)}
+          color={usageColor(pct)}
+          aria-label={t("dashboard.bucketStatus.usedOf", { name: bucket.name, pct })}
+        />
+      )}
     </Stack>
   );
 }

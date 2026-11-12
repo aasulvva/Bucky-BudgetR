@@ -1,6 +1,7 @@
 package httpapi_test
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -133,6 +134,38 @@ func TestTransactionsAPI(t *testing.T) {
 	if page := decode[api.TransactionPage](t, w); len(page.Items) != 0 {
 		t.Errorf("bob sees %d transactions", len(page.Items))
 	}
+
+	// The summary (#203): the opening balance in, the expense out; the
+	// transfer counts, but adds nothing seen from neither account.
+	summary := func(query string, c *http.Cookie) api.TransactionSummary {
+		t.Helper()
+		w := do(http.MethodGet, "/api/v1/transactions/summary"+query, nil, c)
+		expect(t, "summary "+query, w, http.StatusOK, "")
+		return decode[api.TransactionSummary](t, w)
+	}
+	totals := func(s api.TransactionSummary) string {
+		out := fmt.Sprint(s.Count)
+		for _, x := range s.Totals {
+			out += fmt.Sprintf(" %s %s/%s/%s", x.Currency, x.In, x.Out, x.Net)
+		}
+		return out
+	}
+	for query, want := range map[string]string{
+		"":                                  "3 NOK 10000.00/500.00/9500.00",
+		"?account_id=" + main:               "3 NOK 10000.00/1500.00/8500.00",
+		"?type=EXP&tag=FOOD":                "1 NOK 0.00/500.00/-500.00",
+		"?bucket_id=" + groceries:           "1 NOK 0.00/500.00/-500.00",
+		"?reversed=false&account_id=" + eur: "0",
+	} {
+		if got := totals(summary(query, alice)); got != want {
+			t.Errorf("summary %q: %q, want %q", query, got, want)
+		}
+	}
+	if got := totals(summary("", bob)); got != "0" {
+		t.Errorf("bob's summary %q", got)
+	}
+	expect(t, "summary bad type", do(http.MethodGet, "/api/v1/transactions/summary?type=XYZ", nil, alice), http.StatusBadRequest, "invalid_request")
+	expect(t, "summary no session", do(http.MethodGet, "/api/v1/transactions/summary", nil, nil), http.StatusUnauthorized, "unauthenticated")
 
 	// Suggestions for the Create transaction screen; the service tests cover
 	// the rules.

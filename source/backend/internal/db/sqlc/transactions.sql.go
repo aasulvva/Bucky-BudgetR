@@ -83,6 +83,40 @@ func (q *Queries) BalancesAfter(ctx context.Context, arg BalancesAfterParams) ([
 	return items, nil
 }
 
+const bucketCurrencies = `-- name: BucketCurrencies :many
+SELECT b.id, a.currency
+FROM buckets b
+JOIN bank_accounts a ON a.id = b.source_account_id
+WHERE b.user_id = $1
+`
+
+type BucketCurrenciesRow struct {
+	ID       string
+	Currency string
+}
+
+// Each of the user's buckets' currency, its source account's, deleted ones
+// too: what a transaction summary (#203) adds a bucket line up in.
+func (q *Queries) BucketCurrencies(ctx context.Context, userID string) ([]BucketCurrenciesRow, error) {
+	rows, err := q.db.Query(ctx, bucketCurrencies, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []BucketCurrenciesRow{}
+	for rows.Next() {
+		var i BucketCurrenciesRow
+		if err := rows.Scan(&i.ID, &i.Currency); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listBankLinesFor = `-- name: ListBankLinesFor :many
 SELECT id, transaction_id, account_id, amount, original_amount, original_currency, exchange_rate, created_at, created_by FROM bank_transactions WHERE transaction_id = ANY($1::text[]) ORDER BY id
 `

@@ -399,7 +399,59 @@
       "pickButton": "Vel ein modul",
       "noneSaved": "Du har ingen lagra modular enno. Lag ein under <stats>Statistikk og rapportar</stats> og lagre han.",
       "open": "Opne i Statistikk",
-      "openModule": "Opne {{name}} i Statistikk og rapportar"
+      "openModule": "Opne {{name}} i Statistikk og rapportar",
+      "view": {
+        "label": "Vis",
+        "compact": "Kompakt",
+        "full": "Fullstendig"
+      },
+      "compact": {
+        "count_one": "{{count}} transaksjon",
+        "count_other": "{{count}} transaksjonar",
+        "more_one": "+{{count}} til",
+        "more_other": "+{{count}} til",
+        "openTransactions": "Opne i Transaksjonar",
+        "topBuckets": "Mest brukt frå",
+        "topAccounts": "Mest brukt frå",
+        "currency": "I {{currency}}",
+        "noneNear": "Inga bøtte er over 90 % brukt eller over budsjett."
+      },
+      "options": {
+        "showPeriod": "Vis perioden",
+        "graphHeight": "Grafhøgd",
+        "heights": {
+          "small": "Liten",
+          "medium": "Middels",
+          "large": "Stor"
+        },
+        "summary": "Samandrag",
+        "summaries": {
+          "net": "Antal og netto",
+          "in_out": "Antal, inn, ut og netto",
+          "off": "Ingen"
+        },
+        "rows": "Transaksjonar i lista",
+        "none": "Ingen",
+        "all": "Alle",
+        "figures": "Tal",
+        "figuresRequired": "Vel minst eitt tal.",
+        "top": "Kvar mest vart brukt",
+        "topOf": "Av",
+        "topOfOptions": {
+          "module": "Som modulen viser",
+          "buckets": "Bøtter",
+          "accounts": "Kontoar"
+        },
+        "buckets": "Bøtter i lista",
+        "order": "Rekkjefølgje",
+        "orders": {
+          "share": "Del brukt, høgast først",
+          "used": "Beløp brukt, mest først",
+          "name": "Namn"
+        },
+        "attention": "Berre dei som er over 90 % brukte eller over budsjett",
+        "total": "Vis totalen først"
+      }
     },
     "scheduled": {
       "title": "Planlagde",

@@ -1929,6 +1929,122 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/v1/transactions/summary:
+    get:
+      operationId: getTransactionSummary
+      tags: [transactions]
+      summary: Count and sum transactions
+      description: |
+        How many of the user's transactions match the filters (the same as
+        the list's), and their in, out and net per currency (#203), counted
+        as the list shows them, merged with their corrections, and as a
+        report's section summary (#191) adds them up:
+
+        - Reversed and moved transactions aren't counted.
+        - A transaction's amount is its bank lines' if it has any, else its
+          bucket lines'. One line counts with its sign.
+        - With several lines (a transfer between accounts or buckets), only
+          the line of the one account (with exactly one `account_id`) or
+          the one bucket (with exactly one `bucket_id`) counts. Without
+          one, the transaction is counted but adds nothing.
+        - A bank line is in its account's currency, and a bucket line in its
+          bucket's source account's.
+      parameters:
+        - name: type
+          in: query
+          description: Only these types. Repeat for several (`?type=INC&type=EXP`).
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/TransactionType"
+          style: form
+          explode: true
+        - name: account_id
+          in: query
+          description: |
+            Only transactions with a line on one of these accounts. Repeat
+            for several. With exactly one, a transfer's line on it counts.
+          schema:
+            type: array
+            maxItems: 50
+            items:
+              $ref: "#/components/schemas/AccountId"
+          style: form
+          explode: true
+        - name: bucket_id
+          in: query
+          description: |
+            Only transactions with a line on one of these buckets. Repeat for
+            several. With exactly one, a transfer's line on it counts.
+          schema:
+            type: array
+            maxItems: 100
+            items:
+              $ref: "#/components/schemas/BucketId"
+          style: form
+          explode: true
+        - name: cycle_id
+          in: query
+          description: Only transactions dated within this cycle.
+          schema:
+            $ref: "#/components/schemas/CycleId"
+        - name: from
+          in: query
+          description: Only transactions at or after this moment.
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: Only transactions before this moment.
+          schema:
+            type: string
+            format: date-time
+        - name: tag
+          in: query
+          description: Only transactions with any of these tags, ignoring case. Repeat for several.
+          schema:
+            type: array
+            maxItems: 20
+            items:
+              type: string
+              maxLength: 50
+          style: form
+          explode: true
+        - name: counterparty
+          in: query
+          description: Only transactions whose counterparty or description contains this text, ignoring case.
+          schema:
+            type: string
+            maxLength: 200
+        - name: counterparty_is
+          in: query
+          description: Only transactions whose effective counterparty is exactly this, ignoring case and spaces at the ends (#170).
+          schema:
+            type: string
+            maxLength: 200
+        - name: reversed
+          in: query
+          schema:
+            type: boolean
+          description: |
+            As the list's. Reversed and moved transactions are never counted,
+            so this changes nothing but is accepted, so the list's query can
+            be passed as it is.
+      responses:
+        "200":
+          description: The count and the sums.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionSummary"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
   /api/v1/transactions/{transactionId}:
     parameters:
       - $ref: "#/components/parameters/TransactionId"
@@ -3260,6 +3376,106 @@ components:
           type: string
           minLength: 1
           maxLength: 40
+        view:
+          $ref: "#/components/schemas/ModuleWidgetView"
+        show_period:
+          type: boolean
+          description: |
+            A line under the title with the module's period and its dates
+            (#203). Missing means true.
+        graph_height:
+          type: string
+          enum: [small, medium, large]
+          description: |
+            A compact graph's height (#203): small, medium (missing; about
+            200 px on half width, 260 on full) or large.
+        transactions:
+          $ref: "#/components/schemas/ModuleWidgetTransactions"
+        flows:
+          $ref: "#/components/schemas/ModuleWidgetFlows"
+        budget:
+          $ref: "#/components/schemas/ModuleWidgetBudget"
+
+    ModuleWidgetTransactions:
+      type: object
+      additionalProperties: false
+      description: |
+        A compact transactions module's options (#203); each left out is
+        its default. They only apply while the saved module is one.
+      properties:
+        rows:
+          type: integer
+          enum: [0, 3, 5, 10, 15, 20]
+          description: How many of the newest it lists; 0 for none. 3 by default.
+        summary:
+          type: string
+          enum: [net, in_out, "off"]
+          description: |
+            The line above them: the count and net per currency (`net`, the
+            default), the count with in, out and net (`in_out`), or none.
+
+    ModuleWidgetFlows:
+      type: object
+      additionalProperties: false
+      description: |
+        A compact In/out/balance module's options (#203); each left out is
+        its default.
+      properties:
+        figures:
+          type: array
+          minItems: 1
+          maxItems: 3
+          uniqueItems: true
+          items:
+            type: string
+            enum: [in, out, net]
+          description: The accounts' figures it shows, in this order. All three by default.
+        top:
+          type: integer
+          enum: [0, 3, 5, 10]
+          description: How many of those that spent the most it lists; 0 for none. 3 by default.
+        top_of:
+          type: string
+          enum: [buckets, accounts]
+          description: |
+            Whether those are buckets or accounts. Missing follows the
+            module: accounts when it shows accounts only, else buckets.
+
+    ModuleWidgetBudget:
+      type: object
+      additionalProperties: false
+      description: |
+        A compact budget vs spending module's options (#203); each left
+        out is its default.
+      properties:
+        rows:
+          type: integer
+          enum: [0, 3, 6, 10]
+          description: How many buckets it lists before "+N more"; 0 for all. 6 by default.
+        order:
+          type: string
+          enum: [share, used, name]
+          description: |
+            The share of the budget used, highest first (the default), the
+            amount used, most first, or the name.
+        attention:
+          type: boolean
+          description: |
+            Only buckets more than 90 % used or over budget, as Bucket
+            status's Needs attention. Missing means false.
+        total:
+          type: boolean
+          description: |
+            A first line with the total used of the total budget, per
+            currency. Missing means false.
+
+    ModuleWidgetView:
+      type: string
+      enum: [compact, full]
+      description: |
+        How a module widget shows its module (#203): `compact` (left out,
+        the default) in a short form for the Dashboard, or `full` as on
+        Stats & reports.
 
     InOutWidgetSettings:
       type: object
@@ -4968,6 +5184,36 @@ components:
           type: string
           nullable: true
           description: Pass as `cursor` for the next page. Null on the last page.
+
+    TransactionSummary:
+      type: object
+      additionalProperties: false
+      required: [count, totals]
+      description: What `GET /api/v1/transactions/summary` counts (#203).
+      properties:
+        count:
+          type: integer
+          minimum: 0
+          description: The matching transactions, without reversed or moved ones.
+        totals:
+          type: array
+          description: In, out (as a positive amount) and net per currency, in the order the currencies first come, newest first.
+          items:
+            $ref: "#/components/schemas/TransactionTotals"
+
+    TransactionTotals:
+      type: object
+      additionalProperties: false
+      required: [currency, in, out, net]
+      properties:
+        currency:
+          $ref: "#/components/schemas/Currency"
+        in:
+          $ref: "#/components/schemas/Amount"
+        out:
+          $ref: "#/components/schemas/Amount"
+        net:
+          $ref: "#/components/schemas/Amount"
 
     TransactionCreate:
       type: object

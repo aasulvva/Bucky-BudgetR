@@ -1103,6 +1103,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/transactions/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Count and sum transactions
+         * @description How many of the user's transactions match the filters (the same as
+         *     the list's), and their in, out and net per currency (#203), counted
+         *     as the list shows them, merged with their corrections, and as a
+         *     report's section summary (#191) adds them up:
+         *
+         *     - Reversed and moved transactions aren't counted.
+         *     - A transaction's amount is its bank lines' if it has any, else its
+         *       bucket lines'. One line counts with its sign.
+         *     - With several lines (a transfer between accounts or buckets), only
+         *       the line of the one account (with exactly one `account_id`) or
+         *       the one bucket (with exactly one `bucket_id`) counts. Without
+         *       one, the transaction is counted but adds nothing.
+         *     - A bank line is in its account's currency, and a bucket line in its
+         *       bucket's source account's.
+         */
+        get: operations["getTransactionSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/transactions/{transactionId}": {
         parameters: {
             query?: never;
@@ -1911,7 +1944,92 @@ export interface components {
          */
         ModuleWidgetSettings: {
             saved_module_id: string;
+            view?: components["schemas"]["ModuleWidgetView"];
+            /**
+             * @description A line under the title with the module's period and its dates
+             *     (#203). Missing means true.
+             */
+            show_period?: boolean;
+            /**
+             * @description A compact graph's height (#203): small, medium (missing; about
+             *     200 px on half width, 260 on full) or large.
+             * @enum {string}
+             */
+            graph_height?: "small" | "medium" | "large";
+            transactions?: components["schemas"]["ModuleWidgetTransactions"];
+            flows?: components["schemas"]["ModuleWidgetFlows"];
+            budget?: components["schemas"]["ModuleWidgetBudget"];
         };
+        /**
+         * @description A compact transactions module's options (#203); each left out is
+         *     its default. They only apply while the saved module is one.
+         */
+        ModuleWidgetTransactions: {
+            /**
+             * @description How many of the newest it lists; 0 for none. 3 by default.
+             * @enum {integer}
+             */
+            rows?: 0 | 3 | 5 | 10 | 15 | 20;
+            /**
+             * @description The line above them: the count and net per currency (`net`, the
+             *     default), the count with in, out and net (`in_out`), or none.
+             * @enum {string}
+             */
+            summary?: "net" | "in_out" | "off";
+        };
+        /**
+         * @description A compact In/out/balance module's options (#203); each left out is
+         *     its default.
+         */
+        ModuleWidgetFlows: {
+            /** @description The accounts' figures it shows, in this order. All three by default. */
+            figures?: ("in" | "out" | "net")[];
+            /**
+             * @description How many of those that spent the most it lists; 0 for none. 3 by default.
+             * @enum {integer}
+             */
+            top?: 0 | 3 | 5 | 10;
+            /**
+             * @description Whether those are buckets or accounts. Missing follows the
+             *     module: accounts when it shows accounts only, else buckets.
+             * @enum {string}
+             */
+            top_of?: "buckets" | "accounts";
+        };
+        /**
+         * @description A compact budget vs spending module's options (#203); each left
+         *     out is its default.
+         */
+        ModuleWidgetBudget: {
+            /**
+             * @description How many buckets it lists before "+N more"; 0 for all. 6 by default.
+             * @enum {integer}
+             */
+            rows?: 0 | 3 | 6 | 10;
+            /**
+             * @description The share of the budget used, highest first (the default), the
+             *     amount used, most first, or the name.
+             * @enum {string}
+             */
+            order?: "share" | "used" | "name";
+            /**
+             * @description Only buckets more than 90 % used or over budget, as Bucket
+             *     status's Needs attention. Missing means false.
+             */
+            attention?: boolean;
+            /**
+             * @description A first line with the total used of the total budget, per
+             *     currency. Missing means false.
+             */
+            total?: boolean;
+        };
+        /**
+         * @description How a module widget shows its module (#203): `compact` (left out,
+         *     the default) in a short form for the Dashboard, or `full` as on
+         *     Stats & reports.
+         * @enum {string}
+         */
+        ModuleWidgetView: "compact" | "full";
         /**
          * @description The In/out widget (#90): income, expenses and their balance over a
          *     period, on one account or on all accounts in the app's currency.
@@ -2858,6 +2976,19 @@ export interface components {
             items: components["schemas"]["Transaction"][];
             /** @description Pass as `cursor` for the next page. Null on the last page. */
             next_cursor: string | null;
+        };
+        /** @description What `GET /api/v1/transactions/summary` counts (#203). */
+        TransactionSummary: {
+            /** @description The matching transactions, without reversed or moved ones. */
+            count: number;
+            /** @description In, out (as a positive amount) and net per currency, in the order the currencies first come, newest first. */
+            totals: components["schemas"]["TransactionTotals"][];
+        };
+        TransactionTotals: {
+            currency: components["schemas"]["Currency"];
+            in: components["schemas"]["Amount"];
+            out: components["schemas"]["Amount"];
+            net: components["schemas"]["Amount"];
         };
         TransactionCreate: {
             /** @enum {string} */
@@ -4661,6 +4792,60 @@ export interface operations {
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getTransactionSummary: {
+        parameters: {
+            query?: {
+                /** @description Only these types. Repeat for several (`?type=INC&type=EXP`). */
+                type?: components["schemas"]["TransactionType"][];
+                /**
+                 * @description Only transactions with a line on one of these accounts. Repeat
+                 *     for several. With exactly one, a transfer's line on it counts.
+                 */
+                account_id?: components["schemas"]["AccountId"][];
+                /**
+                 * @description Only transactions with a line on one of these buckets. Repeat for
+                 *     several. With exactly one, a transfer's line on it counts.
+                 */
+                bucket_id?: components["schemas"]["BucketId"][];
+                /** @description Only transactions dated within this cycle. */
+                cycle_id?: components["schemas"]["CycleId"];
+                /** @description Only transactions at or after this moment. */
+                from?: string;
+                /** @description Only transactions before this moment. */
+                to?: string;
+                /** @description Only transactions with any of these tags, ignoring case. Repeat for several. */
+                tag?: string[];
+                /** @description Only transactions whose counterparty or description contains this text, ignoring case. */
+                counterparty?: string;
+                /** @description Only transactions whose effective counterparty is exactly this, ignoring case and spaces at the ends (#170). */
+                counterparty_is?: string;
+                /**
+                 * @description As the list's. Reversed and moved transactions are never counted,
+                 *     so this changes nothing but is accepted, so the list's query can
+                 *     be passed as it is.
+                 */
+                reversed?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The count and the sums. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionSummary"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };

@@ -11,7 +11,8 @@ import { QueryState } from "@/components/QueryState";
 import { ModuleBody } from "@/components/reports/ModuleCard";
 import { GraphView, type Compare } from "@/components/stats/GraphView";
 import { useClockVersion } from "@/lib/clock";
-import type { WidgetInstance } from "@/lib/dashboard";
+import { formatDateRange } from "@/lib/cycles";
+import { GRAPH_PX, type ModuleWidgetSettings, type WidgetInstance } from "@/lib/dashboard";
 import {
   isGraphModule,
   readSavedModules,
@@ -22,18 +23,16 @@ import {
   type SavedModule,
 } from "@/lib/savedModules";
 
+import { CompactModule } from "./CompactModule";
 import { WidgetFrame } from "./frame";
 import { WidgetCard } from "./Widget";
 
-/** A half-width graph's height, and a full-width one's. */
-const HALF_PX = 200;
-const FULL_PX = 260;
-
 /**
  * One of the saved modules from Stats & reports (#201; a saved graph
- * before, #124), over its own period, so it follows changes to it. A graph
- * opens there when clicked; the others show in full (compact ones are
- * #203).
+ * before, #124), over its own period, so it follows changes to it.
+ * Compact by default (#203): a graph as a widget draws it, opening there
+ * when clicked, and the others in their short forms (CompactModule). Full
+ * shows the module as Stats & reports does, without a graph's breakdown.
  */
 export function ModuleWidget({
   widget,
@@ -52,7 +51,7 @@ export function ModuleWidget({
       action={action}
     >
       {shown ? (
-        <Loaded saved={shown} half={widget.width === "half"} />
+        <Loaded saved={shown} half={widget.width === "half"} options={widget.settings} />
       ) : (
         <Missing deleted={widget.settings.savedModuleId !== null} noneSaved={saved.length === 0} />
       )}
@@ -87,7 +86,15 @@ function Missing({ deleted, noneSaved }: { deleted: boolean; noneSaved: boolean 
   );
 }
 
-function Loaded({ saved, half }: { saved: SavedModule; half: boolean }) {
+function Loaded({
+  saved,
+  half,
+  options,
+}: {
+  saved: SavedModule;
+  half: boolean;
+  options: ModuleWidgetSettings;
+}) {
   const cycles = useCycles();
   const accounts = useAccounts();
   const buckets = useBuckets();
@@ -97,7 +104,16 @@ function Loaded({ saved, half }: { saved: SavedModule; half: boolean }) {
         <QueryState query={accounts}>
           {(a) => (
             <QueryState query={buckets}>
-              {(b) => <Drawn saved={saved} half={half} cycles={c} accounts={a} buckets={b} />}
+              {(b) => (
+                <Drawn
+                  saved={saved}
+                  half={half}
+                  options={options}
+                  cycles={c}
+                  accounts={a}
+                  buckets={b}
+                />
+              )}
             </QueryState>
           )}
         </QueryState>
@@ -109,19 +125,19 @@ function Loaded({ saved, half }: { saved: SavedModule; half: boolean }) {
 function Drawn({
   saved,
   half,
+  options,
   cycles,
   accounts,
   buckets,
 }: {
   saved: SavedModule;
   half: boolean;
+  options: ModuleWidgetSettings;
   cycles: Cycle[];
   accounts: Account[];
   buckets: Bucket[];
 }) {
-  const { t } = useTranslation();
   const theme = useMantineTheme();
-  const navigate = useNavigate();
   const clock = useClockVersion();
   // Half width only where the Dashboard has two columns.
   const twoColumns = useMediaQuery(`(min-width: ${theme.breakpoints.md})`, true);
@@ -132,7 +148,53 @@ function Drawn({
     [saved, cycles, clock],
   );
 
-  if (!isGraphModule(saved)) {
+  // The period and its dates (#203), unless the widget hides them.
+  const range = periods.period && formatDateRange(periods.period.from, periods.period.to);
+  const periodLine = options.showPeriod && (
+    <Text size="xs" c="dimmed" data-testid="module-period">
+      {range && range !== periods.label ? `${periods.label} · ${range}` : periods.label}
+    </Text>
+  );
+  return (
+    <Stack gap="xs">
+      {periodLine}
+      <Body
+        saved={saved}
+        half={half}
+        options={options}
+        periods={periods}
+        twoColumns={twoColumns}
+        cycles={cycles}
+        accounts={accounts}
+        buckets={buckets}
+      />
+    </Stack>
+  );
+}
+
+/** The module, compact or in full. */
+function Body({
+  saved,
+  half,
+  options,
+  periods,
+  twoColumns,
+  cycles,
+  accounts,
+  buckets,
+}: {
+  saved: SavedModule;
+  half: boolean;
+  options: ModuleWidgetSettings;
+  periods: ReturnType<typeof savedModulePeriods>;
+  twoColumns: boolean;
+  cycles: Cycle[];
+  accounts: Account[];
+  buckets: Bucket[];
+}) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  if (options.view === "full") {
     return (
       <ModuleBody
         report={savedModuleReport(saved)}
@@ -146,6 +208,20 @@ function Drawn({
         isDesktop={twoColumns}
         headingLevel={4}
         breakdown={false}
+      />
+    );
+  }
+  if (!isGraphModule(saved)) {
+    return (
+      <CompactModule
+        report={savedModuleReport(saved)}
+        module={saved.module}
+        period={periods.period}
+        cycles={cycles}
+        accounts={accounts}
+        buckets={buckets}
+        options={options}
+        more={savedModuleLink(saved)}
       />
     );
   }
@@ -175,7 +251,7 @@ function Drawn({
         cycles={cycles}
         accounts={accounts}
         buckets={buckets}
-        height={half && twoColumns ? HALF_PX : FULL_PX}
+        height={GRAPH_PX[options.graphHeight][half && twoColumns ? "half" : "full"]}
         clickThrough={false}
         compare={compare}
       />

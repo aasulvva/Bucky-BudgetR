@@ -124,6 +124,7 @@ export function SavedModules({ saved, current, selectedId, onSelect }: SavedModu
           label={t("stats.saved.label")}
           placeholder={saved.length === 0 ? t("stats.saved.none") : t("stats.saved.pick")}
           data={savedModuleOptions(saved, t)}
+          maxDropdownHeight={360}
           value={selected?.id ?? null}
           onChange={(id) => {
             onSelect(saved.find((g) => g.id === id) ?? null);

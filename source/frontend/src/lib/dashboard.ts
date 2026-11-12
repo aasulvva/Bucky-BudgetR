@@ -46,6 +46,35 @@ export const BUCKET_STATUS_MODES: BucketStatusMode[] = [
 ];
 export const TRANSACTION_COUNTS = [3, 5, 10, 15, 20];
 export const SCHEDULED_SHOWS: ScheduledShow[] = ["both", "queue", "upcoming"];
+/** How a module widget shows its module (#203). */
+export type ModuleWidgetView = Schemas["ModuleWidgetView"];
+export const MODULE_VIEWS: ModuleWidgetView[] = ["compact", "full"];
+/** A compact graph's height (#203), and its pixels on half and full width. */
+export type GraphHeight = NonNullable<Schemas["ModuleWidgetSettings"]["graph_height"]>;
+export const GRAPH_HEIGHTS: GraphHeight[] = ["small", "medium", "large"];
+export const GRAPH_PX: Record<GraphHeight, { half: number; full: number }> = {
+  small: { half: 150, full: 200 },
+  medium: { half: 200, full: 260 },
+  large: { half: 280, full: 360 },
+};
+export type CompactSummary = NonNullable<Schemas["ModuleWidgetTransactions"]["summary"]>;
+export const COMPACT_SUMMARIES: CompactSummary[] = ["net", "in_out", "off"];
+/** A compact transactions module's rows; 0 for none. */
+export type CompactRows = NonNullable<Schemas["ModuleWidgetTransactions"]["rows"]>;
+export const COMPACT_ROWS: CompactRows[] = [0, 3, 5, 10, 15, 20];
+export type CompactFigure = NonNullable<Schemas["ModuleWidgetFlows"]["figures"]>[number];
+export const COMPACT_FIGURES: CompactFigure[] = ["in", "out", "net"];
+/** A compact In/out/balance module's top rows; 0 for none. */
+export type CompactTop = NonNullable<Schemas["ModuleWidgetFlows"]["top"]>;
+export const COMPACT_TOPS: CompactTop[] = [0, 3, 5, 10];
+/** What the top rows are: as the module shows (`module`), buckets or accounts. */
+export type CompactTopOf = "module" | NonNullable<Schemas["ModuleWidgetFlows"]["top_of"]>;
+export const COMPACT_TOP_OF: CompactTopOf[] = ["module", "buckets", "accounts"];
+/** A compact budget module's buckets; 0 for all. */
+export type CompactBudgetRows = NonNullable<Schemas["ModuleWidgetBudget"]["rows"]>;
+export const COMPACT_BUDGET_ROWS: CompactBudgetRows[] = [3, 6, 10, 0];
+export type CompactBudgetOrder = NonNullable<Schemas["ModuleWidgetBudget"]["order"]>;
+export const COMPACT_BUDGET_ORDERS: CompactBudgetOrder[] = ["share", "used", "name"];
 /** The most widgets a layout holds (the API's limit). */
 export const MAX_WIDGETS = 30;
 /** The longest custom title. */
@@ -93,6 +122,21 @@ export interface ScheduledSettings {
 export interface ModuleWidgetSettings {
   /** The saved module it shows; null until one is picked. */
   savedModuleId: string | null;
+  /** Compact, the Dashboard's short form (#203), or the module in full. */
+  view: ModuleWidgetView;
+  /** A line with the module's period and dates under the title. */
+  showPeriod: boolean;
+  /** A compact graph's. */
+  graphHeight: GraphHeight;
+  /** The compact forms' options; each applies while the module is of its type. */
+  transactions: { rows: CompactRows; summary: CompactSummary };
+  flows: { figures: CompactFigure[]; top: CompactTop; topOf: CompactTopOf };
+  budget: {
+    rows: CompactBudgetRows;
+    order: CompactBudgetOrder;
+    attention: boolean;
+    total: boolean;
+  };
 }
 
 interface SettingsOf {
@@ -149,6 +193,24 @@ const fromApi = {
   }),
   module: (s?: Schemas["ModuleWidgetSettings"]): ModuleWidgetSettings => ({
     savedModuleId: s?.saved_module_id ?? null,
+    view: s?.view ?? "compact",
+    showPeriod: s?.show_period ?? true,
+    graphHeight: s?.graph_height ?? "medium",
+    transactions: {
+      rows: s?.transactions?.rows ?? 3,
+      summary: s?.transactions?.summary ?? "net",
+    },
+    flows: {
+      figures: s?.flows?.figures ?? [...COMPACT_FIGURES],
+      top: s?.flows?.top ?? 3,
+      topOf: s?.flows?.top_of ?? "module",
+    },
+    budget: {
+      rows: s?.budget?.rows ?? 6,
+      order: s?.budget?.order ?? "share",
+      attention: s?.budget?.attention ?? false,
+      total: s?.budget?.total ?? false,
+    },
   }),
   scheduled: (s?: Schemas["ScheduledWidgetSettings"]): ScheduledSettings => ({
     show: s?.show ?? "both",
@@ -387,14 +449,38 @@ function widgetToApi(w: WidgetInstance): ApiWidget {
       };
     }
     case "module": {
-      const { savedModuleId } = w.settings;
-      return savedModuleId === null
+      return w.settings.savedModuleId === null
         ? base
-        : { ...base, module: { saved_module_id: savedModuleId } };
+        : { ...base, module: moduleToApi(w.settings, w.settings.savedModuleId) };
     }
     case "scheduled":
       return { ...base, scheduled: { show: w.settings.show, count: w.settings.count } };
   }
+}
+
+/** A module widget's settings as stored: only what differs from the defaults. */
+function moduleToApi(s: ModuleWidgetSettings, id: string): Schemas["ModuleWidgetSettings"] {
+  const d = fromApi.module();
+  /** The entries of `o` that differ from `def`, or nothing when none do. */
+  const changed = <T extends object>(o: T, def: T): Partial<T> | undefined => {
+    const out = Object.fromEntries(
+      Object.entries(o).filter(([k, v]) => JSON.stringify(v) !== JSON.stringify(def[k as keyof T])),
+    ) as Partial<T>;
+    return Object.keys(out).length > 0 ? out : undefined;
+  };
+  const { topOf, ...flows } = changed(s.flows, d.flows) ?? {};
+  const flowsOut = { ...flows, ...(topOf && topOf !== "module" ? { top_of: topOf } : {}) };
+  const transactions = changed(s.transactions, d.transactions);
+  const budget = changed(s.budget, d.budget);
+  return {
+    saved_module_id: id,
+    ...(s.view === "full" ? { view: s.view } : {}),
+    ...(s.showPeriod ? {} : { show_period: false }),
+    ...(s.graphHeight === "medium" ? {} : { graph_height: s.graphHeight }),
+    ...(transactions ? { transactions } : {}),
+    ...(Object.keys(flowsOut).length > 0 ? { flows: flowsOut } : {}),
+    ...(budget ? { budget } : {}),
+  };
 }
 
 /** One layout as the API stores it. */
@@ -427,7 +513,10 @@ export function addModuleWidget(
 ): Layouts {
   const add = (layout: Layout): Layout => [
     ...layout,
-    { ...(newWidget("module", layout) as WidgetInstance<"module">), settings: { savedModuleId } },
+    {
+      ...(newWidget("module", layout) as WidgetInstance<"module">),
+      settings: { ...fromApi.module(), savedModuleId },
+    },
   ];
   return {
     desktop: where === "mobile" ? layouts.desktop : add(layouts.desktop),
@@ -515,7 +604,10 @@ export function settingsComplete(
   saved: SavedName[] = [],
 ): boolean {
   if (widget.type === "module") {
-    return saved.some((g) => g.id === widget.settings.savedModuleId);
+    return (
+      saved.some((g) => g.id === widget.settings.savedModuleId) &&
+      widget.settings.flows.figures.length > 0
+    );
   }
   if (widget.type === "bucket_status" && widget.settings.mode === "bucket") {
     return buckets.some((b) => b.id === widget.settings.bucketId);

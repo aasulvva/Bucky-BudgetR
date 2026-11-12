@@ -157,3 +157,11 @@ WITH total AS (
 SELECT account_id, root::text AS transaction_id, balance::numeric AS balance FROM run
 WHERE root = ANY(sqlc.arg(ids)::text[]) AND amount <> 0
 ORDER BY account_id, transaction_id;
+
+-- name: BucketCurrencies :many
+-- Each of the user's buckets' currency, its source account's, deleted ones
+-- too: what a transaction summary (#203) adds a bucket line up in.
+SELECT b.id, a.currency
+FROM buckets b
+JOIN bank_accounts a ON a.id = b.source_account_id
+WHERE b.user_id = $1;

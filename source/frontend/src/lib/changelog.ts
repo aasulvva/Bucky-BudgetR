@@ -16,6 +16,32 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.21.00",
+    date: "2026-11-12",
+    title: {
+      en: "Dashboard: compact modules",
+      nb: "Dashbord: kompakte moduler",
+      nn: "Dashbord: kompakte modular",
+    },
+    changes: {
+      en: [
+        "Module widgets now show a compact version of their module. Transactions shows how many there are and their total, then the 3 newest. In/out/balance shows In, Out and Net, then the buckets that spent the most. Budget vs spending shows the most used buckets with a bar, at most 6. A graph is drawn as before.",
+        "Set Show to Full in a module widget's settings to see the whole module, as on Stats & reports.",
+        "The settings also choose what the compact version shows: how many transactions and which summary, which figures and how many top buckets or accounts, how many buckets and in which order (or only those near their budget, with a total line), and a graph's height. A line under the title shows the module's period, unless you turn it off.",
+      ],
+      nb: [
+        "Modul på dashbordet viser nå en kompakt versjon av den lagrede modulen. Transaksjoner viser hvor mange det er og summen, så de 3 nyeste. Inn/ut/saldo viser Inn, Ut og Netto, så bøttene som brukte mest. Budsjett mot forbruk viser de mest brukte bøttene med en stolpe, høyst 6. En graf tegnes som før.",
+        "Sett Vis til Fullstendig i innstillingene til Modul for å se hele modulen, som i Statistikk og rapporter.",
+        "Innstillingene velger også hva den kompakte versjonen viser: hvor mange transaksjoner og hvilket sammendrag, hvilke tall og hvor mange bøtter eller kontoer som brukte mest, hvor mange bøtter og i hvilken rekkefølge (eller bare de nær budsjettet, med en totallinje), og høyden på en graf. En linje under tittelen viser modulens periode, med mindre du slår den av.",
+      ],
+      nn: [
+        "Modul på dashbordet viser no ein kompakt versjon av den lagra modulen. Transaksjonar viser kor mange det er og summen, så dei 3 nyaste. Inn/ut/saldo viser Inn, Ut og Netto, så bøttene som brukte mest. Budsjett mot forbruk viser dei mest brukte bøttene med ein stolpe, høgst 6. Ein graf vert teikna som før.",
+        "Set Vis til Fullstendig i innstillingane til Modul for å sjå heile modulen, som i Statistikk og rapportar.",
+        "Innstillingane vel òg kva den kompakte versjonen viser: kor mange transaksjonar og kva samandrag, kva tal og kor mange bøtter eller kontoar som brukte mest, kor mange bøtter og i kva rekkjefølgje (eller berre dei nær budsjettet, med ei totallinje), og høgda på ein graf. Ei linje under tittelen viser perioden til modulen, med mindre du slår ho av.",
+      ],
+    },
+  },
+  {
     version: "v2.20.00",
     date: "2026-11-12",
     title: {

@@ -399,7 +399,59 @@
       "pickButton": "Pick a module",
       "noneSaved": "You have no saved modules yet. Make one on <stats>Stats & reports</stats> and save it.",
       "open": "Open in Stats",
-      "openModule": "Open {{name}} in Stats & reports"
+      "openModule": "Open {{name}} in Stats & reports",
+      "view": {
+        "label": "Show",
+        "compact": "Compact",
+        "full": "Full"
+      },
+      "compact": {
+        "count_one": "{{count}} transaction",
+        "count_other": "{{count}} transactions",
+        "more_one": "+{{count}} more",
+        "more_other": "+{{count}} more",
+        "openTransactions": "Open in Transactions",
+        "topBuckets": "Most spent from",
+        "topAccounts": "Most spent from",
+        "currency": "In {{currency}}",
+        "noneNear": "No bucket is more than 90% used or over budget."
+      },
+      "options": {
+        "showPeriod": "Show the period",
+        "graphHeight": "Graph height",
+        "heights": {
+          "small": "Small",
+          "medium": "Medium",
+          "large": "Large"
+        },
+        "summary": "Summary",
+        "summaries": {
+          "net": "Count and net",
+          "in_out": "Count, in, out and net",
+          "off": "None"
+        },
+        "rows": "Transactions to list",
+        "none": "None",
+        "all": "All",
+        "figures": "Figures",
+        "figuresRequired": "Pick at least one figure.",
+        "top": "Where most was spent",
+        "topOf": "Of",
+        "topOfOptions": {
+          "module": "As the module shows",
+          "buckets": "Buckets",
+          "accounts": "Accounts"
+        },
+        "buckets": "Buckets to list",
+        "order": "Order",
+        "orders": {
+          "share": "Share used, highest first",
+          "used": "Amount used, most first",
+          "name": "Name"
+        },
+        "attention": "Only those more than 90% used or over budget",
+        "total": "Show the total first"
+      }
     },
     "scheduled": {
       "title": "Scheduled",
