@@ -1,7 +1,7 @@
 import type { BucketFlowValues, StatsFlows } from "@/api/stats";
 import { account, bucket, bucketFigures, transaction } from "@/test/fixtures";
 
-import { addDays, endAtFor, startAtFor } from "./cycles";
+import { addDays, endAtFor, formatDateRange, startAtFor } from "./cycles";
 import { parsePeriod, resolvePeriod } from "./periods";
 import {
   MAX_MODULES,
@@ -20,6 +20,7 @@ import {
   moduleBudget,
   moduleFlows,
   moduleGraph,
+  periodsOf,
   moduleTitle,
   moduleTransactions,
   newModule,
@@ -220,6 +221,20 @@ describe("moduleGraph", () => {
     expect(g.account_ids).toEqual(["1234"]);
     expect(g.bucket_ids).toEqual(["1000000001"]);
     expect(g.tags).toEqual(["fun"]);
+  });
+  it("keeps the module's Show as and average line (#182)", () => {
+    const g = moduleGraph(report, {
+      id: "m-1",
+      type: "graph",
+      graph: {
+        kind: "bar",
+        metric: "spending",
+        resolution: "month",
+        show_as: "cycle",
+        average: true,
+      },
+    });
+    expect(g).toMatchObject({ show_as: "cycle", average: true, period: "previous-year" });
   });
 });
 
@@ -1332,5 +1347,33 @@ describe("report builder (#202)", () => {
     expect(readViewMode("report")).toBe("report");
     expect(readViewMode(null)).toBe("builder");
     expect(readViewMode("x")).toBe("builder");
+  });
+});
+
+describe("periodsOf", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ now, toFake: ["Date"] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+  const of = (period: string) => {
+    const choice = parsePeriod(period);
+    if (!choice) throw new Error(`${period} doesn't parse`);
+    return periodsOf(choice, "previous", cycles).compare;
+  };
+
+  it("names both compared periods alike, as a compared pie's titles", () => {
+    // Not "Previous month" beside "September 2026".
+    expect(of("previous-month")).toMatchObject({
+      currentLabel: "October 2026",
+      label: "September 2026",
+    });
+    // Still going, the previous one is cut: both by their dates.
+    expect(of("current-month")).toMatchObject({
+      currentLabel: formatDateRange("2026-11-01", "2026-11-09"),
+      label: formatDateRange("2026-10-01", "2026-10-09"),
+    });
+    expect(of("last-7-days")?.currentLabel).toBe(formatDateRange("2026-11-03", "2026-11-09"));
   });
 });

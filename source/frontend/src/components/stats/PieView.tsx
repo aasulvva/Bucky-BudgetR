@@ -7,6 +7,7 @@ import { getLocale } from "@/lib/locale";
 import { usePrintMode } from "@/lib/print";
 import { formatMoney } from "@/lib/money";
 import type { GraphSettings, PieData, PieSlice } from "@/lib/graphs";
+import { perUnit, type ShowAs } from "@/lib/graphRates";
 
 /** From this width the list goes beside the pie instead of below it. */
 const SIDE_BY_SIDE_PX = 600;
@@ -25,6 +26,8 @@ interface PieViewProps {
   width: number;
   /** The Transactions link for a slice; without it, slices and rows aren't links. */
   linkOf?: (slice: PieSlice) => string;
+  /** The amounts are per this unit (#182). */
+  unit?: ShowAs | null;
 }
 
 /**
@@ -32,7 +35,7 @@ interface PieViewProps {
  * slices with their amounts and shares beside it, labels on the slices, or
  * both (`pie_labels`). Clicking a slice or a row opens its transactions.
  */
-export function PieView({ data, settings, currency, width, linkOf }: PieViewProps) {
+export function PieView({ data, settings, currency, width, linkOf, unit }: PieViewProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   // A PDF (#127) is printed as soon as the page is ready: no animation.
@@ -45,7 +48,7 @@ export function PieView({ data, settings, currency, width, linkOf }: PieViewProp
   const size = Math.max(140, Math.min(wide ? 260 : 220, room));
   const height = size + (withLabels ? 60 : 0);
   const locale = getLocale();
-  const money = (n: number) => formatMoney(n.toFixed(2), currency);
+  const money = (n: number) => perUnit(formatMoney(n.toFixed(2), currency), unit);
   const percent = (share: number) =>
     new Intl.NumberFormat(locale, {
       style: "percent",
@@ -57,6 +60,7 @@ export function PieView({ data, settings, currency, width, linkOf }: PieViewProp
     notation: "compact",
     maximumFractionDigits: 1,
   }).format(Number(data.total));
+  const centre = perUnit(compact, unit);
   const byLabel = new Map(data.slices.map((x) => [x.label, x]));
   const open = (slice: PieSlice | undefined) => {
     if (slice && linkOf) void navigate(linkOf(slice));
@@ -70,7 +74,7 @@ export function PieView({ data, settings, currency, width, linkOf }: PieViewProp
       size={size}
       thickness={Math.round(size / 7)}
       strokeWidth={2}
-      chartLabel={compact}
+      chartLabel={centre}
       tooltipDataSource="segment"
       valueFormatter={money}
       withLabels={withLabels}
@@ -197,7 +201,7 @@ export function PieView({ data, settings, currency, width, linkOf }: PieViewProp
             </Table.Td>
             <Table.Td ta="right">
               <Text size="sm" span style={{ whiteSpace: "nowrap" }}>
-                {formatMoney(x.amount, currency)}
+                {perUnit(formatMoney(x.amount, currency), unit)}
               </Text>
             </Table.Td>
             <Table.Td ta="right">
@@ -212,7 +216,7 @@ export function PieView({ data, settings, currency, width, linkOf }: PieViewProp
         <Table.Tr>
           <Table.Th>{t("stats.graphs.total")}</Table.Th>
           <Table.Th ta="right" style={{ whiteSpace: "nowrap" }}>
-            {formatMoney(data.total, currency)}
+            {perUnit(formatMoney(data.total, currency), unit)}
           </Table.Th>
           <Table.Th />
         </Table.Tr>

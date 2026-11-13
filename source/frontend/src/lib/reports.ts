@@ -1020,23 +1020,25 @@ export function periodsOf(
   const period = resolvePeriod(choice, cycles);
   const previous = period ? previousPeriod(choice, period, compareTo, cycles) : null;
   const label = periodLabel(choice, cycles);
-  const compare =
-    previous && period
-      ? {
-          period: previous.period,
-          label:
-            previous.choice && !inProgress(period)
-              ? specificLabel(previous.choice, cycles)
-              : formatDateRange(previous.period.from, previous.period.to),
-          currentLabel: label,
-        }
-      : null;
   const specific = period ? asSpecific(choice, period, cycles) : null;
   const name = specific
     ? specificLabel(specific, cycles)
     : period
       ? formatDateRange(period.from, period.to)
       : label;
+  // The two are named alike, by name or both by dates, so a compared pie's
+  // titles don't read "Previous month" beside "September 2026".
+  const byName = period && !inProgress(period) ? previous?.choice : null;
+  const compare =
+    previous && period
+      ? {
+          period: previous.period,
+          label: byName
+            ? specificLabel(byName, cycles)
+            : formatDateRange(previous.period.from, previous.period.to),
+          currentLabel: byName ? name : formatDateRange(period.from, period.to),
+        }
+      : null;
   return { choice, period, label, name, compare };
 }
 

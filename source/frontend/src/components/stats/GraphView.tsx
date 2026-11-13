@@ -28,6 +28,7 @@ import {
   type GraphKind,
   type GraphSettings,
 } from "@/lib/graphs";
+import { perUnit, unitDays, type ShowAs } from "@/lib/graphRates";
 import { getLocale } from "@/lib/locale";
 import { usePrintMode } from "@/lib/print";
 import { formatMoney } from "@/lib/money";
@@ -110,6 +111,11 @@ export function GraphView({
   const waiting = query.isPlaceholderData && settled !== null;
 
   const render = (result: StatsSeries, { s, fitted, resolution, currency, leftOut }: View) => {
+    // Per day, week, month or cycle (#182); totals for a cycle without cycles.
+    const days = unitDays(s.show_as, period, cycles);
+    const rate = { unitDays: days, cycles };
+    const unit = s.show_as && days !== null ? s.show_as : null;
+    const noCycles = s.show_as === "cycle" && days === null;
     const coarsened = fitted.coarsened && {
       why: fitted.coarsened,
       resolution: t(`stats.resolution.options.${fitted.resolution}`),
@@ -125,8 +131,8 @@ export function GraphView({
     }
     const before = compare && previous.data ? previous.data : null;
     if (s.kind === "pie" && before && compare) {
-      const now = pieData(result, s, resolution, currency, accounts, buckets);
-      const then = pieData(before, s, resolution, currency, accounts, buckets);
+      const now = pieData(result, s, resolution, currency, accounts, buckets, undefined, rate);
+      const then = pieData(before, s, resolution, currency, accounts, buckets, undefined, rate);
       const half = width >= 640 ? width / 2 : width;
       return (
         <Stack gap="xs">
@@ -142,7 +148,7 @@ export function GraphView({
                 {pie.slices.length === 0 ? (
                   <Text c="dimmed">{t("stats.graphs.empty")}</Text>
                 ) : (
-                  <PieView data={pie} settings={s} currency={currency} width={half} />
+                  <PieView data={pie} settings={s} currency={currency} width={half} unit={unit} />
                 )}
               </Stack>
             ))}
@@ -152,12 +158,13 @@ export function GraphView({
             belowZero={now.belowZero}
             leftOut={leftOut}
             coarsened={coarsened}
+            noCycles={noCycles}
           />
         </Stack>
       );
     }
     if (s.kind === "pie") {
-      const pie = pieData(result, s, resolution, currency, accounts, buckets);
+      const pie = pieData(result, s, resolution, currency, accounts, buckets, undefined, rate);
       return (
         <Stack gap="xs">
           {pie.slices.length === 0 ? (
@@ -168,6 +175,7 @@ export function GraphView({
               settings={s}
               currency={currency}
               width={width}
+              unit={unit}
               linkOf={
                 clickThrough
                   ? (slice) => {
@@ -184,6 +192,7 @@ export function GraphView({
             belowZero={pie.belowZero}
             leftOut={leftOut}
             coarsened={coarsened}
+            noCycles={noCycles}
           />
         </Stack>
       );
@@ -196,19 +205,42 @@ export function GraphView({
       currency,
       accounts,
       buckets,
+      undefined,
+      rate,
     );
+    const money = (n: number) => perUnit(formatMoney(n.toFixed(2), currency), unit);
     return (
       <Stack gap="xs">
         <Chart
           data={data}
           settings={s}
           currency={currency}
+          unit={unit}
           height={height}
           dots={showDots(data.rows.length, plot)}
           intervals={result.intervals}
           clickThrough={clickThrough}
         />
-        <Notes other={data.other} leftOut={leftOut} coarsened={coarsened} />
+        <Notes
+          other={data.other}
+          leftOut={leftOut}
+          coarsened={coarsened}
+          noCycles={noCycles}
+          averages={
+            data.averages.length > 1
+              ? t("stats.graphs.averages", {
+                  list: data.averages.map((a) => `${a.label} ${money(a.value)}`).join(" · "),
+                })
+              : null
+          }
+          averageOf={
+            data.averageOf && fitted.resolution !== "total"
+              ? t(`stats.graphs.averageWhole.${fitted.resolution}`, {
+                  count: data.averageOf.whole,
+                })
+              : null
+          }
+        />
       </Stack>
     );
   };
@@ -244,13 +276,24 @@ interface ChartProps {
   data: GraphData;
   settings: GraphSettings;
   currency: string;
+  /** The amounts are per this unit (#182). */
+  unit: ShowAs | null;
   height: number;
   dots: boolean;
   intervals: { start: string; end: string }[];
   clickThrough: boolean;
 }
 
-function Chart({ data, settings, currency, height, dots, intervals, clickThrough }: ChartProps) {
+function Chart({
+  data,
+  settings,
+  currency,
+  unit,
+  height,
+  dots,
+  intervals,
+  clickThrough,
+}: ChartProps) {
   const { t } = useTranslation();
   // A PDF (#127) is printed as soon as the page is ready: no animation.
   const still = usePrintMode() ? { isAnimationActive: false } : {};
@@ -268,7 +311,21 @@ function Chart({ data, settings, currency, height, dots, intervals, clickThrough
     if (interval) void navigate(intervalLink(settings, seriesName, interval));
   };
   const domain = yDomain(data, settings);
-  const money = (n: number) => formatMoney(n.toFixed(2), currency);
+  const money = (n: number) => perUnit(formatMoney(n.toFixed(2), currency), unit);
+  // The average lines (#182), dashed; one is labelled, several are listed below.
+  const lighter = (color: string) => `color-mix(in srgb, ${color} 45%, var(--mantine-color-body))`;
+  const referenceLines = data.averages.map((a) => ({
+    y: a.value,
+    color: a.previous ? lighter(a.color) : a.color,
+    strokeDasharray: "4 4",
+    ifOverflow: "extendDomain" as const,
+    ...(data.averages.length === 1
+      ? {
+          label: t("stats.graphs.averageLabel", { amount: money(a.value) }),
+          labelPosition: "insideTopRight" as const,
+        }
+      : {}),
+  }));
   const compact = (n: number) =>
     new Intl.NumberFormat(getLocale(), { notation: "compact", maximumFractionDigits: 1 }).format(n);
   const common = {
@@ -279,15 +336,13 @@ function Chart({ data, settings, currency, height, dots, intervals, clickThrough
       name,
       label,
       // The previous period's bars are a lighter step of the same colour.
-      color:
-        previous && settings.kind === "bar"
-          ? `color-mix(in srgb, ${color} 45%, var(--mantine-color-body))`
-          : color,
+      color: previous && settings.kind === "bar" ? lighter(color) : color,
       ...(previous && settings.kind === "line" ? { strokeDasharray: "5 4" } : {}),
       // Stacked bars stack per period: this period's and the previous one's.
       ...(compared && !settings.side_by_side ? { stackId: previous ? "previous" : "current" } : {}),
     })),
     valueFormatter: money,
+    referenceLines,
     withLegend: data.series.length > 1,
     legendProps: { verticalAlign: "bottom" as const },
     yAxisProps: { tickFormatter: compact, width: AXIS_PX - 8, ...(domain ? { domain } : {}) },
@@ -354,11 +409,20 @@ function Notes({
   belowZero = 0,
   leftOut,
   coarsened,
+  noCycles = false,
+  averages = null,
+  averageOf = null,
 }: {
   other: number;
   belowZero?: number;
   leftOut: number;
   coarsened: { why: "count" | "width"; resolution: string; max: number; kind: GraphKind } | null;
+  /** Per cycle without cycles: drawn as totals (#182). */
+  noCycles?: boolean;
+  /** The average lines' values, when there are several (#182). */
+  averages?: string | null;
+  /** How many whole intervals the average counts, when not all (#182). */
+  averageOf?: string | null;
 }) {
   const { t } = useTranslation();
   const notes = [
@@ -372,6 +436,9 @@ function Notes({
     other > 0 && t("stats.graphs.otherNote", { count: other }),
     belowZero > 0 && t("stats.graphs.belowZero", { count: belowZero }),
     leftOut > 0 && t("stats.graphs.leftOut", { count: leftOut }),
+    noCycles && t("stats.graphs.noCycles"),
+    averages,
+    averageOf,
   ].filter((n): n is string => typeof n === "string");
   if (notes.length === 0) return null;
   return (

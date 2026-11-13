@@ -16,6 +16,38 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.23.00",
+    date: "2026-11-12",
+    title: {
+      en: "Graphs: amounts per day, week, month or cycle, and an average line",
+      nb: "Grafer: beløp per dag, uke, måned eller periode, og en gjennomsnittslinje",
+      nn: "Grafar: beløp per dag, veke, månad eller periode, og ei gjennomsnittsline",
+    },
+    changes: {
+      en: [
+        "A graph's new Show as setting draws spending or income per day, week, month or cycle instead of totals, so periods of different lengths compare fairly: a 33-day cycle against a 28-day one, or this cycle so far against the last. An interval still going counts the days it has run.",
+        "A month is the average month; a cycle is the average length of your cycles in the period. A running total with a rate shows a running average.",
+        "An Average line draws a dashed line at the average of the intervals: one for stacked bars, one per series for lines and side-by-side bars, and one for the previous period when comparing. As totals, months or cycles the period cuts don't count, and the graph says so.",
+        "Both work on Stats, in saved modules, on the Dashboard, in reports and in their PDFs. A pie's amounts can be per day, week, month or cycle too.",
+        "Fixed: a compared pie's two titles now name their periods alike (October 2026 and September 2026, or both by their dates) instead of “Previous month” beside a date.",
+      ],
+      nb: [
+        "Den nye innstillingen Vis som tegner forbruk eller inntekt per dag, uke, måned eller periode i stedet for summer, så perioder av ulik lengde kan sammenlignes rettferdig: en periode på 33 dager mot en på 28, eller denne perioden så langt mot den forrige. Et intervall som ikke er ferdig, teller dagene det har gått.",
+        "En måned er gjennomsnittsmåneden; en periode er gjennomsnittslengden på periodene dine i tidsrommet. En løpende sum per dag viser et løpende gjennomsnitt.",
+        "Gjennomsnittslinje tegner en stiplet linje ved gjennomsnittet av intervallene: én for stablede søyler, én per serie for linjer og søyler side om side, og én for forrige periode når du sammenligner. Som summer teller ikke måneder eller perioder som tidsrommet kutter, og grafen sier fra.",
+        "Begge virker i Statistikk, i lagrede moduler, på dashbordet, i rapporter og i PDF-ene deres. Beløpene i et kakediagram kan også være per dag, uke, måned eller periode.",
+        "Rettet: de to titlene på et sammenlignet kakediagram navngir nå periodene likt (oktober 2026 og september 2026, eller begge med datoer) i stedet for «Forrige måned» ved siden av en dato.",
+      ],
+      nn: [
+        "Den nye innstillinga Vis som teiknar forbruk eller inntekt per dag, veke, månad eller periode i staden for summar, så periodar av ulik lengd kan samanliknast rettferdig: ein periode på 33 dagar mot ein på 28, eller denne perioden så langt mot den førre. Eit intervall som ikkje er ferdig, tel dagane det har gått.",
+        "Ein månad er gjennomsnittsmånaden; ein periode er gjennomsnittslengda på periodane dine i tidsrommet. Ein løpande sum per dag viser eit løpande gjennomsnitt.",
+        "Gjennomsnittsline teiknar ei stipla line ved gjennomsnittet av intervalla: éi for stabla søyler, éi per serie for liner og søyler side om side, og éi for førre periode når du samanliknar. Som summar tel ikkje månader eller periodar som tidsrommet kuttar, og grafen seier frå.",
+        "Begge verkar i Statistikk, i lagra modular, på dashbordet, i rapportar og i PDF-ane deira. Beløpa i eit kakediagram kan òg vere per dag, veke, månad eller periode.",
+        "Retta: dei to titlane på eit samanlikna kakediagram namngjev no periodane likt (oktober 2026 og september 2026, eller begge med datoar) i staden for «Førre månad» ved sida av ein dato.",
+      ],
+    },
+  },
+  {
     version: "v2.22.00",
     date: "2026-11-12",
     title: {

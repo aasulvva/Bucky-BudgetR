@@ -9,6 +9,13 @@ import type { StatsQuery, StatsSeries } from "@/api/stats";
 import i18n from "@/i18n";
 
 import { addDays, cycleRange, formatDateRange, lastDay, localDate } from "./cycles";
+import {
+  averageOf,
+  intervalDays as daysOf,
+  rateAmounts,
+  SHOW_AS,
+  wholeInterval,
+} from "./graphRates";
 import { CURRENCY, getLocale } from "./locale";
 import { addAmounts, compareAmounts } from "./money";
 import {
@@ -132,6 +139,12 @@ export function cleanGraph(s: GraphSettings): GraphSettings {
   if (s.fit_y_axis && s.kind !== "pie") out.fit_y_axis = true;
   if (s.kind === "pie" && s.pie_labels && s.pie_labels !== "list") out.pie_labels = s.pie_labels;
   if (topOf(s) !== DEFAULT_TOP) out.top = topOf(s);
+  // A rate (#182) is for sums, and an hour is too short for one.
+  if (s.show_as && s.show_as !== "total" && !balance && s.resolution !== "hour") {
+    out.show_as = s.show_as;
+  }
+  // The average line (#182): lines and bars, not running totals.
+  if (s.average && s.kind !== "pie" && !out.cumulative) out.average = true;
   return out;
 }
 
@@ -158,6 +171,8 @@ export function graphToSearch(settings: GraphSettings): URLSearchParams {
   if (s.fit_y_axis) p.set("fit", "1");
   if (s.pie_labels) p.set("labels", s.pie_labels);
   if (s.top) p.set("top", String(s.top));
+  if (s.show_as) p.set("per", s.show_as);
+  if (s.average) p.set("avg", "1");
   return p;
 }
 
@@ -193,6 +208,8 @@ export function graphFromSearch(params: URLSearchParams, fallback: GraphSettings
     fit_y_axis: params.get("fit") === "1",
     pie_labels: pick("labels", PIE_LABELS) ?? "list",
     top: Number.isInteger(top) && top >= 1 && top <= MAX_TOP ? top : DEFAULT_TOP,
+    show_as: pick("per", SHOW_AS) ?? "total",
+    average: params.get("avg") === "1",
   });
 }
 
@@ -273,6 +290,29 @@ export interface GraphData {
   series: GraphSeries[];
   /** How many series went into Other. */
   other: number;
+  /**
+   * The average lines (#182): one for a stacked bar graph's totals, else
+   * one per series, the previous period's beside this one's.
+   */
+  averages: GraphAverage[];
+  /** How many of this period's intervals the averages count, when not all. */
+  averageOf: { whole: number; of: number } | null;
+}
+
+export interface GraphAverage {
+  /** The series' name, or "total" for stacked bars' totals. */
+  name: string;
+  label: string;
+  color: string;
+  value: number;
+  previous?: boolean;
+}
+
+/** How a graph's values are scaled (#182): the unit's days, and the cycles for whole intervals. */
+export interface GraphRate {
+  /** The unit's days for Show as; null (or left out) shows totals. */
+  unitDays?: number | null;
+  cycles?: readonly { start_at: string; end_at: string; state: string }[];
 }
 
 /** The colour of a series or slice: the graph palette's slots (0-11) in order, Other in grey. */
@@ -443,8 +483,19 @@ export function graphData(
   accounts: Account[],
   buckets: Bucket[],
   locale = getLocale(),
+  rate: GraphRate = {},
 ): GraphData {
-  return compareGraphData(result, null, settings, resolution, currency, accounts, buckets, locale);
+  return compareGraphData(
+    result,
+    null,
+    settings,
+    resolution,
+    currency,
+    accounts,
+    buckets,
+    locale,
+    rate,
+  );
 }
 
 /**
@@ -463,6 +514,7 @@ export function compareGraphData(
   accounts: Account[],
   buckets: Bucket[],
   locale = getLocale(),
+  rate: GraphRate = {},
 ): GraphData {
   const s = cleanGraph(settings);
   const named = namedLines(result, s, currency, accounts, buckets);
@@ -511,14 +563,22 @@ export function compareGraphData(
       prev: upTo(prevCount).map((j) => sumAt(beforeRest, j)),
     });
   }
-  const shown = (a: string[]) => (s.cumulative ? cumulative(a) : a);
+  // Per day, week, month or cycle (#182): each interval by its days so far.
+  const unit = s.show_as ? (rate.unitDays ?? null) : null;
+  const cycles = rate.cycles ?? [];
+  const nowDays = result.intervals.map(daysOf);
+  const prevDays = previous?.result.intervals.map(daysOf) ?? [];
+  const rated = (a: string[], days: number[]) =>
+    unit === null ? (s.cumulative ? cumulative(a) : a) : rateAmounts(a, days, unit, !!s.cumulative);
+  const shown = (a: string[]) => rated(a, nowDays);
+  const shownPrev = (a: string[]) => rated(a, prevDays);
   const negate = (a: string) => (a.startsWith("-") ? a.slice(1) : a === "0" ? a : `-${a}`);
 
   const series: GraphSeries[] = [];
   for (const x of raws) {
     if (previous?.mode === "difference") {
       const now = shown(x.now);
-      const prev = shown(x.prev);
+      const prev = shownPrev(x.prev);
       series.push({
         name: x.name,
         label: x.label,
@@ -534,7 +594,7 @@ export function compareGraphData(
         name: `${x.name}${PREVIOUS_SUFFIX}`,
         label: i18n.t("stats.reports.previousOf", { name: x.label }),
         color: x.color,
-        amounts: shown(x.prev),
+        amounts: shownPrev(x.prev),
         previous: true,
       });
     }
@@ -559,7 +619,79 @@ export function compareGraphData(
     }
     return row;
   });
-  return { rows, series, other: rest.length };
+  const { averages, averageOf: counted } = s.average
+    ? graphAverages(series, s, {
+        how: s.metric === "balance" ? "balance" : unit === null ? "total" : "rate",
+        difference: previous?.mode === "difference",
+        nowDays,
+        prevDays,
+        nowWhole: result.intervals.map((x) => wholeInterval(x, resolution, cycles)),
+        prevWhole: (previous?.result.intervals ?? []).map((x) =>
+          wholeInterval(x, resolution, cycles),
+        ),
+      })
+    : { averages: [], averageOf: null };
+  return { rows, series, other: rest.length, averages, averageOf: counted };
+}
+
+/**
+ * The average lines (#182): stacked bars' totals as one line, else a line
+ * per series, each period over its own intervals (a difference over both
+ * periods' whole ones).
+ */
+function graphAverages(
+  series: GraphSeries[],
+  s: GraphSettings,
+  at: {
+    how: "balance" | "rate" | "total";
+    difference: boolean;
+    nowDays: number[];
+    prevDays: number[];
+    nowWhole: boolean[];
+    prevWhole: boolean[];
+  },
+): Pick<GraphData, "averages" | "averageOf"> {
+  const stacked = s.kind === "bar" && !s.side_by_side;
+  const both = at.nowWhole.map((w, i) => w && (at.prevWhole[i] ?? true));
+  const whole = (previous: boolean) =>
+    previous ? at.prevWhole : at.difference ? both : at.nowWhole;
+  const days = (previous: boolean) => (previous ? at.prevDays : at.nowDays);
+  const lines: {
+    name: string;
+    label: string;
+    color: string;
+    amounts: string[];
+    previous: boolean;
+  }[] = stacked
+    ? [false, true].flatMap((previous) => {
+        const parts = series.filter((x) => !!x.previous === previous);
+        if (parts.length === 0) return [];
+        const n = Math.max(...parts.map((x) => x.amounts.length));
+        return [
+          {
+            name: previous ? `total${PREVIOUS_SUFFIX}` : "total",
+            label: previous
+              ? i18n.t("stats.reports.previousOf", { name: i18n.t("stats.graphs.total") })
+              : i18n.t("stats.graphs.total"),
+            color: "var(--mantine-color-dimmed)",
+            amounts: Array.from({ length: n }, (_, i) =>
+              addAmounts("0", ...parts.map((x) => x.amounts[i] ?? "0")),
+            ),
+            previous,
+          },
+        ];
+      })
+    : series.map((x) => ({ ...x, previous: !!x.previous }));
+  let counted: GraphData["averageOf"] = null;
+  const averages = lines.flatMap((x) => {
+    const avg = averageOf(x.amounts.map(Number), days(x.previous), whole(x.previous), at.how);
+    if (!avg) return [];
+    if (!x.previous && avg.whole < avg.of) counted = { whole: avg.whole, of: avg.of };
+    return [
+      { name: x.name, label: x.label, color: x.color, value: avg.value, previous: x.previous },
+    ];
+  });
+  return { averages, averageOf: counted };
 }
 
 export interface PieSlice {
@@ -603,15 +735,20 @@ export function pieData(
   accounts: Account[],
   buckets: Bucket[],
   locale = getLocale(),
+  rate: GraphRate = {},
 ): PieData {
   const s = cleanGraph(settings);
+  // Per day, week, month or cycle (#182): the shares stay, the amounts scale.
+  const unit = s.show_as ? (rate.unitDays ?? null) : null;
+  const per = (amount: string, days: number) =>
+    unit === null ? amount : (rateAmounts([amount], [days], unit, false)[0] ?? amount);
   let slices: Omit<PieSlice, "share">[];
   let other = 0;
   let belowZero: number;
   if (pieSlicing(s) === "interval") {
     const lines = result.series.filter((l) => l.currency === currency);
-    const amounts = result.intervals.map((_, i) =>
-      addAmounts("0", ...lines.map((l) => l.values[i] ?? "0")),
+    const amounts = result.intervals.map((interval, i) =>
+      per(addAmounts("0", ...lines.map((l) => l.values[i] ?? "0")), daysOf(interval)),
     );
     belowZero = amounts.filter(isNegative).length;
     slices = result.intervals.flatMap((interval, index) => {
@@ -623,8 +760,9 @@ export function pieData(
     slices = slices.slice(0, MAX_SLICES).map((x, i) => ({ ...x, color: seriesColor(i) }));
   } else {
     // A balance is the value at the period's end; a sum is the period's.
+    const days = result.intervals.reduce((a, x) => a + daysOf(x), 0);
     const value = (l: { values: string[] }) =>
-      s.metric === "balance" ? (l.values.at(-1) ?? "0") : addAmounts("0", ...l.values);
+      s.metric === "balance" ? (l.values.at(-1) ?? "0") : per(addAmounts("0", ...l.values), days);
     const lines = result.series
       .filter((l) => l.currency === currency)
       .map((l) => ({ ...l, values: [value(l)] }));
@@ -634,7 +772,7 @@ export function pieData(
         intervals: result.intervals.slice(0, 1),
         series: lines.filter((l) => isPositive(l.values[0] ?? "0")),
       },
-      { ...s, cumulative: false },
+      { ...s, cumulative: false, show_as: "total" },
       "total",
       currency,
       accounts,
@@ -844,9 +982,12 @@ export function graphSummary(
     settings.kind === "pie"
       ? [group === "none" ? resolution : i18n.t(`stats.graphs.groups.${group}`)]
       : [resolution, ...(group === "none" ? [] : [i18n.t(`stats.graphs.groups.${group}`)])];
+  const clean = cleanGraph(settings);
   return [
     i18n.t(`stats.graphs.metrics.${settings.metric}`),
     choice ? periodLabel(choice, cycles, locale) : settings.period,
     ...rest,
+    ...(clean.show_as ? [i18n.t(`stats.graphs.showAsOptions.${clean.show_as}`)] : []),
+    ...(clean.average ? [i18n.t("stats.graphs.averageLine")] : []),
   ].join(" · ");
 }

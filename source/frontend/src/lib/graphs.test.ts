@@ -374,6 +374,8 @@ describe("yDomain", () => {
       { name: "b", label: "B", color: "", amounts: [] },
     ],
     other: 0,
+    averages: [],
+    averageOf: null,
   });
 
   it("includes 0 unless fitted", () => {
@@ -829,5 +831,157 @@ describe("compareGraphData", () => {
     );
     expect(data.rows).toHaveLength(3);
     expect(data.rows[2]).toMatchObject({ "b-b1": 15, "b-b1-prev": null });
+  });
+});
+
+describe("per day, week, month or cycle, and the average line (#182)", () => {
+  const food = bucket({ id: "b1", name: "Food", source_account_id: "1234" });
+  const fun = bucket({ id: "b2", name: "Fun", source_account_id: "1234" });
+  // October (31 days) and 1–11 November so far.
+  const months: StatsSeries = {
+    intervals: [
+      { start: startAtFor("2026-10-01"), end: startAtFor("2026-11-01") },
+      { start: startAtFor("2026-11-01"), end: now.toISOString() },
+    ],
+    series: [
+      { currency: "NOK", bucket_id: "b1", values: ["310.00", "220.00"] },
+      { currency: "NOK", bucket_id: "b2", values: ["62.00", "11.00"] },
+    ],
+  };
+  // Ungrouped, the API gives one line.
+  const total: StatsSeries = {
+    intervals: months.intervals,
+    series: [{ currency: "NOK", values: ["372.00", "231.00"] }],
+  };
+  const perMonth: GraphSettings = { ...base, period: "current-year", resolution: "month" };
+  const data = (s: GraphSettings, unitDays: number | null, result = total) =>
+    graphData(result, s, "month", "NOK", [main], [food, fun], "en-GB", { unitDays });
+
+  it("keeps Show as and the average line in the URL, where they apply", () => {
+    const s: GraphSettings = { ...perMonth, show_as: "day", average: true };
+    expect(graphToSearch(s).toString()).toBe(
+      "kind=bar&metric=spending&period=current-year&res=month&per=day&avg=1",
+    );
+    expect(graphFromSearch(graphToSearch(s), base)).toEqual(s);
+    expect(cleanGraph({ ...s, show_as: "total" }).show_as).toBeUndefined();
+    // Not for a balance, nor per hour; no average on pies or running totals.
+    expect(cleanGraph({ ...s, metric: "balance" }).show_as).toBeUndefined();
+    expect(cleanGraph({ ...s, resolution: "hour" }).show_as).toBeUndefined();
+    expect(cleanGraph({ ...s, kind: "pie" }).average).toBeUndefined();
+    expect(cleanGraph({ ...s, kind: "line", cumulative: true }).average).toBeUndefined();
+    expect(graphSummary(s)).toBe("Spending · This year · Month · Per day · Average line");
+  });
+
+  it("shows each interval per day by its days so far", () => {
+    const d = data({ ...perMonth, show_as: "day" }, 1);
+    // 372 over 31 days; 231 over the 11 days so far.
+    expect(d.series.map((x) => x.amounts)).toEqual([["12.00", "21.00"]]);
+    const week = data({ ...perMonth, show_as: "week", group_by: "bucket" }, 7, months);
+    expect(week.series.map((x) => [x.name, x.amounts])).toEqual([
+      ["b-b1", ["70.00", "140.00"]],
+      ["b-b2", ["14.00", "7.00"]],
+    ]);
+    // Without the unit's days (Per cycle without cycles): totals.
+    expect(data({ ...perMonth, show_as: "cycle" }, null).series[0]?.amounts).toEqual([
+      "372.00",
+      "231.00",
+    ]);
+  });
+
+  it("draws a running average as a running total", () => {
+    const d = data({ ...perMonth, kind: "line", cumulative: true, show_as: "day" }, 1);
+    // 372 / 31, then 603 / 42.
+    expect(d.series[0]?.amounts).toEqual(["12.00", "14.36"]);
+  });
+
+  it("averages the whole intervals of totals, and says how many", () => {
+    const d = data({ ...perMonth, average: true }, null);
+    // Only October is whole.
+    expect(d.averages).toEqual([
+      {
+        name: "total",
+        label: "Total",
+        color: "var(--mantine-color-dimmed)",
+        value: 372,
+        previous: false,
+      },
+    ]);
+    expect(d.averageOf).toEqual({ whole: 1, of: 2 });
+  });
+
+  it("weighs a rate's average by the days, all intervals counted", () => {
+    const d = data({ ...perMonth, average: true, show_as: "day" }, 1);
+    // (372 + 231) / 42 days.
+    expect(d.averages[0]?.value).toBeCloseTo(603 / 42);
+    expect(d.averageOf).toBeNull();
+  });
+
+  it("has a line per series for lines and side-by-side bars, and one for stacked bars", () => {
+    const split = {
+      ...perMonth,
+      group_by: "bucket" as const,
+      average: true,
+      show_as: "day" as const,
+    };
+    expect(data(split, 1, months).averages.map((x) => x.name)).toEqual(["total"]);
+    const lines = data({ ...split, kind: "line" }, 1, months).averages;
+    expect(lines.map((x) => [x.name, x.color])).toEqual([
+      ["b-b1", seriesColor(0)],
+      ["b-b2", seriesColor(1)],
+    ]);
+    expect(lines[0]?.value).toBeCloseTo(530 / 42);
+    expect(data({ ...split, side_by_side: true }, 1, months).averages).toHaveLength(2);
+  });
+
+  it("gives the previous period its own average", () => {
+    const before: StatsSeries = {
+      intervals: [
+        { start: startAtFor("2025-10-01"), end: startAtFor("2025-11-01") },
+        { start: startAtFor("2025-11-01"), end: startAtFor("2025-12-01") },
+      ],
+      series: [{ currency: "NOK", values: ["31.00", "60.00"] }],
+    };
+    const d = compareGraphData(
+      total,
+      { result: before, mode: "both" },
+      { ...perMonth, average: true },
+      "month",
+      "NOK",
+      [main],
+      [food, fun],
+      "en-GB",
+      { unitDays: null },
+    );
+    // Both of last year's months are whole.
+    expect(d.averages.map((x) => [x.name, x.value, x.previous])).toEqual([
+      ["total", 372, false],
+      ["total-prev", 45.5, true],
+    ]);
+  });
+
+  it("averages every interval's balance", () => {
+    const d = data({ ...perMonth, metric: "balance", kind: "line", average: true }, null);
+    expect(d.averages[0]?.value).toBeCloseTo((372 + 231) / 2);
+    expect(d.averageOf).toBeNull();
+  });
+
+  it("scales a pie's amounts, not its shares", () => {
+    const pie: GraphSettings = { ...perMonth, kind: "pie", group_by: "bucket", show_as: "day" };
+    const totals = pieData(
+      months,
+      { ...pie, show_as: "total" },
+      "total",
+      "NOK",
+      [main],
+      [food, fun],
+    );
+    const daily = pieData(months, pie, "total", "NOK", [main], [food, fun], "en-GB", {
+      unitDays: 1,
+    });
+    // 530 and 73 over the 42 days.
+    expect(daily.slices.map((x) => x.amount)).toEqual(["12.62", "1.74"]);
+    expect(daily.slices.map((x) => x.share.toFixed(2))).toEqual(
+      totals.slices.map((x) => x.share.toFixed(2)),
+    );
   });
 });
