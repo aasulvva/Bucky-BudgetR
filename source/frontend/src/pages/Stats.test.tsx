@@ -950,6 +950,37 @@ describe("Stats", () => {
       expect(screen.getByRole("radio", { name: "Transactions" })).toBeChecked();
     });
 
+    it("sets an in/out/balance module's average in place, and saves it (#220)", async () => {
+      apiMock.on("GET /api/v1/stats/flows", (req) => ({
+        body: {
+          intervals: [{ start: req.query.get("from") ?? "", end: req.query.get("to") ?? "" }],
+          buckets: [],
+          accounts: [],
+        },
+      }));
+      renderRoute("/stats?type=flows&period=last-3-months");
+      const panel = within(await screen.findByTestId("module-settings"));
+      await userEvent.click(panel.getByRole("radio", { name: "Per month" }));
+      expect(await screen.findByTestId("flow-average")).toHaveTextContent("Average per month");
+      await waitFor(() => {
+        expect(
+          apiMock.calls("GET /api/v1/stats/flows").map((c) => c.query.get("resolution")),
+        ).toContain("month");
+      });
+
+      await userEvent.click(screen.getByRole("button", { name: "Save module…" }));
+      const dialog = within(await screen.findByRole("dialog", { name: "Save module" }));
+      await userEvent.type(dialog.getByRole("textbox", { name: "Name" }), "Monthly");
+      await userEvent.click(dialog.getByRole("button", { name: "Save" }));
+      await waitFor(() => {
+        expect(prefs.saved_modules?.at(-1)?.module).toEqual({
+          id: "m-1",
+          type: "flows",
+          flows: { average: "month" },
+        });
+      });
+    });
+
     it("keeps a deleted module on screen, unsaved (#204)", async () => {
       prefs = { ...prefs, saved_modules: [list] };
       const { router } = renderRoute("/stats?saved=g-2");

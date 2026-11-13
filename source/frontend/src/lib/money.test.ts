@@ -2,6 +2,7 @@ import {
   addAmounts,
   compareAmounts,
   currencyOptions,
+  divideAmount,
   formatAmountInput,
   formatMoney,
   isValidAmount,
@@ -107,6 +108,14 @@ describe("amount arithmetic", () => {
     expect(multiplyAmount("0.05", "1.5")).toBe("0.08");
     expect(multiplyAmount("-0.05", "1.5")).toBe("-0.08");
     expect(multiplyAmount("333.33", "1")).toBe("333.33");
+  });
+
+  it("divides by a count, rounding half away from zero (#220)", () => {
+    expect(divideAmount("1000", 3)).toBe("333.33");
+    expect(divideAmount("0.05", 2)).toBe("0.03");
+    expect(divideAmount("-0.05", 2)).toBe("-0.03");
+    expect(divideAmount("200.00", 1)).toBe("200.00");
+    expect(divideAmount("10.00", 0)).toBe("10.00");
   });
 
   it("gives a percentage, rounded down", () => {

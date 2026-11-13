@@ -66,6 +66,7 @@ export function FlowGrid({
   balances,
   bucketLink,
   accountLink,
+  average = false,
 }: {
   buckets: FlowTables["buckets"] | null;
   accounts: FlowTables["accounts"] | null;
@@ -73,6 +74,11 @@ export function FlowGrid({
   balances: boolean;
   bucketLink: (id: string) => string;
   accountLink: (id: string) => string;
+  /**
+   * An average per month or cycle (#220): the change is the average's (its
+   * start is 0, its end the change), with no balances, links or overspent mark.
+   */
+  average?: boolean;
 }) {
   const { t } = useTranslation();
   const both = buckets !== null && accounts !== null;
@@ -99,15 +105,15 @@ export function FlowGrid({
   const bucketLabel = (f: BucketFigure) => t(`stats.reports.flows.columns.${f}`);
   const bucketCard = (r: FlowRow<BucketFigure>, total: string | null): Card => ({
     key: total === null ? r.id : `total-${r.currency}`,
-    name: total ?? <ReportLink to={bucketLink(r.id)}>{r.name}</ReportLink>,
+    name: total ?? (average ? r.name : <ReportLink to={bucketLink(r.id)}>{r.name}</ReportLink>),
     label: total ?? r.name,
     currency: r.currency,
     changeLabel: t("stats.reports.flows.grid.change"),
     change: subtractAmounts(r.values.end, r.values.start),
-    balances: [r.values.start, r.values.end],
+    balances: average ? null : [r.values.start, r.values.end],
     openedAt: r.openedAt,
     lines: [line(r, "in", BUCKET_IN, bucketLabel), line(r, "out", BUCKET_OUT, bucketLabel)],
-    overspent: total === null && compareAmounts(r.values.end, "0") < 0,
+    overspent: !average && total === null && compareAmounts(r.values.end, "0") < 0,
     total: total !== null,
   });
 
@@ -119,7 +125,7 @@ export function FlowGrid({
     if (balances && !isZero(r.values.other)) lines.push(line(r, "other", [], accountFigureLabel));
     return {
       key: total === null ? r.id : `total-${r.currency}`,
-      name: total ?? <ReportLink to={accountLink(r.id)}>{r.name}</ReportLink>,
+      name: total ?? (average ? r.name : <ReportLink to={accountLink(r.id)}>{r.name}</ReportLink>),
       label: total ?? r.name,
       currency: r.currency,
       changeLabel: balances

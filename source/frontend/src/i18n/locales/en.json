@@ -1484,6 +1484,32 @@
         "moveInto": "Into {{section}}",
         "more": "More",
         "moreNamed": "More for {{module}}"
+      },
+      "average": {
+        "label": "Average",
+        "hint": "Also the average per month or cycle, over the whole ones in the period.",
+        "options": {
+          "none": "Off",
+          "month": "Per month",
+          "cycle": "Per cycle"
+        },
+        "title": {
+          "month": "Average per month",
+          "cycle": "Average per cycle"
+        },
+        "budgetLabel": "Average per cycle",
+        "budgetHint": "Also the average budget, used and unspent per cycle, over the cycles that are over.",
+        "whole": {
+          "month_one": "The average is of {{count}} whole month; partial ones don't count.",
+          "month_other": "The average is of {{count}} whole months; partial ones don't count.",
+          "cycle_one": "The average is of {{count}} whole cycle; one still going doesn't count.",
+          "cycle_other": "The average is of {{count}} whole cycles; partial ones and one still going don't count."
+        },
+        "budgetWhole_one": "The average is of {{count}} cycle; one still going doesn't count.",
+        "budgetWhole_other": "The average is of {{count}} cycles; one still going doesn't count.",
+        "change": "Change",
+        "noCycles": "Per cycle needs cycles.",
+        "many": "Too many months or cycles to average: at most {{max}}."
       }
     },
     "graphs": {

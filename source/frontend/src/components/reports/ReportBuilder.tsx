@@ -309,6 +309,7 @@ function ModuleRow({
                   buckets={buckets}
                   isDesktop={isDesktop}
                   headingLevel={4}
+                  average={false}
                 />
               </Stack>
             ) : (

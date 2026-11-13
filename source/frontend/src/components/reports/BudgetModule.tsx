@@ -11,6 +11,7 @@ import { specificLabel } from "@/lib/graphs";
 import { compareAmounts, formatMoney } from "@/lib/money";
 import type { Period } from "@/lib/periods";
 import {
+  budgetAverage,
   budgetRows,
   budgetSummary,
   MAX_SUB_PERIODS,
@@ -34,6 +35,7 @@ export function BudgetModule({
   cycles,
   buckets,
   filtered,
+  average: showAverage = true,
 }: {
   /** With the report's accounts and buckets where the module has none of its own. */
   settings: ReportBudget;
@@ -42,6 +44,8 @@ export function BudgetModule({
   buckets: Bucket[];
   /** Whether the report has tags or a counterparty, which don't apply here. */
   filtered: boolean;
+  /** Whether it shows its average (#220): not in a section's part. */
+  average?: boolean;
 }) {
   const { t } = useTranslation();
   const list = period ? periodCycles(period, cycles) : null;
@@ -89,6 +93,9 @@ export function BudgetModule({
   const first = shown[0];
   const last = shown.at(-1);
   const perCycle = settings.per_cycle !== false;
+  // The average per cycle (#220), over the cycles that are over.
+  const average =
+    showAverage && settings.average ? budgetAverage(figures, shown, buckets, settings) : null;
   return (
     <Stack gap="md">
       {note}
@@ -112,6 +119,26 @@ export function BudgetModule({
               fromAt: first.period.fromAt,
               toAt: last.period.toAt,
             }}
+          />
+        </Stack>
+      )}
+      {average && (
+        <Stack gap={4} data-testid="budget-average">
+          <Text size="sm" fw={500}>
+            {t("stats.reports.average.budgetLabel")}
+          </Text>
+          {average.whole < average.of && (
+            <Text size="xs" c="dimmed">
+              {t("stats.reports.average.budgetWhole", { count: average.whole })}
+            </Text>
+          )}
+          <BudgetTable
+            label={t("stats.reports.average.budgetLabel")}
+            table={average}
+            figures={[]}
+            buckets={buckets}
+            settings={settings}
+            period={null}
           />
         </Stack>
       )}
@@ -153,23 +180,31 @@ function CycleLabel({ cycle, cycles }: { cycle: PeriodCycle; cycles: Cycle[] }) 
   );
 }
 
-/** One cycle's, or the summary's, table: Bucket | Budget | Used | Used % | Unspent | Carried over. */
+/**
+ * One cycle's, or the summary's, table: Bucket | Budget | Used | Used % |
+ * Unspent | Carried over. An average (#220, `table` and no period) has no
+ * Carried over and no links.
+ */
 function BudgetTable({
   label,
   figures,
+  table,
   buckets,
   settings,
   period,
 }: {
   label: string;
   figures: BucketFigures[];
+  /** Rows made already, instead of from the figures. */
+  table?: { rows: BudgetRow[]; totals: BudgetRow[] };
   buckets: Bucket[];
   settings: ReportBudget;
-  /** The span the figures cover, for the buckets' Transactions links. */
-  period: Period;
+  /** The span the figures cover, for the buckets' Transactions links; null for an average. */
+  period: Period | null;
 }) {
   const { t } = useTranslation();
-  const { rows, totals } = budgetRows(figures, buckets, settings);
+  const { rows, totals } = table ?? budgetRows(figures, buckets, settings);
+  const average = period === null;
   if (rows.length === 0) {
     return (
       <Text size="sm" c="dimmed">
@@ -188,7 +223,7 @@ function BudgetTable({
             <Table.Th ta="right">{t("stats.reports.budget.used")}</Table.Th>
             <Table.Th ta="right">{t("stats.reports.budget.usedPct")}</Table.Th>
             <Table.Th ta="right">{t("stats.reports.budget.unspent")}</Table.Th>
-            <Table.Th ta="right">{t("stats.reports.budget.carried")}</Table.Th>
+            {!average && <Table.Th ta="right">{t("stats.reports.budget.carried")}</Table.Th>}
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
@@ -196,15 +231,20 @@ function BudgetTable({
             <Row
               key={r.id}
               row={r}
+              carried={!average}
               name={
-                <ReportLink
-                  to={
-                    transactionsLink({ bucket_ids: [r.id], system: true }, period) ??
-                    "/transactions"
-                  }
-                >
-                  {r.name}
-                </ReportLink>
+                period ? (
+                  <ReportLink
+                    to={
+                      transactionsLink({ bucket_ids: [r.id], system: true }, period) ??
+                      "/transactions"
+                    }
+                  >
+                    {r.name}
+                  </ReportLink>
+                ) : (
+                  r.name
+                )
               }
             />
           ))}
@@ -214,6 +254,7 @@ function BudgetTable({
             <Row
               key={r.currency}
               row={r}
+              carried={!average}
               bold
               name={
                 several
@@ -228,7 +269,18 @@ function BudgetTable({
   );
 }
 
-function Row({ row, name, bold }: { row: BudgetRow; name: React.ReactNode; bold?: boolean }) {
+function Row({
+  row,
+  name,
+  bold,
+  carried = true,
+}: {
+  row: BudgetRow;
+  name: React.ReactNode;
+  bold?: boolean;
+  /** Whether it has the Carried over cell; an average hasn't (#220). */
+  carried?: boolean;
+}) {
   const { t } = useTranslation();
   const money = (a: string) => formatMoney(a, row.currency);
   // Over budget: used more than it could spend.
@@ -279,9 +331,11 @@ function Row({ row, name, bold }: { row: BudgetRow; name: React.ReactNode; bold?
       <Table.Td {...cell} c={overColor}>
         {money(row.values.unspent)}
       </Table.Td>
-      <Table.Td {...cell} c={debtColor}>
-        {money(row.values.carried)}
-      </Table.Td>
+      {carried && (
+        <Table.Td {...cell} c={debtColor}>
+          {money(row.values.carried)}
+        </Table.Td>
+      )}
     </Table.Tr>
   );
 }

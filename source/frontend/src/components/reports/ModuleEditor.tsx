@@ -60,6 +60,9 @@ import {
 import { USER_TYPES } from "@/lib/transactionList";
 import { readSavedModules, savedModuleOptions, toReportModule } from "@/lib/savedModules";
 
+/** An In/out/balance module's average (#220). */
+const FLOWS_AVERAGES = ["none", "month", "cycle"] as const;
+
 /** A module title's most characters. */
 export const MAX_MODULE_TITLE = 80;
 const MAX_TITLE = MAX_MODULE_TITLE;
@@ -573,6 +576,7 @@ function BudgetFields({
   onChange,
   accounts,
   buckets,
+  inSection,
   standalone,
 }: FieldsProps & { draft: BudgetModule; onChange: (m: BudgetModule) => void }) {
   const { t } = useTranslation();
@@ -629,6 +633,16 @@ function BudgetFields({
             set({ per_cycle: e.currentTarget.checked });
           }}
         />
+        {!inSection && (
+          <Switch
+            label={t("stats.reports.average.budgetLabel")}
+            description={t("stats.reports.average.budgetHint")}
+            checked={s.average ?? false}
+            onChange={(e) => {
+              set({ average: e.currentTarget.checked });
+            }}
+          />
+        )}
         <Text size="sm" c="dimmed">
           {t("stats.reports.budget.hint")}
         </Text>
@@ -782,6 +796,24 @@ function FlowsFields({
               {why}
             </Text>
           )}
+          <Input.Wrapper
+            label={t("stats.reports.average.label")}
+            description={t("stats.reports.average.hint")}
+          >
+            <SegmentedControl
+              fullWidth
+              mt={4}
+              data={FLOWS_AVERAGES.map((a) => ({
+                value: a,
+                label: t(`stats.reports.average.options.${a}`),
+                disabled: a === "cycle" && cycles.length === 0 && s.average !== "cycle",
+              }))}
+              value={s.average ?? "none"}
+              onChange={(a) => {
+                set({ average: a });
+              }}
+            />
+          </Input.Wrapper>
         </Stack>
       )}
     </>

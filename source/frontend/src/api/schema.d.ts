@@ -2580,6 +2580,13 @@ export interface components {
              * @enum {string}
              */
             breakdown?: "none" | "month" | "cycle";
+            /**
+             * @description Also a table or grid of the average per month or cycle (#220):
+             *     In and Out (with their parts) and the change, over the whole
+             *     months or cycles in the period. `none` by default.
+             * @enum {string}
+             */
+            average?: "none" | "month" | "cycle";
         };
         /**
          * @description What to render (#127): the report as the screen has it, its name,
@@ -2616,6 +2623,11 @@ export interface components {
             bucket_ids?: components["schemas"]["BucketId"][];
             /** @description A table per cycle after the summary (the default), or only the summary (false). */
             per_cycle?: boolean;
+            /**
+             * @description Also a table of the average per cycle after the summary (#220):
+             *     budget, used and unspent over the whole cycles shown.
+             */
+            average?: boolean;
         };
         /**
          * @description A transactions module (#126): the report's period's transactions, as

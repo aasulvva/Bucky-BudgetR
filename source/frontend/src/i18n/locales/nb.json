@@ -1484,6 +1484,32 @@
         "moveInto": "Inn i {{section}}",
         "more": "Mer",
         "moreNamed": "Mer for {{module}}"
+      },
+      "average": {
+        "label": "Gjennomsnitt",
+        "hint": "Også gjennomsnittet per måned eller syklus, over de hele i tidsrommet.",
+        "options": {
+          "none": "Av",
+          "month": "Per måned",
+          "cycle": "Per syklus"
+        },
+        "title": {
+          "month": "Gjennomsnitt per måned",
+          "cycle": "Gjennomsnitt per syklus"
+        },
+        "budgetLabel": "Gjennomsnitt per syklus",
+        "budgetHint": "Også gjennomsnittlig budsjett, brukt og ubrukt per syklus, over syklusene som er ferdige.",
+        "whole": {
+          "month_one": "Gjennomsnittet er av {{count}} hel måned; delvise teller ikke.",
+          "month_other": "Gjennomsnittet er av {{count}} hele måneder; delvise teller ikke.",
+          "cycle_one": "Gjennomsnittet er av {{count}} hel syklus; en som pågår, teller ikke.",
+          "cycle_other": "Gjennomsnittet er av {{count}} hele sykluser; delvise og en som pågår, teller ikke."
+        },
+        "budgetWhole_one": "Gjennomsnittet er av {{count}} syklus; en som pågår, teller ikke.",
+        "budgetWhole_other": "Gjennomsnittet er av {{count}} sykluser; en som pågår, teller ikke.",
+        "change": "Endring",
+        "noCycles": "Per syklus krever sykluser.",
+        "many": "For mange måneder eller sykluser å ta gjennomsnitt av: høyst {{max}}."
       }
     },
     "graphs": {
