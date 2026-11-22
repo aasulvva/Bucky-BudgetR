@@ -22,7 +22,7 @@ import { Link } from "react-router";
 import { accountTypeLabel, useRefreshMoney, type Account, type Bucket } from "@/api/accounts";
 import { api } from "@/api/client";
 import { unwrap } from "@/api/errors";
-import type { SavingsTarget } from "@/api/savings";
+import { useSavingsBudget, type SavingsTarget } from "@/api/savings";
 import { AmountInput } from "@/components/AmountInput";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { autofocusField, isTouch } from "@/lib/device";
@@ -363,6 +363,8 @@ function DeleteTarget({
   const { t } = useTranslation();
   const refresh = useRefreshMoney();
   const overflowing = overflowingInto(buckets, target.id);
+  // Its savings budget entries stop until they get another destination (#234).
+  const budgeted = (useSavingsBudget().data ?? []).filter((e) => e.target_id === target.id);
   const remove = useMutation({
     mutationFn: () =>
       unwrap(
@@ -417,6 +419,9 @@ function DeleteTarget({
             names: overflowing.map((b) => b.name).join(", "),
           })}
         </Text>
+      )}
+      {budgeted.length > 0 && (
+        <Text size="sm">{t("savingsSetup.deleteBudget", { count: budgeted.length })}</Text>
       )}
       {remove.error && <ErrorAlert error={remove.error} />}
       <Group justify="flex-end" gap="xs">

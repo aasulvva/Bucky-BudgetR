@@ -17,7 +17,14 @@ import {
 } from "@mantine/core";
 import { useMediaQuery, useWindowEvent } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
-import { IconArrowBackUp, IconCoins, IconPencil, IconPlus, IconTrash } from "@tabler/icons-react";
+import {
+  IconArrowBackUp,
+  IconCalendarDollar,
+  IconCoins,
+  IconPencil,
+  IconPlus,
+  IconTrash,
+} from "@tabler/icons-react";
 import { useMutation } from "@tanstack/react-query";
 import { useState, type Dispatch, type SetStateAction } from "react";
 import { Trans, useTranslation } from "react-i18next";
@@ -34,6 +41,12 @@ import {
 import { api } from "@/api/client";
 import { useCurrentCycles } from "@/api/cycles";
 import { unwrap } from "@/api/errors";
+import {
+  useSavingsBudget,
+  useSavingsTargets,
+  type SavingsBudgetEntry,
+  type SavingsTarget,
+} from "@/api/savings";
 import { useSession } from "@/app/session";
 import { AmountInput } from "@/components/AmountInput";
 import { BucketSettingsDrawer, IncomeRules } from "@/components/BucketSettings";
@@ -51,9 +64,12 @@ import {
   draftBucketsFor,
   draftIncome,
   draftRefill,
+  draftSaving,
   incomeProblem,
   newCapacity,
   refillProblem,
+  savingProblem,
+  savingsFor,
   shareOf,
   type BudgetChanges,
   type BudgetDraft,
@@ -64,6 +80,7 @@ import { canDelete, isFullyManual } from "@/lib/buckets";
 import { isOverdue } from "@/lib/cycles";
 import { getLocale } from "@/lib/locale";
 import { compareAmounts, formatMoney, subtractAmounts } from "@/lib/money";
+import { budgetDestination } from "@/lib/savings";
 
 /**
  * Budget setup (spec §9): every bucket by source account, the income
@@ -73,12 +90,17 @@ import { compareAmounts, formatMoney, subtractAmounts } from "@/lib/money";
  * refilled buckets' TF moves by the same amount.
  *
  * New buckets (#112) are made with Bucket setup's form and join the draft:
- * they count at once and are created first on Save.
+ * they count at once and are created first on Save. The savings budget's
+ * fixed amounts (#234) are listed and count with the buckets; they're added
+ * in Savings setup.
  */
 export default function BudgetSetup() {
   const { t } = useTranslation();
   const accounts = useAccounts();
   const buckets = useBuckets();
+  // Not waited for: Budget setup works without them.
+  const entries = useSavingsBudget().data ?? [];
+  const targets = useSavingsTargets().data ?? [];
   const preferences = useSession().data?.preferences;
   const theme = useMantineTheme();
   const isDesktop = useMediaQuery(`(min-width: ${theme.breakpoints.sm})`, true);
@@ -210,6 +232,8 @@ export default function BudgetSetup() {
               <Budget
                 accounts={accountList}
                 buckets={bucketList}
+                entries={entries}
+                targets={targets}
                 draft={draft}
                 setDraft={setDraft}
                 onNew={(source) => {
@@ -245,6 +269,8 @@ function formatPercent(value: number): string {
 function Budget({
   accounts,
   buckets,
+  entries,
+  targets,
   draft,
   setDraft,
   onNew,
@@ -252,6 +278,8 @@ function Budget({
 }: {
   accounts: Account[];
   buckets: Bucket[];
+  entries: SavingsBudgetEntry[];
+  targets: SavingsTarget[];
   draft: BudgetDraft;
   setDraft: Dispatch<SetStateAction<BudgetDraft>>;
   onNew: (source: string) => void;
@@ -261,7 +289,7 @@ function Budget({
   const theme = useMantineTheme();
   const isDesktop = useMediaQuery(`(min-width: ${theme.breakpoints.sm})`, true);
   const refresh = useRefreshMoney();
-  const changes = budgetChanges(draft, accounts, buckets);
+  const changes = budgetChanges(draft, accounts, buckets, entries);
   const dirty = changes.count > 0;
   const active = useCurrentCycles().data?.active ?? null;
   const [thisCycleOn, setThisCycle] = useState(false);
@@ -297,6 +325,15 @@ function Budget({
         await unwrap(
           api.POST("/api/v1/buckets/refill-amounts", {
             body: { items: c.ras, this_cycle: thisCycle },
+          }),
+        );
+      }
+      // From the next run (spec §8.6), whatever "Also change this cycle" says.
+      for (const e of c.savings) {
+        await unwrap(
+          api.PATCH("/api/v1/savings/budget/{entryId}", {
+            params: { path: { entryId: e.entry_id } },
+            body: { amount: e.amount },
           }),
         );
       }
@@ -354,6 +391,8 @@ function Budget({
           key={a.id}
           account={a}
           buckets={buckets.filter((b) => b.source_account_id === a.id)}
+          entries={savingsFor(entries, a.id)}
+          targets={targets}
           draft={draft}
           onEdit={edit}
           onDelete={markDeleted}
@@ -538,11 +577,13 @@ function ConfirmAccount({ change }: { change: CycleAccount }) {
   );
 }
 
-type Edit = (kind: "incomes" | "ras", id: string, value: string | null) => void;
+type Edit = (kind: "incomes" | "ras" | "savings", id: string, value: string | null) => void;
 
 function AccountSection({
   account,
   buckets: all,
+  entries,
+  targets,
   draft,
   onEdit,
   onDelete,
@@ -553,6 +594,9 @@ function AccountSection({
 }: {
   account: Account;
   buckets: Bucket[];
+  /** The account's savings budget entries that run (#234). */
+  entries: SavingsBudgetEntry[];
+  targets: SavingsTarget[];
   draft: BudgetDraft;
   onEdit: Edit;
   /** Marks a saved bucket deleted in the draft, or undoes that (#174). */
@@ -571,8 +615,9 @@ function AccountSection({
   const buckets = all.filter((b) => !isFullyManual(b));
   const skipped = all.length - buckets.length;
   const created = draftBucketsFor(draft, account.id);
-  const empty = buckets.length === 0 && created.length === 0;
-  const budget = accountBudget(draft, account, buckets);
+  const empty = buckets.length === 0 && created.length === 0 && entries.length === 0;
+  const budget = accountBudget(draft, account, buckets, entries);
+  const expected = budget.percent === null ? null : budget.expected;
   const money = (amount: string) => formatMoney(amount, account.currency);
   const income = draftIncome(draft, account);
 
@@ -680,9 +725,23 @@ function AccountSection({
                     onEdit={onEditNew}
                   />
                 ))}
+                {entries.map((e) => (
+                  <SavingRow
+                    key={e.id}
+                    entry={e}
+                    targets={targets}
+                    account={account}
+                    draft={draft}
+                    expected={expected}
+                    onEdit={onEdit}
+                  />
+                ))}
                 <Table.Tr>
                   <Table.Td colSpan={5}>
-                    <NewBucketButton account={account} onClick={onNew} />
+                    <Group gap="xs">
+                      <NewBucketButton account={account} onClick={onNew} />
+                      <SavingsSetupLink />
+                    </Group>
                   </Table.Td>
                 </Table.Tr>
               </Table.Tbody>
@@ -712,7 +771,21 @@ function AccountSection({
               onEdit={onEditNew}
             />
           ))}
-          <NewBucketButton account={account} onClick={onNew} />
+          {entries.map((e) => (
+            <SavingCard
+              key={e.id}
+              entry={e}
+              targets={targets}
+              account={account}
+              draft={draft}
+              expected={expected}
+              onEdit={onEdit}
+            />
+          ))}
+          <Group gap="xs">
+            <NewBucketButton account={account} onClick={onNew} />
+            <SavingsSetupLink />
+          </Group>
         </Stack>
       )}
       {skipped > 0 && (
@@ -970,6 +1043,130 @@ function BucketCard(props: BucketProps) {
         )}
       </Stack>
     </Card>
+  );
+}
+
+interface SavingProps {
+  entry: SavingsBudgetEntry;
+  targets: SavingsTarget[];
+  account: Account;
+  draft: BudgetDraft;
+  /** The account's expected income, when there is a valid one. */
+  expected: string | null;
+  onEdit: Edit;
+}
+
+/** What a savings budget entry's row shows (#234). */
+function useSavingValues({ entry, targets, draft, expected }: SavingProps) {
+  const { t } = useTranslation();
+  const amount = draftSaving(draft, entry);
+  const problem = entry.id in (draft.savings ?? {}) ? savingProblem(amount) : null;
+  const share = shareOf(amount !== null && problem === null ? amount : entry.amount, expected);
+  return {
+    name: budgetDestination(entry, targets),
+    amount,
+    error:
+      problem === "empty"
+        ? t("budgetSetup.enterSaving")
+        : problem === "notPositive"
+          ? t("savings.enterAmount")
+          : undefined,
+    share: share === null ? "–" : t("budgetSetup.shareValue", { percent: formatPercent(share) }),
+    when: t(`savingsSetup.budget.when.${entry.when}`),
+  };
+}
+
+function SavingName({ name }: { name: string }) {
+  const { t } = useTranslation();
+  return (
+    <Group gap={6} wrap="wrap" style={{ minWidth: 0 }}>
+      <Text fw={600}>{name}</Text>
+      <Badge size="sm" variant="light" color="teal" radius="sm">
+        {t("budgetSetup.savingBadge")}
+      </Badge>
+    </Group>
+  );
+}
+
+function SavingInput({
+  props,
+  name,
+  amount,
+  error,
+}: {
+  props: SavingProps;
+  name: string;
+  amount: string | null;
+  error: string | undefined;
+}) {
+  const { t } = useTranslation();
+  return (
+    <AmountInput
+      aria-label={t("budgetSetup.savingAmountFor", { name })}
+      value={amount}
+      currency={props.account.currency}
+      error={error}
+      onChange={(v) => {
+        props.onEdit("savings", props.entry.id, v);
+      }}
+    />
+  );
+}
+
+function SavingRow(props: SavingProps) {
+  const v = useSavingValues(props);
+  return (
+    <Table.Tr>
+      <Table.Td>
+        <SavingName name={v.name} />
+      </Table.Td>
+      <Table.Td>
+        <SavingInput props={props} name={v.name} amount={v.amount} error={v.error} />
+      </Table.Td>
+      <Table.Td>
+        <Text size="sm">{v.share}</Text>
+      </Table.Td>
+      <Table.Td colSpan={2}>
+        <Text size="sm" c="dimmed">
+          {v.when}
+        </Text>
+      </Table.Td>
+    </Table.Tr>
+  );
+}
+
+function SavingCard(props: SavingProps) {
+  const { t } = useTranslation();
+  const v = useSavingValues(props);
+  return (
+    <Card withBorder component="article" aria-label={v.name}>
+      <Stack gap="xs">
+        <SavingName name={v.name} />
+        <SavingInput props={props} name={v.name} amount={v.amount} error={v.error} />
+        <Group gap="lg" wrap="wrap">
+          <Figure label={t("budgetSetup.share")} value={v.share} />
+          <Text size="sm" c="dimmed">
+            {v.when}
+          </Text>
+        </Group>
+      </Stack>
+    </Card>
+  );
+}
+
+/** Where the savings budget's fixed amounts are added (#234). */
+function SavingsSetupLink() {
+  const { t } = useTranslation();
+  return (
+    <Button
+      variant="subtle"
+      size="compact-sm"
+      component={Link}
+      to="/savings/setup?budget"
+      leftSection={<IconCalendarDollar size={14} />}
+    >
+      {t("budgetSetup.savingsBudget")}
+    </Button>
   );
 }
 

@@ -17,12 +17,14 @@ import { Link } from "react-router";
 
 import { useAccounts, useBuckets, type Account, type Bucket } from "@/api/accounts";
 import {
+  useSavingsBudget,
   useSavingsDistributor,
   useSavingsRules,
   useSavingsTargets,
   type SavingsTarget,
 } from "@/api/savings";
 import { QueryState } from "@/components/QueryState";
+import { BudgetCard } from "@/components/savings/BudgetCard";
 import { DistributorCard } from "@/components/savings/DistributorCard";
 import { SavingsDialog, type SavingsAction } from "@/components/savings/SavingsDialog";
 import { compareAmounts, formatMoney, subtractAmounts } from "@/lib/money";
@@ -40,6 +42,7 @@ export default function Savings() {
   const targets = useSavingsTargets();
   const distributor = useSavingsDistributor();
   const rules = useSavingsRules();
+  const budget = useSavingsBudget();
   return (
     <Stack gap="lg">
       <Group justify="space-between">
@@ -72,6 +75,11 @@ export default function Savings() {
                             />
                           )}
                         </QueryState>
+                      )}
+                    </QueryState>
+                    <QueryState query={budget}>
+                      {(entries) => (
+                        <BudgetCard entries={entries} targets={targetList} accounts={accountList} />
                       )}
                     </QueryState>
                     {targetList.length === 0 ? (

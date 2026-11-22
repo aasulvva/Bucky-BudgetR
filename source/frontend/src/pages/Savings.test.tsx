@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 
 import { formatMoney } from "@/lib/money";
 import { apiMock } from "@/test/api";
-import { account, bucket, savingsTarget } from "@/test/fixtures";
+import { account, bucket, budgetEntry, savingsTarget } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
 
@@ -339,5 +339,79 @@ describe("the savings distributor (#232)", () => {
       account_id: main.id,
       amount: "200.00",
     });
+  });
+});
+
+describe("the savings budget (#234)", () => {
+  const saved = budgetEntry({
+    id: "1234000001",
+    target_id: rainy.id,
+    amount: "1000.00",
+    this_cycle: { wanted: "1000.00", reserved: "1000.00", at: "2026-01-01T00:00:00Z" },
+  });
+  const short = budgetEntry({
+    id: "1234000002",
+    account_id: other.id,
+    amount: "800.00",
+    this_cycle: { wanted: "800.00", reserved: "500.00", at: "2026-01-01T00:00:00Z" },
+  });
+  const onIncome = budgetEntry({ id: "1234000003", target_id: trip.id, when: "on_income" });
+  const manual = budgetEntry({ id: "1234000004", target_id: rainy.id, when: "manual" });
+  const stopped = budgetEntry({ id: "1234000005", target_id: "1000001999", stopped: true });
+
+  beforeEach(() => {
+    apiMock.on("GET /api/v1/savings/budget", {
+      body: [saved, short, onIncome, manual, stopped],
+    });
+  });
+
+  it("shows what each fixed amount did this cycle", async () => {
+    renderRoute("/savings");
+    const budget = await card("Savings budget");
+    const row = (name: string) => within(budget.getByRole("article", { name }));
+    expect(
+      row(`${raw("1000.00")} to Rainy day`).getByText(`Reserved ${m("1000.00")} this cycle.`),
+    ).toBeInTheDocument();
+    expect(
+      row(`${raw("800.00")} to Savings distributor`).getByText(
+        `Reserved ${m("500.00")} of ${m("800.00")}: ${m("300.00")} short, Other had no more unallocated.`,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      row(`${raw("500.00")} to Holiday`).getByText("Waits for an income on Main."),
+    ).toBeInTheDocument();
+    expect(
+      row(`${raw("500.00")} to Savings target #1000001999`).getByText(
+        "Stopped: its savings target is gone.",
+      ),
+    ).toBeInTheDocument();
+    // Only the manual one can be saved by hand.
+    expect(budget.getAllByRole("button", { name: /^Save .* now$/ })).toHaveLength(1);
+  });
+
+  it("saves a manual amount now", async () => {
+    apiMock.on("POST /api/v1/savings/budget/1234000004/save-now", {
+      body: {
+        ...manual,
+        this_cycle: { wanted: "500.00", reserved: "500.00", at: "2026-01-01T00:00:00Z" },
+      },
+    });
+    renderRoute("/savings");
+    const budget = await card("Savings budget");
+    await userEvent.click(
+      budget.getByRole("button", { name: `Save ${raw("500.00")} to Rainy day now` }),
+    );
+    expect(await screen.findByText(`Reserved ${m("500.00")} for Rainy day.`)).toBeInTheDocument();
+    expect(apiMock.calls("POST /api/v1/savings/budget/1234000004/save-now")).toHaveLength(1);
+  });
+
+  it("says where to add them when there are none", async () => {
+    apiMock.on("GET /api/v1/savings/budget", { body: [] });
+    renderRoute("/savings");
+    const budget = await card("Savings budget");
+    expect(budget.getByRole("link", { name: "Add them in Savings setup" })).toHaveAttribute(
+      "href",
+      "/savings/setup?budget",
+    );
   });
 });

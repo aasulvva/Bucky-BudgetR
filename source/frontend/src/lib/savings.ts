@@ -3,7 +3,12 @@
 // checks it all again.
 
 import { accountTypeLabel, type Account, type AccountType, type Bucket } from "@/api/accounts";
-import type { SavingsDistributor, SavingsRule, SavingsTarget } from "@/api/savings";
+import type {
+  SavingsBudgetEntry,
+  SavingsDistributor,
+  SavingsRule,
+  SavingsTarget,
+} from "@/api/savings";
 import i18n from "@/i18n";
 
 import { addAmounts, compareAmounts, formatMoney, percentOf, subtractAmounts } from "./money";
@@ -305,4 +310,56 @@ export function overflowTo(bucket: Bucket, targets: SavingsTarget[]): string | n
 /** The buckets that send their overflow to the target, which switch to the distributor if it goes. */
 export function overflowingInto(buckets: Bucket[], targetId: string): Bucket[] {
   return buckets.filter((b) => b.overflow_target_id === targetId);
+}
+
+/** Where a savings budget entry saves to (#234): its target's name, or the distributor. */
+export function budgetDestination(entry: SavingsBudgetEntry, targets: SavingsTarget[]): string {
+  if (entry.target_id === null) return i18n.t("savingsSetup.distributor.title");
+  return (
+    targets.find((x) => x.id === entry.target_id)?.name ??
+    i18n.t("transactions.unknownTarget", { id: entry.target_id })
+  );
+}
+
+/**
+ * Where a savings budget entry is in this cycle: stopped (its target went),
+ * saved (all of it), short, waiting for the next cycle (set up to start
+ * then, or At cycle start without having run), waiting for an income, ready
+ * to save by hand, or without a running cycle.
+ */
+export type BudgetStatus =
+  "stopped" | "saved" | "short" | "nextCycle" | "waitingIncome" | "saveNow" | "noCycle";
+
+export function budgetStatus(entry: SavingsBudgetEntry, running: boolean): BudgetStatus {
+  if (entry.stopped) return "stopped";
+  const run = entry.this_cycle;
+  if (run) {
+    if (compareAmounts(run.wanted, "0") === 0) return "nextCycle";
+    return compareAmounts(run.reserved, run.wanted) < 0 ? "short" : "saved";
+  }
+  if (!running) return "noCycle";
+  switch (entry.when) {
+    case "on_income":
+      return "waitingIncome";
+    case "manual":
+      return "saveNow";
+    default:
+      return "nextCycle";
+  }
+}
+
+/** What an account's live savings budget entries add up to per cycle. */
+export function budgetTotal(entries: SavingsBudgetEntry[], accountId: string): string {
+  return addAmounts(
+    ...entries.filter((e) => e.account_id === accountId && !e.stopped).map((e) => e.amount),
+  );
+}
+
+/** The targets a savings budget entry from the account can save to: its currency, not itself. */
+export function budgetTargets(
+  targets: SavingsTarget[],
+  account: Account | undefined,
+): SavingsTarget[] {
+  if (!account) return [];
+  return targets.filter((x) => x.currency === account.currency && x.account_id !== account.id);
 }

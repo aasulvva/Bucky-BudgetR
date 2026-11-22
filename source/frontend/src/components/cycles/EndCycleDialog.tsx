@@ -4,11 +4,11 @@ import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { useBuckets } from "@/api/accounts";
+import { useAccounts, useBuckets } from "@/api/accounts";
 import { api } from "@/api/client";
 import { useRefreshCycles, type Cycle } from "@/api/cycles";
 import { unwrap } from "@/api/errors";
-import { useSavingsTargets } from "@/api/savings";
+import { useSavingsBudget, useSavingsTargets } from "@/api/savings";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { QueryState } from "@/components/QueryState";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
@@ -17,7 +17,7 @@ import { endPreview } from "@/lib/cycleEnd";
 import { cycleRange, daysLeft, isOverdue, lastDay } from "@/lib/cycles";
 import { formatDate } from "@/lib/dates";
 import { compareAmounts, formatMoney } from "@/lib/money";
-import { overflowTo } from "@/lib/savings";
+import { budgetDestination, overflowTo } from "@/lib/savings";
 
 interface EndCycleDialogProps {
   opened: boolean;
@@ -54,6 +54,11 @@ function EndForm({
   const refresh = useRefreshCycles();
   const buckets = useBuckets();
   const targets = useSavingsTargets().data ?? [];
+  const accounts = useAccounts().data ?? [];
+  // The savings budget's At cycle start amounts (#234), after the refills.
+  const atStart = (useSavingsBudget().data ?? []).filter(
+    (e) => e.when === "cycle_start" && !e.stopped,
+  );
   const now = clockNow();
   const early = !isOverdue(active, now);
   // Where the cycle will end: now when early, else its planned end.
@@ -197,6 +202,31 @@ function EndForm({
                           </Text>
                         </Group>
                       ))
+                    )}
+                    {atStart.length > 0 && (
+                      <Stack gap={4} mt={4}>
+                        <Text size="sm" fw={600}>
+                          {t("cycles.savingsBudget")}
+                        </Text>
+                        {atStart.map((e) => {
+                          const account = accounts.find((a) => a.id === e.account_id);
+                          return (
+                            <Group key={e.id} justify="space-between" gap="sm" wrap="nowrap">
+                              <Text size="sm">
+                                {t("cycles.savingsBudgetLine", {
+                                  name: budgetDestination(e, targets),
+                                  account: account?.name ?? `#${e.account_id}`,
+                                })}
+                              </Text>
+                              <Text size="sm" ta="right">
+                                {t("cycles.upTo", {
+                                  amount: formatMoney(e.amount, account?.currency),
+                                })}
+                              </Text>
+                            </Group>
+                          );
+                        })}
+                      </Stack>
                     )}
                     <Text size="sm" c="dimmed" mt={4}>
                       {t("cycles.othersWait")}

@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { addDays, endAtFor, today } from "@/lib/cycles";
 import { formatMoney } from "@/lib/money";
 import { apiMock, problem, testUser } from "@/test/api";
-import { account, bucket, cycle } from "@/test/fixtures";
+import { account, budgetEntry, bucket, cycle, savingsTarget } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
 
@@ -630,5 +630,48 @@ describe("Budget setup, deleting buckets (#174)", () => {
     await userEvent.click(card.getByRole("button", { name: "Delete Groceries" }));
     expect(card.getByText("Deleted")).toBeInTheDocument();
     expect(card.getByRole("button", { name: "Undo deleting Groceries" })).toBeInTheDocument();
+  });
+});
+
+describe("the savings budget in Budget setup (#234)", () => {
+  const trip = savingsTarget({ id: "1000001001", name: "Holiday fund", account_id: "9999" });
+  const toTrip = budgetEntry({ id: "1234000001", target_id: trip.id, amount: "2000.00" });
+  const stopped = budgetEntry({ id: "1234000002", target_id: "1000001999", stopped: true });
+
+  beforeEach(() => {
+    apiMock.on("GET /api/v1/savings/targets", { body: [trip] });
+    apiMock.on("GET /api/v1/savings/budget", { body: [toTrip, stopped] });
+  });
+
+  it("counts the fixed amounts with the buckets, and saves them", async () => {
+    apiMock.on("PATCH /api/v1/savings/budget/1234000001", {
+      body: { ...toTrip, amount: "3000.00" },
+    });
+    renderRoute("/budget");
+    const mainSection = await section("Main account");
+    // 18000 of buckets and 2000 to save; the stopped one isn't counted or listed.
+    expect(await mainSection.findByText(`${m("20000.00")} (62.5%)`)).toBeInTheDocument();
+    expect(mainSection.getByText("Holiday fund")).toBeInTheDocument();
+    expect(mainSection.getByText("6.2%")).toBeInTheDocument();
+    expect(mainSection.queryByText(/Savings target #1000001999/)).not.toBeInTheDocument();
+    expect(mainSection.getAllByRole("link", { name: "Savings budget" })[0]).toHaveAttribute(
+      "href",
+      "/savings/setup?budget",
+    );
+
+    const amount = mainSection.getByRole("textbox", { name: "Amount to save for Holiday fund" });
+    await userEvent.clear(amount);
+    expect(mainSection.getByText("Enter an amount.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    await userEvent.type(amount, "3000");
+    expect(mainSection.getByText(`${m("21000.00")} (65.6%)`)).toBeInTheDocument();
+    expect(within(saveBar() ?? document.body).getByText("1 change")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("Budget saved.")).toBeInTheDocument();
+    expect(apiMock.calls("PATCH /api/v1/savings/budget/1234000001").map((c) => c.body)).toEqual([
+      { amount: "3000.00" },
+    ]);
+    expect(apiMock.calls("POST /api/v1/buckets/refill-amounts")).toHaveLength(0);
   });
 });

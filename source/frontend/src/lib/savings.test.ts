@@ -1,5 +1,5 @@
-import type { SavingsDistributor, SavingsRule } from "@/api/savings";
-import { account, bucket, savingsTarget } from "@/test/fixtures";
+import type { SavingsBudgetEntry, SavingsDistributor, SavingsRule } from "@/api/savings";
+import { account, budgetEntry, bucket, savingsTarget } from "@/test/fixtures";
 
 import { formatMoney } from "./money";
 
@@ -8,6 +8,9 @@ import {
   addOutcome,
   addProblem,
   bucketRoom,
+  budgetStatus,
+  budgetTargets,
+  budgetTotal,
   freeAccounts,
   freeBuckets,
   gapsOf,
@@ -204,5 +207,40 @@ describe("the distributor's rules (#232)", () => {
     expect(addOutcome(minimum, main.id, "400.00")).toBe("reachesMinimum");
     // Per account: nothing is held on Other.
     expect(addOutcome(minimum, other.id, "400.00")).toBe("belowMinimum");
+  });
+});
+
+describe("the savings budget (#234)", () => {
+  const entry = (over: Partial<SavingsBudgetEntry>) => budgetEntry({ id: "1234000001", ...over });
+  const run = (wanted: string, reserved: string) => ({ wanted, reserved, at: null });
+
+  it("says where each entry is this cycle", () => {
+    expect(budgetStatus(entry({ stopped: true, this_cycle: run("5.00", "5.00") }), true)).toBe(
+      "stopped",
+    );
+    expect(budgetStatus(entry({ this_cycle: run("500.00", "500.00") }), true)).toBe("saved");
+    expect(budgetStatus(entry({ this_cycle: run("500.00", "120.00") }), true)).toBe("short");
+    // Set up mid-cycle to start next cycle.
+    expect(budgetStatus(entry({ this_cycle: run("0.00", "0.00") }), true)).toBe("nextCycle");
+    expect(budgetStatus(entry({ when: "cycle_start" }), true)).toBe("nextCycle");
+    expect(budgetStatus(entry({ when: "on_income" }), true)).toBe("waitingIncome");
+    expect(budgetStatus(entry({ when: "manual" }), true)).toBe("saveNow");
+    expect(budgetStatus(entry({ when: "manual" }), false)).toBe("noCycle");
+  });
+
+  it("adds up what runs per account, and offers targets in its currency but not itself", () => {
+    const main = account({ id: "1234", name: "Main" });
+    const entries = [
+      entry({ amount: "500.00" }),
+      entry({ id: "1234000002", amount: "250.00" }),
+      entry({ id: "1234000003", amount: "999.00", stopped: true }),
+      entry({ id: "2345000001", account_id: "2345", amount: "100.00" }),
+    ];
+    expect(budgetTotal(entries, main.id)).toBe("750.00");
+    const own = savingsTarget({ id: "1000001001", name: "Own", account_id: main.id });
+    const euro = savingsTarget({ id: "1000001002", name: "Euro", currency: "EUR" });
+    const ok = savingsTarget({ id: "1000001003", name: "Ok" });
+    expect(budgetTargets([own, euro, ok], main).map((x) => x.name)).toEqual(["Ok"]);
+    expect(budgetTargets([ok], undefined)).toEqual([]);
   });
 });

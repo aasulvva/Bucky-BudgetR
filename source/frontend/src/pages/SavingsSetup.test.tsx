@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 
 import { formatAmountInput, formatMoney } from "@/lib/money";
 import { apiMock } from "@/test/api";
-import { account, bucket, savingsTarget } from "@/test/fixtures";
+import { account, bucket, budgetEntry, savingsTarget } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
 
@@ -253,6 +253,121 @@ describe("the savings distributor (#232)", () => {
     expect(
       await screen.findByText(
         "Fuel sends its overflow here; it goes to the savings distributor instead.",
+      ),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("the savings budget (#234)", () => {
+  const raw = (amount: string) => formatMoney(amount, "NOK");
+  const toBuffer = budgetEntry({
+    id: "1234000001",
+    target_id: rainy.id,
+    amount: "1000.00",
+    when: "on_income",
+  });
+  const stopped = budgetEntry({ id: "1234000002", target_id: "1000001999", stopped: true });
+
+  beforeEach(() => {
+    apiMock.on("GET /api/v1/savings/budget", { body: [toBuffer, stopped] });
+  });
+
+  it("lists the fixed amounts per account, with what runs per cycle", async () => {
+    renderRoute("/savings/setup");
+    await userEvent.click(await screen.findByRole("button", { name: /^Savings budget/ }));
+    const section = within(await screen.findByRole("region", { name: "Main" }));
+    // The stopped one doesn't run, so it isn't counted.
+    expect(section.getByText(`${m("1000.00")} per cycle`)).toBeInTheDocument();
+    expect(section.getByRole("button", { name: `${raw("1000.00")} to Buffer` })).toHaveTextContent(
+      "On income",
+    );
+    expect(section.getByText("Stopped")).toBeInTheDocument();
+  });
+
+  it("adds an At cycle start amount, asking about this cycle", async () => {
+    apiMock.on("POST /api/v1/savings/budget", {
+      status: 201,
+      body: budgetEntry({ id: "1234000003", target_id: rainy.id }),
+    });
+    renderRoute("/savings/setup?budget");
+    await userEvent.click(await screen.findByRole("button", { name: "Add a fixed amount" }));
+    const form = within(await screen.findByRole("form", { name: "New fixed amount" }));
+    await userEvent.click(form.getByRole("button", { name: "Add" }));
+    expect(form.getByText("Pick an account.")).toBeInTheDocument();
+    expect(form.getByText("Enter an amount above 0.")).toBeInTheDocument();
+
+    await userEvent.click(form.getByRole("combobox", { name: "From account" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Main" }));
+    await userEvent.click(form.getByRole("combobox", { name: "Save to" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Buffer" }));
+    await userEvent.type(form.getByRole("textbox", { name: "Amount per cycle" }), "750");
+    // At cycle start in a running cycle: reserve now, or start next cycle.
+    expect(form.getByRole("radio", { name: "Reserve it now" })).toBeChecked();
+    await userEvent.click(form.getByRole("radio", { name: "Start next cycle" }));
+    await userEvent.click(form.getByRole("button", { name: "Add" }));
+    await waitFor(() => {
+      expect(apiMock.calls("POST /api/v1/savings/budget")).toHaveLength(1);
+    });
+    expect(apiMock.calls("POST /api/v1/savings/budget")[0]?.body).toEqual({
+      account_id: main.id,
+      target_id: rainy.id,
+      amount: "750.00",
+      when: "cycle_start",
+      this_cycle: false,
+    });
+  });
+
+  it("doesn't offer an account's own target, nor ask about this cycle for other modes", async () => {
+    renderRoute("/savings/setup?budget");
+    await userEvent.click(await screen.findByRole("button", { name: "Add a fixed amount" }));
+    const form = within(await screen.findByRole("form", { name: "New fixed amount" }));
+    await userEvent.click(form.getByRole("combobox", { name: "From account" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Buffer" }));
+    await userEvent.click(form.getByRole("combobox", { name: "Save to" }));
+    expect(await screen.findByRole("option", { name: "Savings distributor" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Buffer" })).not.toBeInTheDocument();
+    await userEvent.click(form.getByRole("radio", { name: "Manually" }));
+    expect(form.queryByRole("radio", { name: "Reserve it now" })).not.toBeInTheDocument();
+  });
+
+  it("gives a stopped amount another destination, or deletes one", async () => {
+    apiMock.on("PATCH /api/v1/savings/budget/1234000002", { body: { ...stopped, stopped: false } });
+    apiMock.on("DELETE /api/v1/savings/budget/1234000001", { status: 204 });
+    renderRoute("/savings/setup?budget");
+    await userEvent.click(
+      await screen.findByRole("button", { name: `${raw("500.00")} to Savings target #1000001999` }),
+    );
+    const form = within(await screen.findByRole("form", { name: "Fixed amount" }));
+    expect(form.getByText(/Its savings target is gone/)).toBeInTheDocument();
+    // Switching to At cycle start from it doesn't apply: it's At cycle start already.
+    expect(form.queryByRole("radio", { name: "Reserve it now" })).not.toBeInTheDocument();
+    await userEvent.click(form.getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(apiMock.calls("PATCH /api/v1/savings/budget/1234000002")[0]?.body).toEqual({
+        target_id: null,
+        amount: "500.00",
+        when: "cycle_start",
+      });
+    });
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: `${raw("1000.00")} to Buffer` }),
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    expect(screen.getByText("What it has reserved stays held.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await waitFor(() => {
+      expect(apiMock.calls("DELETE /api/v1/savings/budget/1234000001")).toHaveLength(1);
+    });
+  });
+
+  it("says when deleting a target stops fixed amounts", async () => {
+    renderRoute("/savings/setup?edit=1000001001");
+    const form = within(await screen.findByRole("form", { name: "Buffer" }));
+    await userEvent.click(form.getByRole("button", { name: "Delete target" }));
+    expect(
+      await screen.findByText(
+        "1 fixed amount in the savings budget stops until it gets another destination.",
       ),
     ).toBeInTheDocument();
   });

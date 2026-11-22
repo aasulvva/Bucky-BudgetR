@@ -16,6 +16,35 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.28.00",
+    date: "2026-11-22",
+    title: {
+      en: "Savings budget",
+      nb: "Sparebudsjett",
+      nn: "Sparebudsjett",
+    },
+    changes: {
+      en: [
+        "Save fixed amounts each cycle: in Savings setup, add an amount from an account to a savings target or the savings distributor, at cycle start, on income or by hand. It's reserved out of the unallocated money once a cycle, after the buckets.",
+        "The Savings screen shows what each amount reserved this cycle, and Save now for the ones saved by hand.",
+        "Budget setup lists the amounts under each account's buckets and counts them in what's allocated; you can change them there too.",
+        "Ending a cycle lists what the savings budget reserves when the next one starts.",
+      ],
+      nb: [
+        "Spar faste beløp hver periode: i Spareoppsett legger du til et beløp fra en konto til et sparemål eller sparefordeleren, ved periodestart, ved inntekt eller for hånd. Det reserveres av de ufordelte pengene én gang per periode, etter bøttene.",
+        "Sparing-siden viser hva hvert beløp har reservert denne perioden, og Spar nå for de som spares for hånd.",
+        "Budsjettoppsett viser beløpene under bøttene på hver konto og regner dem med i det som er fordelt; du kan endre dem der også.",
+        "Når du avslutter en periode, ser du hva sparebudsjettet reserverer når den neste starter.",
+      ],
+      nn: [
+        "Spar faste beløp kvar periode: i Spareoppsett legg du til eit beløp frå ein konto til eit sparemål eller sparefordelaren, ved periodestart, ved inntekt eller for hand. Det blir reservert av dei ufordelte pengane éin gong per periode, etter bøttene.",
+        "Sparing-sida viser kva kvart beløp har reservert denne perioden, og Spar no for dei som blir spart for hand.",
+        "Budsjettoppsett viser beløpa under bøttene på kvar konto og reknar dei med i det som er fordelt; du kan endre dei der òg.",
+        "Når du avsluttar ein periode, ser du kva sparebudsjettet reserverer når den neste startar.",
+      ],
+    },
+  },
+  {
     version: "v2.27.01",
     date: "2026-11-22",
     title: {

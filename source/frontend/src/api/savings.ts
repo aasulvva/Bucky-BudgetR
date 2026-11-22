@@ -1,4 +1,4 @@
-// Savings targets (#231) and the distributor (#232): what the screens share. Money moves refresh them
+// Savings targets (#231), the distributor (#232) and the savings budget (#234): what the screens share. Money moves refresh them
 // with the accounts (useRefreshMoney), since held funds change unallocated.
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
@@ -58,5 +58,20 @@ export function useDistributionPreview(accountId: string | null, amount: string 
       ),
     enabled: accountId !== null && amount !== null && Number(amount) > 0,
     placeholderData: keepPreviousData,
+  });
+}
+
+export type SavingsBudgetEntry = components["schemas"]["SavingsBudgetEntry"];
+export type SavingsBudgetWhen = components["schemas"]["SavingsBudgetWhen"];
+export type NewSavingsBudgetEntry = components["schemas"]["NewSavingsBudgetEntry"];
+export type SavingsBudgetEntryUpdate = components["schemas"]["SavingsBudgetEntryUpdate"];
+
+export const BUDGET_WHEN: SavingsBudgetWhen[] = ["cycle_start", "on_income", "manual"];
+
+/** The savings budget's fixed amounts (#234), oldest first, with this cycle's runs. */
+export function useSavingsBudget() {
+  return useQuery({
+    queryKey: [...SAVINGS_KEY, "budget"],
+    queryFn: () => unwrap(api.GET("/api/v1/savings/budget")),
   });
 }

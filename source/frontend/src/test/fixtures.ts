@@ -2,7 +2,7 @@
 
 import type { Account, Bucket, BucketFigures } from "@/api/accounts";
 import type { Cycle } from "@/api/cycles";
-import type { SavingsTarget } from "@/api/savings";
+import type { SavingsBudgetEntry, SavingsTarget } from "@/api/savings";
 import type { Transaction } from "@/api/transactions";
 import { addDays, endAtFor, startAtFor, today } from "@/lib/cycles";
 
@@ -124,6 +124,23 @@ export function savingsTarget(
     current: "0.00",
     held_total: "0.00",
     held: [],
+    created_at: "2026-01-01T00:00:00Z",
+    modified_at: "2026-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+/** A savings budget entry (#234): from account 1234 to the distributor, not run this cycle. */
+export function budgetEntry(
+  overrides: Partial<SavingsBudgetEntry> & Pick<SavingsBudgetEntry, "id">,
+): SavingsBudgetEntry {
+  return {
+    account_id: "1234",
+    target_id: null,
+    amount: "500.00",
+    when: "cycle_start",
+    stopped: false,
+    this_cycle: null,
     created_at: "2026-01-01T00:00:00Z",
     modified_at: "2026-01-01T00:00:00Z",
     ...overrides,
