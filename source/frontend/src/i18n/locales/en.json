@@ -1003,7 +1003,8 @@
     "INP": "Internal payment",
     "SVR": "Reserved for savings",
     "SVC": "Savings released",
-    "SVB": "Savings to bucket"
+    "SVB": "Savings to bucket",
+    "SVD": "Savings distribution"
   },
   "transactions": {
     "new": "New transaction",
@@ -1083,7 +1084,9 @@
     "reverseSavingsReserve": "The money is no longer held for the target.",
     "reverseSavingsRelease": "The money is held for the target again.",
     "reverseSavingsDone": "The money is held for the target again.",
-    "unknownTarget": "Savings target #{{id}}"
+    "unknownTarget": "Savings target #{{id}}",
+    "distributor": "Savings distributor",
+    "reverseSavingsDistribution": "The money goes back to the savings distributor."
   },
   "cycles": {
     "plan": "Plan a cycle",
@@ -1987,8 +1990,10 @@
       "pdf_unavailable": "PDF export isn't set up on this server, or its renderer can't be reached.",
       "read_only": "This session can only read.",
       "refill_unavailable": "Only income in the active cycle can trigger a refill.",
+      "rule_overlap": "The range overlaps another rule of the target.",
       "savings_transfer": "This transfer moved held savings, so its amount and accounts can't change. Reverse it to put the money back on hold.",
       "too_many_renders": "Other PDFs are being made. Try again in a moment.",
+      "too_many_rules": "The target has as many rules as it can (20).",
       "unauthenticated": "Log in first.",
       "username_taken": "That username is already in use.",
       "wrong_account_type": "Only a savings, BSU, fund or investment account can be a savings target.",

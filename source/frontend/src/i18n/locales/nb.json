@@ -1003,7 +1003,8 @@
     "INP": "Intern betaling",
     "SVR": "Satt av til sparing",
     "SVC": "Sparing frigjort",
-    "SVB": "Sparing til bøtte"
+    "SVB": "Sparing til bøtte",
+    "SVD": "Sparefordeling"
   },
   "transactions": {
     "new": "Ny transaksjon",
@@ -1083,7 +1084,9 @@
     "reverseSavingsReserve": "Pengene er ikke lenger satt av til målet.",
     "reverseSavingsRelease": "Pengene settes av til målet igjen.",
     "reverseSavingsDone": "Pengene settes av til målet igjen.",
-    "unknownTarget": "Sparemål #{{id}}"
+    "unknownTarget": "Sparemål #{{id}}",
+    "distributor": "Sparefordeler",
+    "reverseSavingsDistribution": "Pengene går tilbake til sparefordeleren."
   },
   "cycles": {
     "plan": "Planlegg en periode",
@@ -1987,8 +1990,10 @@
       "pdf_unavailable": "PDF-eksport er ikke satt opp på denne serveren, eller PDF-tjenesten svarer ikke.",
       "read_only": "Denne økten kan bare lese.",
       "refill_unavailable": "Bare inntekt i den aktive perioden kan utløse påfyll.",
+      "rule_overlap": "Intervallet overlapper en annen regel for sparemålet.",
       "savings_transfer": "Denne overføringen flyttet avsatt sparing, så beløpet og kontoene kan ikke endres. Reverser den for å sette pengene av igjen.",
       "too_many_renders": "Andre PDF-er lages nå. Prøv igjen om litt.",
+      "too_many_rules": "Sparemålet har så mange regler som det kan ha (20).",
       "unauthenticated": "Logg inn først.",
       "username_taken": "Det brukernavnet er allerede i bruk.",
       "wrong_account_type": "Bare en sparekonto, BSU-, fonds- eller investeringskonto kan være et sparemål.",

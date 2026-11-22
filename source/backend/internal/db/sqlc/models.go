@@ -496,6 +496,59 @@ func (e RefillMode) Valid() bool {
 	return false
 }
 
+type SavingsHoldMode string
+
+const (
+	SavingsHoldModeImmediate SavingsHoldMode = "immediate"
+	SavingsHoldModeMinimum   SavingsHoldMode = "minimum"
+	SavingsHoldModeManual    SavingsHoldMode = "manual"
+)
+
+func (e *SavingsHoldMode) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = SavingsHoldMode(s)
+	case string:
+		*e = SavingsHoldMode(s)
+	default:
+		return fmt.Errorf("unsupported scan type for SavingsHoldMode: %T", src)
+	}
+	return nil
+}
+
+type NullSavingsHoldMode struct {
+	SavingsHoldMode SavingsHoldMode
+	Valid           bool // Valid is true if SavingsHoldMode is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullSavingsHoldMode) Scan(value interface{}) error {
+	if value == nil {
+		ns.SavingsHoldMode, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.SavingsHoldMode.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullSavingsHoldMode) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.SavingsHoldMode), nil
+}
+
+func (e SavingsHoldMode) Valid() bool {
+	switch e {
+	case SavingsHoldModeImmediate,
+		SavingsHoldModeMinimum,
+		SavingsHoldModeManual:
+		return true
+	}
+	return false
+}
+
 type SavingsHolderKind string
 
 const (
@@ -672,6 +725,7 @@ const (
 	TransactionTypeSVR TransactionType = "SVR"
 	TransactionTypeSVC TransactionType = "SVC"
 	TransactionTypeSVB TransactionType = "SVB"
+	TransactionTypeSVD TransactionType = "SVD"
 )
 
 func (e *TransactionType) Scan(src interface{}) error {
@@ -724,7 +778,8 @@ func (e TransactionType) Valid() bool {
 		TransactionTypeOVF,
 		TransactionTypeSVR,
 		TransactionTypeSVC,
-		TransactionTypeSVB:
+		TransactionTypeSVB,
+		TransactionTypeSVD:
 		return true
 	}
 	return false
@@ -852,6 +907,20 @@ type SavingsHolder struct {
 	Goal       decimal.NullDecimal
 	Note       string
 	Deleted    bool
+	CreatedAt  time.Time
+	ModifiedAt time.Time
+	HoldMode   NullSavingsHoldMode
+	MinAmount  decimal.NullDecimal
+}
+
+type SavingsRule struct {
+	ID         string
+	TargetID   string
+	UserID     string
+	RangeFrom  decimal.Decimal
+	RangeTo    decimal.NullDecimal
+	Priority   int16
+	PastGoal   bool
 	CreatedAt  time.Time
 	ModifiedAt time.Time
 }

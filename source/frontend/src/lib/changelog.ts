@@ -16,6 +16,29 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.25.01",
+    date: "2026-11-22",
+    title: {
+      en: "Groundwork for the savings distributor",
+      nb: "Grunnarbeid for sparefordeleren",
+      nn: "Grunnarbeid for sparefordelaren",
+    },
+    changes: {
+      en: [
+        "Behind the scenes, the app can now keep a savings distributor: it takes money in and splits it among your savings targets by rules, a range of each target's balance or funds with a priority. Its screens come in the next version.",
+        "A new transaction type, Savings distribution, shows with the refills and adjustments. It can be reversed, which puts the money back in the distributor.",
+      ],
+      nb: [
+        "I bakgrunnen kan appen nå ha en sparefordeler: den tar imot penger og fordeler dem mellom sparemålene dine etter regler, et intervall av hvert sparemåls saldo eller midler med en prioritet. Skjermbildene kommer i neste versjon.",
+        "En ny transaksjonstype, Sparefordeling, vises sammen med påfyll og justeringer. Den kan reverseres, og da går pengene tilbake til sparefordeleren.",
+      ],
+      nn: [
+        "I bakgrunnen kan appen no ha ein sparefordelar: han tek imot pengar og fordeler dei mellom sparemåla dine etter reglar, eit intervall av saldoen eller midlane til kvart sparemål med ein prioritet. Skjermbileta kjem i neste versjon.",
+        "Ein ny transaksjonstype, Sparefordeling, blir vist saman med påfyll og justeringar. Han kan reverserast, og då går pengane tilbake til sparefordelaren.",
+      ],
+    },
+  },
+  {
     version: "v2.25.00",
     date: "2026-11-22",
     title: {

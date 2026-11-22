@@ -14,6 +14,7 @@
 //	Occurrence   Schedule + 8 random  18 digits
 //	SavingsHolder User + 4 random     10 digits
 //	SavingsLine  SavingsHolder + 14 random  24 digits
+//	SavingsRule  SavingsHolder + 2 random   12 digits
 //
 // The database stores them as text with a CHECK on Kind.Pattern. They are
 // drawn with crypto/rand; see Insert for handling collisions.
@@ -56,6 +57,8 @@ var (
 	// SavingsHolder is a savings target or a user's savings distributor.
 	SavingsHolder = newKind("savings holder", 10, `^[1-9][0-9]{9}$`)
 	SavingsLine   = newKind("savings line", 24, `^[1-9][0-9]{23}$`)
+	// SavingsRule is a savings distributor rule, owned by its target.
+	SavingsRule = newKind("savings rule", 12, `^[1-9][0-9]{11}$`)
 )
 
 // Valid reports whether s is a well-formed ID of this kind. For transactions
@@ -106,6 +109,9 @@ func NewSavingsHolder(userID string) string { return withPrefix(User, userID, 4)
 
 // NewSavingsLine returns a random ID for a savings line of holderID.
 func NewSavingsLine(holderID string) string { return withPrefix(SavingsHolder, holderID, 14) }
+
+// NewSavingsRule returns a random ID for a distributor rule of targetID.
+func NewSavingsRule(targetID string) string { return withPrefix(SavingsHolder, targetID, 2) }
 
 // withPrefix appends n random digits to an owner ID. A malformed owner ID is
 // a programming error, so it panics rather than returning an error.

@@ -55,6 +55,10 @@ function defaults(): Map<string, Handler> {
     ["GET /api/v1/counterparties", { body: [] }],
     ["GET /api/v1/transactions", { body: { items: [], next_cursor: null } }],
     ["GET /api/v1/savings/targets", { body: [] }],
+    [
+      "GET /api/v1/savings/distributor",
+      { body: { id: null, hold_mode: "immediate", min_amount: null, held: [] } },
+    ],
   ]);
 }
 

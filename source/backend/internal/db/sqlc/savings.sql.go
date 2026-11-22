@@ -13,12 +13,54 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+const createDistributor = `-- name: CreateDistributor :one
+INSERT INTO savings_holders (id, user_id, kind, hold_mode, min_amount)
+VALUES ($1, $2, 'distributor', $3, $4)
+ON CONFLICT DO NOTHING
+RETURNING id, user_id, kind, bucket_id, account_id, name, goal, note, deleted, created_at, modified_at, hold_mode, min_amount
+`
+
+type CreateDistributorParams struct {
+	ID        string
+	UserID    string
+	HoldMode  NullSavingsHoldMode
+	MinAmount decimal.NullDecimal
+}
+
+// Use with ids.Insert: a taken ID (or a distributor the user has already)
+// returns no row.
+func (q *Queries) CreateDistributor(ctx context.Context, arg CreateDistributorParams) (SavingsHolder, error) {
+	row := q.db.QueryRow(ctx, createDistributor,
+		arg.ID,
+		arg.UserID,
+		arg.HoldMode,
+		arg.MinAmount,
+	)
+	var i SavingsHolder
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Kind,
+		&i.BucketID,
+		&i.AccountID,
+		&i.Name,
+		&i.Goal,
+		&i.Note,
+		&i.Deleted,
+		&i.CreatedAt,
+		&i.ModifiedAt,
+		&i.HoldMode,
+		&i.MinAmount,
+	)
+	return i, err
+}
+
 const createSavingsHolder = `-- name: CreateSavingsHolder :one
 
 INSERT INTO savings_holders (id, user_id, kind, bucket_id, account_id, name, goal, note)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 ON CONFLICT (id) DO NOTHING
-RETURNING id, user_id, kind, bucket_id, account_id, name, goal, note, deleted, created_at, modified_at
+RETURNING id, user_id, kind, bucket_id, account_id, name, goal, note, deleted, created_at, modified_at, hold_mode, min_amount
 `
 
 type CreateSavingsHolderParams struct {
@@ -58,8 +100,62 @@ func (q *Queries) CreateSavingsHolder(ctx context.Context, arg CreateSavingsHold
 		&i.Deleted,
 		&i.CreatedAt,
 		&i.ModifiedAt,
+		&i.HoldMode,
+		&i.MinAmount,
 	)
 	return i, err
+}
+
+const createSavingsRule = `-- name: CreateSavingsRule :one
+INSERT INTO savings_rules (id, target_id, user_id, range_from, range_to, priority, past_goal)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (id) DO NOTHING
+RETURNING id, target_id, user_id, range_from, range_to, priority, past_goal, created_at, modified_at
+`
+
+type CreateSavingsRuleParams struct {
+	ID        string
+	TargetID  string
+	UserID    string
+	RangeFrom decimal.Decimal
+	RangeTo   decimal.NullDecimal
+	Priority  int16
+	PastGoal  bool
+}
+
+// Use with ids.Insert: a taken ID returns no row.
+func (q *Queries) CreateSavingsRule(ctx context.Context, arg CreateSavingsRuleParams) (SavingsRule, error) {
+	row := q.db.QueryRow(ctx, createSavingsRule,
+		arg.ID,
+		arg.TargetID,
+		arg.UserID,
+		arg.RangeFrom,
+		arg.RangeTo,
+		arg.Priority,
+		arg.PastGoal,
+	)
+	var i SavingsRule
+	err := row.Scan(
+		&i.ID,
+		&i.TargetID,
+		&i.UserID,
+		&i.RangeFrom,
+		&i.RangeTo,
+		&i.Priority,
+		&i.PastGoal,
+		&i.CreatedAt,
+		&i.ModifiedAt,
+	)
+	return i, err
+}
+
+const deleteRulesOfTarget = `-- name: DeleteRulesOfTarget :exec
+DELETE FROM savings_rules WHERE target_id = $1
+`
+
+func (q *Queries) DeleteRulesOfTarget(ctx context.Context, targetID string) error {
+	_, err := q.db.Exec(ctx, deleteRulesOfTarget, targetID)
+	return err
 }
 
 const deleteSavingsHolder = `-- name: DeleteSavingsHolder :exec
@@ -76,8 +172,78 @@ func (q *Queries) DeleteSavingsHolder(ctx context.Context, arg DeleteSavingsHold
 	return err
 }
 
+const deleteSavingsRule = `-- name: DeleteSavingsRule :execrows
+DELETE FROM savings_rules WHERE id = $1 AND user_id = $2
+`
+
+type DeleteSavingsRuleParams struct {
+	ID     string
+	UserID string
+}
+
+func (q *Queries) DeleteSavingsRule(ctx context.Context, arg DeleteSavingsRuleParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteSavingsRule, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const getDistributor = `-- name: GetDistributor :one
+
+SELECT id, user_id, kind, bucket_id, account_id, name, goal, note, deleted, created_at, modified_at, hold_mode, min_amount FROM savings_holders WHERE user_id = $1 AND kind = 'distributor'
+`
+
+// The savings distributor (#232).
+func (q *Queries) GetDistributor(ctx context.Context, userID string) (SavingsHolder, error) {
+	row := q.db.QueryRow(ctx, getDistributor, userID)
+	var i SavingsHolder
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Kind,
+		&i.BucketID,
+		&i.AccountID,
+		&i.Name,
+		&i.Goal,
+		&i.Note,
+		&i.Deleted,
+		&i.CreatedAt,
+		&i.ModifiedAt,
+		&i.HoldMode,
+		&i.MinAmount,
+	)
+	return i, err
+}
+
+const getDistributorForUpdate = `-- name: GetDistributorForUpdate :one
+SELECT id, user_id, kind, bucket_id, account_id, name, goal, note, deleted, created_at, modified_at, hold_mode, min_amount FROM savings_holders WHERE user_id = $1 AND kind = 'distributor' FOR UPDATE
+`
+
+// Locks the distributor until the transaction ends.
+func (q *Queries) GetDistributorForUpdate(ctx context.Context, userID string) (SavingsHolder, error) {
+	row := q.db.QueryRow(ctx, getDistributorForUpdate, userID)
+	var i SavingsHolder
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Kind,
+		&i.BucketID,
+		&i.AccountID,
+		&i.Name,
+		&i.Goal,
+		&i.Note,
+		&i.Deleted,
+		&i.CreatedAt,
+		&i.ModifiedAt,
+		&i.HoldMode,
+		&i.MinAmount,
+	)
+	return i, err
+}
+
 const getSavingsHolderForUpdate = `-- name: GetSavingsHolderForUpdate :one
-SELECT id, user_id, kind, bucket_id, account_id, name, goal, note, deleted, created_at, modified_at FROM savings_holders WHERE id = $1 AND user_id = $2 AND NOT deleted FOR UPDATE
+SELECT id, user_id, kind, bucket_id, account_id, name, goal, note, deleted, created_at, modified_at, hold_mode, min_amount FROM savings_holders WHERE id = $1 AND user_id = $2 AND NOT deleted FOR UPDATE
 `
 
 type GetSavingsHolderForUpdateParams struct {
@@ -101,12 +267,40 @@ func (q *Queries) GetSavingsHolderForUpdate(ctx context.Context, arg GetSavingsH
 		&i.Deleted,
 		&i.CreatedAt,
 		&i.ModifiedAt,
+		&i.HoldMode,
+		&i.MinAmount,
+	)
+	return i, err
+}
+
+const getSavingsRule = `-- name: GetSavingsRule :one
+SELECT id, target_id, user_id, range_from, range_to, priority, past_goal, created_at, modified_at FROM savings_rules WHERE id = $1 AND user_id = $2
+`
+
+type GetSavingsRuleParams struct {
+	ID     string
+	UserID string
+}
+
+func (q *Queries) GetSavingsRule(ctx context.Context, arg GetSavingsRuleParams) (SavingsRule, error) {
+	row := q.db.QueryRow(ctx, getSavingsRule, arg.ID, arg.UserID)
+	var i SavingsRule
+	err := row.Scan(
+		&i.ID,
+		&i.TargetID,
+		&i.UserID,
+		&i.RangeFrom,
+		&i.RangeTo,
+		&i.Priority,
+		&i.PastGoal,
+		&i.CreatedAt,
+		&i.ModifiedAt,
 	)
 	return i, err
 }
 
 const getTargetOfAccount = `-- name: GetTargetOfAccount :one
-SELECT id, user_id, kind, bucket_id, account_id, name, goal, note, deleted, created_at, modified_at FROM savings_holders WHERE account_id = $1 AND NOT deleted
+SELECT id, user_id, kind, bucket_id, account_id, name, goal, note, deleted, created_at, modified_at, hold_mode, min_amount FROM savings_holders WHERE account_id = $1 AND NOT deleted
 `
 
 func (q *Queries) GetTargetOfAccount(ctx context.Context, accountID pgtype.Text) (SavingsHolder, error) {
@@ -124,12 +318,14 @@ func (q *Queries) GetTargetOfAccount(ctx context.Context, accountID pgtype.Text)
 		&i.Deleted,
 		&i.CreatedAt,
 		&i.ModifiedAt,
+		&i.HoldMode,
+		&i.MinAmount,
 	)
 	return i, err
 }
 
 const getTargetOfBucket = `-- name: GetTargetOfBucket :one
-SELECT id, user_id, kind, bucket_id, account_id, name, goal, note, deleted, created_at, modified_at FROM savings_holders WHERE bucket_id = $1 AND NOT deleted
+SELECT id, user_id, kind, bucket_id, account_id, name, goal, note, deleted, created_at, modified_at, hold_mode, min_amount FROM savings_holders WHERE bucket_id = $1 AND NOT deleted
 `
 
 func (q *Queries) GetTargetOfBucket(ctx context.Context, bucketID pgtype.Text) (SavingsHolder, error) {
@@ -147,12 +343,52 @@ func (q *Queries) GetTargetOfBucket(ctx context.Context, bucketID pgtype.Text) (
 		&i.Deleted,
 		&i.CreatedAt,
 		&i.ModifiedAt,
+		&i.HoldMode,
+		&i.MinAmount,
 	)
 	return i, err
 }
 
+const listSavingsRules = `-- name: ListSavingsRules :many
+SELECT r.id, r.target_id, r.user_id, r.range_from, r.range_to, r.priority, r.past_goal, r.created_at, r.modified_at FROM savings_rules r
+JOIN savings_holders h ON h.id = r.target_id
+WHERE r.user_id = $1 AND NOT h.deleted
+ORDER BY h.created_at, h.id, r.range_from, r.id
+`
+
+// The user's rules on live targets, by target, then range.
+func (q *Queries) ListSavingsRules(ctx context.Context, userID string) ([]SavingsRule, error) {
+	rows, err := q.db.Query(ctx, listSavingsRules, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SavingsRule{}
+	for rows.Next() {
+		var i SavingsRule
+		if err := rows.Scan(
+			&i.ID,
+			&i.TargetID,
+			&i.UserID,
+			&i.RangeFrom,
+			&i.RangeTo,
+			&i.Priority,
+			&i.PastGoal,
+			&i.CreatedAt,
+			&i.ModifiedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSavingsTargets = `-- name: ListSavingsTargets :many
-SELECT h.id, h.user_id, h.kind, h.bucket_id, h.account_id, h.name, h.goal, h.note, h.deleted, h.created_at, h.modified_at,
+SELECT h.id, h.user_id, h.kind, h.bucket_id, h.account_id, h.name, h.goal, h.note, h.deleted, h.created_at, h.modified_at, h.hold_mode, h.min_amount,
     COALESCE(b.name, a.name)::text AS source_name,
     COALESCE(ba.currency, a.currency)::text AS currency,
     COALESCE(b.source_account_id, '')::text AS bucket_account_id
@@ -176,6 +412,8 @@ type ListSavingsTargetsRow struct {
 	Deleted         bool
 	CreatedAt       time.Time
 	ModifiedAt      time.Time
+	HoldMode        NullSavingsHoldMode
+	MinAmount       decimal.NullDecimal
 	SourceName      string
 	Currency        string
 	BucketAccountID string
@@ -204,6 +442,8 @@ func (q *Queries) ListSavingsTargets(ctx context.Context, userID string) ([]List
 			&i.Deleted,
 			&i.CreatedAt,
 			&i.ModifiedAt,
+			&i.HoldMode,
+			&i.MinAmount,
 			&i.SourceName,
 			&i.Currency,
 			&i.BucketAccountID,
@@ -383,10 +623,82 @@ func (q *Queries) SavingsNewestLines(ctx context.Context, userID string) ([]Savi
 	return items, nil
 }
 
+const updateDistributor = `-- name: UpdateDistributor :one
+UPDATE savings_holders SET hold_mode = $2, min_amount = $3, modified_at = now()
+WHERE user_id = $1 AND kind = 'distributor'
+RETURNING id, user_id, kind, bucket_id, account_id, name, goal, note, deleted, created_at, modified_at, hold_mode, min_amount
+`
+
+type UpdateDistributorParams struct {
+	UserID    string
+	HoldMode  NullSavingsHoldMode
+	MinAmount decimal.NullDecimal
+}
+
+func (q *Queries) UpdateDistributor(ctx context.Context, arg UpdateDistributorParams) (SavingsHolder, error) {
+	row := q.db.QueryRow(ctx, updateDistributor, arg.UserID, arg.HoldMode, arg.MinAmount)
+	var i SavingsHolder
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Kind,
+		&i.BucketID,
+		&i.AccountID,
+		&i.Name,
+		&i.Goal,
+		&i.Note,
+		&i.Deleted,
+		&i.CreatedAt,
+		&i.ModifiedAt,
+		&i.HoldMode,
+		&i.MinAmount,
+	)
+	return i, err
+}
+
+const updateSavingsRule = `-- name: UpdateSavingsRule :one
+UPDATE savings_rules SET range_from = $3, range_to = $4, priority = $5, past_goal = $6, modified_at = now()
+WHERE id = $1 AND user_id = $2
+RETURNING id, target_id, user_id, range_from, range_to, priority, past_goal, created_at, modified_at
+`
+
+type UpdateSavingsRuleParams struct {
+	ID        string
+	UserID    string
+	RangeFrom decimal.Decimal
+	RangeTo   decimal.NullDecimal
+	Priority  int16
+	PastGoal  bool
+}
+
+func (q *Queries) UpdateSavingsRule(ctx context.Context, arg UpdateSavingsRuleParams) (SavingsRule, error) {
+	row := q.db.QueryRow(ctx, updateSavingsRule,
+		arg.ID,
+		arg.UserID,
+		arg.RangeFrom,
+		arg.RangeTo,
+		arg.Priority,
+		arg.PastGoal,
+	)
+	var i SavingsRule
+	err := row.Scan(
+		&i.ID,
+		&i.TargetID,
+		&i.UserID,
+		&i.RangeFrom,
+		&i.RangeTo,
+		&i.Priority,
+		&i.PastGoal,
+		&i.CreatedAt,
+		&i.ModifiedAt,
+	)
+	return i, err
+}
+
 const updateSavingsTarget = `-- name: UpdateSavingsTarget :one
 UPDATE savings_holders SET name = $3, goal = $4, note = $5, modified_at = now()
 WHERE id = $1 AND user_id = $2 AND NOT deleted
-RETURNING id, user_id, kind, bucket_id, account_id, name, goal, note, deleted, created_at, modified_at
+RETURNING id, user_id, kind, bucket_id, account_id, name, goal, note, deleted, created_at, modified_at, hold_mode, min_amount
 `
 
 type UpdateSavingsTargetParams struct {
@@ -418,6 +730,8 @@ func (q *Queries) UpdateSavingsTarget(ctx context.Context, arg UpdateSavingsTarg
 		&i.Deleted,
 		&i.CreatedAt,
 		&i.ModifiedAt,
+		&i.HoldMode,
+		&i.MinAmount,
 	)
 	return i, err
 }

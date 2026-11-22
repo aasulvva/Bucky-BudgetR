@@ -165,6 +165,9 @@ func (s *server) savingsService() (*savings.Service, error) {
 
 // savingsError maps errors from the savings service to problems.
 func savingsError(err error) error {
+	if e := distributorError(err); e != nil {
+		return e
+	}
 	var unallocated *savings.NotEnoughUnallocatedError
 	var held *savings.NotEnoughHeldError
 	switch {
@@ -188,7 +191,7 @@ func savingsError(err error) error {
 			Detail: "The account has only " + unallocated.Available.StringFixed(money.Places) + " unallocated."}
 	case errors.As(err, &held):
 		return &Error{Status: http.StatusConflict, Code: "not_enough_held",
-			Detail: "Only " + held.Held.StringFixed(money.Places) + " is held for the target on the account."}
+			Detail: "Only " + held.Held.StringFixed(money.Places) + " is held on the account."}
 	case errors.Is(err, savings.ErrInvalid):
 		return &Error{Status: http.StatusBadRequest, Code: "invalid_request", Detail: invalidDetail(err, savings.ErrInvalid), Err: err}
 	}

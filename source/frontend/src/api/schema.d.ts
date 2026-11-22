@@ -1225,7 +1225,7 @@ export interface paths {
          *     time. The transaction stays in the list, marked `reversed`. The same
          *     rules as for corrections apply: bucket lines must be in the active
          *     cycle (409 `bucket_lines_locked`), only INC, EXP, TRF, OPB and BLA,
-         *     and the savings types SVR, SVC and SVB (409 `not_correctable`), and
+         *     and the savings types SVR, SVC, SVB and SVD (409 `not_correctable`), and
          *     only once (409 `already_reversed`).
          *
          *     Savings lines (#231) are cancelled too: reversing a *Done* transfer
@@ -1233,6 +1233,8 @@ export interface paths {
          *     SVR) is refused once it's no longer held (409 `not_enough_held`), and
          *     reversing a release (an SVC) unless the account has enough
          *     unallocated money to hold it again (409 `not_enough_unallocated`).
+         *     Reversing a distribution (an SVD, #232) puts the money back in the
+         *     distributor, refused once a target's share has been moved on.
          *
          *     Reversing an income undoes the refills it triggered in the active
          *     cycle (their REF and OVF are reversed), so those buckets can be
@@ -1705,6 +1707,173 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/savings/distributor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The savings distributor
+         * @description The user's savings distributor (#232, spec §8): its hold mode and what
+         *     it holds per source account. Before it's first used or set up, `id`
+         *     is null and the hold mode is `immediate`.
+         */
+        get: operations["getSavingsDistributor"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set the distributor's hold mode
+         * @description `minimum` needs `min_amount`; the other modes drop it. Changing the
+         *     mode doesn't move money: `…/distribute` splits what's waiting.
+         */
+        patch: operations["updateSavingsDistributor"];
+        trace?: never;
+    };
+    "/api/v1/savings/distributor/add": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add to the distributor
+         * @description Reserves `amount` of the account's unallocated money for the
+         *     distributor (an SVR). More than is unallocated is 409
+         *     `not_enough_unallocated`, whose detail says how much is. By the hold
+         *     mode it's then split at once (`immediate`), once the account's
+         *     holdings reach `min_amount` (`minimum`), or not (`manual`).
+         */
+        post: operations["addToSavingsDistributor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/savings/distributor/distribute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Distribute now
+         * @description Splits what the distributor holds on the account, or on every account
+         *     without `account_id`, among the targets in its currency by their rules
+         *     (spec §8), whatever the hold mode: one savings distribution (SVD) per
+         *     account. A bucket target funded from the account gets its share
+         *     straight into the bucket (a bucket line) while a cycle is active;
+         *     every other share is held for its target. What no target takes stays
+         *     in the distributor.
+         */
+        post: operations["distributeSavings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/savings/distributor/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clear the distributor's holdings
+         * @description Gives `amount` of what the distributor holds on the account back to unallocated (SVC). At most what it holds (409 `not_enough_held`).
+         */
+        post: operations["clearSavingsDistributor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/savings/distributor/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview a split
+         * @description What splitting `amount` from the account would give each target now, and what would stay in the distributor. Records nothing.
+         */
+        get: operations["previewSavingsDistribution"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/savings/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The distributor's rules
+         * @description The rules of the user's live targets, by target, then range.
+         */
+        get: operations["listSavingsRules"];
+        put?: never;
+        /**
+         * Add a rule to a target
+         * @description A range of the target's position (its balance or TF plus what's held
+         *     for it), from `from` up to, not including, `to` (none: no end), with
+         *     a priority. A range that overlaps another of the target's is 409
+         *     `rule_overlap`; a target has at most 20 rules (409 `too_many_rules`).
+         */
+        post: operations["createSavingsRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/savings/rules/{ruleId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ruleId: components["parameters"]["SavingsRuleId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a rule */
+        delete: operations["deleteSavingsRule"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a rule
+         * @description Sets the rule's range, priority and `past_goal`; its target stays. An overlap is 409 `rule_overlap`.
+         */
+        patch: operations["updateSavingsRule"];
         trace?: never;
     };
     "/api/v1/notifications": {
@@ -3167,13 +3336,90 @@ export interface components {
             description?: string;
         };
         /**
-         * @description See spec §5.4. Only INC, EXP and TRF can be created with
-         *     `POST /transactions`. SVR (savings reserve), SVC (savings cancel) and
-         *     SVB (savings to bucket) come from the savings endpoints (#231); they
-         *     can be reversed, not corrected.
+         * @description When the distributor splits what it gets (#232) — as it comes in, once an account's holdings reach `min_amount`, or only when asked.
          * @enum {string}
          */
-        TransactionType: "OPB" | "BLA" | "INC" | "EXP" | "TRF" | "INP" | "OPF" | "REF" | "BUA" | "BAT" | "OVF" | "SVR" | "SVC" | "SVB";
+        SavingsHoldMode: "immediate" | "minimum" | "manual";
+        /** @description The user's savings distributor (#232, spec §8). */
+        SavingsDistributor: {
+            /** @description Null until it's first used or set up. */
+            id: (string & components["schemas"]["SavingsHolderId"]) | null;
+            hold_mode: components["schemas"]["SavingsHoldMode"];
+            /** @description Set with the `minimum` hold mode, checked per source account. */
+            min_amount: (string & components["schemas"]["Amount"]) | null;
+            /** @description What it holds, per source account. */
+            held: components["schemas"]["SavingsHeld"][];
+        };
+        SavingsDistributorUpdate: {
+            hold_mode: components["schemas"]["SavingsHoldMode"];
+            /** @description Above 0; needed with `minimum`. */
+            min_amount?: components["schemas"]["Amount"];
+        };
+        SavingsDistribute: {
+            /** @description Split only what's held on this account. */
+            account_id?: components["schemas"]["AccountId"];
+        };
+        SavingsDistribution: {
+            distributor: components["schemas"]["SavingsDistributor"];
+            /** @description The savings distributions (SVD) recorded, one per account split. */
+            distributed: components["schemas"]["TransactionId"][];
+        };
+        SavingsShare: {
+            target_id: components["schemas"]["SavingsHolderId"];
+            amount: components["schemas"]["Amount"];
+            /** @description It goes straight into the target's bucket (funded from the account, with a cycle active), instead of being held for it. */
+            into_bucket: boolean;
+        };
+        SavingsPreview: {
+            /** @description The targets that would get something, in the order of the target list. */
+            shares: components["schemas"]["SavingsShare"][];
+            /** @description What would stay in the distributor. */
+            left: components["schemas"]["Amount"];
+        };
+        /**
+         * @description 12-digit distributor rule ID, its target's ID and 2 random digits.
+         * @example 482913552107
+         */
+        SavingsRuleId: string;
+        SavingsRuleInput: {
+            /** @description Where the range starts, 0 or more. */
+            from: components["schemas"]["Amount"];
+            /** @description Where it ends (not included), above `from`; null or none for no end. */
+            to?: (string & components["schemas"]["Amount"]) | null;
+            /** @description The target's weight in the split; 0 gives it nothing in this range. */
+            priority: number;
+            /**
+             * @description The rule may take the target past its goal (a bucket's fixed capacity still holds).
+             * @default false
+             */
+            past_goal: boolean;
+        };
+        /** @description A rule for a target; the fields as in `SavingsRuleInput`. */
+        NewSavingsRule: {
+            target_id: components["schemas"]["SavingsHolderId"];
+            from: components["schemas"]["Amount"];
+            to?: (string & components["schemas"]["Amount"]) | null;
+            priority: number;
+            /** @default false */
+            past_goal: boolean;
+        };
+        SavingsRule: {
+            id: components["schemas"]["SavingsRuleId"];
+            target_id: components["schemas"]["SavingsHolderId"];
+            from: components["schemas"]["Amount"];
+            to: (string & components["schemas"]["Amount"]) | null;
+            priority: number;
+            past_goal: boolean;
+        };
+        /**
+         * @description See spec §5.4. Only INC, EXP and TRF can be created with
+         *     `POST /transactions`. SVR (savings reserve), SVC (savings cancel) and
+         *     SVB (savings to bucket) come from the savings endpoints (#231), and
+         *     SVD (savings distribution) from the distributor (#232); they can be
+         *     reversed, not corrected.
+         * @enum {string}
+         */
+        TransactionType: "OPB" | "BLA" | "INC" | "EXP" | "TRF" | "INP" | "OPF" | "REF" | "BUA" | "BAT" | "OVF" | "SVR" | "SVC" | "SVB" | "SVD";
         /** @enum {string} */
         CorrectionType: "none" | "adjustment" | "reversal";
         TransactionBankLine: {
@@ -3657,6 +3903,7 @@ export interface components {
         CycleId: components["schemas"]["CycleId"];
         BucketId: components["schemas"]["BucketId"];
         SavingsTargetId: components["schemas"]["SavingsHolderId"];
+        SavingsRuleId: components["schemas"]["SavingsRuleId"];
         TransactionId: components["schemas"]["TransactionId"];
         ScheduleId: components["schemas"]["ScheduleId"];
         ScheduledTransactionId: components["schemas"]["ScheduledTransactionId"];
@@ -5854,6 +6101,271 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SavingsTarget"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getSavingsDistributor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The distributor. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsDistributor"];
+                };
+            };
+            401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    updateSavingsDistributor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavingsDistributorUpdate"];
+            };
+        };
+        responses: {
+            /** @description The distributor. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsDistributor"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    addToSavingsDistributor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavingsAmount"];
+            };
+        };
+        responses: {
+            /** @description The distributor, and the split it recorded, if any. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsDistribution"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    distributeSavings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SavingsDistribute"];
+            };
+        };
+        responses: {
+            /** @description The distributor, and the splits it recorded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsDistribution"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    clearSavingsDistributor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavingsAmount"];
+            };
+        };
+        responses: {
+            /** @description The distributor. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsDistributor"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    previewSavingsDistribution: {
+        parameters: {
+            query: {
+                account_id: components["schemas"]["AccountId"];
+                amount: components["schemas"]["Amount"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The split. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsPreview"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listSavingsRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rules. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsRule"][];
+                };
+            };
+            401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createSavingsRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewSavingsRule"];
+            };
+        };
+        responses: {
+            /** @description The rule. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsRule"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteSavingsRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ruleId: components["parameters"]["SavingsRuleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    updateSavingsRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ruleId: components["parameters"]["SavingsRuleId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavingsRuleInput"];
+            };
+        };
+        responses: {
+            /** @description The rule. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsRule"];
                 };
             };
             400: components["responses"]["Error"];

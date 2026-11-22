@@ -12,7 +12,8 @@ import { insideCycle } from "./transactionForm";
 export const USER_TYPES: TransactionType[] = ["INC", "EXP", "TRF", "OPB", "BLA"];
 /**
  * What the routines, Bucket setup and Savings record: refills, overflow,
- * adjustments, and savings reserved, released or moved into a bucket (#231).
+ * adjustments, and savings reserved, released, moved into a bucket (#231) or
+ * distributed (#232).
  */
 export const SYSTEM_TYPES: TransactionType[] = [
   "REF",
@@ -23,6 +24,7 @@ export const SYSTEM_TYPES: TransactionType[] = [
   "SVR",
   "SVC",
   "SVB",
+  "SVD",
 ];
 /** The types that can be corrected and reversed. */
 export type CorrectableType = "INC" | "EXP" | "TRF" | "OPB" | "BLA";
@@ -32,8 +34,8 @@ export function isCorrectableType(type: TransactionType): type is CorrectableTyp
   return CORRECTABLE.some((x) => x === type);
 }
 
-/** The savings types (#231): they can be reversed, not corrected. */
-export const SAVINGS_TYPES: TransactionType[] = ["SVR", "SVC", "SVB"];
+/** The savings types (#231, #232): they can be reversed, not corrected. */
+export const SAVINGS_TYPES: TransactionType[] = ["SVR", "SVC", "SVB", "SVD"];
 
 const ALL_TYPES = [...USER_TYPES, ...SYSTEM_TYPES];
 

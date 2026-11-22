@@ -537,7 +537,8 @@ func (s *Service) ReleaseAccount(ctx context.Context, tx pgx.Tx, userID, account
 	return nil
 }
 
-// retire releases everything held for the holder and deletes it.
+// retire releases everything held for the holder and deletes it, with its
+// rules.
 func (s *Service) retire(ctx context.Context, tx pgx.Tx, userID, holderID string) error {
 	q := sqlc.New(tx)
 	rows, err := q.SavingsHeld(ctx, userID)
@@ -551,6 +552,10 @@ func (s *Service) retire(ctx context.Context, tx pgx.Tx, userID, holderID string
 		if err := s.release(ctx, tx, userID, holderID, r.AccountID, r.Held); err != nil {
 			return err
 		}
+	}
+	// Its distributor rules go with it (#232).
+	if err := q.DeleteRulesOfTarget(ctx, holderID); err != nil {
+		return err
 	}
 	return q.DeleteSavingsHolder(ctx, sqlc.DeleteSavingsHolderParams{ID: holderID, UserID: userID})
 }

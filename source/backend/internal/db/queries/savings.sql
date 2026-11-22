@@ -84,3 +84,53 @@ FROM savings_transactions s
 JOIN savings_holders h ON h.id = s.holder_id
 WHERE h.user_id = $1 AND NOT h.deleted
 ORDER BY s.holder_id, s.created_at DESC, s.id DESC;
+
+-- The savings distributor (#232).
+
+-- name: GetDistributor :one
+SELECT * FROM savings_holders WHERE user_id = $1 AND kind = 'distributor';
+
+-- name: GetDistributorForUpdate :one
+-- Locks the distributor until the transaction ends.
+SELECT * FROM savings_holders WHERE user_id = $1 AND kind = 'distributor' FOR UPDATE;
+
+-- name: CreateDistributor :one
+-- Use with ids.Insert: a taken ID (or a distributor the user has already)
+-- returns no row.
+INSERT INTO savings_holders (id, user_id, kind, hold_mode, min_amount)
+VALUES ($1, $2, 'distributor', $3, $4)
+ON CONFLICT DO NOTHING
+RETURNING *;
+
+-- name: UpdateDistributor :one
+UPDATE savings_holders SET hold_mode = $2, min_amount = $3, modified_at = now()
+WHERE user_id = $1 AND kind = 'distributor'
+RETURNING *;
+
+-- name: ListSavingsRules :many
+-- The user's rules on live targets, by target, then range.
+SELECT r.* FROM savings_rules r
+JOIN savings_holders h ON h.id = r.target_id
+WHERE r.user_id = $1 AND NOT h.deleted
+ORDER BY h.created_at, h.id, r.range_from, r.id;
+
+-- name: GetSavingsRule :one
+SELECT * FROM savings_rules WHERE id = $1 AND user_id = $2;
+
+-- name: CreateSavingsRule :one
+-- Use with ids.Insert: a taken ID returns no row.
+INSERT INTO savings_rules (id, target_id, user_id, range_from, range_to, priority, past_goal)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (id) DO NOTHING
+RETURNING *;
+
+-- name: UpdateSavingsRule :one
+UPDATE savings_rules SET range_from = $3, range_to = $4, priority = $5, past_goal = $6, modified_at = now()
+WHERE id = $1 AND user_id = $2
+RETURNING *;
+
+-- name: DeleteSavingsRule :execrows
+DELETE FROM savings_rules WHERE id = $1 AND user_id = $2;
+
+-- name: DeleteRulesOfTarget :exec
+DELETE FROM savings_rules WHERE target_id = $1;
