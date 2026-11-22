@@ -4416,6 +4416,13 @@ components:
           type: string
           enum: [none, month, cycle]
           description: Also a table or grid per month or cycle, for periods of at least 60 days. `none` by default.
+        average:
+          type: string
+          enum: [none, month, cycle]
+          description: |
+            Also a table or grid of the average per month or cycle (#220):
+            In and Out (with their parts) and the change, over the whole
+            months or cycles in the period. `none` by default.
 
     ReportPdfRequest:
       type: object
@@ -4475,6 +4482,11 @@ components:
         per_cycle:
           type: boolean
           description: A table per cycle after the summary (the default), or only the summary (false).
+        average:
+          type: boolean
+          description: |
+            Also a table of the average per cycle after the summary (#220):
+            budget, used and unspent over the whole cycles shown.
 
     ReportTransactions:
       type: object

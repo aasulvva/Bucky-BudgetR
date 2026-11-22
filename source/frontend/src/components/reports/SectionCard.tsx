@@ -241,6 +241,7 @@ export function SectionParts({
           onRemove={noop}
           actions={false}
           headingLevel={4}
+          inSection
         />
       ))}
     </Stack>

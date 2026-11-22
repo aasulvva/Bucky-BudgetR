@@ -154,6 +154,14 @@ export function multiplyAmount(amount: string, factor: string): string {
   return fromCents((product + half) / 100n);
 }
 
+/** amount ÷ n (a whole number above 0), rounded to cents half away from zero (#220). */
+export function divideAmount(amount: string, n: number): string {
+  const c = toCents(canonicalAmount(amount));
+  const d = BigInt(Math.max(1, Math.trunc(n)));
+  const sign = c < 0n ? -1n : 1n;
+  return fromCents((2n * c + sign * d) / (2n * d));
+}
+
 /** What percentage part is of whole, rounded down; 0 when whole isn't positive. */
 export function percentOf(part: string, whole: string): number {
   const w = toCents(canonicalAmount(whole));

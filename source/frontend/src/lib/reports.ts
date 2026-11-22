@@ -30,7 +30,7 @@ import {
   specificLabel,
   type GraphSettings,
 } from "./graphs";
-import { addAmounts, compareAmounts, percentOf, subtractAmounts } from "./money";
+import { addAmounts, compareAmounts, divideAmount, percentOf, subtractAmounts } from "./money";
 import {
   defaultResolution,
   formatPeriod,
@@ -529,6 +529,121 @@ export function flowTables(
   };
 }
 
+/**
+ * An average table's columns (#220): only what flows, in and out (and
+ * their parts) and the change, no start, end or other, which are levels.
+ */
+export const BUCKET_AVERAGE = ["in", "out", "change"] as const;
+export const BUCKET_AVERAGE_DETAILS = [
+  "refills",
+  "income",
+  "opening_funds",
+  "adjustments_in",
+  "transfers_in",
+  "in",
+  "spent",
+  "overflow",
+  "adjustments_out",
+  "transfers_out",
+  "out",
+  "change",
+] as const;
+export type BucketAverageFigure = (typeof BUCKET_AVERAGE_DETAILS)[number];
+export type AccountAverageFigure = (typeof ACCOUNT_DETAILS)[number];
+
+export interface FlowAverages {
+  buckets: { rows: FlowRow<BucketAverageFigure>[]; totals: FlowRow<BucketAverageFigure>[] };
+  accounts: { rows: FlowRow<AccountAverageFigure>[]; totals: FlowRow<AccountAverageFigure>[] };
+  /** How many of the parts it averages, of how many. */
+  whole: number;
+  of: number;
+}
+
+/**
+ * The average per month or cycle (#220): each bucket's and account's flows
+ * summed over the whole parts (those the period doesn't cut and that are
+ * over; all of them when none is), ÷ their number. A part where a bucket
+ * had nothing counts as 0. `result` has one interval per part, at the
+ * parts' unit. Null without parts.
+ */
+export function flowAverages(
+  result: StatsFlows,
+  parts: readonly SubPeriod[],
+  accounts: Account[],
+  buckets: Bucket[],
+  { transfers }: { transfers: boolean },
+  locale?: string,
+): FlowAverages | null {
+  const indexed = parts.flatMap((p) => {
+    const i = result.intervals.findIndex(
+      (iv) => Date.parse(iv.start) === Date.parse(p.period.fromAt),
+    );
+    return i < 0 ? [] : [{ part: p, index: i }];
+  });
+  if (indexed.length === 0) return null;
+  const whole = indexed.filter((x) => !x.part.partial);
+  const used = whole.length > 0 ? whole : indexed;
+  const n = used.length;
+
+  const sum = <F extends string>(
+    lists: FlowRow<F>[][],
+    keys: readonly F[],
+  ): Map<string, FlowRow<F>> => {
+    const out = new Map<string, FlowRow<F>>();
+    for (const rows of lists) {
+      for (const r of rows) {
+        const key = `${r.id}|${r.currency}`;
+        const s = out.get(key);
+        if (!s) {
+          out.set(key, { id: r.id, name: r.name, currency: r.currency, values: { ...r.values } });
+          continue;
+        }
+        for (const k of keys) s.values[k] = addAmounts(s.values[k], r.values[k]);
+      }
+    }
+    return out;
+  };
+  const tables = used.map((x) =>
+    flowTables(result, x.index, accounts, buckets, { transfers, balances: false }, locale),
+  );
+  const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, locale);
+  const bucketKeys = BUCKET_AVERAGE_DETAILS.filter((k) => k !== "change");
+  const bucketRows = [
+    ...sum(
+      tables.map((t) => t.buckets.rows),
+      bucketKeys,
+    ).values(),
+  ]
+    .map((r): FlowRow<BucketAverageFigure> => {
+      const values = Object.fromEntries(
+        bucketKeys.map((k) => [k, divideAmount(r.values[k], n)]),
+      ) as Record<BucketAverageFigure, string>;
+      values.change = subtractAmounts(values.in, values.out);
+      return { id: r.id, name: r.name, currency: r.currency, values };
+    })
+    .sort(byName);
+  const accountRows = [
+    ...sum(
+      tables.map((t) => t.accounts.rows),
+      ACCOUNT_DETAILS,
+    ).values(),
+  ]
+    .map((r): FlowRow<AccountAverageFigure> => {
+      const values = Object.fromEntries(
+        ACCOUNT_DETAILS.map((k) => [k, divideAmount(r.values[k], n)]),
+      ) as Record<AccountAverageFigure, string>;
+      values.net = subtractAmounts(values.in, values.out);
+      return { id: r.id, name: r.name, currency: r.currency, values };
+    })
+    .sort(byName);
+  return {
+    buckets: { rows: bucketRows, totals: totals(bucketRows, BUCKET_AVERAGE_DETAILS) },
+    accounts: { rows: accountRows, totals: totals(accountRows, ACCOUNT_DETAILS) },
+    whole: n,
+    of: indexed.length,
+  };
+}
+
 /** A budget vs spending table's amount columns. */
 export const BUDGET_FIGURES = ["budget", "used", "unspent", "carried"] as const;
 export type BudgetFigure = (typeof BUDGET_FIGURES)[number];
@@ -587,6 +702,61 @@ export function budgetRows(
     })
     .sort((a, b) => a.name.localeCompare(b.name, locale));
   return { rows: rows.map(withPct), totals: totals(rows, BUDGET_FIGURES).map(withPct) };
+}
+
+/**
+ * The average per cycle of a budget vs spending module (#220): each
+ * bucket's budget, used and unspent over the cycles that are over (all of
+ * them when none is), ÷ their number, with Used % of the averages. A cycle
+ * where a bucket had nothing counts as 0. Carried over isn't averaged.
+ * Null without cycles.
+ */
+export function budgetAverage(
+  perCycle: readonly BucketFigures[][],
+  shown: readonly PeriodCycle[],
+  buckets: Bucket[],
+  filters: ReportBudget,
+  locale?: string,
+): { rows: BudgetRow[]; totals: BudgetRow[]; whole: number; of: number } | null {
+  const all = shown.map((c, i) => ({ cycle: c, figures: perCycle[i] ?? [] }));
+  if (all.length === 0) return null;
+  const over = all.filter((x) => !x.cycle.active);
+  const used = over.length > 0 ? over : all;
+  const n = used.length;
+  const keys = ["budget", "used", "unspent"] as const;
+  const out = new Map<string, FlowRow<BudgetFigure>>();
+  for (const { figures } of used) {
+    for (const r of budgetRows(figures, buckets, filters, locale).rows) {
+      const s = out.get(r.id);
+      if (!s) {
+        out.set(r.id, {
+          id: r.id,
+          name: r.name,
+          currency: r.currency,
+          values: { ...r.values, carried: "0.00" },
+        });
+        continue;
+      }
+      for (const k of keys) s.values[k] = addAmounts(s.values[k], r.values[k]);
+    }
+  }
+  const rows = [...out.values()]
+    .map((r) => ({
+      ...r,
+      values: {
+        budget: divideAmount(r.values.budget, n),
+        used: divideAmount(r.values.used, n),
+        unspent: divideAmount(r.values.unspent, n),
+        carried: "0.00",
+      },
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, locale));
+  return {
+    rows: rows.map(withPct),
+    totals: totals(rows, BUDGET_FIGURES).map(withPct),
+    whole: n,
+    of: all.length,
+  };
 }
 
 const SUMMED_PARTS = [
@@ -1340,6 +1510,7 @@ function cleanModule(r: ReportSettings, m: ReportModule): ReportModule {
       if (m.budget.account_ids?.length) budget.account_ids = [...m.budget.account_ids];
       if (m.budget.bucket_ids?.length) budget.bucket_ids = [...m.budget.bucket_ids];
       if (m.budget.per_cycle === false) budget.per_cycle = false;
+      if (m.budget.average) budget.average = true;
       return { id: m.id, type: m.type, ...title, budget };
     }
     const graph = withoutPeriod(cleanGraph({ ...m.graph, period: r.period }));
@@ -1361,6 +1532,7 @@ function cleanFlows(f: ReportFlows): ReportFlows {
   if (f.balances) out.balances = true;
   if (f.details) out.details = true;
   if (f.breakdown && f.breakdown !== "none") out.breakdown = f.breakdown;
+  if (f.average && f.average !== "none") out.average = f.average;
   return out;
 }
 

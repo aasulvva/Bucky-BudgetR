@@ -16,6 +16,32 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.24.00",
+    date: "2026-11-13",
+    title: {
+      en: "Reports: averages per month or cycle",
+      nb: "Rapporter: gjennomsnitt per måned eller syklus",
+      nn: "Rapportar: gjennomsnitt per månad eller syklus",
+    },
+    changes: {
+      en: [
+        "An in/out/balance module's new Average setting adds an Average per month or Average per cycle table (or grid) after the whole period's: each bucket's and account's In, Out and change, over the whole months or cycles in the period. A year can show its monthly average without twelve monthly tables.",
+        "A budget vs spending module's new Average per cycle adds a table after the summary: each bucket's average budget, used and unspent per cycle, with its share used.",
+        "Months or cycles the period cuts, or that are still going, don't count, and the module says how many it averages. Not in a section's parts. On the Dashboard, the averages show in a module widget's Full view.",
+      ],
+      nb: [
+        "Den nye innstillingen Gjennomsnitt på en inn/ut/saldo-modul legger til en tabell (eller et rutenett) med gjennomsnitt per måned eller per syklus etter tabellen for hele tidsrommet: hver bøttes og kontos inn, ut og endring, over de hele månedene eller syklusene i tidsrommet. Et år kan vise månedsgjennomsnittet uten tolv månedstabeller.",
+        "Den nye innstillingen Gjennomsnitt per syklus på en budsjett mot forbruk-modul legger til en tabell etter sammendraget: hver bøttes gjennomsnittlige budsjett, brukt og ubrukt per syklus, med hvor stor andel som er brukt.",
+        "Måneder eller sykluser som tidsrommet kutter, eller som pågår, teller ikke, og modulen sier hvor mange den tar gjennomsnittet av. Ikke i delene til en seksjon. På dashbordet vises gjennomsnittene i visningen Fullstendig for Modul.",
+      ],
+      nn: [
+        "Den nye innstillinga Gjennomsnitt på ein inn/ut/saldo-modul legg til ein tabell (eller eit rutenett) med gjennomsnitt per månad eller per syklus etter tabellen for heile tidsrommet: kvar bøtte og konto sin inn, ut og endring, over dei heile månadene eller syklusane i tidsrommet. Eit år kan vise månadsgjennomsnittet utan tolv månadstabellar.",
+        "Den nye innstillinga Gjennomsnitt per syklus på ein budsjett mot forbruk-modul legg til ein tabell etter samandraget: kvar bøtte sitt gjennomsnittlege budsjett, brukt og ubrukt per syklus, med kor stor del som er brukt.",
+        "Månader eller syklusar som tidsrommet kuttar, eller som går føre seg, tel ikkje, og modulen seier kor mange han tek gjennomsnittet av. Ikkje i delane til ein seksjon. På dashbordet vert gjennomsnitta viste i visninga Fullstendig for Modul.",
+      ],
+    },
+  },
+  {
     version: "v2.23.00",
     date: "2026-11-12",
     title: {

@@ -11,17 +11,26 @@ import { specificLabel } from "@/lib/graphs";
 import { compareAmounts, formatMoney } from "@/lib/money";
 import type { Period, PeriodChoice } from "@/lib/periods";
 import {
+  ACCOUNT_DETAILS,
+  ACCOUNT_FIGURES,
   accountColumns,
   accountFigureLabel,
   BREAKDOWN_MIN_DAYS,
+  BUCKET_AVERAGE,
+  BUCKET_AVERAGE_DETAILS,
   BUCKET_DETAILS,
   BUCKET_FIGURES,
+  flowAverages,
   flowsQuery,
   flowTables,
   MAX_SUB_PERIODS,
+  periodParts,
   subPeriods,
   transactionsLink,
+  type AccountAverageFigure,
+  type BucketAverageFigure,
   type FlowRow,
+  type FlowTables,
   type ReportFlows,
   type SubPeriod,
 } from "@/lib/reports";
@@ -43,6 +52,7 @@ export function FlowsModule({
   accounts,
   buckets,
   filtered,
+  average: showAverage = true,
 }: {
   /** With the report's accounts and buckets where the module has none of its own. */
   settings: ReportFlows;
@@ -53,6 +63,8 @@ export function FlowsModule({
   buckets: Bucket[];
   /** Whether the report has tags or a counterparty, which don't apply here. */
   filtered: boolean;
+  /** Whether it shows its average (#220): not in a section's part. */
+  average?: boolean;
 }) {
   const { t } = useTranslation();
   const breakdown = settings.breakdown ?? "none";
@@ -62,6 +74,15 @@ export function FlowsModule({
   const split = useStatsFlows(
     period && parts?.ok && breakdown !== "none" ? flowsQuery(settings, period, breakdown) : null,
   );
+  // The average per month or cycle (#220), with the breakdown's numbers when it has them.
+  const unit =
+    showAverage && settings.average && settings.average !== "none" ? settings.average : null;
+  const averageParts = unit && period ? periodParts(period, unit, cycles) : null;
+  const reuse = unit !== null && unit === breakdown && parts?.ok === true;
+  const own = useStatsFlows(
+    period && unit && averageParts?.ok && !reuse ? flowsQuery(settings, period, unit) : null,
+  );
+  const averaged = reuse ? split : own;
   if (!period) return null;
 
   return (
@@ -82,6 +103,33 @@ export function FlowsModule({
           />
         )}
       </Result>
+      {unit && (
+        <Stack gap={4} data-testid="flow-average">
+          <Text size="sm" fw={500}>
+            {t(`stats.reports.average.title.${unit}`)}
+          </Text>
+          {averageParts?.ok ? (
+            <Result query={averaged} retry={() => void averaged.refetch()}>
+              {(r) => (
+                <Averages
+                  result={r}
+                  parts={averageParts.parts}
+                  unit={unit}
+                  settings={settings}
+                  accounts={accounts}
+                  buckets={buckets}
+                />
+              )}
+            </Result>
+          ) : (
+            <Text size="sm" c="dimmed">
+              {averageParts?.reason === "many"
+                ? t("stats.reports.average.many", { max: MAX_SUB_PERIODS })
+                : t("stats.reports.average.noCycles")}
+            </Text>
+          )}
+        </Stack>
+      )}
       {parts &&
         (parts.ok ? (
           <Stack gap="sm">
@@ -163,6 +211,110 @@ function PartLabel({ part, cycles }: { part: SubPeriod; cycles: Cycle[] }) {
         </Badge>
       )}
     </Group>
+  );
+}
+
+/** The average per month or cycle (#220), as tables or a grid, with how many it counts. */
+function Averages({
+  result,
+  parts,
+  unit,
+  settings,
+  accounts,
+  buckets,
+}: {
+  result: StatsFlows;
+  parts: SubPeriod[];
+  unit: "month" | "cycle";
+  settings: ReportFlows;
+  accounts: Account[];
+  buckets: Bucket[];
+}) {
+  const { t } = useTranslation();
+  const show = settings.show ?? "buckets";
+  const details = settings.details ?? false;
+  const showBuckets = show !== "accounts";
+  const showAccounts = show !== "buckets";
+  const avg = flowAverages(result, parts, accounts, buckets, {
+    transfers: settings.transfers ?? false,
+  });
+  const empty =
+    !avg ||
+    ((!showBuckets || avg.buckets.rows.length === 0) &&
+      (!showAccounts || avg.accounts.rows.length === 0));
+  if (!avg || empty) {
+    return (
+      <Text size="sm" c="dimmed">
+        {t("stats.reports.flows.empty")}
+      </Text>
+    );
+  }
+  const note = avg.whole < avg.of && (
+    <Text size="xs" c="dimmed">
+      {t(`stats.reports.average.whole.${unit}`, { count: avg.whole })}
+    </Text>
+  );
+  if (settings.view === "grid") {
+    // As the grid's cards: a start of 0 and an end of the change.
+    const bucketCards = (rows: FlowRow<BucketAverageFigure>[]): FlowTables["buckets"]["rows"] =>
+      rows.map((r) => ({ ...r, values: { ...r.values, start: "0.00", end: r.values.change } }));
+    const accountCards = (rows: FlowRow<AccountAverageFigure>[]): FlowTables["accounts"]["rows"] =>
+      rows.map((r) => ({
+        ...r,
+        values: { ...r.values, start: "0.00", other: "0.00", end: r.values.net },
+      }));
+    return (
+      <Stack gap={4}>
+        {note}
+        <FlowGrid
+          buckets={
+            showBuckets
+              ? { rows: bucketCards(avg.buckets.rows), totals: bucketCards(avg.buckets.totals) }
+              : null
+          }
+          accounts={
+            showAccounts
+              ? {
+                  rows: accountCards(avg.accounts.rows),
+                  totals: accountCards(avg.accounts.totals),
+                }
+              : null
+          }
+          details={details}
+          balances={false}
+          bucketLink={() => ""}
+          accountLink={() => ""}
+          average
+        />
+      </Stack>
+    );
+  }
+  const bucketHeading = (c: BucketAverageFigure) =>
+    c === "change" ? t("stats.reports.average.change") : t(`stats.reports.flows.columns.${c}`);
+  return (
+    <Stack gap="sm">
+      {note}
+      {showBuckets && avg.buckets.rows.length > 0 && (
+        <FlowTable
+          label={`${t(`stats.reports.average.title.${unit}`)}: ${t("stats.reports.flows.buckets")}`}
+          nameHeader={t("stats.reports.flows.bucket")}
+          columns={details ? BUCKET_AVERAGE_DETAILS : BUCKET_AVERAGE}
+          heading={bucketHeading}
+          rows={avg.buckets.rows}
+          totals={avg.buckets.totals}
+        />
+      )}
+      {showAccounts && avg.accounts.rows.length > 0 && (
+        <FlowTable
+          label={`${t(`stats.reports.average.title.${unit}`)}: ${t("stats.reports.flows.accounts")}`}
+          nameHeader={t("stats.reports.flows.account")}
+          columns={details ? ACCOUNT_DETAILS : ACCOUNT_FIGURES}
+          heading={accountFigureLabel}
+          rows={avg.accounts.rows}
+          totals={avg.accounts.totals}
+        />
+      )}
+    </Stack>
   );
 }
 
@@ -266,7 +418,8 @@ function FlowTable<F extends string>({
   heading: (column: F) => string;
   rows: FlowRow<F>[];
   totals: FlowRow<F>[];
-  linkOf: (id: string) => string;
+  /** A row's Transactions link; an average's rows have none (#220). */
+  linkOf?: (id: string) => string;
 }) {
   const { t } = useTranslation();
   const several = totals.length > 1;
@@ -287,7 +440,7 @@ function FlowTable<F extends string>({
           {rows.map((r) => (
             <Table.Tr key={r.id}>
               <Table.Td>
-                <ReportLink to={linkOf(r.id)}>{r.name}</ReportLink>
+                {linkOf ? <ReportLink to={linkOf(r.id)}>{r.name}</ReportLink> : r.name}
                 {r.openedAt && (
                   <Text span size="xs" c="dimmed" ml={6} style={{ whiteSpace: "nowrap" }}>
                     {t("stats.reports.flows.openedOn", { date: formatDate(r.openedAt) })}

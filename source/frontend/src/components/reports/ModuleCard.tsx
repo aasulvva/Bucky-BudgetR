@@ -76,6 +76,8 @@ interface ModuleCardProps {
   headingLevel?: 2 | 4;
   /** Its id, which a PDF's contents link to (#193); none in a section's parts. */
   anchor?: string;
+  /** In a section's part (#194): no average of its own (#220). */
+  inSection?: boolean;
 }
 
 /** One module of a report (#125): its graph, compared or broken down as set, or its transactions (#126). */
@@ -98,6 +100,7 @@ export function ModuleCard({
   actions = true,
   headingLevel = 2,
   anchor,
+  inSection = false,
 }: ModuleCardProps) {
   const { t } = useTranslation();
   const print = usePrintMode();
@@ -153,6 +156,7 @@ export function ModuleCard({
           isDesktop={isDesktop}
           anchor={anchor}
           headingLevel={headingLevel}
+          average={!inSection}
         />
       </Stack>
     </Card>
@@ -175,6 +179,8 @@ type ModuleBodyProps = Pick<
   headingLevel?: 2 | 4;
   /** Whether a graph draws its breakdown (not in a Dashboard widget, #201). */
   breakdown?: boolean;
+  /** Whether an in/out/balance or budget module shows its average (not in a section, #220). */
+  average?: boolean;
 };
 
 /**
@@ -196,6 +202,7 @@ export function ModuleBody({
   anchor,
   headingLevel = 2,
   breakdown = true,
+  average = true,
 }: ModuleBodyProps) {
   return module.type === "transactions" ? (
     <TransactionsModule
@@ -215,6 +222,7 @@ export function ModuleBody({
       accounts={accounts}
       buckets={buckets}
       filtered={(report.tags?.length ?? 0) > 0 || Boolean(report.counterparty?.trim())}
+      average={average}
     />
   ) : module.type === "budget" ? (
     <BudgetModule
@@ -223,6 +231,7 @@ export function ModuleBody({
       cycles={cycles}
       buckets={buckets}
       filtered={(report.tags?.length ?? 0) > 0 || Boolean(report.counterparty?.trim())}
+      average={average}
     />
   ) : (
     <GraphBody

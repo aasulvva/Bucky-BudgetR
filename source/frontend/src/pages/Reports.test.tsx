@@ -882,6 +882,107 @@ describe("Reports", () => {
     });
   });
 
+  describe("in/out/balance averages (#220)", () => {
+    const open = (flows: Record<string, unknown>) => {
+      prefs = {
+        ...prefs,
+        report_templates: [
+          template({
+            period: "previous-year",
+            modules: [{ id: "m-1", type: "flows", flows }],
+          }),
+        ],
+      };
+      renderRoute("/stats/reports?template=r-1&view=report");
+      return screen.findByRole("region", { name: "In, out and balance" });
+    };
+    const cells = (row: HTMLElement) =>
+      within(row)
+        .getAllByRole("cell")
+        .map((c) => c.textContent);
+    const nok = (a: string) => formatMoney(a, "NOK");
+
+    it("shows the average per month after the year's tables, its rows not links", async () => {
+      const module = await open({ show: "both", average: "month" });
+      const average = await within(module).findByTestId("flow-average");
+      expect(within(average).getByText("Average per month")).toBeInTheDocument();
+      const buckets = await within(average).findByRole("table", {
+        name: "Average per month: Buckets",
+      });
+      expect(
+        within(buckets)
+          .getAllByRole("columnheader")
+          .map((c) => c.textContent),
+      ).toEqual(["Bucket", "In", "Out", "Change"]);
+      const food = within(buckets).getByRole("row", { name: /Food/ });
+      expect(cells(food)).toEqual(["Food", nok("1000.00"), nok("400.00"), nok("600.00")]);
+      expect(within(food).queryByRole("link")).not.toBeInTheDocument();
+      const accounts = within(average).getByRole("table", { name: "Average per month: Accounts" });
+      expect(cells(within(accounts).getByRole("row", { name: /Main/ })).slice(1)).toEqual([
+        nok("30000.00"),
+        nok("400.00"),
+        nok("29600.00"),
+      ]);
+      // Twelve whole months: no note.
+      expect(within(average).queryByText(/whole month/)).not.toBeInTheDocument();
+      expect(
+        apiMock
+          .calls(flowsPath)
+          .map((c) => c.query.get("resolution"))
+          .sort(),
+      ).toEqual(["month", "total"]);
+    });
+
+    it("uses the breakdown's numbers when it's per month too", async () => {
+      const module = await open({ average: "month", breakdown: "month" });
+      await within(module).findByRole("table", { name: "Average per month: Buckets" });
+      await waitFor(() => {
+        expect(within(module).getAllByTestId("breakdown-part")).toHaveLength(12);
+      });
+      expect(
+        apiMock
+          .calls(flowsPath)
+          .map((c) => c.query.get("resolution"))
+          .sort(),
+      ).toEqual(["month", "total"]);
+    });
+
+    it("is a grid of cards in the grid view, without balances", async () => {
+      const module = await open({ view: "grid", average: "month" });
+      const average = await within(module).findByTestId("flow-average");
+      const food = await within(average).findByRole("group", { name: "Food" });
+      expect(food.querySelector("[data-change]")?.textContent).toBe(`+${nok("600.00")}`);
+      expect(food.querySelector("[data-balances]")).toBeNull();
+      expect(within(food).queryByRole("link")).not.toBeInTheDocument();
+    });
+
+    it("isn't shown in a section's parts", async () => {
+      apiMock.on(list, { body: { items: [], next_cursor: null } });
+      prefs = {
+        ...prefs,
+        report_templates: [
+          template({
+            period: `quarter-${String(year - 1)}-q2`,
+            modules: [
+              {
+                id: "m-1",
+                type: "section",
+                section: {
+                  unit: "month",
+                  modules: [{ id: "m-2", type: "flows", flows: { average: "month" } }],
+                },
+              },
+            ],
+          }),
+        ],
+      };
+      renderRoute("/stats/reports?template=r-1&view=report");
+      const section = await screen.findByRole("region", { name: "Each month" });
+      expect(await within(section).findByRole("table", { name: "Buckets" })).toBeInTheDocument();
+      expect(within(section).queryByTestId("flow-average")).not.toBeInTheDocument();
+    });
+  });
+
   describe("budget vs spending (#126)", () => {
     const y = String(year - 1);
     // 24 of its 31 days are in last year: last year's.
@@ -1037,6 +1138,35 @@ describe("Reports", () => {
       expect(within(module).queryByText("Fun")).not.toBeInTheDocument();
       expect(within(module).getByText(/don't apply/)).toBeInTheDocument();
       expect(within(module).getByText("Own buckets")).toBeInTheDocument();
+    });
+
+    it("shows the average per cycle after the summary, without carried over (#220)", async () => {
+      prefs = {
+        ...prefs,
+        report_templates: [
+          template({
+            period: "previous-year",
+            modules: [{ id: "m-1", type: "budget", budget: { average: true } }],
+          }),
+        ],
+      };
+      renderRoute("/stats/reports?template=r-1&view=report");
+      const module = await screen.findByRole("region", { name: "Budget vs spending" });
+      const average = await within(module).findByTestId("budget-average");
+      const table = within(average).getByRole("table", { name: "Average per cycle" });
+      expect(within(table).queryByRole("columnheader", { name: "Carried over" })).toBeNull();
+      // Food: budgets of 4000 and 4500 (500 capped), used 3000 and 2000.
+      const food = within(table).getByRole("row", { name: /Food/ });
+      expect(cells(food)).toEqual([
+        "Food",
+        nok("4250.00"),
+        nok("2500.00"),
+        expect.stringContaining("58%") as unknown as string,
+        nok("1750.00"),
+      ]);
+      expect(within(food).queryByRole("link")).not.toBeInTheDocument();
+      // Both cycles are over: no note.
+      expect(within(average).queryByText(/still going/)).not.toBeInTheDocument();
     });
 
     it("shows only the summary when each cycle is off", async () => {

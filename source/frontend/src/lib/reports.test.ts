@@ -10,9 +10,11 @@ import {
   readViewMode,
   removeModule,
   type PartModule,
+  budgetAverage,
   budgetRows,
   budgetSummary,
   cleanReport,
+  flowAverages,
   flowsQuery,
   flowTables,
   groupTransactions,
@@ -1375,5 +1377,150 @@ describe("periodsOf", () => {
       label: formatDateRange("2026-10-01", "2026-10-09"),
     });
     expect(of("last-7-days")?.currentLabel).toBe(formatDateRange("2026-11-03", "2026-11-09"));
+  });
+});
+
+describe("averages per month or cycle (#220)", () => {
+  const zero: BucketFlowValues = {
+    start: "0.00",
+    refills: "0.00",
+    income: "0.00",
+    opening_funds: "0.00",
+    adjustments_in: "0.00",
+    adjustments_out: "0.00",
+    transfers_in: "0.00",
+    transfers_out: "0.00",
+    spent: "0.00",
+    overflow: "0.00",
+    in: "0.00",
+    out: "0.00",
+    end: "0.00",
+  };
+  const food = bucket({ id: "1000000001", name: "Food", source_account_id: "1234" });
+  const fun = bucket({ id: "1000000002", name: "Fun", source_account_id: "1234" });
+  const main = account({ id: "1234", name: "Main" });
+  // 1 August to 9 November: August, September and October whole, November so far.
+  const period = {
+    from: "2026-08-01",
+    to: "2026-11-09",
+    fromAt: startAtFor("2026-08-01"),
+    toAt: now.toISOString(),
+  };
+  const months = periodParts(period, "month", cycles);
+  if (!months.ok) throw new Error("no months");
+  const at = (spent: string[]) => spent.map((x) => ({ ...zero, spent: x, out: x }));
+  const result: StatsFlows = {
+    intervals: months.parts.map((p) => ({ start: p.period.fromAt, end: p.period.toAt })),
+    buckets: [
+      {
+        bucket_id: food.id,
+        account_id: "1234",
+        currency: "NOK",
+        values: at(["300.00", "400.00", "500.00", "90.00"]),
+      },
+      // Nothing in September: it counts as 0.
+      {
+        bucket_id: fun.id,
+        account_id: "1234",
+        currency: "NOK",
+        values: at(["100.00", "0.00", "50.00", "0.00"]),
+      },
+    ],
+    accounts: [
+      {
+        account_id: "1234",
+        currency: "NOK",
+        values: months.parts.map(() => ({
+          start: "0.00",
+          income: "3000.00",
+          expenses: "1000.00",
+          transfers_in: "0.00",
+          transfers_out: "500.00",
+          end: "0.00",
+        })),
+      },
+    ],
+  };
+
+  it("averages the whole months, a month without anything as 0", () => {
+    const avg = flowAverages(result, months.parts, [main], [food, fun], { transfers: false });
+    expect(avg).toMatchObject({ whole: 3, of: 4 });
+    expect(avg?.buckets.rows.map((r) => [r.name, r.values.out, r.values.change])).toEqual([
+      ["Food", "400.00", "-400.00"],
+      ["Fun", "50.00", "-50.00"],
+    ]);
+    expect(avg?.buckets.totals[0]?.values.out).toBe("450.00");
+    expect(avg?.accounts.rows[0]?.values).toMatchObject({
+      in: "3000.00",
+      out: "1000.00",
+      net: "2000.00",
+    });
+    // Transfers count when the module counts them.
+    const withTransfers = flowAverages(result, months.parts, [main], [food, fun], {
+      transfers: true,
+    });
+    expect(withTransfers?.accounts.rows[0]?.values).toMatchObject({
+      out: "1500.00",
+      transfers_out: "500.00",
+      net: "1500.00",
+    });
+  });
+
+  it("averages all of them when none is whole", () => {
+    const november = months.parts.slice(3);
+    const avg = flowAverages(result, november, [main], [food, fun], { transfers: false });
+    expect(avg).toMatchObject({ whole: 1, of: 1 });
+    expect(avg?.buckets.rows.map((r) => r.values.out)).toEqual(["90.00"]);
+    expect(flowAverages(result, [], [main], [food, fun], { transfers: false })).toBeNull();
+  });
+
+  it("averages a budget per cycle over the cycles that are over", () => {
+    const shown = [
+      { id: "100001000001", period, partial: false, active: false },
+      { id: "100001000002", period, partial: true, active: false },
+      { id: "100001000003", period, partial: false, active: true },
+    ];
+    const figures = [
+      [bucketFigures({ bucket_id: food.id, budget: "1000.00", used: "800.00" })],
+      [
+        bucketFigures({ bucket_id: food.id, budget: "1000.00", used: "1200.00" }),
+        bucketFigures({ bucket_id: fun.id, budget: "200.00", used: "100.00" }),
+      ],
+      [bucketFigures({ bucket_id: food.id, budget: "1000.00", used: "100.00" })],
+    ];
+    const avg = budgetAverage(figures, shown, [food, fun], {});
+    // The active one is left out; one the period cuts is shown whole, so it counts.
+    expect(avg).toMatchObject({ whole: 2, of: 3 });
+    expect(
+      avg?.rows.map((r) => [r.name, r.values.budget, r.values.used, r.values.unspent, r.usedPct]),
+    ).toEqual([
+      ["Food", "1000.00", "1000.00", "0.00", 100],
+      ["Fun", "100.00", "50.00", "50.00", 50],
+    ]);
+    expect(avg?.totals[0]?.values).toMatchObject({ budget: "1100.00", used: "1050.00" });
+    // Only the active one: it counts.
+    expect(budgetAverage(figures.slice(2), shown.slice(2), [food, fun], {})).toMatchObject({
+      whole: 1,
+      of: 1,
+    });
+    expect(budgetAverage([], [], [food], {})).toBeNull();
+  });
+
+  it("keeps the setting in a report's clean form", () => {
+    const report: ReportSettings = {
+      period: "previous-year",
+      modules: [
+        { id: "m-1", type: "flows", flows: { average: "month" } },
+        { id: "m-2", type: "flows", flows: { average: "none" } },
+        { id: "m-3", type: "budget", budget: { average: true } },
+        { id: "m-4", type: "budget", budget: { average: false } },
+      ],
+    };
+    expect(cleanReport(report).modules).toEqual([
+      { id: "m-1", type: "flows", flows: { average: "month" } },
+      { id: "m-2", type: "flows", flows: {} },
+      { id: "m-3", type: "budget", budget: { average: true } },
+      { id: "m-4", type: "budget", budget: {} },
+    ]);
   });
 });
