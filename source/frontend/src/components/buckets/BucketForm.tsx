@@ -36,6 +36,7 @@ import type { components } from "@/api/schema";
 import { useSession } from "@/app/session";
 import { AmountInput } from "@/components/AmountInput";
 import { ErrorAlert } from "@/components/ErrorAlert";
+import { ReleaseNote } from "@/components/savings/ReleaseNote";
 import i18n from "@/i18n";
 import { isOverdue } from "@/lib/cycles";
 import { compareAmounts, formatMoney, multiplyAmount, subtractAmounts } from "@/lib/money";
@@ -425,6 +426,9 @@ export function BucketForm({
               ))}
             </Stack>
           </Radio.Group>
+          {bucket?.refill_mode === "fully_manual" && !manual && (
+            <ReleaseNote bucketId={bucket.id} />
+          )}
           {bucket === undefined && (
             <Text size="sm" c="dimmed">
               <Trans
@@ -728,6 +732,7 @@ function DeleteBucket({
       </Text>
       {tf > 0 && <Text>{t("bucketSetup.deleteReleases", values)}</Text>}
       {tf < 0 && <Text>{t("bucketSetup.deleteSettles", values)}</Text>}
+      <ReleaseNote bucketId={bucket.id} />
       {blocked && <Alert color="orange">{t("bucketSetup.deleteNeedsCycle")}</Alert>}
       {remove.error && <ErrorAlert error={remove.error} />}
       <Group justify="flex-end" gap="xs">

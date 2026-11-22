@@ -16,6 +16,38 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.25.00",
+    date: "2026-11-22",
+    title: {
+      en: "Savings targets",
+      nb: "Sparemål",
+      nn: "Sparemål",
+    },
+    changes: {
+      en: [
+        "New Savings setup: make a Fully manual bucket, or a savings, BSU, fund or investment account, a savings target with a goal, a name and a note.",
+        "New Savings screen: each target's progress towards its goal. Add to savings sets money aside from an account's unallocated money until you move it at the bank. Done records the transfer, and Clear puts the money back.",
+        "Accounts, Buckets and the Dashboard show what's reserved for savings, and what isn't covered when an account runs short.",
+        "Savings transactions show their savings lines. They can be reversed but not edited, and a transfer recorded by Done keeps its amount and accounts.",
+        "A new notification, Savings to transfer, reminds you of money held for a target. You can switch it off in Settings.",
+      ],
+      nb: [
+        "Nytt Spareoppsett: gjør en bøtte med Helt manuelt, eller en sparekonto, BSU-, fonds- eller investeringskonto, til et sparemål med mål, navn og notat.",
+        "Nytt skjermbilde Sparing: fremgangen mot målet for hvert sparemål. Legg til sparing setter av penger fra de ufordelte pengene på en konto til du flytter dem i banken. Utført registrerer overføringen, og Frigjør gir pengene tilbake.",
+        "Kontoer, Bøtter og Oversikt viser hva som er satt av til sparing, og hva som ikke er dekket når en konto ikke har nok.",
+        "Sparetransaksjoner viser sparelinjene sine. De kan reverseres, men ikke redigeres, og en overføring registrert med Utført beholder beløpet og kontoene.",
+        "Et nytt varsel, Sparing å overføre, minner deg på penger som er satt av til et mål. Du kan slå det av i Innstillinger.",
+      ],
+      nn: [
+        "Nytt Spareoppsett: gjer ei bøtte med Heilt manuelt, eller ein sparekonto, BSU-, fonds- eller investeringskonto, til eit sparemål med mål, namn og notat.",
+        "Nytt skjermbilete Sparing: framgangen mot målet for kvart sparemål. Legg til sparing set av pengar frå dei ufordelte pengane på ein konto til du flyttar dei i banken. Utført registrerer overføringa, og Frigjer gjev pengane tilbake.",
+        "Kontoar, Bøtter og Oversikt viser kva som er sett av til sparing, og kva som ikkje er dekt når ein konto ikkje har nok.",
+        "Sparetransaksjonar viser sparelinjene sine. Dei kan reverserast, men ikkje redigerast, og ei overføring registrert med Utført held på beløpet og kontoane.",
+        "Eit nytt varsel, Sparing å overføre, minner deg på pengar som er sette av til eit mål. Du kan slå det av i Innstillingar.",
+      ],
+    },
+  },
+  {
     version: "v2.24.01",
     date: "2026-11-22",
     title: {

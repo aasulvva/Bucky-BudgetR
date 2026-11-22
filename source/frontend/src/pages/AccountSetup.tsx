@@ -38,6 +38,7 @@ import { AmountInput } from "@/components/AmountInput";
 import { DateTimeInput } from "@/components/DateTimeInput";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { QueryState } from "@/components/QueryState";
+import { ReleaseNote } from "@/components/savings/ReleaseNote";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
 import i18n from "@/i18n";
 import { canDelete } from "@/lib/buckets";
@@ -46,6 +47,7 @@ import { CURRENCY } from "@/lib/locale";
 import { INTEREST_TAG } from "@/lib/interest";
 import { LANGUAGES } from "@/lib/language";
 import { checkName } from "@/lib/names";
+import { TARGET_ACCOUNT_TYPES } from "@/lib/savings";
 import { compareAmounts, currencyOptions, formatMoney, subtractAmounts } from "@/lib/money";
 import { autofocusField } from "@/lib/device";
 
@@ -470,6 +472,9 @@ function EditAccount({
             if (v) setType(v);
           }}
         />
+        {type !== account.type && !TARGET_ACCOUNT_TYPES.includes(type) && (
+          <ReleaseNote account={account} />
+        )}
         <TextInput
           label={t("accountSetup.currency")}
           description={t("accountSetup.currencySet")}
@@ -697,6 +702,7 @@ function DeleteAccount({
                   components={{ b: <strong /> }}
                 />
               </Text>
+              <ReleaseNote account={account} reservedToo />
               {hasMoney && (
                 <Radio.Group
                   label={t("accountSetup.stillHolds", {

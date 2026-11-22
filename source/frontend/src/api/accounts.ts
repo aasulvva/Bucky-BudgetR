@@ -8,6 +8,7 @@ import i18n from "@/i18n";
 import { api } from "./client";
 import { unwrap } from "./errors";
 import { NOTIFICATIONS_KEY } from "./notifications";
+import { SAVINGS_KEY } from "./savings";
 import type { components } from "./schema";
 
 export type Account = components["schemas"]["Account"];
@@ -105,15 +106,15 @@ export function refillModeLabel(mode: RefillMode): string {
 
 /**
  * Refreshes what a transaction or an account change can move: balances,
- * unallocated money, the buckets' TF and CAF, transaction lists, and the
- * notifications they settle.
+ * unallocated money, the buckets' TF and CAF, savings targets and their held
+ * funds, transaction lists, and the notifications they settle.
  */
 export function useRefreshMoney(): () => Promise<void> {
   const client = useQueryClient();
   return async () => {
     await Promise.all(
-      [ACCOUNTS_KEY, BUCKETS_KEY, ["transactions"], NOTIFICATIONS_KEY].map((queryKey) =>
-        client.invalidateQueries({ queryKey }),
+      [ACCOUNTS_KEY, BUCKETS_KEY, SAVINGS_KEY, ["transactions"], NOTIFICATIONS_KEY].map(
+        (queryKey) => client.invalidateQueries({ queryKey }),
       ),
     );
   };

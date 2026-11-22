@@ -32,6 +32,9 @@ export function isCorrectableType(type: TransactionType): type is CorrectableTyp
   return CORRECTABLE.some((x) => x === type);
 }
 
+/** The savings types (#231): they can be reversed, not corrected. */
+export const SAVINGS_TYPES: TransactionType[] = ["SVR", "SVC", "SVB"];
+
 const ALL_TYPES = [...USER_TYPES, ...SYSTEM_TYPES];
 
 export interface TransactionFilter {
@@ -197,7 +200,7 @@ export function groupByDay(items: Transaction[]): { day: LocalDate; items: Trans
   return out;
 }
 
-type Lines = Pick<Transaction, "bank_lines" | "bucket_lines">;
+type Lines = Pick<Transaction, "bank_lines" | "bucket_lines" | "savings_lines">;
 
 /** The lines a transaction amounts to: the effective ones, or before its reversal. */
 export function shownLines(tx: Transaction): Lines {
@@ -209,7 +212,8 @@ const abs = (a: string) => (compareAmounts(a, "0") < 0 ? negate(a) : a);
 
 /**
  * The amount lines add up to, as a row shows it. With bank lines those count,
- * otherwise the bucket lines. One line is signed. Several (a transfer between
+ * otherwise the bucket lines, otherwise the savings lines (SVR, SVC). One
+ * line is signed. Several (a transfer between
  * accounts or buckets) are signed from `focus`'s side when it has a line, and
  * unsigned otherwise.
  */
@@ -220,7 +224,9 @@ export function linesAmount(
   const list =
     lines.bank_lines.length > 0
       ? lines.bank_lines.map((l) => ({ id: l.account_id, amount: l.amount }))
-      : lines.bucket_lines.map((l) => ({ id: l.bucket_id, amount: l.amount }));
+      : lines.bucket_lines.length > 0
+        ? lines.bucket_lines.map((l) => ({ id: l.bucket_id, amount: l.amount }))
+        : lines.savings_lines.map((l) => ({ id: l.account_id, amount: l.amount }));
   if (list.length <= 1) return { amount: list[0]?.amount ?? "0.00", signed: true };
   const own = list.find((l) => l.id === focus);
   if (own) return { amount: own.amount, signed: true };
@@ -256,4 +262,17 @@ export function bucketLinesLocked(tx: Transaction, active: Cycle | null): boolea
 /** Whether the transaction can be corrected and reversed at all. */
 export function isCorrectable(tx: Transaction): boolean {
   return isCorrectableType(tx.type) && !tx.reversed;
+}
+
+/** Whether the transaction can be reversed: a correctable one, or a savings type. */
+export function isReversible(tx: Transaction): boolean {
+  return (isCorrectableType(tx.type) || SAVINGS_TYPES.includes(tx.type)) && !tx.reversed;
+}
+
+/**
+ * A transfer that took held savings off hold (Done, #231): its amount and
+ * accounts can't change, only its text. Reversing it puts the money back.
+ */
+export function isSavingsTransfer(tx: Transaction): boolean {
+  return tx.type === "TRF" && tx.savings_lines.length > 0;
 }

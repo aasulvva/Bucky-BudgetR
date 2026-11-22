@@ -1,7 +1,7 @@
 // Package notifications works out the user's reminders and to-dos (#57):
 // things the app can't do for them, such as approving scheduled
-// transactions, paying a bill at the bank or updating an investment
-// account's balance.
+// transactions, paying a bill at the bank, updating an investment
+// account's balance or moving money held for savings.
 //
 // Notifications aren't stored. They're worked out from the user's data each
 // time they're read, so one goes away by itself once its task is done. Only
@@ -29,6 +29,7 @@ import (
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/buckets"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/savings"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/schedules"
 )
 
@@ -48,11 +49,15 @@ const (
 	KindBalance Kind = "investment_balance"
 	// KindBucket is a priority bucket whose CAF is below its TF.
 	KindBucket Kind = "bucket_uncovered"
+	// KindSavings is a savings target with money held for it, waiting for
+	// the user to move it (#231).
+	KindSavings Kind = "savings_transfer"
 )
 
 // keyPrefix is each kind's key prefix.
 var keyPrefix = map[Kind]string{
 	KindQueue: "queue:", KindBill: "bill:", KindBalance: "balance:", KindBucket: "bucket:",
+	KindSavings: "savings:",
 }
 
 // Severity orders notifications: alerts first.
@@ -85,7 +90,9 @@ type Notification struct {
 	AccountID      string
 	BucketID       string
 	CycleID        string
-	// Amount is the bill's amount, or what the bucket is missing.
+	TargetID       string
+	// Amount is the bill's amount, what the bucket is missing, or what's
+	// held for the savings target.
 	Amount   decimal.NullDecimal
 	Currency string
 }
@@ -98,13 +105,14 @@ type Settings struct {
 	UpcomingDays      *int  `json:"upcoming_days"`
 	InvestmentBalance *bool `json:"investment_balance"`
 	BucketUncovered   *bool `json:"bucket_uncovered"`
+	SavingsTransfer   *bool `json:"savings_transfer"`
 }
 
 // On reports whether a kind shows.
 func (s Settings) On(k Kind) bool {
 	v := map[Kind]*bool{
 		KindQueue: s.ApprovalQueue, KindBill: s.UpcomingBills,
-		KindBalance: s.InvestmentBalance, KindBucket: s.BucketUncovered,
+		KindBalance: s.InvestmentBalance, KindBucket: s.BucketUncovered, KindSavings: s.SavingsTransfer,
 	}[k]
 	return v == nil || *v
 }
@@ -127,12 +135,19 @@ type Buckets interface {
 	List(ctx context.Context, userID string) ([]buckets.Bucket, error)
 }
 
+// Savings lists the user's savings targets with what's held for them (a
+// *savings.Service).
+type Savings interface {
+	List(ctx context.Context, userID string) ([]savings.Target, error)
+}
+
 // Options configures a Service.
 type Options struct {
 	// Now returns the current time. Defaults to time.Now.
 	Now       func() time.Time
 	Schedules Schedules
 	Buckets   Buckets
+	Savings   Savings
 }
 
 // Service works out notifications.
@@ -141,6 +156,7 @@ type Service struct {
 	now       func() time.Time
 	schedules Schedules
 	buckets   Buckets
+	savings   Savings
 }
 
 // NewService returns a Service.
@@ -148,7 +164,7 @@ func NewService(pool *pgxpool.Pool, opts Options) *Service {
 	if opts.Now == nil {
 		opts.Now = time.Now
 	}
-	return &Service{pool: pool, now: opts.Now, schedules: opts.Schedules, buckets: opts.Buckets}
+	return &Service{pool: pool, now: opts.Now, schedules: opts.Schedules, buckets: opts.Buckets, savings: opts.Savings}
 }
 
 // List returns the user's open notifications: alerts first, then warnings,
@@ -260,6 +276,7 @@ func (s *Service) work(ctx context.Context, q *sqlc.Queries, userID string, sett
 		run  func(context.Context, *sqlc.Queries, string, Settings) ([]Notification, error)
 	}{
 		{KindQueue, s.queue}, {KindBill, s.bills}, {KindBalance, s.balances}, {KindBucket, s.uncovered},
+		{KindSavings, s.held},
 	}
 	for _, step := range steps {
 		if !settings.On(step.kind) {
@@ -380,6 +397,39 @@ func (s *Service) uncovered(ctx context.Context, _ *sqlc.Queries, userID string,
 		out = append(out, Notification{
 			Key: keyPrefix[KindBucket] + b.ID, Kind: KindBucket, Severity: Alert, BucketID: b.ID,
 			Amount: decimal.NullDecimal{Decimal: b.TargetFunds.Sub(b.Caf), Valid: true}, Currency: b.Currency,
+		})
+	}
+	return out, nil
+}
+
+// held are the savings targets with money held for them, which the user has
+// still to move there. Keyed by the target's newest savings line, so a
+// dismissed one shows again when more is held or some is moved.
+func (s *Service) held(ctx context.Context, q *sqlc.Queries, userID string, _ Settings) ([]Notification, error) {
+	if s.savings == nil {
+		return nil, nil
+	}
+	list, err := s.savings.List(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := q.SavingsNewestLines(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	newest := make(map[string]string, len(rows))
+	for _, r := range rows {
+		newest[r.HolderID] = r.ID
+	}
+	out := []Notification{}
+	for _, t := range list {
+		held := t.HeldTotal()
+		if !held.IsPositive() {
+			continue
+		}
+		out = append(out, Notification{
+			Key: keyPrefix[KindSavings] + t.ID + ":" + newest[t.ID], Kind: KindSavings, Severity: Info, TargetID: t.ID,
+			Amount: decimal.NullDecimal{Decimal: held, Valid: true}, Currency: t.Currency,
 		})
 	}
 	return out, nil

@@ -20,6 +20,7 @@ const buckets: Record<string, string> = { b1: "Food", b2: "Household" };
 const names: Lookups = {
   accountName: (id) => accounts[id]?.name ?? id,
   bucketName: (id) => buckets[id] ?? id,
+  targetName: (id) => id,
   accountCurrency: (id) => accounts[id]?.currency,
   currencyOf: (tx) => accounts[tx.bank_lines[0]?.account_id ?? "1234"]?.currency,
 };

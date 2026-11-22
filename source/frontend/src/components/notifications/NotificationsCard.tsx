@@ -9,12 +9,18 @@ import { ErrorAlert } from "@/components/ErrorAlert";
 export const DEFAULT_UPCOMING_DAYS = 3;
 const DAYS = [1, 2, 3, 5, 7, 14];
 
-type Toggle = "approval_queue" | "upcoming_bills" | "investment_balance" | "bucket_uncovered";
+type Toggle =
+  | "approval_queue"
+  | "upcoming_bills"
+  | "investment_balance"
+  | "bucket_uncovered"
+  | "savings_transfer";
 const TOGGLES: Toggle[] = [
   "approval_queue",
   "upcoming_bills",
   "investment_balance",
   "bucket_uncovered",
+  "savings_transfer",
 ];
 
 /** Settings › Notifications (#57): which kinds show, and how far ahead bills do. */

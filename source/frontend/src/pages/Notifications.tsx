@@ -4,6 +4,7 @@ import {
   IconCalendarDue,
   IconCheck,
   IconChecklist,
+  IconPigMoney,
   IconTrendingUp,
   IconX,
   type Icon,
@@ -26,6 +27,7 @@ const ICONS: Record<NotificationKind, Icon> = {
   upcoming_bill: IconCalendarDue,
   investment_balance: IconTrendingUp,
   bucket_uncovered: IconAlertTriangle,
+  savings_transfer: IconPigMoney,
 };
 
 const COLORS: Record<Notification["severity"], string> = {

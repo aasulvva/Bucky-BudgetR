@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 
 import type { Notification } from "@/api/notifications";
+import { useSavingsTargets } from "@/api/savings";
 import { useSchedules } from "@/api/schedules";
 import { useScheduleText } from "@/components/schedules/scheduleText";
 import { useLookups } from "@/components/transactions/lookups";
@@ -27,6 +28,7 @@ export function useNotificationText(): (n: Notification) => NotificationText {
   const { t } = useTranslation();
   const names = useLookups();
   const schedules = useSchedules().data ?? [];
+  const targets = useSavingsTargets().data ?? [];
   const scheduleText = useScheduleText();
   return (n) => {
     const base = { done: false };
@@ -82,6 +84,23 @@ export function useNotificationText(): (n: Notification) => NotificationText {
           link: "/buckets",
           open: t("notifications.bucket.open"),
         };
+      case "savings_transfer": {
+        const target = targets.find((x) => x.id === n.target_id);
+        return {
+          ...base,
+          title: t("notifications.savings.title", {
+            name: target?.name ?? `#${n.target_id ?? ""}`,
+          }),
+          body: t(
+            target?.account_id === null
+              ? "notifications.savings.bodyBucket"
+              : "notifications.savings.body",
+            { amount: n.amount ? formatMoney(n.amount, n.currency ?? undefined) : "" },
+          ),
+          link: "/savings",
+          open: t("notifications.savings.open"),
+        };
+      }
     }
   };
 }

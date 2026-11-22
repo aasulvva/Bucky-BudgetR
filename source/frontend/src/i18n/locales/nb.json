@@ -205,7 +205,9 @@
     "interestCounterparty": "Renter",
     "interestRegistered": "Renter på {{name}} er registrert.",
     "enterInterest": "Skriv rentene.",
-    "interestPositive": "Rentene må være mer enn 0."
+    "interestPositive": "Rentene må være mer enn 0.",
+    "reserved": "{{amount}} satt av til sparing",
+    "reservedUncovered": "{{amount}} satt av til sparing ({{uncovered}} ikke dekket)"
   },
   "accountSetup": {
     "newAccount": "Ny konto",
@@ -621,7 +623,9 @@
       "overFunds": "{{name}} har bare {{amount}}.",
       "added": "La til {{amount}} i {{name}}.",
       "removed": "Fjernet {{amount}} fra {{name}}."
-    }
+    },
+    "reserved": "Satt av til sparing",
+    "reservedUncovered": "{{amount}} av sparingen som er satt av på denne kontoen, er ikke dekket: bøttene får saldoen først."
   },
   "bucketSetup": {
     "newBucket": "Ny bøtte",
@@ -796,6 +800,110 @@
     "deletes_one": "Lagringen sletter også {{count}} bøtte: {{names}}.",
     "deletes_other": "Lagringen sletter også {{count}} bøtter: {{names}}."
   },
+  "savings": {
+    "empty": "Ingen sparemål ennå",
+    "emptyHint": "Et sparemål er en bøtte med Helt manuelt, eller en sparekonto, BSU-, fonds- eller investeringskonto, med et mål. Sett av penger til det her, og registrer det som utført når du har flyttet dem i banken.",
+    "setupFor": "Spareoppsett for {{name}}",
+    "kindBucket": "Bøtte",
+    "kindBucketOn": "Bøtte på {{account}}",
+    "kindAccount": "Konto",
+    "progress": "{{saved}} av {{goal}}",
+    "progressLabel": "{{pct}} % av målet",
+    "reached": "Målet er nådd",
+    "left": "{{amount}} igjen",
+    "inBucket": "{{amount}} i bøtta",
+    "inAccount": "{{amount}} på kontoen",
+    "heldTotal": "{{amount}} satt av",
+    "held": "Avsatte midler",
+    "heldOn": "{{amount}} på {{account}}",
+    "notCovered": "{{amount}} er ikke dekket: bøttene på kontoen kommer først",
+    "heldHintAccount": "Avsatte midler blir stående på kontoen sin til du har flyttet dem. Gjør overføringen i banken, og trykk Utført.",
+    "heldHintBucket": "Avsatte midler blir stående på kontoen sin til du har flyttet dem til bøttas konto. Flytt dem i banken, og trykk Utført.",
+    "amount": "Beløp",
+    "enterAmount": "Skriv inn et beløp over 0.",
+    "overHeld": "Bare {{amount}} er satt av på denne kontoen.",
+    "overCapacity": "Bøttas kapasitet gir plass til {{amount}}.",
+    "needsCycle": "Dette registrerer en bøttelinje, så det trengs en aktiv periode som ikke er over. Start eller forleng en periode først.",
+    "add": {
+      "title": "Legg til sparing: {{name}}",
+      "name": "Legg til sparing for {{name}}",
+      "submit": "Legg til sparing",
+      "from": "Fra",
+      "unallocated": "{{amount}} ufordelt",
+      "noAccounts": "Du har ingen konto i {{currency}} å legge til fra.",
+      "overUnallocated": "Kontoen har bare {{amount}} ufordelt.",
+      "preview": "{{amount}} av de ufordelte pengene på {{account}} settes av til {{name}} til du flytter dem.",
+      "previewDirect": "{{amount}} går rett inn i {{name}} fra de ufordelte pengene på {{account}}.",
+      "pastGoal": "Da går du forbi målet på {{goal}}, og det går fint.",
+      "added": "{{amount}} satt av til {{name}}.",
+      "addedDirect": "{{amount}} lagt til i {{name}}."
+    },
+    "done": {
+      "title": "Utført: {{name}}",
+      "name": "Utført for {{name}} på {{account}}",
+      "submit": "Utført",
+      "hint": "{{amount}} er satt av på {{account}}. Registrer det du har flyttet.",
+      "when": "Når du flyttet dem",
+      "whenHint": "Tomt betyr nå.",
+      "description": "Beskrivelse",
+      "previewAccount": "Registrerer en overføring på {{amount}} fra {{from}} til {{to}}.",
+      "previewBucket": "Registrerer {{amount}} flyttet fra {{from}} til {{to}}, inn i {{name}}.",
+      "previewBucketSame": "Legger {{amount}} i {{name}}.",
+      "recorded": "{{amount}} flyttet til {{name}}."
+    },
+    "clear": {
+      "title": "Frigjør: {{name}}",
+      "name": "Frigjør for {{name}} på {{account}}",
+      "submit": "Frigjør",
+      "hint": "{{amount}} er satt av på {{account}}.",
+      "preview": "{{amount}} går tilbake til de ufordelte pengene på {{account}}.",
+      "cleared": "{{amount}} frigjort fra {{name}}."
+    },
+    "release": {
+      "targetHeld": "{{name}} slutter å være et sparemål, og {{amount}} som er satt av til det, går tilbake til ufordelt.",
+      "target": "{{name}} slutter å være et sparemål.",
+      "reserved": "{{amount}} som er satt av til sparing på den, frigjøres."
+    }
+  },
+  "savingsSetup": {
+    "intro": "Et sparemål er en bøtte med Helt manuelt, eller en sparekonto, BSU-, fonds- eller investeringskonto, med et mål. Fremgangen teller midlene i bøtta eller saldoen på kontoen, pluss det som er satt av til målet.",
+    "newTarget": "Nytt sparemål",
+    "targets": "Sparemål",
+    "empty": "Ingen sparemål ennå.",
+    "pick": "Velg et sparemål, eller lag et nytt.",
+    "kind": "Hva du sparer i",
+    "kindBucket": "En bøtte",
+    "kindAccount": "En konto",
+    "kindBucketHint": "En bøtte med Helt manuelt: pengene blir stående på kontoen, satt av i bøtta.",
+    "kindAccountHint": "En sparekonto, BSU-, fonds- eller investeringskonto: pengene flyttes dit.",
+    "noBuckets": "Ingen ledig bøtte har Helt manuelt. <setup>Lag en i Bøtteoppsett</setup>.",
+    "noAccounts": "Ingen sparekonto, BSU-, fonds- eller investeringskonto er ledig. <setup>Legg til en i Kontooppsett</setup>.",
+    "bucket": "Bøtte",
+    "account": "Konto",
+    "pickBucket": "Velg en bøtte.",
+    "pickAccount": "Velg en konto.",
+    "goal": "Mål",
+    "goalLimit": "Høyst bøttas kapasitet, {{amount}}.",
+    "goalBucketHint": "Det bøtta skal inneholde.",
+    "goalAccountHint": "Saldoen du vil nå.",
+    "enterGoal": "Skriv inn et mål over 0.",
+    "goalAboveCapacity": "Målet kan ikke være over bøttas kapasitet, {{amount}}.",
+    "name": "Navn",
+    "nameHint": "Tomt bruker navnet på bøtta eller kontoen.",
+    "note": "Notat",
+    "isBucket": "Bøtta {{name}}.",
+    "isAccount": "Kontoen {{name}}.",
+    "create": "Lag sparemål",
+    "created": "{{name}} er nå et sparemål.",
+    "saved": "{{name}} er lagret.",
+    "delete": "Slett sparemål",
+    "deleteQuestion": "Slette sparemålet <b>{{name}}</b>?",
+    "deleteReleases": "Det som er satt av til det, går tilbake til ufordelt:",
+    "deleteReleasesOn": "{{amount}} på {{account}}",
+    "deleteKeepsBucket": "Bøtta, midlene i den og transaksjonene blir stående.",
+    "deleteKeepsAccount": "Kontoen, saldoen og transaksjonene blir stående.",
+    "deleted": "{{name}} er ikke lenger et sparemål."
+  },
   "newTransaction": {
     "type": "Type",
     "types": {
@@ -878,7 +986,8 @@
     "futureNote": "Den er frem i tid, så den lagres som en planlagt transaksjon som føres én gang {{date}}.",
     "savedRepeating": "Lagret. Den gjentas fra {{date}}.",
     "savedEnded": "Lagret.",
-    "scheduledFor": "Planlagt til {{date}}."
+    "scheduledFor": "Planlagt til {{date}}.",
+    "savingsTransferHint": "Denne overføringen flyttet avsatt sparing, så beløpet og kontoene kan ikke endres. Reverser den for å sette pengene av igjen."
   },
   "transactionTypes": {
     "INC": "Inntekt",
@@ -965,7 +1074,16 @@
     "scheduledMark": "Ført av en planlagt transaksjon",
     "makeRecurring": "Gjør gjentakende",
     "balanceAfter": "Saldo {{amount}}",
-    "balanceAfterDetail": "Saldo etter: {{amount}}"
+    "balanceAfterDetail": "Saldo etter: {{amount}}",
+    "savingsLines_one": "Sparing",
+    "savingsLines_other": "Sparing",
+    "savingsLineOn": "Satt av på {{account}}",
+    "savingsNote": "Registrert av Sparing, så den kan ikke korrigeres. Du kan reversere den.",
+    "savingsTransferNote": "Denne overføringen flyttet avsatt sparing: beløpet og kontoene kan ikke endres. Reverserer du den, settes pengene av igjen.",
+    "reverseSavingsReserve": "Pengene er ikke lenger satt av til målet.",
+    "reverseSavingsRelease": "Pengene settes av til målet igjen.",
+    "reverseSavingsDone": "Pengene settes av til målet igjen.",
+    "unknownTarget": "Sparemål #{{id}}"
   },
   "cycles": {
     "plan": "Planlegg en periode",
@@ -1828,12 +1946,14 @@
       "504": "Fikk ikke kontakt med serveren"
     },
     "codes": {
+      "above_capacity": "Det ville tatt bøtta over kapasiteten.",
       "account_has_buckets": "Bøtter bruker denne kontoen som kilde. Velg en ny kildekonto for hver av dem, eller slett dem i bøtteoppsettet.",
       "active_cycle_exists": "En annen periode er aktiv. Avslutt den først.",
       "admin_only": "Bare administratorer kan gjøre dette.",
       "already_refilled": "Bøtta er allerede fylt på i denne perioden.",
       "already_resolved": "Den er allerede godkjent eller hoppet over.",
       "already_reversed": "Transaksjonen er reversert.",
+      "already_target": "Det er allerede et sparemål.",
       "balance_not_zero": "Det er fortsatt penger på kontoen. Overfør dem til en annen konto, eller juster saldoen til 0.",
       "body_too_large": "Forespørselen er for stor.",
       "bucket_lines_locked": "Transaksjonen ligger utenfor den aktive perioden, så bøttelinjene kan ikke endres. Du kan fortsatt endre bankbeløpet, motparten, beskrivelsen og taggene.",
@@ -1846,6 +1966,7 @@
       "cycle_overlap": "Perioden ville overlappet en annen periode.",
       "database_unavailable": "Databasen svarer ikke.",
       "export_too_new": "Denne eksporten er fra en nyere versjon av appen. Oppdater appen først.",
+      "goal_above_capacity": "Målet kan ikke være over bøttas kapasitet.",
       "internal_error": "Serveren støtte på et problem.",
       "invalid_credentials": "Feil brukernavn eller passord.",
       "invalid_export": "Denne filen er ikke en eksport fra Bucky BudgetR, eller den er skadet.",
@@ -1855,7 +1976,10 @@
       "no_active_cycle": "Bøttetransaksjoner trenger en aktiv periode. Start en periode først.",
       "no_change": "Saldoen er allerede dette beløpet.",
       "not_correctable": "Systemtransaksjoner av denne typen kan ikke korrigeres eller reverseres.",
+      "not_enough_held": "Så mye er ikke satt av til målet på denne kontoen, eller det var ikke satt av ennå på det tidspunktet.",
+      "not_enough_unallocated": "Kontoen har ikke så mye ufordelte penger.",
       "not_found": "Det finnes ikke, eller det er slettet.",
+      "not_fully_manual": "Bare en bøtte med Helt manuelt kan være et sparemål.",
       "not_next_cycle": "En tidligere periode er planlagt. Start den først.",
       "own_account": "Du kan ikke endre din egen konto her. Bruk Innstillinger.",
       "password_change_required": "Bytt passordet ditt først.",
@@ -1863,9 +1987,11 @@
       "pdf_unavailable": "PDF-eksport er ikke satt opp på denne serveren, eller PDF-tjenesten svarer ikke.",
       "read_only": "Denne økten kan bare lese.",
       "refill_unavailable": "Bare inntekt i den aktive perioden kan utløse påfyll.",
+      "savings_transfer": "Denne overføringen flyttet avsatt sparing, så beløpet og kontoene kan ikke endres. Reverser den for å sette pengene av igjen.",
       "too_many_renders": "Andre PDF-er lages nå. Prøv igjen om litt.",
       "unauthenticated": "Logg inn først.",
       "username_taken": "Det brukernavnet er allerede i bruk.",
+      "wrong_account_type": "Bare en sparekonto, BSU-, fonds- eller investeringskonto kan være et sparemål.",
       "wrong_password": "Det nåværende passordet er feil.",
       "wrong_refill_mode": "Bare bøtter med manuelt påfyll kan fylles på for hånd."
     },
@@ -2086,7 +2212,7 @@
     "count_one": "{{count}} åpent varsel",
     "count_other": "{{count}} åpne varsler",
     "empty": "Ingenting å gjøre",
-    "emptyHint": "Påminnelser og gjøremål vises her: planlagte transaksjoner å godkjenne, regninger som kommer, saldoer å oppdatere og prioriterte bøtter som ikke er dekket.",
+    "emptyHint": "Påminnelser og gjøremål vises her: planlagte transaksjoner å godkjenne, regninger som kommer, saldoer å oppdatere, prioriterte bøtter som ikke er dekket og sparing å flytte.",
     "settingsLink": "Velg hvilke i Innstillinger.",
     "dismiss": "Avvis",
     "done": "Saldoen stemmer",
@@ -2127,7 +2253,15 @@
       "bucket_uncoveredHint": "Prioriterte bøtter som ikke er helt dekket.",
       "upcomingDays": "Vis regninger",
       "days_one": "{{count}} dag fram",
-      "days_other": "{{count}} dager fram"
+      "days_other": "{{count}} dager fram",
+      "savings_transfer": "Sparing å overføre",
+      "savings_transferHint": "Penger satt av til sparemål, som venter på at du flytter dem."
+    },
+    "savings": {
+      "title": "Penger satt av til {{name}}",
+      "body": "{{amount}} er satt av. Gjør overføringen i banken, og trykk Utført.",
+      "bodyBucket": "{{amount}} er satt av på en annen konto. Flytt det til bøttas konto, og trykk Utført.",
+      "open": "Åpne Sparing"
     }
   }
 }

@@ -62,7 +62,7 @@ func toAPINotification(n notifications.Notification) api.Notification {
 		At: nullable.NewNullNullable[time.Time](), Count: nullable.NewNullNullable[int](),
 		Overdue:    nullable.NewNullNullable[int](),
 		ScheduleId: text(n.ScheduleID), AccountId: text(n.AccountID), BucketId: text(n.BucketID),
-		CycleId: text(n.CycleID), Amount: nullable.NewNullNullable[string](), Currency: text(n.Currency),
+		CycleId: text(n.CycleID), TargetId: text(n.TargetID), Amount: nullable.NewNullNullable[string](), Currency: text(n.Currency),
 	}
 	if !n.At.IsZero() {
 		out.At = nullable.NewNullableWithValue(n.At.UTC())

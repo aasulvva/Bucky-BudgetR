@@ -18,6 +18,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/notifications"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/refill"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/savings"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/schedules"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/testdb"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/transactions"
@@ -387,5 +388,64 @@ func TestDismissUnknown(t *testing.T) {
 	}
 	if err := e.svc.Dismiss(t.Context(), bob, got[0].Key); !errors.Is(err, notifications.ErrNotFound) {
 		t.Fatalf("bob dismissing = %v", err)
+	}
+}
+
+// TestSavingsTransfer: one per savings target with money held for it (#231),
+// shown again after a dismissal once more is held or some is moved.
+func TestSavingsTransfer(t *testing.T) {
+	e := setup(t)
+	ctx := t.Context()
+	clock := func() time.Time { return *e.now }
+	sv := savings.NewService(e.pool, ledger.New(ledger.Options{AfterRecord: allocation.AfterRecord}), savings.Options{Now: clock})
+	e.svc = notifications.NewService(e.pool, notifications.Options{Now: clock, Savings: sv})
+	buffer := e.newAccount(t, "Buffer", sqlc.AccountTypeSavings, "0")
+	target, err := sv.Create(ctx, e.user, savings.New{AccountID: buffer, Goal: dec("5000")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	held := func() []notifications.Notification {
+		t.Helper()
+		var out []notifications.Notification
+		for _, n := range e.list(t) {
+			if n.Kind == notifications.KindSavings {
+				out = append(out, n)
+			}
+		}
+		return out
+	}
+	if got := held(); len(got) != 0 {
+		t.Fatalf("nothing held: %+v", got)
+	}
+
+	if _, err := sv.Add(ctx, e.user, target.ID, e.account, dec("300")); err != nil {
+		t.Fatal(err)
+	}
+	got := held()
+	if len(got) != 1 || got[0].TargetID != target.ID || got[0].Amount.Decimal.StringFixed(2) != "300.00" ||
+		got[0].Currency != "NOK" || got[0].Severity != notifications.Info {
+		t.Fatalf("held: %+v", got)
+	}
+	e.dismiss(t, got[0].Key)
+	if got := held(); len(got) != 0 {
+		t.Errorf("dismissed: %+v", got)
+	}
+	// Moving some of it shows it again, with what's left.
+	if _, err := sv.Done(ctx, e.user, target.ID, savings.Done{AccountID: e.account, Amount: dec("100")}); err != nil {
+		t.Fatal(err)
+	}
+	if got := held(); len(got) != 1 || got[0].Amount.Decimal.StringFixed(2) != "200.00" {
+		t.Errorf("after Done: %+v", got)
+	}
+	e.prefer(t, `{"savings_transfer": false}`)
+	if got := held(); len(got) != 0 {
+		t.Errorf("switched off: %+v", got)
+	}
+	e.prefer(t, `{}`)
+	if _, err := sv.Done(ctx, e.user, target.ID, savings.Done{AccountID: e.account, Amount: dec("200")}); err != nil {
+		t.Fatal(err)
+	}
+	if got := held(); len(got) != 0 {
+		t.Errorf("all moved: %+v", got)
 	}
 }
