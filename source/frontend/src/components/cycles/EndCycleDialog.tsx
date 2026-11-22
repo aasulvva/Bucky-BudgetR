@@ -194,7 +194,7 @@ function EndForm({
                           {account
                             ? t("cycles.about", {
                                 amount: formatMoney(
-                                  sweepEstimate(preview, account, e.keep),
+                                  sweepEstimate(list, preview, account, e.keep),
                                   account.currency,
                                 ),
                               })

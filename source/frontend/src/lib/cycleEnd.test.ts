@@ -86,7 +86,7 @@ describe("sweepEstimate (#235)", () => {
     name: "Food",
     source_account_id: "1234",
     target_funds: "800.00",
-    current_available_funds: "500.00",
+    current_available_funds: "800.00",
   });
   const saved = bucket({
     id: "1000000002",
@@ -103,15 +103,39 @@ describe("sweepEstimate (#235)", () => {
     target_funds: "900.00",
     current_available_funds: "900.00",
   });
-  const preview = endPreview([food, saved, elsewhere], false);
-  const main = { id: "1234", unallocated: "1000.00" };
+  const all = [food, saved, elsewhere];
+  const main = { id: "1234", balance: "2100.00", reserved: "0.00" };
 
-  it("adds what the account's emptied buckets give back to unallocated, less keep", () => {
-    // Only Food's funded 500: the saved one's goes to savings, the other's to its account.
-    expect(sweepEstimate(preview, main, "200.00")).toBe("1300.00");
+  it("sweeps what the emptied buckets give back, but not what they send to savings", () => {
+    // 2 100 − the 300 the saved bucket's OVF holds for savings − 200 to keep.
+    expect(sweepEstimate(all, endPreview(all, false), main, "200.00")).toBe("1600.00");
   });
 
-  it("is never below 0", () => {
-    expect(sweepEstimate(preview, main, "5000.00")).toBe("0.00");
+  it("funds the buckets left first, as an underfunded account does (demouser's Regningskonto)", () => {
+    const rent = bucket({
+      id: "1000000004",
+      name: "Rent",
+      source_account_id: "1639",
+      target_funds: "12500.00",
+      current_available_funds: "6594.56",
+    });
+    const insurance = bucket({
+      id: "1000000005",
+      name: "Insurance",
+      source_account_id: "1639",
+      keep_funds: true,
+      target_funds: "2400.00",
+      current_available_funds: "0.00",
+    });
+    const list = [rent, insurance];
+    const bills = { id: "1639", balance: "6594.56", reserved: "0.00" };
+    // Rent is emptied, Insurance takes 2 400 of it: 6 594.56 − 2 400 − 1 000.
+    expect(sweepEstimate(list, endPreview(list, false), bills, "1000.00")).toBe("3194.56");
+  });
+
+  it("covers the savings holds before it, and is never below 0", () => {
+    const held = { ...main, reserved: "1500.00" };
+    expect(sweepEstimate(all, endPreview(all, false), held, "0.00")).toBe("300.00");
+    expect(sweepEstimate(all, endPreview(all, false), main, "5000.00")).toBe("0.00");
   });
 });

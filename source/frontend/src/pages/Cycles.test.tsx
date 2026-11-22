@@ -415,7 +415,7 @@ describe("ending a cycle", () => {
   it("estimates what the At cycle end sweeps take (#235)", async () => {
     given({ active, next: planned });
     apiMock.on("GET /api/v1/accounts", {
-      body: [account({ id: "1234", name: "Main", unallocated: "2000.00" })],
+      body: [account({ id: "1234", name: "Main", balance: "7000.00" })],
     });
     apiMock.on("GET /api/v1/savings/budget", {
       body: [
@@ -427,7 +427,7 @@ describe("ending a cycle", () => {
     const dialog = await openEnd();
     expect(await dialog.findByText("Then the savings budget sweeps")).toBeInTheDocument();
     expect(dialog.getByText("Savings distributor, from Main")).toBeInTheDocument();
-    // 2 000 unallocated + Groceries' funded 500 − 1 000 to keep.
+    // Groceries is emptied; Car keeps its 4 500, so 7 000 − 4 500 − 1 000 to keep.
     expect(dialog.getByText(`about ${plain(formatMoney("1500.00"))}`)).toBeInTheDocument();
     expect(dialog.getAllByText(/, from Main$/)).toHaveLength(1);
   });

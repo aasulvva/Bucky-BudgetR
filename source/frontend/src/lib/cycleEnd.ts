@@ -86,22 +86,36 @@ function perCurrency(emptied: Emptied[]): { currency: string; amount: string }[]
 }
 
 /**
- * About what an At cycle end sweep (#235) takes from the account: what it
- * has unallocated now, plus what its emptied buckets give back to it, above
- * keep (at least 0). It runs after the OVFs, before the next cycle's refills.
+ * About what an At cycle end sweep (#235) takes from the account. It runs
+ * after the OVFs, before the next cycle's refills, and takes what's
+ * unallocated then above keep (at least 0). By then the emptied buckets have
+ * no TF, so the buckets left (Keep funds on, or at 0 or below) are funded
+ * first, up to their TF: an underfunded account's freed money goes to them.
+ * The savings holds come next, with what the emptied buckets sent to
+ * savings (#233). This mirrors balance.NewMoney.
  */
 export function sweepEstimate(
+  buckets: Bucket[],
   preview: EndPreview,
-  account: { id: string; unallocated: string },
+  account: { id: string; balance: string; reserved: string },
   keep: string,
 ): string {
-  const back = preview.emptied
+  const emptied = new Set(preview.emptied.map((e) => e.bucket.id));
+  const left = buckets.filter((b) => b.source_account_id === account.id && !emptied.has(b.id));
+  const wanted = addAmounts(
+    ...left.map((b) => (positive(b.target_funds) ? b.target_funds : "0.00")),
+  );
+  const free = positive(account.balance) ? account.balance : "0.00";
+  const allocated = min(free, wanted);
+  const toSavings = preview.emptied
     .filter(
       (e) =>
         e.bucket.source_account_id === account.id &&
-        e.bucket.overflow_destination === "unallocated",
+        e.bucket.overflow_destination !== "unallocated",
     )
     .map((e) => e.funded);
-  const above = subtractAmounts(addAmounts(account.unallocated, ...back), keep);
+  const held = addAmounts(account.reserved, ...toSavings);
+  const unallocated = subtractAmounts(subtractAmounts(free, allocated), held);
+  const above = subtractAmounts(unallocated, keep);
   return positive(above) ? above : "0.00";
 }
