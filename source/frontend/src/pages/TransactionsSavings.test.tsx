@@ -6,7 +6,7 @@ import userEvent from "@testing-library/user-event";
 
 import { formatMoney } from "@/lib/money";
 import { apiMock } from "@/test/api";
-import { account, savingsTarget, transaction } from "@/test/fixtures";
+import { account, bucket, savingsTarget, transaction } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
 
@@ -16,6 +16,19 @@ const m = (amount: string) => formatMoney(amount, "NOK").replace(/\s/g, " ");
 const main = account({ id: "1234", name: "Main account" });
 const buffer = account({ id: "2345", name: "Buffer account", type: "savings" });
 const rainy = savingsTarget({ id: "1000001001", name: "Rainy day", account_id: buffer.id });
+
+const holiday = bucket({ id: "1000000001", name: "Holiday", source_account_id: main.id });
+const DISTRIBUTOR = "1000009999";
+const split = transaction({
+  id: "2026102300000003",
+  type: "SVD",
+  bank_lines: [],
+  bucket_lines: [{ bucket_id: holiday.id, cycle_id: "20261101", amount: "400.00" }],
+  savings_lines: [
+    { holder_id: DISTRIBUTOR, account_id: main.id, amount: "-1000.00" },
+    { holder_id: rainy.id, account_id: main.id, amount: "600.00" },
+  ],
+});
 
 const reserve = transaction({
   id: "2026102300000001",
@@ -40,6 +53,11 @@ beforeEach(() => {
   apiMock.on("GET /api/v1/transactions", { body: { items: [reserve, done], next_cursor: null } });
   apiMock.on(`GET /api/v1/transactions/${reserve.id}`, { body: { ...reserve, history: [] } });
   apiMock.on(`GET /api/v1/transactions/${done.id}`, { body: { ...done, history: [] } });
+  apiMock.on(`GET /api/v1/transactions/${split.id}`, { body: { ...split, history: [] } });
+  apiMock.on("GET /api/v1/buckets", { body: [holiday] });
+  apiMock.on("GET /api/v1/savings/distributor", {
+    body: { id: DISTRIBUTOR, hold_mode: "immediate", min_amount: null, held: [] },
+  });
 });
 
 describe("savings transactions", () => {
@@ -84,5 +102,16 @@ describe("savings transactions", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "From account" })).toBeDisabled();
     expect(screen.getByRole("combobox", { name: "To account" })).toBeDisabled();
+  });
+
+  it("shows a split's lines off the distributor and into the bucket (#232)", async () => {
+    renderRoute(`/transactions?open=${split.id}`);
+    const panel = within(await screen.findByRole("article", { name: "Savings distribution" }));
+    const lines = within(panel.getByRole("region", { name: "Savings" }));
+    expect(lines.getByText("Savings distributor")).toBeInTheDocument();
+    expect(lines.getByText("Rainy day")).toBeInTheDocument();
+    expect(panel.getByText("Holiday")).toBeInTheDocument();
+    await userEvent.click(panel.getByRole("button", { name: "Reverse" }));
+    expect(panel.getByText(/The money goes back to the savings distributor\./)).toBeInTheDocument();
   });
 });

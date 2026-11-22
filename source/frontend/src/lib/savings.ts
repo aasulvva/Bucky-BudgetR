@@ -3,10 +3,10 @@
 // checks it all again.
 
 import { accountTypeLabel, type Account, type AccountType, type Bucket } from "@/api/accounts";
-import type { SavingsTarget } from "@/api/savings";
+import type { SavingsDistributor, SavingsRule, SavingsTarget } from "@/api/savings";
 import i18n from "@/i18n";
 
-import { addAmounts, compareAmounts, percentOf, subtractAmounts } from "./money";
+import { addAmounts, compareAmounts, formatMoney, percentOf, subtractAmounts } from "./money";
 
 /** The account types that can be a savings target. */
 export const TARGET_ACCOUNT_TYPES: AccountType[] = ["savings", "bsu", "fund", "investment"];
@@ -185,4 +185,104 @@ export function targetKindText(
   }
   const account = accounts.find((a) => a.id === target.account_id);
   return account ? accountTypeLabel(account.type) : i18n.t("savings.kindAccount");
+}
+
+// The distributor (#232, spec §8.4).
+
+/** A rule's range as the forms edit it: from, and to (null: no end). */
+export interface RangeInput {
+  from: string | null;
+  to: string | null;
+}
+
+/** The target's rules, by where they start. */
+export function rulesOf(rules: SavingsRule[], targetId: string): SavingsRule[] {
+  return rules
+    .filter((r) => r.target_id === targetId)
+    .sort((a, b) => compareAmounts(a.from, b.from));
+}
+
+export type RangeProblem = "noFrom" | "toNotAbove" | "overlap";
+
+/**
+ * What's wrong with a range among its target's other rules (skip: the one
+ * being edited). Ranges run from up to, not including, to, so touching ones
+ * are fine; the server checks it again.
+ */
+export function rangeProblem(
+  input: RangeInput,
+  siblings: SavingsRule[],
+  skip?: string,
+): { problem: RangeProblem; with?: SavingsRule } | null {
+  const from = input.from;
+  if (from === null || compareAmounts(from, "0") < 0) return { problem: "noFrom" };
+  if (input.to !== null && compareAmounts(input.to, from) <= 0) return { problem: "toNotAbove" };
+  for (const r of siblings) {
+    if (r.id === skip) continue;
+    const startsBeforeItEnds = r.to === null || compareAmounts(from, r.to) < 0;
+    const endsAfterItStarts = input.to === null || compareAmounts(r.from, input.to) < 0;
+    if (startsBeforeItEnds && endsAfterItStarts) return { problem: "overlap", with: r };
+  }
+  return null;
+}
+
+/** The stretches of position no rule of the target covers, below its last range. */
+export function gapsOf(rules: SavingsRule[]): RangeInput[] {
+  const sorted = [...rules].sort((a, b) => compareAmounts(a.from, b.from));
+  const gaps: RangeInput[] = [];
+  let edge = "0.00";
+  for (const r of sorted) {
+    if (compareAmounts(r.from, edge) > 0) gaps.push({ from: edge, to: r.from });
+    if (r.to === null) return gaps;
+    if (compareAmounts(r.to, edge) > 0) edge = r.to;
+  }
+  return gaps;
+}
+
+/** Where the target's last range ends, or null when it has no end; "0.00" without rules. */
+export function rulesEnd(rules: SavingsRule[]): string | null {
+  let edge = "0.00";
+  for (const r of rules) {
+    if (r.to === null) return null;
+    if (compareAmounts(r.to, edge) > 0) edge = r.to;
+  }
+  return edge;
+}
+
+/** "0 kr – 40 000 kr", or "40 000 kr and up". */
+export function rangeText(range: { from: string; to: string | null }, currency: string): string {
+  const from = formatMoney(range.from, currency);
+  return range.to === null
+    ? i18n.t("savingsSetup.distributor.rangeOpen", { from })
+    : i18n.t("savingsSetup.distributor.range", { from, to: formatMoney(range.to, currency) });
+}
+
+/** A target's position as the distributor sees it: its balance or TF, not below 0, plus held. */
+export function position(target: SavingsTarget): string {
+  return progress(target).saved;
+}
+
+/** What the distributor holds on the account. */
+export function distributorHeldOn(distributor: SavingsDistributor, accountId: string): string {
+  return distributor.held.find((h) => h.account_id === accountId)?.amount ?? "0.00";
+}
+
+/** The accounts the distributor can take money from: the targets' currencies. */
+export function distributorSources(accounts: Account[], targets: SavingsTarget[]): Account[] {
+  const currencies = new Set(targets.map((t) => t.currency));
+  return accounts.filter((a) => currencies.has(a.currency));
+}
+
+/** What adding to the distributor does now, by its hold mode. */
+export function addOutcome(
+  distributor: SavingsDistributor,
+  accountId: string,
+  amount: string,
+): "split" | "waits" | "reachesMinimum" | "belowMinimum" {
+  if (distributor.hold_mode === "immediate") return "split";
+  if (distributor.hold_mode === "manual") return "waits";
+  const after = addAmounts(distributorHeldOn(distributor, accountId), amount);
+  return compareAmounts(after, distributor.min_amount ?? "0") >= 0
+    ? "reachesMinimum"
+    : "belowMinimum";
 }

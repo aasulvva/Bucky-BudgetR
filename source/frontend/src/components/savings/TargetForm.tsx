@@ -53,12 +53,15 @@ export function TargetForm({
   targets,
   accounts,
   buckets,
+  ruleCount = 0,
   onDone,
 }: {
   target: SavingsTarget | undefined;
   targets: SavingsTarget[];
   accounts: Account[];
   buckets: Bucket[];
+  /** How many distributor rules the target has (#232). */
+  ruleCount?: number;
   /** After saving (with the target's ID), deleting or cancelling (null). */
   onDone: (saved: string | null) => void;
 }) {
@@ -141,6 +144,7 @@ export function TargetForm({
       <DeleteTarget
         target={target}
         accounts={accounts}
+        ruleCount={ruleCount}
         onCancel={() => {
           setDeleting(false);
         }}
@@ -295,6 +299,14 @@ export function TargetForm({
           minRows={2}
           maxLength={MAX_NOTE}
         />
+        {target && (
+          <Text size="sm">
+            {t("savingsSetup.distributor.ruleCount", { count: ruleCount })} ·{" "}
+            <Anchor component={Link} to="/savings/setup?distributor">
+              {t("savingsSetup.distributor.editRules")}
+            </Anchor>
+          </Text>
+        )}
 
         {save.error && <ErrorAlert error={save.error} />}
 
@@ -335,11 +347,13 @@ export function TargetForm({
 function DeleteTarget({
   target,
   accounts,
+  ruleCount,
   onCancel,
   onDone,
 }: {
   target: SavingsTarget;
   accounts: Account[];
+  ruleCount: number;
   onCancel: () => void;
   onDone: () => void;
 }) {
@@ -390,6 +404,7 @@ function DeleteTarget({
             ? "savingsSetup.deleteKeepsBucket"
             : "savingsSetup.deleteKeepsAccount",
         )}
+        {ruleCount > 0 && ` ${t("savingsSetup.deleteRules", { count: ruleCount })}`}
       </Text>
       {remove.error && <ErrorAlert error={remove.error} />}
       <Group justify="flex-end" gap="xs">

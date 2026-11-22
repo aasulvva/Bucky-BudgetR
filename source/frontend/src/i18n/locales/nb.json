@@ -863,6 +863,44 @@
       "targetHeld": "{{name}} slutter å være et sparemål, og {{amount}} som er satt av til det, går tilbake til ufordelt.",
       "target": "{{name}} slutter å være et sparemål.",
       "reserved": "{{amount}} som er satt av til sparing på den, frigjøres."
+    },
+    "distributor": {
+      "setup": "Spareoppsett for sparefordeleren",
+      "mode": {
+        "immediate": "Fordeler penger mellom sparemålene når de kommer inn",
+        "minimum": "Fordeler pengene på en konto når den har {{amount}}",
+        "manual": "Venter til du trykker Fordel nå"
+      },
+      "noRules": "Ingen regler ennå, så sparefordeleren gir ingenting til sparemålene. Sett dem opp i Spareoppsett.",
+      "noTargets": "Lag et sparemål først: sparefordeleren fordeler penger mellom dem.",
+      "empty": "Den har ingenting nå.",
+      "held": "I sparefordeleren",
+      "waiting": "{{amount}} på {{account}}",
+      "add": {
+        "title": "Legg til sparing: sparefordeleren",
+        "name": "Legg til sparing i sparefordeleren",
+        "noAccounts": "Du har ingen konto i sparemålenes valuta å legge til fra.",
+        "split": "{{amount}} av de ufordelte pengene på {{account}} fordeles mellom sparemålene med en gang:",
+        "reachesMinimum": "Da har sparefordeleren {{total}} på {{account}}, over minstebeløpet på {{minimum}}, så det fordeles med en gang:",
+        "belowMinimum": "{{amount}} venter i sparefordeleren til den har {{minimum}} på {{account}} (med dette {{total}}).",
+        "waits": "{{amount}} venter i sparefordeleren til du trykker Fordel nå.",
+        "held": "{{amount}} er i sparefordeleren."
+      },
+      "distribute": {
+        "title": "Fordel nå",
+        "name": "Fordel nå fra {{account}}",
+        "submit": "Fordel nå",
+        "all": "Fordel alt",
+        "hint": "Det sparefordeleren har, fordeles mellom sparemålene etter reglene deres. Det ingen sparemål tar, blir værende i den.",
+        "done_one": "Fordelingen er registrert.",
+        "done_other": "{{count}} fordelinger registrert, én per konto.",
+        "nothing": "Ingen sparemål tar noe nå, så ingenting ble fordelt."
+      },
+      "clear": {
+        "title": "Frigjør: sparefordeleren",
+        "name": "Frigjør sparefordeleren på {{account}}",
+        "cleared": "{{amount}} frigjort fra sparefordeleren."
+      }
     }
   },
   "savingsSetup": {
@@ -902,7 +940,67 @@
     "deleteReleasesOn": "{{amount}} på {{account}}",
     "deleteKeepsBucket": "Bøtta, midlene i den og transaksjonene blir stående.",
     "deleteKeepsAccount": "Kontoen, saldoen og transaksjonene blir stående.",
-    "deleted": "{{name}} er ikke lenger et sparemål."
+    "deleted": "{{name}} er ikke lenger et sparemål.",
+    "distributor": {
+      "title": "Sparefordeler",
+      "intro": "Penger du legger i sparefordeleren, fordeles mellom sparemålene etter reglene deres. De settes av til dem på kontoen sin, som når du legger til et sparemål selv; et bøttesparemål som fylles fra den kontoen, får sin del rett i bøtta.",
+      "holdMode": "Når det fordeles",
+      "holdModeHint": "Å endre den flytter ikke penger sparefordeleren allerede har.",
+      "modes": {
+        "immediate": "Med en gang",
+        "minimum": "Ved et minstebeløp",
+        "manual": "Bare manuelt"
+      },
+      "modeHints": {
+        "immediate": "Pengene fordeles så snart de kommer inn.",
+        "minimum": "Pengene på en konto fordeles når sparefordeleren har beløpet der.",
+        "manual": "Pengene venter til du trykker Fordel nå på Sparing-skjermen."
+      },
+      "minimum": "Minstebeløp",
+      "minimumHint": "Sjekkes per konto.",
+      "enterMinimum": "Skriv inn et beløp over 0.",
+      "saveMode": "Lagre",
+      "modeSaved": "Sparefordeleren er lagret.",
+      "rules": "Regler",
+      "rulesHint": "Hver regel gjelder et intervall av hvor et sparemål står (saldoen eller midlene pluss det som er satt av til det), med en prioritet fra 0 til 6. I hvert intervall får sparemålet en del etter prioriteten sin blant de andre; 0 gir det ingenting.",
+      "noTargets": "Ingen sparemål ennå.",
+      "standing": "Nå {{position}} · mål {{goal}}",
+      "noRules": "Ingen regler: det får ingenting fra sparefordeleren.",
+      "range": "{{from}} – {{to}}",
+      "rangeOpen": "{{from}} og over",
+      "priorityValue": "Prioritet {{priority}}",
+      "pastGoal": "Forbi målet",
+      "pastGoalHint": "Uten dette slutter sparemålet å få penger ved målet på {{goal}}.",
+      "capacityCaps": "Bøttas grense på {{amount}} gjelder fortsatt.",
+      "gap": "Mellom {{from}} og {{to}} får {{name}} ingenting: ingen regel dekker det.",
+      "addRule": "Legg til intervall",
+      "addRuleFor": "Legg til intervall for {{name}}",
+      "editRule": "Rediger {{range}} for {{name}}",
+      "deleteRule": "Slett {{range}} for {{name}}",
+      "editRuleTitle": "Rediger et intervall for {{name}}",
+      "newRuleTitle": "Nytt intervall for {{name}}",
+      "from": "Fra",
+      "to": "Opp til",
+      "noEnd": "Ingen slutt",
+      "priority": "Prioritet",
+      "priorityNone": "0 (ingenting)",
+      "saveRule": "Lagre intervall",
+      "enterFrom": "Skriv inn hvor intervallet starter, 0 eller mer.",
+      "toNotAbove": "Opp til må være over Fra, eller tom for ingen slutt.",
+      "overlap": "Intervallet overlapper {{range}}.",
+      "preview": "Forhåndsvisning",
+      "previewHint": "Hvordan et beløp ville blitt fordelt nå, etter reglene og hvor hvert sparemål står. Ingenting registreres.",
+      "previewFrom": "Fra konto",
+      "previewResult": "Fordelingen",
+      "intoBucket": "rett i bøtta",
+      "stays": "Blir i sparefordeleren",
+      "nobodyTakes": "Ingen sparemål ville fått noe: sjekk reglene.",
+      "ruleCount_one": "{{count}} regel i sparefordeleren",
+      "ruleCount_other": "{{count}} regler i sparefordeleren",
+      "editRules": "Rediger i sparefordeleren"
+    },
+    "deleteRules_one": "Regelen i sparefordeleren slettes.",
+    "deleteRules_other": "De {{count}} reglene i sparefordeleren slettes."
   },
   "newTransaction": {
     "type": "Type",

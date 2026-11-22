@@ -59,6 +59,7 @@ function defaults(): Map<string, Handler> {
       "GET /api/v1/savings/distributor",
       { body: { id: null, hold_mode: "immediate", min_amount: null, held: [] } },
     ],
+    ["GET /api/v1/savings/rules", { body: [] }],
   ]);
 }
 

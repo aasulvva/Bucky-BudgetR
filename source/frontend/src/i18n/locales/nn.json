@@ -863,6 +863,44 @@
       "targetHeld": "{{name}} sluttar å vere eit sparemål, og {{amount}} som er sett av til det, går tilbake til ufordelt.",
       "target": "{{name}} sluttar å vere eit sparemål.",
       "reserved": "{{amount}} som er sett av til sparing på han, blir frigjort."
+    },
+    "distributor": {
+      "setup": "Spareoppsett for sparefordelaren",
+      "mode": {
+        "immediate": "Fordeler pengar mellom sparemåla når dei kjem inn",
+        "minimum": "Fordeler pengane på ein konto når han har {{amount}}",
+        "manual": "Ventar til du trykkjer Fordel no"
+      },
+      "noRules": "Ingen reglar enno, så sparefordelaren gjev ingenting til sparemåla. Set dei opp i Spareoppsett.",
+      "noTargets": "Lag eit sparemål først: sparefordelaren fordeler pengar mellom dei.",
+      "empty": "Han har ingenting no.",
+      "held": "I sparefordelaren",
+      "waiting": "{{amount}} på {{account}}",
+      "add": {
+        "title": "Legg til sparing: sparefordelaren",
+        "name": "Legg til sparing i sparefordelaren",
+        "noAccounts": "Du har ingen konto i valutaen til sparemåla å leggje til frå.",
+        "split": "{{amount}} av dei ufordelte pengane på {{account}} blir fordelte mellom sparemåla med ein gong:",
+        "reachesMinimum": "Då har sparefordelaren {{total}} på {{account}}, over minstebeløpet på {{minimum}}, så det blir fordelt med ein gong:",
+        "belowMinimum": "{{amount}} ventar i sparefordelaren til han har {{minimum}} på {{account}} (med dette {{total}}).",
+        "waits": "{{amount}} ventar i sparefordelaren til du trykkjer Fordel no.",
+        "held": "{{amount}} er i sparefordelaren."
+      },
+      "distribute": {
+        "title": "Fordel no",
+        "name": "Fordel no frå {{account}}",
+        "submit": "Fordel no",
+        "all": "Fordel alt",
+        "hint": "Det sparefordelaren har, blir fordelt mellom sparemåla etter reglane deira. Det ingen sparemål tek, blir verande i han.",
+        "done_one": "Fordelinga er registrert.",
+        "done_other": "{{count}} fordelingar registrerte, éi per konto.",
+        "nothing": "Ingen sparemål tek noko no, så ingenting vart fordelt."
+      },
+      "clear": {
+        "title": "Frigjer: sparefordelaren",
+        "name": "Frigjer sparefordelaren på {{account}}",
+        "cleared": "{{amount}} frigjort frå sparefordelaren."
+      }
     }
   },
   "savingsSetup": {
@@ -902,7 +940,67 @@
     "deleteReleasesOn": "{{amount}} på {{account}}",
     "deleteKeepsBucket": "Bøtta, midlane i ho og transaksjonane blir ståande.",
     "deleteKeepsAccount": "Kontoen, saldoen og transaksjonane blir ståande.",
-    "deleted": "{{name}} er ikkje lenger eit sparemål."
+    "deleted": "{{name}} er ikkje lenger eit sparemål.",
+    "distributor": {
+      "title": "Sparefordelar",
+      "intro": "Pengar du legg i sparefordelaren, blir fordelte mellom sparemåla etter reglane deira. Dei blir sette av til dei på kontoen sin, som når du legg til eit sparemål sjølv; eit bøttesparemål som blir fylt frå den kontoen, får sin del rett i bøtta.",
+      "holdMode": "Når det blir fordelt",
+      "holdModeHint": "Å endre han flyttar ikkje pengar sparefordelaren alt har.",
+      "modes": {
+        "immediate": "Med ein gong",
+        "minimum": "Ved eit minstebeløp",
+        "manual": "Berre manuelt"
+      },
+      "modeHints": {
+        "immediate": "Pengane blir fordelte så snart dei kjem inn.",
+        "minimum": "Pengane på ein konto blir fordelte når sparefordelaren har beløpet der.",
+        "manual": "Pengane ventar til du trykkjer Fordel no på Sparing-skjermen."
+      },
+      "minimum": "Minstebeløp",
+      "minimumHint": "Blir sjekka per konto.",
+      "enterMinimum": "Skriv inn eit beløp over 0.",
+      "saveMode": "Lagre",
+      "modeSaved": "Sparefordelaren er lagra.",
+      "rules": "Reglar",
+      "rulesHint": "Kvar regel gjeld eit intervall av kvar eit sparemål står (saldoen eller midlane pluss det som er sett av til det), med ein prioritet frå 0 til 6. I kvart intervall får sparemålet ein del etter prioriteten sin blant dei andre; 0 gjev det ingenting.",
+      "noTargets": "Ingen sparemål enno.",
+      "standing": "No {{position}} · mål {{goal}}",
+      "noRules": "Ingen reglar: det får ingenting frå sparefordelaren.",
+      "range": "{{from}} – {{to}}",
+      "rangeOpen": "{{from}} og over",
+      "priorityValue": "Prioritet {{priority}}",
+      "pastGoal": "Forbi målet",
+      "pastGoalHint": "Utan dette sluttar sparemålet å få pengar ved målet på {{goal}}.",
+      "capacityCaps": "Grensa til bøtta på {{amount}} gjeld framleis.",
+      "gap": "Mellom {{from}} og {{to}} får {{name}} ingenting: ingen regel dekkjer det.",
+      "addRule": "Legg til intervall",
+      "addRuleFor": "Legg til intervall for {{name}}",
+      "editRule": "Rediger {{range}} for {{name}}",
+      "deleteRule": "Slett {{range}} for {{name}}",
+      "editRuleTitle": "Rediger eit intervall for {{name}}",
+      "newRuleTitle": "Nytt intervall for {{name}}",
+      "from": "Frå",
+      "to": "Opp til",
+      "noEnd": "Ingen slutt",
+      "priority": "Prioritet",
+      "priorityNone": "0 (ingenting)",
+      "saveRule": "Lagre intervall",
+      "enterFrom": "Skriv inn kvar intervallet startar, 0 eller meir.",
+      "toNotAbove": "Opp til må vere over Frå, eller tom for ingen slutt.",
+      "overlap": "Intervallet overlappar {{range}}.",
+      "preview": "Førehandsvising",
+      "previewHint": "Korleis eit beløp ville blitt fordelt no, etter reglane og kvar kvart sparemål står. Ingenting blir registrert.",
+      "previewFrom": "Frå konto",
+      "previewResult": "Fordelinga",
+      "intoBucket": "rett i bøtta",
+      "stays": "Blir i sparefordelaren",
+      "nobodyTakes": "Ingen sparemål ville fått noko: sjekk reglane.",
+      "ruleCount_one": "{{count}} regel i sparefordelaren",
+      "ruleCount_other": "{{count}} reglar i sparefordelaren",
+      "editRules": "Rediger i sparefordelaren"
+    },
+    "deleteRules_one": "Regelen i sparefordelaren blir sletta.",
+    "deleteRules_other": "Dei {{count}} reglane i sparefordelaren blir sletta."
   },
   "newTransaction": {
     "type": "Type",
