@@ -80,6 +80,14 @@ export type FixedBudgetEntry = SavingsBudgetEntry & {
 
 export const BUDGET_WHEN: FixedBudgetWhen[] = ["cycle_start", "on_income", "manual"];
 
+/** The modes of a sweep (#235). */
+export type SweepWhen = Exclude<SavingsBudgetWhen, FixedBudgetWhen>;
+
+export const SWEEP_WHEN: SweepWhen[] = ["after_refills", "cycle_end"];
+
+/** A sweep of unallocated money (#235): what's above keep. */
+export type SweepEntry = SavingsBudgetEntry & { amount: null; keep: string; when: SweepWhen };
+
 /** The savings budget's fixed amounts (#234) and sweeps (#235), oldest first, with this cycle's runs. */
 export function useSavingsBudget() {
   return useQuery({

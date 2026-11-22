@@ -1,5 +1,6 @@
-// The savings budget on the Savings screen (#234, spec §9): this cycle's fixed
-// amounts, what each reserved, and Save now for the manual ones.
+// The savings budget on the Savings screen (#234, #235, spec §9): this cycle's
+// fixed amounts and sweeps, what each reserved, and Save now for the manual
+// ones.
 
 import { ActionIcon, Anchor, Button, Card, Group, Stack, Text, Title } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
@@ -12,21 +13,34 @@ import { useRefreshMoney, type Account } from "@/api/accounts";
 import { api } from "@/api/client";
 import { useCurrentCycles } from "@/api/cycles";
 import { unwrap } from "@/api/errors";
-import type { FixedBudgetEntry, SavingsTarget } from "@/api/savings";
+import type {
+  FixedBudgetEntry,
+  SavingsBudgetEntry,
+  SavingsTarget,
+  SweepEntry,
+} from "@/api/savings";
 import { isOverdue } from "@/lib/cycles";
-import { formatMoney, subtractAmounts } from "@/lib/money";
-import { budgetDestination, budgetStatus } from "@/lib/savings";
+import { compareAmounts, formatMoney, subtractAmounts } from "@/lib/money";
+import {
+  budgetDestination,
+  budgetStatus,
+  fixedEntries,
+  sweepEntries,
+  sweepStatus,
+} from "@/lib/savings";
 
 export function BudgetCard({
   entries,
   targets,
   accounts,
 }: {
-  entries: FixedBudgetEntry[];
+  entries: SavingsBudgetEntry[];
   targets: SavingsTarget[];
   accounts: Account[];
 }) {
   const { t } = useTranslation();
+  const fixed = fixedEntries(entries);
+  const sweeps = sweepEntries(entries);
   const active = useCurrentCycles().data?.active ?? null;
   const running = active !== null && !isOverdue(active);
   const title = t("savingsSetup.budget.title");
@@ -66,8 +80,17 @@ export function BudgetCard({
           </Text>
         ) : (
           <Stack gap="xs">
-            {entries.map((e) => (
+            {fixed.map((e) => (
               <EntryRow
+                key={e.id}
+                entry={e}
+                targets={targets}
+                account={accounts.find((a) => a.id === e.account_id)}
+                running={running}
+              />
+            ))}
+            {sweeps.map((e) => (
+              <SweepRow
                 key={e.id}
                 entry={e}
                 targets={targets}
@@ -162,5 +185,47 @@ function EntryRow({
         </Button>
       )}
     </Group>
+  );
+}
+
+/** A sweep (#235): what it took this cycle, or what it waits for. */
+function SweepRow({
+  entry,
+  targets,
+  account,
+  running,
+}: {
+  entry: SweepEntry;
+  targets: SavingsTarget[];
+  account: Account | undefined;
+  running: boolean;
+}) {
+  const { t } = useTranslation();
+  const money = (a: string) => formatMoney(a, account?.currency);
+  const name = budgetDestination(entry, targets);
+  const status = sweepStatus(entry, running);
+  const accountName = account?.name ?? `#${entry.account_id}`;
+  const keeps = compareAmounts(entry.keep, "0") > 0;
+  return (
+    <div
+      role="article"
+      aria-label={t("savingsSetup.budget.sweepName", { name, keep: money(entry.keep) })}
+      style={{ minWidth: 0 }}
+    >
+      <Text size="sm">
+        {t(keeps ? "savings.budget.sweepLine" : "savings.budget.sweepLineAll", {
+          keep: money(entry.keep),
+          name,
+          account: accountName,
+          when: t(`savingsSetup.budget.when.${entry.when}`),
+        })}
+      </Text>
+      <Text size="xs" c={status === "stopped" ? "var(--mantine-color-orange-text)" : "dimmed"}>
+        {t(`savings.budget.sweepStatus.${status}`, {
+          amount: money(entry.this_cycle?.reserved ?? "0"),
+          account: accountName,
+        })}
+      </Text>
+    </div>
   );
 }

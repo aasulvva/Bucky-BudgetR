@@ -1,6 +1,6 @@
 import { bucket } from "@/test/fixtures";
 
-import { endPreview } from "./cycleEnd";
+import { endPreview, sweepEstimate } from "./cycleEnd";
 
 const base = { source_account_id: "1234" };
 
@@ -72,10 +72,107 @@ describe("endPreview", () => {
     expect(endPreview([full], true).refilled).toEqual([]);
   });
 
+  it("leaves out what the buckets left take back on an underfunded account (demouser's Regningskonto)", () => {
+    const rent = bucket({
+      ...base,
+      id: "1000000005",
+      name: "Rent",
+      refill_amount: "12500.00",
+      capacity: "12500.00",
+      target_funds: "12500.00",
+      current_available_funds: "6594.56",
+    });
+    const insurance = bucket({
+      ...base,
+      id: "1000000006",
+      name: "Insurance",
+      keep_funds: true,
+      target_funds: "2400.00",
+      current_available_funds: "0.00",
+    });
+    const bills = {
+      id: "1234",
+      currency: "NOK",
+      balance: "6594.56",
+      reserved: "0.00",
+      unallocated: "0.00",
+    };
+    // Insurance keeps its TF and takes 2 400 of Rent's 6 594.56.
+    expect(endPreview([rent, insurance], false, [bills]).backToUnallocated).toEqual([
+      { currency: "NOK", amount: "4194.56" },
+    ]);
+    // A fully funded account gets all of the funded part back.
+    const funded = { ...bills, balance: "8994.56", unallocated: "0.00" };
+    const full = { ...insurance, current_available_funds: "2400.00" };
+    expect(endPreview([rent, full], false, [funded]).backToUnallocated).toEqual([
+      { currency: "NOK", amount: "6594.56" },
+    ]);
+  });
+
   it("counts what goes to savings apart from what goes back to unallocated (#233)", () => {
     const saved = { ...hobby, overflow_destination: "savings_distribution" as const };
     const p = endPreview([groceries, saved], false);
     expect(p.backToUnallocated).toEqual([{ currency: "NOK", amount: "500.00" }]);
     expect(p.toSavings).toEqual([{ currency: "NOK", amount: "299.50" }]);
+  });
+});
+
+describe("sweepEstimate (#235)", () => {
+  const food = bucket({
+    id: "1000000001",
+    name: "Food",
+    source_account_id: "1234",
+    target_funds: "800.00",
+    current_available_funds: "800.00",
+  });
+  const saved = bucket({
+    id: "1000000002",
+    name: "Saved",
+    source_account_id: "1234",
+    target_funds: "300.00",
+    current_available_funds: "300.00",
+    overflow_destination: "savings_distribution",
+  });
+  const elsewhere = bucket({
+    id: "1000000003",
+    name: "Elsewhere",
+    source_account_id: "2345",
+    target_funds: "900.00",
+    current_available_funds: "900.00",
+  });
+  const all = [food, saved, elsewhere];
+  const main = { id: "1234", balance: "2100.00", reserved: "0.00" };
+
+  it("sweeps what the emptied buckets give back, but not what they send to savings", () => {
+    // 2 100 − the 300 the saved bucket's OVF holds for savings − 200 to keep.
+    expect(sweepEstimate(all, endPreview(all, false), main, "200.00")).toBe("1600.00");
+  });
+
+  it("funds the buckets left first, as an underfunded account does (demouser's Regningskonto)", () => {
+    const rent = bucket({
+      id: "1000000004",
+      name: "Rent",
+      source_account_id: "1639",
+      target_funds: "12500.00",
+      current_available_funds: "6594.56",
+    });
+    const insurance = bucket({
+      id: "1000000005",
+      name: "Insurance",
+      source_account_id: "1639",
+      keep_funds: true,
+      target_funds: "2400.00",
+      current_available_funds: "0.00",
+    });
+    const list = [rent, insurance];
+    const bills = { id: "1639", balance: "6594.56", reserved: "0.00" };
+    // Rent is emptied, Insurance takes 2 400 of it: 6 594.56 − 2 400 − 1 000.
+    expect(sweepEstimate(list, endPreview(list, false), bills, "1000.00")).toBe("3194.56");
+  });
+
+  it("covers the savings holds before it, and is never below 0", () => {
+    const held = { ...main, reserved: "1500.00" };
+    expect(sweepEstimate(all, endPreview(all, false), held, "0.00")).toBe("300.00");
+    expect(sweepEstimate(all, endPreview(all, false), main, "5000.00")).toBe("0.00");
   });
 });

@@ -264,9 +264,13 @@
     "chooseFate": "Choose an account, or delete it.",
     "deletesBuckets_one": "Deletes {{count}} bucket with the account: {{names}}. Its transactions are kept.",
     "deletesBuckets_other": "Deletes {{count}} buckets with the account: {{names}}. Their transactions are kept.",
-    "deletesBudget_one": "Deletes {{count}} fixed amount in the savings budget: {{names}}. What it reserved is released with the account.",
-    "deletesBudget_other": "Deletes {{count}} fixed amounts in the savings budget: {{names}}. What they reserved is released with the account.",
-    "budgetEntry": "{{amount}} to {{name}}"
+    "deletesBudget_one": "Deletes {{count}} entry in the savings budget: {{names}}. What it reserved is released with the account.",
+    "deletesBudget_other": "Deletes {{count}} entries in the savings budget: {{names}}. What they reserved is released with the account.",
+    "budgetEntry": "{{amount}} to {{name}}",
+    "budgetSweep": {
+      "after_refills": "the sweep after the refills to {{name}}",
+      "cycle_end": "the sweep at cycle end to {{name}}"
+    }
   },
   "dashboard": {
     "settings": "Settings",
@@ -809,7 +813,11 @@
     "enterSaving": "Enter an amount.",
     "savingBadge": "Savings",
     "savingAmountFor": "Amount to save for {{name}}",
-    "savingsBudget": "Savings budget"
+    "savingsBudget": "Savings budget",
+    "sweep": {
+      "after_refills": "Unallocated money above {{keep}} is swept to {{name}} after the refills.",
+      "cycle_end": "Unallocated money above {{keep}} is swept to {{name}} at cycle end."
+    }
   },
   "savings": {
     "empty": "No savings targets yet",
@@ -914,9 +922,9 @@
       }
     },
     "budget": {
-      "hint": "Fixed amounts saved each cycle.",
+      "hint": "Fixed amounts and sweeps saved each cycle.",
       "setup": "Set up the savings budget",
-      "empty": "No fixed amounts to save each cycle. <setup>Add them in Savings setup</setup>.",
+      "empty": "Nothing to save each cycle. <setup>Add it in Savings setup</setup>.",
       "line": "{{amount}} to {{name}} from {{account}} · {{when}}",
       "status": {
         "stopped": "Stopped: its savings target is gone.",
@@ -929,7 +937,17 @@
       },
       "saveNow": "Save now",
       "saveNowName": "Save {{amount}} to {{name}} now",
-      "savedNow": "Reserved {{amount}} for {{name}}."
+      "savedNow": "Reserved {{amount}} for {{name}}.",
+      "sweepLine": "What's above {{keep}} to {{name}} from {{account}} · {{when}}",
+      "sweepLineAll": "All unallocated money to {{name}} from {{account}} · {{when}}",
+      "sweepStatus": {
+        "stopped": "Stopped: its savings target is gone.",
+        "swept": "Swept {{amount}} this cycle.",
+        "nothingSwept": "Nothing swept this cycle.",
+        "waitingRefills": "Waits for the refills on {{account}}.",
+        "atCycleEnd": "Runs at cycle end.",
+        "noCycle": "Runs in an active cycle."
+      }
     }
   },
   "savingsSetup": {
@@ -1034,11 +1052,11 @@
     "deleteOverflow_other": "{{names}} send their overflow here; it goes to the savings distributor instead.",
     "budget": {
       "title": "Savings budget",
-      "none": "No fixed amounts yet",
+      "none": "Nothing set up yet",
       "count_one": "{{count}} fixed amount per cycle",
       "count_other": "{{count}} fixed amounts per cycle",
-      "intro": "Fixed amounts to save each cycle. Each reserves its amount from the account's unallocated money, once a cycle, after the buckets refilled at the same moment. If the account has less, it reserves what's there and a notification says what's missing.",
-      "empty": "No fixed amounts yet.",
+      "intro": "Fixed amounts to save each cycle, and sweeps of what's left. A fixed amount reserves its amount from the account's unallocated money, once a cycle, after the buckets refilled at the same moment; if the account has less, it reserves what's there and a notification says what's missing. A sweep saves what the account has unallocated above an amount to keep.",
+      "empty": "Nothing in the savings budget yet.",
       "perCycle": "{{amount}} per cycle",
       "editName": "{{amount}} to {{name}}",
       "stoppedBadge": "Stopped",
@@ -1057,12 +1075,16 @@
       "when": {
         "cycle_start": "At cycle start",
         "on_income": "On income",
-        "manual": "Manually"
+        "manual": "Manually",
+        "after_refills": "After the refills",
+        "cycle_end": "At cycle end"
       },
       "whenHints": {
         "cycle_start": "When a cycle starts, after its Auto refills.",
         "on_income": "When an income on the account refills its On income buckets, after those refills. Once a cycle, however many incomes come in.",
-        "manual": "When you press Save now on the Savings screen, once a cycle."
+        "manual": "When you press Save now on the Savings screen, once a cycle.",
+        "after_refills": "Once every bucket on the account is refilled this cycle, all but the Fully manual ones: it waits for the Manual ones too. Once a cycle.",
+        "cycle_end": "When the cycle ends, after its buckets are emptied, so it takes what they give back too. It runs before the next cycle's refills, so keep enough for them."
       },
       "start": "This cycle",
       "startNow": "Reserve it now",
@@ -1075,10 +1097,30 @@
       "delete": "Delete",
       "deleteQuestion": "Delete the fixed amount of <b>{{amount}}</b> to {{name}}?",
       "deleteKeeps": "What it has reserved stays held.",
-      "deleted": "Fixed amount deleted."
+      "deleted": "Fixed amount deleted.",
+      "sweepCount_one": "{{count}} sweep",
+      "sweepCount_other": "{{count}} sweeps",
+      "addSweep": "Add a sweep",
+      "newSweepTitle": "New sweep",
+      "editSweepTitle": "Sweep",
+      "sweepName": "Sweep above {{keep}} to {{name}}",
+      "sweepAbove": "Above {{keep}}",
+      "sweepIntro": "Saves what the account has unallocated above an amount to keep, once a cycle. A target takes up to its goal; the rest goes to the savings distributor.",
+      "keep": "Amount to keep",
+      "keepHint": "Left unallocated on the account; 0 sweeps all of it.",
+      "keepInvalid": "Enter 0 or more.",
+      "sweepTaken": "{{account}} has a sweep at this moment already.",
+      "sweepsTaken": "Pick a moment {{account}} has no sweep at yet.",
+      "sweepNow": "Sweep it now",
+      "sweepNowHint": "{{account}}'s buckets are refilled: what it has unallocated above the amount to keep, {{amount}} now.",
+      "sweepNextHint": "Nothing is swept until the next cycle's refills.",
+      "sweepCreated": "Sweep added to the savings budget.",
+      "sweepSaved": "Sweep saved.",
+      "sweepDeleted": "Sweep deleted.",
+      "deleteSweepQuestion": "Delete the sweep to {{name}}, <b>{{when}}</b>?"
     },
-    "deleteBudget_one": "{{count}} fixed amount in the savings budget stops until it gets another destination.",
-    "deleteBudget_other": "{{count}} fixed amounts in the savings budget stop until they get another destination."
+    "deleteBudget_one": "{{count}} entry in the savings budget stops until it gets another destination.",
+    "deleteBudget_other": "{{count}} entries in the savings budget stop until they get another destination."
   },
   "newTransaction": {
     "type": "Type",
@@ -1351,7 +1393,10 @@
     "overflowsTo": " ({{amount}} overflows to {{to}})",
     "savingsBudget": "Then the savings budget reserves",
     "savingsBudgetLine": "{{name}}, from {{account}}",
-    "upTo": "up to {{amount}}"
+    "upTo": "up to {{amount}}",
+    "swept": "Then the savings budget sweeps",
+    "about": "about {{amount}}",
+    "sweptNote": "What's unallocated then, with what the emptied buckets give back, above the amount to keep."
   },
   "stats": {
     "period": {

@@ -43,6 +43,7 @@ import { useCurrentCycles } from "@/api/cycles";
 import { unwrap } from "@/api/errors";
 import {
   useFixedBudget,
+  useSavingsBudget,
   useSavingsTargets,
   type FixedBudgetEntry,
   type SavingsTarget,
@@ -80,7 +81,7 @@ import { canDelete, isFullyManual } from "@/lib/buckets";
 import { isOverdue } from "@/lib/cycles";
 import { getLocale } from "@/lib/locale";
 import { compareAmounts, formatMoney, subtractAmounts } from "@/lib/money";
-import { budgetDestination } from "@/lib/savings";
+import { budgetDestination, sweepEntries } from "@/lib/savings";
 
 /**
  * Budget setup (spec §9): every bucket by source account, the income
@@ -620,6 +621,10 @@ function AccountSection({
   const expected = budget.percent === null ? null : budget.expected;
   const money = (amount: string) => formatMoney(amount, account.currency);
   const income = draftIncome(draft, account);
+  // Its sweeps (#235) take what's left, so they aren't counted in it.
+  const sweeps = sweepEntries(useSavingsBudget().data ?? []).filter(
+    (e) => e.account_id === account.id && !e.stopped,
+  );
 
   return (
     <Stack gap="sm" component="section" aria-label={account.name}>
@@ -788,6 +793,14 @@ function AccountSection({
           </Group>
         </Stack>
       )}
+      {sweeps.map((e) => (
+        <Text key={e.id} size="xs" c="dimmed" px={4}>
+          {t(`budgetSetup.sweep.${e.when}`, {
+            keep: money(e.keep),
+            name: budgetDestination(e, targets),
+          })}
+        </Text>
+      ))}
       {skipped > 0 && (
         <Text size="xs" c="dimmed" px={4}>
           {t("budgetSetup.fullyManualSkipped", { count: skipped })}

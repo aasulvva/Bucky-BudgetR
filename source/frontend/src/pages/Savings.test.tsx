@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 
 import { formatMoney } from "@/lib/money";
 import { apiMock } from "@/test/api";
-import { account, bucket, budgetEntry, savingsTarget } from "@/test/fixtures";
+import { account, bucket, budgetEntry, savingsTarget, sweepEntry } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
 
@@ -405,11 +405,43 @@ describe("the savings budget (#234)", () => {
     expect(apiMock.calls("POST /api/v1/savings/budget/1234000004/save-now")).toHaveLength(1);
   });
 
+  it("shows what each sweep did this cycle, or waits for (#235)", async () => {
+    apiMock.on("GET /api/v1/savings/budget", {
+      body: [
+        sweepEntry({
+          id: "1234000006",
+          target_id: rainy.id,
+          keep: "1000.00",
+          this_cycle: { wanted: "2500.00", reserved: "2500.00", at: "2026-01-01T00:00:00Z" },
+        }),
+        sweepEntry({ id: "3456000001", account_id: other.id }),
+        sweepEntry({ id: "3456000002", account_id: other.id, when: "cycle_end" }),
+      ],
+    });
+    renderRoute("/savings");
+    const budget = await card("Savings budget");
+    const row = (name: string) => within(budget.getByRole("article", { name }));
+    const swept = row(`Sweep above ${raw("1000.00")} to Rainy day`);
+    expect(
+      swept.getByText(`What's above ${m("1000.00")} to Rainy day from Main · After the refills`),
+    ).toBeInTheDocument();
+    expect(swept.getByText(`Swept ${m("2500.00")} this cycle.`)).toBeInTheDocument();
+    const [afterRefills, atEnd] = budget.getAllByRole("article", {
+      name: `Sweep above ${raw("0.00")} to Savings distributor`,
+    });
+    expect(afterRefills).toHaveTextContent(
+      "All unallocated money to Savings distributor from Other · After the refills",
+    );
+    expect(afterRefills).toHaveTextContent("Waits for the refills on Other.");
+    expect(atEnd).toHaveTextContent("Runs at cycle end.");
+    expect(budget.queryByRole("button", { name: /^Save .* now$/ })).not.toBeInTheDocument();
+  });
+
   it("says where to add them when there are none", async () => {
     apiMock.on("GET /api/v1/savings/budget", { body: [] });
     renderRoute("/savings");
     const budget = await card("Savings budget");
-    expect(budget.getByRole("link", { name: "Add them in Savings setup" })).toHaveAttribute(
+    expect(budget.getByRole("link", { name: "Add it in Savings setup" })).toHaveAttribute(
       "href",
       "/savings/setup?budget",
     );

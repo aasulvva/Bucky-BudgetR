@@ -1,5 +1,5 @@
 import type { FixedBudgetEntry, SavingsDistributor, SavingsRule } from "@/api/savings";
-import { account, budgetEntry, bucket, savingsTarget } from "@/test/fixtures";
+import { account, budgetEntry, bucket, savingsTarget, sweepEntry } from "@/test/fixtures";
 
 import { formatMoney } from "./money";
 
@@ -11,8 +11,13 @@ import {
   budgetStatus,
   budgetTargets,
   budgetTotal,
+  accountRefilled,
   fixedEntries,
   isSweep,
+  sweepEntries,
+  sweepNow,
+  sweepStatus,
+  takenSweepModes,
   freeAccounts,
   freeBuckets,
   gapsOf,
@@ -252,5 +257,63 @@ describe("the savings budget (#234)", () => {
     const ok = savingsTarget({ id: "1000001003", name: "Ok" });
     expect(budgetTargets([own, euro, ok], main).map((x) => x.name)).toEqual(["Ok"]);
     expect(budgetTargets([ok], undefined)).toEqual([]);
+  });
+});
+
+describe("sweeps (#235)", () => {
+  const sweep = (over: Parameters<typeof sweepEntry>[0]) => sweepEntry(over);
+  const run = (reserved: string) => ({ wanted: reserved, reserved, at: null });
+
+  it("says where each sweep is this cycle", () => {
+    expect(sweepStatus(sweep({ id: "1", stopped: true, this_cycle: run("5.00") }), true)).toBe(
+      "stopped",
+    );
+    expect(sweepStatus(sweep({ id: "1", this_cycle: run("700.00") }), true)).toBe("swept");
+    expect(sweepStatus(sweep({ id: "1", this_cycle: run("0.00") }), true)).toBe("nothingSwept");
+    expect(sweepStatus(sweep({ id: "1" }), true)).toBe("waitingRefills");
+    expect(sweepStatus(sweep({ id: "1", when: "cycle_end" }), true)).toBe("atCycleEnd");
+    expect(sweepStatus(sweep({ id: "1" }), false)).toBe("noCycle");
+  });
+
+  it("knows the modes an account has a sweep at, but the one being edited", () => {
+    const entries = [
+      sweep({ id: "1234000001" }),
+      sweep({ id: "2345000001", account_id: "2345", when: "cycle_end" }),
+      budgetEntry({ id: "1234000002", when: "cycle_start" }),
+    ];
+    expect(sweepEntries(entries).map((e) => e.id)).toEqual(["1234000001", "2345000001"]);
+    expect(takenSweepModes(entries, "1234")).toEqual(["after_refills"]);
+    expect(takenSweepModes(entries, "1234", "1234000001")).toEqual([]);
+    expect(takenSweepModes(entries, "2345")).toEqual(["cycle_end"]);
+  });
+
+  it("knows when an account is refilled, leaving out the Fully manual buckets", () => {
+    const refilled = bucket({
+      id: "1000000001",
+      name: "Food",
+      source_account_id: "1234",
+      refilled: true,
+    });
+    const waiting = bucket({
+      id: "1000000002",
+      name: "Hobby",
+      source_account_id: "1234",
+      refill_mode: "manual",
+    });
+    const manual = bucket({
+      id: "1000000003",
+      name: "Trip",
+      source_account_id: "1234",
+      refill_mode: "fully_manual",
+    });
+    expect(accountRefilled([refilled, manual], "1234")).toBe(true);
+    expect(accountRefilled([refilled, waiting], "1234")).toBe(false);
+    // No such buckets: nothing to wait for.
+    expect(accountRefilled([refilled], "2345")).toBe(true);
+  });
+
+  it("sweeps what's above keep, never below 0", () => {
+    expect(sweepNow("1500.00", "400.00")).toBe("1100.00");
+    expect(sweepNow("300.00", "400.00")).toBe("0.00");
   });
 });
