@@ -25,6 +25,8 @@ Self-hosted, envelope-style ("bucket") budgeting application.
 | **TF** – Target Funds | What the bucket *should* have (sum of its bucket transactions). |
 | **CAF** – Current Available Funds | What the bucket *actually* has, after the Money Allocation Routine. |
 | **OVF** | Overflow – money removed from a bucket at cycle change. |
+| **Savings target** | A Fully manual bucket or a savings, BSU, fund or investment account with a goal (§8). |
+| **Held funds** | Money reserved in its source account for a savings target until it's moved there (§8). |
 
 ---
 
@@ -67,7 +69,8 @@ Self-hosted, envelope-style ("bucket") budgeting application.
 - **Snapshots:** to keep this fast, pre-calculate the balance at fixed points (e.g. 1 January each year) and add only the transactions after that point. Bucket TF uses the same mechanism.
 - New accounts get an **Opening Balance (OPB)** transaction.
 - The balance can be corrected from the Accounts screen, which creates a **Balance Adjustment (BLA)** for the difference between the entered balance and the balance at that moment.
-- **Deleting** an account settles it first, all in one step. Money left in it is **transferred (TRF)** to another account or **adjusted to 0 (BLA)**, as the user chooses. Every bucket funded from it gets a **new source account** or is **deleted with it** (#137). A deleted bucket's remaining TF is released first (a BUA to 0, as when deleting a bucket, §4), so that money is part of what's transferred or adjusted; this needs an active cycle unless its TF is already 0. Money and buckets only move to an account in the same currency. The account's transactions are kept.
+- **Deleting** an account settles it first, all in one step. Money left in it is **transferred (TRF)** to another account or **adjusted to 0 (BLA)**, as the user chooses. Every bucket funded from it gets a **new source account** or is **deleted with it** (#137). A deleted bucket's remaining TF is released first (a BUA to 0, as when deleting a bucket, §4), so that money is part of what's transferred or adjusted; this needs an active cycle unless its TF is already 0. Money and buckets only move to an account in the same currency. Savings held on the account, for any target, are released (SVC), and if the account is a savings target itself, the target goes too and its held funds are released (§8). The account's transactions are kept.
+- **Changing the type** of an account that is a savings target to one that can't be (usage) deletes the target and releases its held funds (§8).
 
 ## 3. Cycles
 
@@ -129,9 +132,9 @@ A budget period. Usually a month, but its start and end dates can be set freely,
 - RA can never be above BC. With a fixed BC, BC is raised automatically when RA exceeds it.
 - New buckets get an **Opening Funds (OPF)** transaction when the opening funds aren't 0. Like every bucket transaction, it needs an active cycle.
 - The source account can only change to an account in the same currency, since TF is an amount in that currency. CAF is reset to 0 and the allocation routine funds the bucket from the new account.
-- **Deleting** a bucket releases its remaining TF with a **BUA** to 0, so the money becomes unallocated in the source account (a negative TF is brought up to 0 the same way). That needs an active cycle unless TF is already 0. The bucket's transactions stay.
+- **Deleting** a bucket releases its remaining TF with a **BUA** to 0, so the money becomes unallocated in the source account (a negative TF is brought up to 0 the same way). That needs an active cycle unless TF is already 0. If the bucket is a savings target, the target goes too and its held funds are released (SVC, §8). The bucket's transactions stay.
 - The new user preference only sets the *default* refill mode. Each bucket decides for itself.
-- A **Fully manual** bucket (#76) is never refilled. It has no RA (always 0), Keep funds is always on, and its BC is a fixed amount or none. Its funds only change by hand: *Add funds* and *Remove funds* on the Buckets screen (§9), which are *This cycle only* adjustments (BUA) from or to the source account's unallocated money, and moves to or from other buckets (TF only, BAT). Adding, or a move into it, can't take TF above a fixed BC; removing stops at 0; adding may take more than the account has unallocated, which leaves the account short. Switching a bucket to it sets RA to 0 and turns Keep funds on, keeping TF; switching back asks for an RA and a BC again.
+- A **Fully manual** bucket (#76) is never refilled. It has no RA (always 0), Keep funds is always on, and its BC is a fixed amount or none. Its funds only change by hand: *Add funds* and *Remove funds* on the Buckets screen (§9), which are *This cycle only* adjustments (BUA) from or to the source account's unallocated money, and moves to or from other buckets (TF only, BAT). Adding, or a move into it, can't take TF above a fixed BC; removing stops at 0; adding may take more than the account has unallocated, which leaves the account short. Switching a bucket to it sets RA to 0 and turns Keep funds on, keeping TF; switching back asks for an RA and a BC again, and deletes its savings target if it has one, releasing the held funds (§8).
 - *Savings distribution* and *Specific savings target* become available with the savings module (§8). Until then, overflow is always *Unallocated* (the money stays in the source account).
 
 **Figures per cycle** (Buckets screen, "used X of Y"). Calculated from bucket lines, never stored:
@@ -151,7 +154,8 @@ Every transaction has a **header**. Each affected bank account or bucket gets it
 
 Transactions are immutable. An edit creates a **correction** (e.g. 100 NOK corrected to 150 NOK creates a +50 NOK adjustment, which the UI shows as a single 150 NOK transaction). A transaction entered by mistake can be **reversed**.
 
-- **What can be corrected:** INC, EXP and TRF, and the system types OPB and BLA. REF, OVF, OPF, BUA and BAT can't: the routines and Bucket setup own them. A reversed transaction can't be corrected or reversed again.
+- **What can be corrected:** INC, EXP and TRF, and the system types OPB and BLA. REF, OVF, OPF, BUA and BAT can't: the routines and Bucket setup own them. The savings types SVR, SVC and SVB can't be corrected but can be reversed (§8). A reversed transaction can't be corrected or reversed again.
+- **A transfer that took held savings off hold** (*Done*, §8) keeps its amount and accounts: only its counterparty, description and tags can be corrected (409 `savings_transfer`). Reversing it puts the money back on hold.
 - **What a correction changes:** amounts, bucket lines, counterparty, description and tags. Its lines hold the difference and keep the original time. Every correction carries the counterparty, description and tags, so the newest one's are the effective values; a change of only these is a correction without lines. A move brings the description to the new transaction, and a reversal keeps it.
 - **Another account:** moving an INC, EXP or TRF to another account reverses it and records it again on the new account at the original time. The new transaction *replaces* the old one, and both point to each other.
 
@@ -207,6 +211,11 @@ For foreign-currency transactions, record the amount in the account currency as 
 | BUA | Budget Adjustment | – | 1 | system (Bucket setup) | Change a bucket's TF |
 | BAT | Budget Adjustment Transfer | – | 2 | system (Bucket setup) | Move TF between buckets |
 | OVF | Overflow | – | 1 | system | Removes leftover/overflow at cycle change (§6) |
+| SVR | Savings Reserve | – | – | system (Savings) | Holds unallocated money for a savings target: 1 savings line (§8) |
+| SVC | Savings Cancel | – | – | system (Savings) | Releases held funds back to unallocated: 1 savings line (§8) |
+| SVB | Savings to Bucket | 0 or 2 | 1 | system (Savings) | Money into a bucket target, from unallocated or held funds: 0–1 savings lines, and a transfer's bank lines when the bucket is on another account (§8) |
+
+A TRF can also have 1 savings line, when it records *Done* for an account target (§8). No other type has savings lines.
 
 Only **INC, EXP, TRF and INP** can be created from the *Create transaction* screen.
 
@@ -309,13 +318,51 @@ Funds the buckets: works out how much of each source account's money backs each 
     - CAF no longer fits (Σ CAF above the balance), or the balance covers Σ TF but CAF doesn't match it.
   - Otherwise nothing moves, so an underfunded account can leave a refilled bucket uncovered. **Reallocate** on the Buckets screen (`POST /accounts/{id}/reallocate`) recalculates it by hand.
 - **Bucket changes recalculate at once:** creating or deleting a bucket, moving it to another account, or changing its priority or importance recalculates the accounts involved right away.
-- **Unallocated** is the account balance minus the CAF of its buckets. It is derived from the stored CAF rather than stored separately.
+- **Unallocated** is the account balance minus the CAF of its buckets, minus the part of its savings reservations the balance covers (§8): `unallocated = balance − Σ CAF − covered`, where `covered = clamp(balance − Σ CAF, 0, reserved)`. It is derived rather than stored. The routine itself ignores reservations: buckets are funded from the whole balance first, so when an account runs short, its reservations go uncovered before its buckets do.
 
-## 8. Savings module *(later)*
+## 8. Savings module
 
-- **Savings distribution:** an amount to split across savings targets according to priority rules, which are set as amount thresholds on each target.
-- **Holding money set aside for a specific target**, e.g. an emergency fund in a savings account, money for a fund, BSU.
-- Possibly a *savings transaction* type, used to move money into the distribution and to record funds waiting to go to targets.
+Savings targets and the money held for them (#231). The distributor (#232), overflow to savings (#233), a fixed amount per cycle (#234), the sweep (#235), the BSU cap (#236) and the Dashboard widget (#237) build on it; #35 tracks the module.
+
+### 8.1 Savings targets
+
+| Field | Notes |
+| ----- | ----- |
+| Holder-ID | `<6-digit User-ID><4-digit random>`. Savings targets and the distributor (#232) are both *savings holders*. |
+| Target | a **Fully manual bucket** (§4), or a **savings, BSU, fund or investment account** (§2). Each is a target once at most. |
+| Name | optional, up to 100 characters; none shows the bucket's or account's name |
+| Goal | > 0: TF for a bucket, the balance for an account. A bucket's goal can't be above its fixed BC. |
+| Note | optional, up to 500 characters |
+| Deleted | soft-delete flag |
+| Created / Modified | audit |
+
+**Progress** is *current* (the bucket's TF or the account's balance) plus *held* (below) against the goal.
+
+**A target goes away**, releasing its held funds in the same step (one SVC per source account), when it's deleted, its bucket is deleted or stops being Fully manual, or its account is deleted or gets a type that can't be a target.
+
+### 8.2 Held funds
+
+Money for a target stays in its **source account**, *reserved* there until the user moves it. Savings lines record it:
+
+| Field | Notes |
+| ----- | ----- |
+| Line-ID | `<10-digit Holder-ID><14-digit random>` (24 digits) |
+| Holder | the target (or the distributor) the money is held for |
+| Account | the source account, where it's reserved; in the target's currency |
+| Amount | positive holds money, negative releases it or takes it off hold |
+| Cycle | the cycle the line's time falls in, or none: savings lines don't need an active cycle |
+| Created, User | audit (immutable: never modified) |
+
+What a holder has **held** on an account is the sum of its lines there; an account's **reserved** money is the sum of all lines on it. Reservations come after buckets (§7): `covered = clamp(balance − Σ CAF, 0, reserved)` and `unallocated = balance − Σ CAF − covered`. An account short of its reservations splits what it covers among its holders by their amounts (largest remainder, as in §7); the rest is *not covered*.
+
+### 8.3 Actions
+
+- **Add to savings** (`POST /savings/targets/{id}/add`): holds money from an account's unallocated money, with an **SVR**. More than is unallocated is refused (409 `not_enough_unallocated`, which says how much is). For a bucket target funded from that account, the money goes straight into the bucket instead: an **SVB** with only a bucket line, which needs an active cycle and can't take TF above a fixed BC. A manual add may go past the goal.
+- **Done** (`…/done`): the user has moved held money to the target. For an account target it's a **TRF** from the source account to the target account, with a savings line that takes the amount off hold; for a bucket target an **SVB** with the bucket line, the savings line, and a transfer's bank lines when the bucket is on another account (needs an active cycle containing the time, and room below a fixed BC). Part of what's held can be done, leaving the rest held. The time can't be in the future, and the amount must have been held then and still be.
+- **Clear** (`…/clear`): releases held money back to unallocated, with an **SVC**.
+- **Reversals:** SVR, SVC and SVB can be reversed, not corrected. Reversing an SVR is refused once its money is no longer held (moved on or released); reversing an SVC is refused unless the account has enough unallocated money to hold it again. Reversing a Done TRF or SVB puts the money back on hold.
+
+**Figures:** an SVB's bucket line counts as an adjustment (§4 *Figures per cycle*) and its bank lines as a transfer. SVR and SVC move no money, so they count nowhere but in held funds and unallocated.
 
 ## 9. UI
 

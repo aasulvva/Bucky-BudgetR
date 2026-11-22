@@ -40,7 +40,7 @@ SELECT
     COALESCE(SUM(l.amount) FILTER (WHERE l.cycle_id = this.id AND h.transaction_type = 'REF'), 0)::numeric AS refills,
     COALESCE(SUM(l.amount) FILTER (WHERE l.cycle_id = this.id AND h.transaction_type = 'INC'), 0)::numeric AS income,
     COALESCE(SUM(l.amount) FILTER (WHERE l.cycle_id = this.id AND h.transaction_type = 'OPF'), 0)::numeric AS opening,
-    COALESCE(SUM(l.amount) FILTER (WHERE l.cycle_id = this.id AND h.transaction_type = 'BUA'), 0)::numeric AS adjustments,
+    COALESCE(SUM(l.amount) FILTER (WHERE l.cycle_id = this.id AND h.transaction_type IN ('BUA', 'SVB')), 0)::numeric AS adjustments,
     COALESCE(SUM(l.amount) FILTER (WHERE l.cycle_id = this.id AND h.transaction_type = 'BAT'), 0)::numeric AS transfers,
     COALESCE(SUM(l.amount) FILTER (WHERE l.cycle_id = this.id AND h.transaction_type = 'EXP'), 0)::numeric AS expenses,
     COALESCE(SUM(l.amount) FILTER (WHERE l.cycle_id = this.id AND h.transaction_type = 'OVF'), 0)::numeric AS overflow,

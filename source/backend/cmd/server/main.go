@@ -47,6 +47,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/notifications"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/pdf"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/refill"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/savings"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/schedules"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/transactions"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/userdata"
@@ -160,7 +161,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, out, lo
 	transactionsSvc := transactions.NewService(pool, ledgerSvc, transactions.Options{Now: now, Refills: refills})
 	schedulesSvc := schedules.NewService(pool, schedules.Options{Now: now, Transactions: transactionsSvc})
 	go schedulesSvc.RunLoop(ctx, cfg.ScheduleInterval, logger)
-	bucketsSvc := buckets.NewService(pool, ledgerSvc, buckets.Options{Now: now, OnCreate: refills.OnCreate})
+	savingsSvc := savings.NewService(pool, ledgerSvc, savings.Options{Now: now})
+	bucketsSvc := buckets.NewService(pool, ledgerSvc, buckets.Options{
+		Now: now, OnCreate: refills.OnCreate, ReleaseSavings: savingsSvc.ReleaseBucket,
+	})
 	notificationsSvc := notifications.NewService(pool, notifications.Options{Now: now, Schedules: schedulesSvc, Buckets: bucketsSvc})
 	var renderer pdf.Renderer
 	if cfg.PDFChromeURL != "" {
@@ -170,9 +174,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, out, lo
 	}
 	handler, err := httpapi.NewHandler(logger, pool, httpapi.Options{
 		Auth:           authSvc,
-		Accounts:       accounts.NewService(pool, ledgerSvc, accounts.Options{Now: now}),
+		Accounts:       accounts.NewService(pool, ledgerSvc, accounts.Options{Now: now, Savings: savingsSvc}),
 		Cycles:         cyclesSvc,
 		Buckets:        bucketsSvc,
+		Savings:        savingsSvc,
 		Transactions:   transactionsSvc,
 		Refills:        refills,
 		Schedules:      schedulesSvc,

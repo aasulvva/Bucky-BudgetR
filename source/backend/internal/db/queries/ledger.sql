@@ -72,3 +72,25 @@ WHERE tt.transaction_id = $1 ORDER BY lower(t.name) COLLATE "C";
 -- Serializes a user's money writes until the transaction ends (see
 -- ledger.LockUser).
 SELECT pg_advisory_xact_lock(1, (sqlc.arg(user_id)::text)::int);
+
+-- name: CreateSavingsLine :one
+-- Use with ids.Insert: a taken ID returns no row.
+INSERT INTO savings_transactions (id, transaction_id, holder_id, account_id, cycle_id, amount, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (id) DO NOTHING
+RETURNING *;
+
+-- name: ListSavingsLines :many
+SELECT * FROM savings_transactions WHERE transaction_id = $1 ORDER BY id;
+
+-- name: GetOwnedSavingsHolders :many
+-- FOR SHARE: waits for a concurrent delete of the holder, then sees whether it
+-- still exists.
+SELECT id FROM savings_holders
+WHERE id = ANY(sqlc.arg(ids)::text[]) AND user_id = sqlc.arg(user_id) AND NOT deleted
+FOR SHARE;
+
+-- name: CycleAt :one
+-- The user's cycle that contains the moment, whatever its state.
+SELECT id FROM cycles
+WHERE user_id = sqlc.arg(user_id) AND start_at <= sqlc.arg(at)::timestamptz AND sqlc.arg(at)::timestamptz < end_at;

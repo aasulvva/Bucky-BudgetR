@@ -135,14 +135,23 @@ type Options struct {
 	// Nil means New.Refill is refused and opening funds don't count as a
 	// refill.
 	OnCreate CreateHook
+	// ReleaseSavings is savings.Service.ReleaseBucket (#231): it releases the
+	// money held for the bucket's savings target and deletes the target, when
+	// the bucket is deleted or stops being Fully manual. Nil skips it.
+	ReleaseSavings ReleaseHook
 }
+
+// ReleaseHook runs in the transaction that deletes a bucket, or switches it
+// away from Fully manual.
+type ReleaseHook func(ctx context.Context, tx pgx.Tx, userID, bucketID string) error
 
 // Service manages buckets.
 type Service struct {
-	pool     *pgxpool.Pool
-	ledger   *ledger.Ledger
-	now      func() time.Time
-	onCreate CreateHook
+	pool           *pgxpool.Pool
+	ledger         *ledger.Ledger
+	now            func() time.Time
+	onCreate       CreateHook
+	releaseSavings ReleaseHook
 }
 
 // NewService returns a Service that records money movements in l.
@@ -150,7 +159,7 @@ func NewService(pool *pgxpool.Pool, l *ledger.Ledger, opts Options) *Service {
 	if opts.Now == nil {
 		opts.Now = time.Now
 	}
-	return &Service{pool: pool, ledger: l, now: opts.Now, onCreate: opts.OnCreate}
+	return &Service{pool: pool, ledger: l, now: opts.Now, onCreate: opts.OnCreate, releaseSavings: opts.ReleaseSavings}
 }
 
 // List returns the user's buckets, sorted by name.
@@ -340,10 +349,17 @@ func (s *Service) Update(ctx context.Context, userID, id string, c Changes) (Buc
 		if err := ledger.LockUser(ctx, tx, userID); err != nil {
 			return err
 		}
-		if err := update(ctx, tx, userID, id, c); err != nil {
+		before, err := update(ctx, tx, userID, id, c)
+		if err != nil {
 			return err
 		}
-		var err error
+		// Only a Fully manual bucket can be a savings target.
+		if s.releaseSavings != nil && before.RefillMode == sqlc.RefillModeFullyManual &&
+			c.RefillMode != nil && *c.RefillMode != sqlc.RefillModeFullyManual {
+			if err := s.releaseSavings(ctx, tx, userID, id); err != nil {
+				return err
+			}
+		}
 		out, err = s.get(ctx, tx, userID, id)
 		return err
 	})
@@ -400,7 +416,7 @@ func (s *Service) SetRefillAmounts(ctx context.Context, userID string, items []R
 			if thisCycle && before.Refilled {
 				changes[it.BucketID] = it.Amount.Sub(before.RefillAmount)
 			}
-			if err := update(ctx, tx, userID, it.BucketID, Changes{RefillAmount: &it.Amount}); err != nil {
+			if _, err := update(ctx, tx, userID, it.BucketID, Changes{RefillAmount: &it.Amount}); err != nil {
 				return err
 			}
 		}
@@ -426,21 +442,22 @@ func (s *Service) SetRefillAmounts(ctx context.Context, userID string, items []R
 }
 
 // update applies c to the bucket in tx, which holds the user's lock.
-func update(ctx context.Context, tx pgx.Tx, userID, id string, c Changes) error {
+// update changes the bucket and returns it as it was.
+func update(ctx context.Context, tx pgx.Tx, userID, id string, c Changes) (row sqlc.Bucket, err error) {
 	q := sqlc.New(tx)
-	row, err := q.GetBucketForUpdate(ctx, sqlc.GetBucketForUpdateParams{ID: id, UserID: userID})
+	row, err = q.GetBucketForUpdate(ctx, sqlc.GetBucketForUpdateParams{ID: id, UserID: userID})
 	if err != nil {
-		return notFound(err, id)
+		return row, notFound(err, id)
 	}
 	p := sqlc.UpdateBucketParams{ID: id, UserID: userID, Name: row.Name, SourceAccountID: row.SourceAccountID, Caf: row.Caf}
 	if c.Name != nil {
 		if p.Name, err = checkName(*c.Name); err != nil {
-			return err
+			return row, err
 		}
 	}
 	if c.SourceAccountID != nil && *c.SourceAccountID != row.SourceAccountID {
 		if err := checkNewSource(ctx, q, userID, row.SourceAccountID, *c.SourceAccountID); err != nil {
-			return err
+			return row, err
 		}
 		p.SourceAccountID = *c.SourceAccountID
 		p.Caf = decimal.Zero
@@ -452,24 +469,24 @@ func update(ctx context.Context, tx pgx.Tx, userID, id string, c Changes) error 
 		Priority: row.Priority, Importance: int(row.Importance),
 	}
 	if err := st.apply(c); err != nil {
-		return err
+		return row, err
 	}
 	if err := st.check(); err != nil {
-		return err
+		return row, err
 	}
 	p.RefillAmount, p.CapMode, p.CapMultiplier, p.CapAmount = st.RefillAmount, st.CapMode, st.CapMultiplier, st.CapAmount
 	p.KeepFunds, p.NegativeTf, p.RefillMode, p.OverflowDestination = st.KeepFunds, st.NegativeTF, st.RefillMode, st.OverflowDestination
 	p.Priority, p.Importance = st.Priority, st.dbImportance
 	if err := q.UpdateBucket(ctx, p); err != nil {
-		return nameTaken(err)
+		return row, nameTaken(err)
 	}
 	// Settings that change how the money is split take effect at once.
 	if p.SourceAccountID != row.SourceAccountID || p.Priority != row.Priority || p.Importance != row.Importance {
 		if err := allocation.Run(ctx, tx, userID, compact(row.SourceAccountID, p.SourceAccountID), true); err != nil {
-			return err
+			return row, err
 		}
 	}
-	return nil
+	return row, nil
 }
 
 // Mode is how an adjustment applies (spec §9): to this cycle's TF, to RA
@@ -544,7 +561,7 @@ func (s *Service) Adjust(ctx context.Context, userID, id string, a Adjustment) (
 			if a.RefillAmount.Equal(row.RefillAmount) {
 				return fmt.Errorf("%w: the refill amount is already %s", ErrNoChange, row.RefillAmount.StringFixed(money.Places))
 			}
-			if err := update(ctx, tx, userID, id, Changes{RefillAmount: a.RefillAmount}); err != nil {
+			if _, err := update(ctx, tx, userID, id, Changes{RefillAmount: a.RefillAmount}); err != nil {
 				return err
 			}
 			if a.Mode == ModeBoth {
@@ -638,7 +655,7 @@ func (s *Service) Transfer(ctx context.Context, userID, from string, t Transfer)
 				id string
 				ra decimal.Decimal
 			}{{from, src.RefillAmount.Sub(t.Amount)}, {t.To, dst.RefillAmount.Add(t.Amount)}} {
-				if err := update(ctx, tx, userID, c.id, Changes{RefillAmount: &c.ra}); err != nil {
+				if _, err := update(ctx, tx, userID, c.id, Changes{RefillAmount: &c.ra}); err != nil {
 					return err
 				}
 			}
@@ -679,6 +696,12 @@ func (s *Service) Delete(ctx context.Context, userID, id string) error {
 		row, err := q.GetBucketForUpdate(ctx, sqlc.GetBucketForUpdateParams{ID: id, UserID: userID})
 		if err != nil {
 			return notFound(err, id)
+		}
+		// Savings held for it go back to unallocated, and its target goes.
+		if s.releaseSavings != nil {
+			if err := s.releaseSavings(ctx, tx, userID, id); err != nil {
+				return err
+			}
 		}
 		tf, err := balance.Buckets(ctx, tx, userID)
 		if err != nil {

@@ -205,6 +205,15 @@ func transactionError(err error) error {
 	case errors.Is(err, transactions.ErrBucketLinesLocked):
 		return &Error{Status: http.StatusConflict, Code: "bucket_lines_locked",
 			Detail: "The transaction is outside the active cycle, so its bucket lines can't change. You can still change the bank amount, counterparty and tags.", Err: err}
+	case errors.Is(err, transactions.ErrSavingsTransfer):
+		return &Error{Status: http.StatusConflict, Code: "savings_transfer",
+			Detail: "This transfer took held savings off hold, so its amount and accounts can't change. Reverse it to put the money back on hold, then do Done again.", Err: err}
+	case errors.Is(err, transactions.ErrNoLongerHeld):
+		return &Error{Status: http.StatusConflict, Code: "not_enough_held",
+			Detail: "The money is no longer held for savings: it has been moved on or released since.", Err: err}
+	case errors.Is(err, transactions.ErrNotEnoughUnallocated):
+		return &Error{Status: http.StatusConflict, Code: "not_enough_unallocated",
+			Detail: "The account doesn't have enough unallocated money to hold it again.", Err: err}
 	case errors.Is(err, transactions.ErrNoChange):
 		return &Error{Status: http.StatusBadRequest, Code: "no_change", Detail: "Nothing would change.", Err: err}
 	case errors.Is(err, transactions.ErrCurrencyMismatch):
@@ -308,6 +317,7 @@ func toAPITransaction(t transactions.Transaction) api.Transaction {
 		ScheduleId:     nullableString(t.ScheduleID),
 		BankLines:      toAPIBankLines(t.BankLines),
 		BucketLines:    toAPIBucketLines(t.BucketLines),
+		SavingsLines:   toAPISavingsLines(t.SavingsLines),
 		BeforeReversal: nullable.NewNullNullable[api.TransactionLines](),
 		BalancesAfter:  make([]api.TransactionBalance, len(t.BalancesAfter)),
 	}
@@ -316,7 +326,7 @@ func toAPITransaction(t transactions.Transaction) api.Transaction {
 	}
 	if b := t.BeforeReversal; b != nil {
 		out.BeforeReversal = nullable.NewNullableWithValue(api.TransactionLines{
-			BankLines: toAPIBankLines(b.Bank), BucketLines: toAPIBucketLines(b.Buckets),
+			BankLines: toAPIBankLines(b.Bank), BucketLines: toAPIBucketLines(b.Buckets), SavingsLines: toAPISavingsLines(b.Savings),
 		})
 	}
 	if t.History != nil {
@@ -329,6 +339,7 @@ func toAPITransaction(t transactions.Transaction) api.Transaction {
 				CreatedBy:      nullableString(v.CreatedBy),
 				BankLines:      toAPIBankLines(v.BankLines),
 				BucketLines:    toAPIBucketLines(v.BucketLines),
+				SavingsLines:   toAPISavingsLines(v.SavingsLines),
 			}
 		}
 		out.History = &h
@@ -348,6 +359,14 @@ func toAPIBucketLines(lines []transactions.BucketLine) []api.TransactionBucketLi
 	out := make([]api.TransactionBucketLine, len(lines))
 	for i, l := range lines {
 		out[i] = api.TransactionBucketLine{BucketId: l.BucketID, CycleId: l.CycleID, Amount: l.Amount.StringFixed(money.Places)}
+	}
+	return out
+}
+
+func toAPISavingsLines(lines []transactions.SavingsLine) []api.TransactionSavingsLine {
+	out := make([]api.TransactionSavingsLine, len(lines))
+	for i, l := range lines {
+		out[i] = api.TransactionSavingsLine{HolderId: l.HolderID, AccountId: l.AccountID, Amount: l.Amount.StringFixed(money.Places)}
 	}
 	return out
 }

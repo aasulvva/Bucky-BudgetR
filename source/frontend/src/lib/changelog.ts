@@ -16,6 +16,32 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.24.01",
+    date: "2026-11-22",
+    title: {
+      en: "Groundwork for savings",
+      nb: "Grunnarbeid for sparing",
+      nn: "Grunnarbeid for sparing",
+    },
+    changes: {
+      en: [
+        "Behind the scenes, the app can now keep savings targets and set money aside for them in its account until you move it. The Savings screens come in the next version.",
+        "Money set aside for savings isn't unallocated. Buckets are still funded first, so if an account runs short, its savings go uncovered before its buckets do.",
+        "The transaction list knows the new savings types: Reserved for savings, Savings released and Savings to bucket. They show with the refills and adjustments.",
+      ],
+      nb: [
+        "I bakgrunnen kan appen nå holde sparemål og sette av penger til dem på kontoen til du flytter dem. Skjermbildene for sparing kommer i neste versjon.",
+        "Penger satt av til sparing er ikke ufordelte. Bøttene får fortsatt penger først, så hvis en konto ikke har nok, er det sparingen som står udekket før bøttene.",
+        "Transaksjonslisten kjenner de nye sparetypene: Satt av til sparing, Sparing frigjort og Sparing til bøtte. De vises sammen med påfyll og justeringer.",
+      ],
+      nn: [
+        "I bakgrunnen kan appen no halde sparemål og setje av pengar til dei på kontoen til du flyttar dei. Skjermbileta for sparing kjem i neste versjon.",
+        "Pengar sette av til sparing er ikkje ufordelte. Bøttene får framleis pengar først, så om ein konto ikkje har nok, er det sparinga som står udekt før bøttene.",
+        "Transaksjonslista kjenner dei nye sparetypane: Sett av til sparing, Sparing frigjort og Sparing til bøtte. Dei vert viste saman med påfyll og justeringar.",
+      ],
+    },
+  },
+  {
     version: "v2.24.00",
     date: "2026-11-13",
     title: {

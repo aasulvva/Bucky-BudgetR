@@ -10,8 +10,20 @@ import { insideCycle } from "./transactionForm";
 
 /** What the user records, shown by default. */
 export const USER_TYPES: TransactionType[] = ["INC", "EXP", "TRF", "OPB", "BLA"];
-/** What the routines and Bucket setup record: refills, overflow, adjustments. */
-export const SYSTEM_TYPES: TransactionType[] = ["REF", "OVF", "OPF", "BUA", "BAT"];
+/**
+ * What the routines, Bucket setup and Savings record: refills, overflow,
+ * adjustments, and savings reserved, released or moved into a bucket (#231).
+ */
+export const SYSTEM_TYPES: TransactionType[] = [
+  "REF",
+  "OVF",
+  "OPF",
+  "BUA",
+  "BAT",
+  "SVR",
+  "SVC",
+  "SVB",
+];
 /** The types that can be corrected and reversed. */
 export type CorrectableType = "INC" | "EXP" | "TRF" | "OPB" | "BLA";
 export const CORRECTABLE: CorrectableType[] = ["INC", "EXP", "TRF", "OPB", "BLA"];

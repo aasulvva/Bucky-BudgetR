@@ -47,7 +47,11 @@ const wine = transaction({
   at: yesterday,
   reversed: true,
   bank_lines: [],
-  before_reversal: { bank_lines: [{ account_id: main.id, amount: "-389.90" }], bucket_lines: [] },
+  before_reversal: {
+    bank_lines: [{ account_id: main.id, amount: "-389.90" }],
+    bucket_lines: [],
+    savings_lines: [],
+  },
 });
 
 function listQueries(): URLSearchParams[] {
@@ -228,6 +232,7 @@ describe("Transactions", () => {
           created_by: testUser.id,
           bank_lines: [{ account_id: main.id, amount: "-200.00" }],
           bucket_lines: [],
+          savings_lines: [],
         },
         {
           id: "2026102400000009",
@@ -236,6 +241,7 @@ describe("Transactions", () => {
           created_by: null,
           bank_lines: [{ account_id: main.id, amount: "-50.40" }],
           bucket_lines: [],
+          savings_lines: [],
         },
       ],
     };

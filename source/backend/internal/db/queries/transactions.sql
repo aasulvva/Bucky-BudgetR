@@ -165,3 +165,6 @@ SELECT b.id, a.currency
 FROM buckets b
 JOIN bank_accounts a ON a.id = b.source_account_id
 WHERE b.user_id = $1;
+
+-- name: ListSavingsLinesFor :many
+SELECT * FROM savings_transactions WHERE transaction_id = ANY(sqlc.arg(ids)::text[]) ORDER BY id;

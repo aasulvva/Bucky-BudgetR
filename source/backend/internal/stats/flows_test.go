@@ -235,3 +235,50 @@ func TestFlows(t *testing.T) {
 		}
 	}
 }
+
+// TestFlowsSavingsToBucket: a savings to bucket (SVB, #231) adds to the
+// bucket like an adjustment, and its bank lines are a transfer.
+func TestFlowsSavingsToBucket(t *testing.T) {
+	pool := testdb.New(t)
+	user := authtest.NewUser(t, pool, "alice").ID
+	e := env{t: t, pool: pool, user: user, l: ledger.New(ledger.Options{})}
+	main := ledgertest.Account(t, pool, user, "")
+	other := ledgertest.Account(t, pool, user, "")
+	holiday := ledgertest.Bucket(t, pool, user, main)
+	target := ledgertest.Target(t, pool, user, other)
+	oct, nov := at("2026-09-30T22:00:00Z"), at("2026-10-31T23:00:00Z")
+	ledgertest.Cycle(t, pool, user, oct, nov, "active")
+	e.record(ledger.Entry{Type: sqlc.TransactionTypeOPB, At: at("2026-10-01T08:00:00Z"), BankLines: lines(bank{other, "1000"})})
+	// Held on other, then moved into Holiday on main; and 50 straight in.
+	e.record(ledger.Entry{Type: sqlc.TransactionTypeSVR, At: at("2026-10-02T08:00:00Z"),
+		SavingsLines: []ledger.SavingsLine{{HolderID: target, AccountID: other, Amount: dec("300")}}})
+	e.record(ledger.Entry{
+		Type: sqlc.TransactionTypeSVB, At: at("2026-10-03T08:00:00Z"),
+		BankLines: lines(bank{other, "-300"}, bank{main, "300"}), BucketLines: bucketLines(bank{holiday, "300"}),
+		SavingsLines: []ledger.SavingsLine{{HolderID: target, AccountID: other, Amount: dec("-300")}},
+	})
+	e.record(ledger.Entry{Type: sqlc.TransactionTypeSVB, At: at("2026-10-04T08:00:00Z"), BucketLines: bucketLines(bank{holiday, "50"})})
+
+	res, err := stats.Flows(t.Context(), pool, user, stats.FlowsQuery{From: oct, To: nov, Resolution: stats.Total, Location: oslo(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, b := range res.Buckets {
+		if v := b.Values[0]; b.BucketID == holiday && (v.AdjustmentsIn.StringFixed(2) != "350.00" || v.End.StringFixed(2) != "350.00") {
+			t.Errorf("holiday %+v", v)
+		}
+	}
+	for _, a := range res.Accounts {
+		v := a.Values[0]
+		switch a.AccountID {
+		case main:
+			if v.TransfersIn.StringFixed(2) != "300.00" || v.End.StringFixed(2) != "300.00" {
+				t.Errorf("main %+v", v)
+			}
+		case other:
+			if v.TransfersOut.StringFixed(2) != "300.00" || v.Income.Sign() != 0 || v.End.StringFixed(2) != "700.00" {
+				t.Errorf("other %+v", v)
+			}
+		}
+	}
+}
