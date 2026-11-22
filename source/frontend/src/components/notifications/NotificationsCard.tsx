@@ -14,13 +14,15 @@ type Toggle =
   | "upcoming_bills"
   | "investment_balance"
   | "bucket_uncovered"
-  | "savings_transfer";
+  | "savings_transfer"
+  | "savings_short";
 const TOGGLES: Toggle[] = [
   "approval_queue",
   "upcoming_bills",
   "investment_balance",
   "bucket_uncovered",
   "savings_transfer",
+  "savings_short",
 ];
 
 /** Settings › Notifications (#57): which kinds show, and how far ahead bills do. */

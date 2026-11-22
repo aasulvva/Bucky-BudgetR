@@ -3,6 +3,7 @@ package userdata_test
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/shopspring/decimal"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/buckets"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledgertest"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/savings"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/userdata"
 )
@@ -58,8 +60,9 @@ func TestExportImportSavings(t *testing.T) {
 }
 
 // TestExportImportDistributor: the distributor, its rules and its SVD
-// (#232) round-trip, and a copy's rules and a bucket's overflow target (#233)
-// follow their target's new ID.
+// (#232) round-trip, and a copy's rules, a bucket's overflow target (#233)
+// and a savings budget entry with its run (#234) follow their target's new
+// ID.
 func TestExportImportDistributor(t *testing.T) {
 	e := setup(t)
 	ctx := t.Context()
@@ -82,6 +85,11 @@ func TestExportImportDistributor(t *testing.T) {
 	if _, split, err := sv.AddToDistributor(ctx, alice.ID, main.ID, dec("100")); err != nil || len(split) != 1 {
 		t.Fatalf("add to the distributor: split %v, %v", split, err)
 	}
+	ledgertest.Cycle(t, e.pool, alice.ID, now.Add(-24*time.Hour), now.Add(24*time.Hour), "active")
+	entry := must[savings.BudgetEntry](t)(sv.CreateBudget(ctx, alice.ID, savings.NewBudget{
+		AccountID: main.ID, TargetID: target.ID, Amount: dec("50"), When: sqlc.SavingsBudgetWhenManual,
+	}))
+	must[savings.BudgetEntry](t)(sv.SaveNow(ctx, alice.ID, entry.ID))
 
 	f, _ := e.file(t, alice.ID)
 	if n, m := len(f.Data.Tables["savings_holders"]), len(f.Data.Tables["savings_rules"]); n != 2 || m != 2 {
@@ -96,7 +104,8 @@ func TestExportImportDistributor(t *testing.T) {
 	bob := authtest.NewUser(t, e.pool, "bob")
 	must[userdata.Counts](t)(e.svc.Import(ctx, bob.ID, f))
 	list := must[[]savings.Target](t)(sv.List(ctx, bob.ID))
-	if len(list) != 1 || list[0].HeldTotal().StringFixed(2) != "100.00" {
+	// 100 from the distributor, 50 from the savings budget.
+	if len(list) != 1 || list[0].HeldTotal().StringFixed(2) != "150.00" {
 		t.Fatalf("bob's targets %+v", list)
 	}
 	rules := must[[]savings.SavingsRule](t)(sv.ListRules(ctx, bob.ID))
@@ -111,6 +120,11 @@ func TestExportImportDistributor(t *testing.T) {
 	bobBuckets := must[[]buckets.Bucket](t)(e.buckets.List(ctx, bob.ID))
 	if len(bobBuckets) != 1 || bobBuckets[0].OverflowTargetID.String != list[0].ID {
 		t.Errorf("bob's buckets %+v, target %s", bobBuckets, list[0].ID)
+	}
+	budget := must[[]savings.BudgetEntry](t)(sv.ListBudget(ctx, bob.ID))
+	if len(budget) != 1 || budget[0].TargetID != list[0].ID || !strings.HasPrefix(budget[0].ID, bob.ID) ||
+		budget[0].ThisCycle == nil || budget[0].ThisCycle.Reserved.StringFixed(2) != "50.00" {
+		t.Errorf("bob's savings budget %+v, target %s", budget, list[0].ID)
 	}
 	if d := must[savings.Distributor](t)(sv.Distributor(ctx, bob.ID)); d.ID == "" || !strings.HasPrefix(d.ID, bob.ID) || len(d.Held) != 0 {
 		t.Errorf("bob's distributor %+v", d)

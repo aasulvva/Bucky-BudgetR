@@ -32,27 +32,42 @@ import (
 // An account target that is the bucket's own account already has the money,
 // so it gets no line. Run it after LockUser.
 func (s *Service) OverflowLines(ctx context.Context, tx pgx.Tx, userID string, b sqlc.Bucket, funded decimal.Decimal) ([]ledger.SavingsLine, error) {
-	if !funded.IsPositive() || b.OverflowDestination == sqlc.OverflowDestinationUnallocated {
+	switch b.OverflowDestination {
+	case sqlc.OverflowDestinationSavingsDistribution:
+		return s.holdLines(ctx, tx, userID, b.SourceAccountID, "", funded)
+	case sqlc.OverflowDestinationSavingsTarget:
+		return s.holdLines(ctx, tx, userID, b.SourceAccountID, b.OverflowTargetID.String, funded)
+	default:
 		return nil, nil
 	}
-	account := b.SourceAccountID
+}
+
+// holdLines are the savings lines that hold amount on the account for the
+// target, or the distributor when targetID is "": the target takes up to its
+// room (overflowRoom), and the distributor the rest. A target that's gone
+// leaves it all to the distributor; an account target that is the account
+// itself already has the money, so it gets no line. Run it after LockUser.
+func (s *Service) holdLines(ctx context.Context, tx pgx.Tx, userID, accountID, targetID string, amount decimal.Decimal) ([]ledger.SavingsLine, error) {
+	if !amount.IsPositive() {
+		return nil, nil
+	}
 	toTarget := decimal.Zero
-	if b.OverflowDestination == sqlc.OverflowDestinationSavingsTarget {
+	if targetID != "" {
 		targets, err := list(ctx, tx, userID)
 		if err != nil {
 			return nil, err
 		}
-		i := slices.IndexFunc(targets, func(t Target) bool { return t.ID == b.OverflowTargetID.String })
+		i := slices.IndexFunc(targets, func(t Target) bool { return t.ID == targetID })
 		if i >= 0 {
 			t := targets[i]
-			if t.AccountID == account {
+			if t.AccountID == accountID {
 				return nil, nil
 			}
 			room, err := s.overflowRoom(ctx, tx, userID, t)
 			if err != nil {
 				return nil, err
 			}
-			toTarget = funded
+			toTarget = amount
 			if room != nil && room.LessThan(toTarget) {
 				toTarget = decimal.Max(*room, decimal.Zero)
 			}
@@ -60,19 +75,20 @@ func (s *Service) OverflowLines(ctx context.Context, tx pgx.Tx, userID string, b
 	}
 	var lines []ledger.SavingsLine
 	if toTarget.IsPositive() {
-		lines = append(lines, ledger.SavingsLine{HolderID: b.OverflowTargetID.String, AccountID: account, Amount: toTarget})
+		lines = append(lines, ledger.SavingsLine{HolderID: targetID, AccountID: accountID, Amount: toTarget})
 	}
-	if rest := funded.Sub(toTarget); rest.IsPositive() {
+	if rest := amount.Sub(toTarget); rest.IsPositive() {
 		d, err := ensureDistributor(ctx, tx, userID)
 		if err != nil {
 			return nil, err
 		}
-		lines = append(lines, ledger.SavingsLine{HolderID: d.ID, AccountID: account, Amount: rest})
+		lines = append(lines, ledger.SavingsLine{HolderID: d.ID, AccountID: accountID, Amount: rest})
 	}
 	return lines, nil
 }
 
-// overflowRoom is how much more the target can take from overflow: up to its
+// overflowRoom is how much more the target can take from overflow or the
+// savings budget: up to its
 // goal unless the rule at its position goes past it, and never past a bucket
 // target's fixed BC; nil for no limit.
 func (s *Service) overflowRoom(ctx context.Context, tx pgx.Tx, userID string, t Target) (*decimal.Decimal, error) {
@@ -105,9 +121,10 @@ func (s *Service) overflowRoom(ctx context.Context, tx pgx.Tx, userID string, t 
 	return &room, nil
 }
 
-// AfterOverflow moves an overflow's savings on, in its transaction: a bucket
+// AfterOverflow moves savings just held (by an OVF, or a savings budget SVR)
+// on, in its transaction: a bucket
 // target funded from the account gets its share straight into the bucket
-// (an SVB at the overflow's time, while a cycle holds it), and the
+// (an SVB at the same time, while a cycle holds it), and the
 // distributor splits by its hold mode.
 func (s *Service) AfterOverflow(ctx context.Context, tx pgx.Tx, userID, accountID string, at time.Time, lines []ledger.SavingsLine) error {
 	q := sqlc.New(tx)
@@ -150,7 +167,8 @@ func (s *Service) AfterOverflow(ctx context.Context, tx pgx.Tx, userID, accountI
 	return nil
 }
 
-// ReleasableOverflow is what reversing the overflow t can take off hold: each
+// ReleasableOverflow is what reversing the overflow (or savings budget SVR) t
+// can take off hold: each
 // of its savings lines, but no more than its holder still holds on the
 // account. What was distributed or moved on stays where it went.
 func (s *Service) ReleasableOverflow(ctx context.Context, tx pgx.Tx, userID string, t *ledger.Transaction) ([]ledger.SavingsLine, error) {

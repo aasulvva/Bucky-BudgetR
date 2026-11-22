@@ -168,6 +168,9 @@ func savingsError(err error) error {
 	if e := distributorError(err); e != nil {
 		return e
 	}
+	if e := budgetError(err); e != nil {
+		return e
+	}
 	var unallocated *savings.NotEnoughUnallocatedError
 	var held *savings.NotEnoughHeldError
 	switch {

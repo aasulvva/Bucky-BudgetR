@@ -31,6 +31,7 @@ const (
 	kHolder
 	kSavingsLine
 	kRule
+	kBudget
 	// kKept is kept as it is: a notification dismissal's key (#57). It names
 	// IDs, so a clone's no longer match and are forgotten when its
 	// notifications are next read.
@@ -53,6 +54,8 @@ var idColumns = map[string]map[string]kind{
 	"savings_transactions":    {"id": kSavingsLine, "transaction_id": kTransaction, "holder_id": kHolder, "account_id": kAccount, "cycle_id": kCycle, "created_by": kUser},
 	"transaction_tags":        {"transaction_id": kTransaction, "tag_id": kTag, "user_id": kUser},
 	"refills":                 {"bucket_id": kBucket, "cycle_id": kCycle, "user_id": kUser, "ref_id": kTransaction, "ovf_id": kTransaction, "income_id": kTransaction},
+	"savings_budget_entries":  {"id": kBudget, "user_id": kUser, "account_id": kAccount, "target_id": kHolder},
+	"savings_budget_runs":     {"entry_id": kBudget, "cycle_id": kCycle, "user_id": kUser, "svr_id": kTransaction, "income_id": kTransaction},
 	"schedules":               {"id": kSchedule, "user_id": kUser, "account_id": kAccount, "to_account_id": kAccount},
 	"schedule_bucket_lines":   {"schedule_id": kSchedule, "bucket_id": kBucket, "user_id": kUser},
 	"schedule_occurrences":    {"id": kOccurrence, "schedule_id": kSchedule, "user_id": kUser, "transaction_id": kTransaction},
@@ -60,7 +63,7 @@ var idColumns = map[string]map[string]kind{
 }
 
 // remap returns data with new IDs for userID: new accounts, cycles, buckets,
-// savings targets, tags, transactions, lines, schedules and occurrences,
+// savings targets and budget entries, tags, transactions, lines, schedules and occurrences,
 // with every reference
 // following. IDs are
 // unique across users, so the new ones are checked against other users' rows.
@@ -101,6 +104,10 @@ func remap(ctx context.Context, tx pgx.Tx, userID string, data Data) (Data, erro
 	}
 	if m[kHolder], err = newIDs(ctx, tx, userID, "savings_holders", keys(data.Tables["savings_holders"], "id"),
 		func(string) string { return ids.NewSavingsHolder(userID) }); err != nil {
+		return Data{}, err
+	}
+	if m[kBudget], err = newIDs(ctx, tx, userID, "savings_budget_entries", keys(data.Tables["savings_budget_entries"], "id"),
+		func(string) string { return ids.NewSavingsBudgetEntry(userID) }); err != nil {
 		return Data{}, err
 	}
 	// A rule's ID is its target's and 2 random digits: drawn unique per

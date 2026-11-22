@@ -39,6 +39,7 @@ var tables = []table{
 	{"buckets", "user_id = $1", "id"},
 	{"savings_holders", "user_id = $1", "id"},
 	{"savings_rules", "user_id = $1", "id"},
+	{"savings_budget_entries", "user_id = $1", "id"},
 	{"tags", "user_id = $1", "id"},
 	{"transaction_headers", "user_id = $1", "id"},
 	{"bank_transactions", "account_id IN (SELECT id FROM bank_accounts WHERE user_id = $1)", "id"},
@@ -46,6 +47,7 @@ var tables = []table{
 	{"savings_transactions", "holder_id IN (SELECT id FROM savings_holders WHERE user_id = $1)", "id"},
 	{"transaction_tags", "user_id = $1", "transaction_id, tag_id"},
 	{"refills", "user_id = $1", "bucket_id, cycle_id"},
+	{"savings_budget_runs", "user_id = $1", "entry_id, cycle_id"},
 	{"schedules", "user_id = $1", "id"},
 	{"schedule_bucket_lines", "user_id = $1", "schedule_id, bucket_id"},
 	{"schedule_occurrences", "user_id = $1", "id"},
@@ -146,7 +148,7 @@ func Replace(ctx context.Context, tx pgx.Tx, userID, owner string, data Data) (D
 // idsFree reports whether none of the data's IDs belong to another user
 // now, so it can be written as it is. IDs are unique across users.
 func idsFree(ctx context.Context, tx pgx.Tx, userID string, data Data) (bool, error) {
-	for _, t := range []string{"bank_accounts", "cycles", "buckets", "savings_holders", "tags", "transaction_headers", "schedules"} {
+	for _, t := range []string{"bank_accounts", "cycles", "buckets", "savings_holders", "savings_budget_entries", "tags", "transaction_headers", "schedules"} {
 		var taken bool
 		err := tx.QueryRow(ctx, fmt.Sprintf(`
 			SELECT EXISTS (SELECT 1 FROM %s WHERE id::text = ANY($1) AND user_id <> $2)`, t),

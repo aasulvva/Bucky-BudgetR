@@ -101,6 +101,21 @@ export function useNotificationText(): (n: Notification) => NotificationText {
           open: t("notifications.savings.open"),
         };
       }
+      case "savings_short": {
+        const target = targets.find((x) => x.id === n.target_id);
+        return {
+          ...base,
+          title: n.target_id
+            ? t("notifications.savingsShort.title", { name: target?.name ?? `#${n.target_id}` })
+            : t("notifications.savingsShort.titleDistributor"),
+          body: t("notifications.savingsShort.body", {
+            amount: n.amount ? formatMoney(n.amount, n.currency ?? undefined) : "",
+            account: names.accountName(n.account_id ?? ""),
+          }),
+          link: "/savings",
+          open: t("notifications.savings.open"),
+        };
+      }
     }
   };
 }

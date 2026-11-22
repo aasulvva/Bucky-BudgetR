@@ -195,6 +195,34 @@ describe("Notifications", () => {
     expect(row.getByRole("link", { name: "Open Savings" })).toHaveAttribute("href", "/savings");
   });
 
+  it("says when the savings budget fell short (#234)", async () => {
+    apiMock.on("GET /api/v1/notifications", {
+      body: {
+        items: [
+          notification({
+            key: "savings-short:1000002001:100000100100",
+            kind: "savings_short",
+            severity: "warning",
+            account_id: main.id,
+            amount: "250.00",
+            currency: "NOK",
+          }),
+        ],
+      },
+    });
+    renderRoute("/notifications");
+    const [row] = (await rows()).map((r) => within(r));
+    if (!row) throw new Error("one row");
+    expect(await row.findByText("Saved less for the savings distributor")).toBeInTheDocument();
+    expect(
+      row.getByText(
+        new RegExp(
+          `${main.name} didn.t have enough unallocated money, so the savings budget is NOK.250\\.00 short`,
+        ),
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("says when there's nothing to do", async () => {
     apiMock.on("GET /api/v1/notifications", { body: { items: [] } });
     renderRoute("/notifications");

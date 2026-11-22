@@ -431,7 +431,10 @@ func TestSavingsLines(t *testing.T) {
 		{sqlc.TransactionTypeSVR, nil, nil, held, true},
 		{sqlc.TransactionTypeSVR, nil, nil, nil, false},
 		{sqlc.TransactionTypeSVR, bank(w.acc1, "10"), nil, held, false},
-		{sqlc.TransactionTypeSVR, nil, nil, append(held, savingsLine(target, w.acc2, "1")...), false},
+		// A savings budget amount cut at the goal holds the rest for the
+		// distributor (#234): two lines, not three.
+		{sqlc.TransactionTypeSVR, nil, nil, append(held, savingsLine(target, w.acc2, "1")...), true},
+		{sqlc.TransactionTypeSVR, nil, nil, append(append(held, savingsLine(target, w.acc2, "1")...), savingsLine(target, w.acc2, "2")...), false},
 		{sqlc.TransactionTypeSVC, nil, nil, savingsLine(target, w.acc1, "-10"), true},
 		{sqlc.TransactionTypeSVC, nil, buckets(w.bucket1, "1"), held, false},
 		{sqlc.TransactionTypeTRF, twoBank, nil, savingsLine(target, w.acc1, "-10"), true},

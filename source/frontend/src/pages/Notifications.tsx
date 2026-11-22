@@ -1,13 +1,14 @@
 import { Anchor, Box, Button, Card, Group, Stack, Text, ThemeIcon, Title } from "@mantine/core";
 import {
+  type Icon,
   IconAlertTriangle,
   IconCalendarDue,
   IconCheck,
   IconChecklist,
+  IconCoinOff,
   IconPigMoney,
   IconTrendingUp,
   IconX,
-  type Icon,
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
@@ -28,6 +29,7 @@ const ICONS: Record<NotificationKind, Icon> = {
   investment_balance: IconTrendingUp,
   bucket_uncovered: IconAlertTriangle,
   savings_transfer: IconPigMoney,
+  savings_short: IconCoinOff,
 };
 
 const COLORS: Record<Notification["severity"], string> = {

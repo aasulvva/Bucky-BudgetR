@@ -16,6 +16,29 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.27.01",
+    date: "2026-11-22",
+    title: {
+      en: "Savings budget, behind the scenes",
+      nb: "Sparebudsjett, bak kulissene",
+      nn: "Sparebudsjett, bak kulissane",
+    },
+    changes: {
+      en: [
+        "The groundwork for the savings budget: fixed amounts to save each cycle, at cycle start, on income or by hand. Its screens come in the next update.",
+        "A new notification says when the unallocated money didn't cover a savings amount. It can be switched off in Settings.",
+      ],
+      nb: [
+        "Grunnlaget for sparebudsjettet: faste beløp å spare hver periode, ved periodestart, ved inntekt eller for hånd. Skjermbildene kommer i neste oppdatering.",
+        "Et nytt varsel sier fra når de ufordelte pengene ikke dekket et sparebeløp. Det kan slås av under Innstillinger.",
+      ],
+      nn: [
+        "Grunnlaget for sparebudsjettet: faste beløp å spare kvar periode, ved periodestart, ved inntekt eller for hand. Skjermbileta kjem i neste oppdatering.",
+        "Eit nytt varsel seier frå når dei ufordelte pengane ikkje dekte eit sparebeløp. Det kan slåast av under Innstillingar.",
+      ],
+    },
+  },
+  {
     version: "v2.27.00",
     date: "2026-11-22",
     title: {

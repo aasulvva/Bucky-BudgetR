@@ -1878,6 +1878,92 @@ export interface paths {
         patch: operations["updateSavingsRule"];
         trace?: never;
     };
+    "/api/v1/savings/budget": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The savings budget's fixed amounts
+         * @description The user's entries (#234, spec §8.6), oldest first, each with its
+         *     run in the active cycle (`this_cycle`, null before it runs).
+         */
+        get: operations["listSavingsBudget"];
+        put?: never;
+        /**
+         * Add a fixed amount to the savings budget
+         * @description An amount per cycle from a source account, for a savings target in
+         *     its currency (not the account itself) or, without `target_id`, the
+         *     distributor. It runs once per cycle, `when` says: at cycle start
+         *     or on income (after the refills of the same moment), or by hand
+         *     (`saveSavingsBudgetEntry`). It reserves up to what the account has
+         *     unallocated, with an SVR; a target takes up to its goal, the
+         *     distributor the rest. An `cycle_start` entry set up while a cycle
+         *     runs reserves now, or with `this_cycle: false` waits for the next
+         *     cycle.
+         */
+        post: operations["createSavingsBudgetEntry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/savings/budget/{entryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entryId: components["parameters"]["SavingsBudgetEntryId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a fixed amount
+         * @description What it reserved stays held.
+         */
+        delete: operations["deleteSavingsBudgetEntry"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a fixed amount
+         * @description Changes the destination (`target_id` null is the distributor), the
+         *     amount or `when`; the source account stays, and so does what it
+         *     reserved. A change to `cycle_start` while a cycle runs is as in
+         *     `createSavingsBudgetEntry`.
+         */
+        patch: operations["updateSavingsBudgetEntry"];
+        trace?: never;
+    };
+    "/api/v1/savings/budget/{entryId}/save-now": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entryId: components["parameters"]["SavingsBudgetEntryId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save a Manually entry now
+         * @description Runs a `manual` entry, once per cycle (409 `already_saved`), in an
+         *     active cycle that holds now (409 `no_active_cycle`). Another mode,
+         *     or a stopped entry, is 400.
+         */
+        post: operations["saveSavingsBudgetEntry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/notifications": {
         parameters: {
             query?: never;
@@ -1905,6 +1991,10 @@ export interface paths {
          *     - `savings_transfer`: a savings target with money held for it that
          *       the user has still to move there (#231), with `target_id` and the
          *       held `amount` and `currency`.
+         *     - `savings_short`: a savings budget entry that reserved less than its
+         *       amount this cycle (#234), with `account_id`, `cycle_id`,
+         *       `target_id` (null for the distributor), `at`, and the missing
+         *       `amount` and `currency`.
          */
         get: operations["listNotifications"];
         put?: never;
@@ -3420,12 +3510,73 @@ export interface components {
             past_goal: boolean;
         };
         /**
+         * @description 10-digit savings budget entry ID (User ID + 4 random digits).
+         * @example 4829131234
+         */
+        SavingsBudgetEntryId: string;
+        /**
+         * @description When an entry runs: `cycle_start` after the Auto refills,
+         *     `on_income` after the On income refills of the same income (spec
+         *     §6), `manual` when the user saves it.
+         * @enum {string}
+         */
+        SavingsBudgetWhen: "cycle_start" | "on_income" | "manual";
+        SavingsBudgetRun: {
+            /** @description The amount then; 0 for an entry set up mid-cycle to wait for the next cycle. */
+            wanted: components["schemas"]["Amount"];
+            /** @description What the account's unallocated money allowed; below `wanted` is short. */
+            reserved: components["schemas"]["Amount"];
+            /**
+             * Format: date-time
+             * @description When it reserved; null if it reserved nothing.
+             */
+            at: string | null;
+        };
+        SavingsBudgetEntry: {
+            id: components["schemas"]["SavingsBudgetEntryId"];
+            /** @description The source account the money is reserved on. */
+            account_id: components["schemas"]["AccountId"];
+            /** @description The savings target; null is the distributor. */
+            target_id: (string & components["schemas"]["SavingsHolderId"]) | null;
+            /** @description Per cycle, above 0. */
+            amount: components["schemas"]["Amount"];
+            when: components["schemas"]["SavingsBudgetWhen"];
+            /** @description Its target went away, so it doesn't run until it gets another destination. */
+            stopped: boolean;
+            /** @description Its run in the active cycle; null before it runs, or without an active cycle. */
+            this_cycle: components["schemas"]["SavingsBudgetRun"] | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            modified_at: string;
+        };
+        NewSavingsBudgetEntry: {
+            account_id: components["schemas"]["AccountId"];
+            /** @description A live target in the account's currency, not the account itself; without it, the distributor. */
+            target_id?: components["schemas"]["SavingsHolderId"];
+            /** @description Above 0. */
+            amount: components["schemas"]["Amount"];
+            when: components["schemas"]["SavingsBudgetWhen"];
+            /** @description For `cycle_start` while a cycle runs, true (the default) reserves now and false waits for the next cycle. */
+            this_cycle?: boolean;
+        };
+        SavingsBudgetEntryUpdate: {
+            /** @description The new destination; null is the distributor. */
+            target_id?: (string & components["schemas"]["SavingsHolderId"]) | null;
+            /** @description Above 0. */
+            amount?: components["schemas"]["Amount"];
+            when?: components["schemas"]["SavingsBudgetWhen"];
+            /** @description As in `NewSavingsBudgetEntry`, for a change to `cycle_start`. */
+            this_cycle?: boolean;
+        };
+        /**
          * @description See spec §5.4. Only INC, EXP and TRF can be created with
          *     `POST /transactions`. SVR (savings reserve), SVC (savings cancel) and
          *     SVB (savings to bucket) come from the savings endpoints (#231), and
          *     SVD (savings distribution) from the distributor (#232); they can be
          *     reversed, not corrected. An OVF can have up to two savings lines,
-         *     holding the overflow for a savings target and the distributor (#233).
+         *     holding the overflow for a savings target and the distributor (#233),
+         *     and so can a savings budget SVR cut at a target's goal (#234).
          * @enum {string}
          */
         TransactionType: "OPB" | "BLA" | "INC" | "EXP" | "TRF" | "INP" | "OPF" | "REF" | "BUA" | "BAT" | "OVF" | "SVR" | "SVC" | "SVB" | "SVD";
@@ -3834,7 +3985,7 @@ export interface components {
             next_cursor: string | null;
         };
         /** @enum {string} */
-        NotificationKind: "approval_queue" | "upcoming_bill" | "investment_balance" | "bucket_uncovered" | "savings_transfer";
+        NotificationKind: "approval_queue" | "upcoming_bill" | "investment_balance" | "bucket_uncovered" | "savings_transfer" | "savings_short";
         /**
          * @description A reminder or to-do. The client words it from `kind` and the fields
          *     that kind uses (see `listNotifications`); the others are null.
@@ -3848,7 +3999,8 @@ export interface components {
             kind: components["schemas"]["NotificationKind"];
             /**
              * @description `alert` for an overdue approval or an uncovered bucket,
-             *     `warning` for an approval that isn't overdue, else `info`.
+             *     `warning` for an approval that isn't overdue or a short savings
+             *     budget entry, else `info`.
              * @enum {string}
              */
             severity: "info" | "warning" | "alert";
@@ -3869,7 +4021,7 @@ export interface components {
             cycle_id: string | null;
             /** @description The savings target. */
             target_id: string | null;
-            /** @description The bill's amount, what the bucket is missing (TF − CAF), or what's held for the savings target. */
+            /** @description The bill's amount, what the bucket is missing (TF − CAF), what's held for the savings target, or what a savings budget entry fell short by. */
             amount: string | null;
             currency: string | null;
         };
@@ -3893,6 +4045,8 @@ export interface components {
             bucket_uncovered?: boolean | null;
             /** @description Money held for savings targets, waiting to be moved. Null means true. */
             savings_transfer?: boolean | null;
+            /** @description Savings budget amounts the unallocated money fell short of. Null means true. */
+            savings_short?: boolean | null;
         };
     };
     responses: {
@@ -3913,6 +4067,7 @@ export interface components {
         BucketId: components["schemas"]["BucketId"];
         SavingsTargetId: components["schemas"]["SavingsHolderId"];
         SavingsRuleId: components["schemas"]["SavingsRuleId"];
+        SavingsBudgetEntryId: components["schemas"]["SavingsBudgetEntryId"];
         TransactionId: components["schemas"]["TransactionId"];
         ScheduleId: components["schemas"]["ScheduleId"];
         ScheduledTransactionId: components["schemas"]["ScheduledTransactionId"];
@@ -6375,6 +6530,138 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SavingsRule"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listSavingsBudget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The entries. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsBudgetEntry"][];
+                };
+            };
+            401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createSavingsBudgetEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewSavingsBudgetEntry"];
+            };
+        };
+        responses: {
+            /** @description The entry. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsBudgetEntry"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteSavingsBudgetEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entryId: components["parameters"]["SavingsBudgetEntryId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    updateSavingsBudgetEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entryId: components["parameters"]["SavingsBudgetEntryId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavingsBudgetEntryUpdate"];
+            };
+        };
+        responses: {
+            /** @description The entry. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsBudgetEntry"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    saveSavingsBudgetEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entryId: components["parameters"]["SavingsBudgetEntryId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The entry, with its run. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsBudgetEntry"];
                 };
             };
             400: components["responses"]["Error"];
