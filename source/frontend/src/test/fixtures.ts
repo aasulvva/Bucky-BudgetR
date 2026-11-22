@@ -17,6 +17,7 @@ export function account(overrides: Partial<Account> & Pick<Account, "id" | "name
     reserved_uncovered: "0.00",
     expected_income: null,
     created_at: "2026-01-01T00:00:00Z",
+    bsu: null,
     ...overrides,
   };
 }

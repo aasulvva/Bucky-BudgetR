@@ -14,6 +14,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/accounts"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/api"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/auth"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/bsu"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/buckets"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/cycles"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/logging"
@@ -45,6 +46,9 @@ type Options struct {
 	// Savings manages savings targets (#231). Nil answers its endpoints
 	// with 503.
 	Savings *savings.Service
+	// BSU sets up BSU accounts' history and keeps the deposit rules
+	// (#214). Nil answers its endpoints with 503.
+	BSU *bsu.Service
 	// Transactions creates and lists transactions. Nil answers its endpoints
 	// with 503.
 	Transactions *transactions.Service
@@ -82,7 +86,7 @@ type Options struct {
 func NewHandler(logger *slog.Logger, db Pinger, opts Options) (http.Handler, error) {
 	mux := http.NewServeMux()
 
-	strict := api.NewStrictHandlerWithOptions(&server{db: db, auth: opts.Auth, accounts: opts.Accounts, cycles: opts.Cycles, buckets: opts.Buckets, savings: opts.Savings, transactions: opts.Transactions, refills: opts.Refills, schedules: opts.Schedules, notifications: opts.Notifications, logs: opts.Logs, userData: opts.UserData, pdf: opts.PDF, logger: logger}, nil, api.StrictHTTPServerOptions{
+	strict := api.NewStrictHandlerWithOptions(&server{db: db, auth: opts.Auth, accounts: opts.Accounts, cycles: opts.Cycles, buckets: opts.Buckets, savings: opts.Savings, bsu: opts.BSU, transactions: opts.Transactions, refills: opts.Refills, schedules: opts.Schedules, notifications: opts.Notifications, logs: opts.Logs, userData: opts.UserData, pdf: opts.PDF, logger: logger}, nil, api.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc:  badRequest,
 		ResponseErrorHandlerFunc: responseError(logger),
 	})

@@ -9,6 +9,7 @@ import (
 	"github.com/oapi-codegen/nullable"
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/api"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/bsu"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/money"
@@ -127,7 +128,7 @@ func (s *server) CorrectTransaction(ctx context.Context, req api.CorrectTransact
 	b := req.Body
 	c := transactions.Changes{
 		AccountID: b.AccountId, ToAccountID: b.ToAccountId, Counterparty: b.Counterparty, Description: b.Description, Tags: b.Tags,
-		TriggersRefill: b.TriggersRefill,
+		TriggersRefill: b.TriggersRefill, BSUConfirmed: deref(b.BsuConfirmed),
 	}
 	if b.Amount != nil {
 		d, err := parseAmount(*b.Amount)
@@ -194,6 +195,9 @@ func (s *server) transactionService() (*transactions.Service, error) {
 
 // transactionError maps errors from the transactions service to problems.
 func transactionError(err error) error {
+	if errors.Is(err, bsu.ErrOverLimit) || errors.Is(err, bsu.ErrWithdrawal) {
+		return bsuError(err)
+	}
 	switch {
 	case errors.Is(err, transactions.ErrNotFound):
 		return &Error{Status: http.StatusNotFound, Code: "not_found", Detail: "Transaction not found.", Err: err}
@@ -276,6 +280,7 @@ func fromAPITransactionCreate(b api.TransactionCreate) (transactions.New, error)
 	n := transactions.New{
 		Type: sqlc.TransactionType(b.Type), Counterparty: deref(b.Counterparty), Description: deref(b.Description),
 		AccountID: b.AccountId, ToAccountID: deref(b.ToAccountId), TriggersRefill: b.TriggersRefill,
+		BSUConfirmed: deref(b.BsuConfirmed),
 	}
 	if b.At != nil {
 		n.At = *b.At

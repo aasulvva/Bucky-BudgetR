@@ -116,6 +116,22 @@ export function useNotificationText(): (n: Notification) => NotificationText {
           open: t("notifications.savings.open"),
         };
       }
+      case "bsu_over_limit":
+      case "bsu_withdrawal": {
+        const over = n.kind === "bsu_over_limit";
+        return {
+          ...base,
+          title: t(over ? "notifications.bsu.overTitle" : "notifications.bsu.withdrawalTitle", {
+            name: names.accountName(n.account_id ?? ""),
+          }),
+          body: t(over ? "notifications.bsu.overBody" : "notifications.bsu.withdrawalBody", {
+            amount: n.amount ? formatMoney(n.amount, n.currency ?? undefined) : "",
+            date: n.at ? formatDateTime(n.at) : "",
+          }),
+          link: "/accounts",
+          open: t("notifications.bsu.open"),
+        };
+      }
     }
   };
 }

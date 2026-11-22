@@ -17,7 +17,11 @@ SELECT * FROM bank_accounts WHERE id = $1 AND user_id = $2 AND NOT deleted;
 SELECT * FROM bank_accounts WHERE id = $1 AND user_id = $2 AND NOT deleted FOR UPDATE;
 
 -- name: UpdateAccount :one
-UPDATE bank_accounts SET name = $3, account_type = $4, expected_income = $5, bank = $6, modified_at = now()
+-- A type change to or from BSU clears its history setup (#214): a BSU is
+-- locked until it's set up again.
+UPDATE bank_accounts SET name = $3, account_type = $4, expected_income = $5, bank = $6, modified_at = now(),
+    bsu_set_up_at = CASE WHEN account_type = $4 THEN bsu_set_up_at END,
+    bsu_opened_year = CASE WHEN account_type = $4 THEN bsu_opened_year END
 WHERE id = $1 AND user_id = $2 AND NOT deleted
 RETURNING *;
 

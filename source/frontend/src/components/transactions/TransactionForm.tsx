@@ -44,7 +44,9 @@ import { useSession } from "@/app/session";
 import { AmountInput } from "@/components/AmountInput";
 import { DateTimeInput } from "@/components/DateTimeInput";
 import { ErrorAlert } from "@/components/ErrorAlert";
+import { BsuConfirm } from "@/components/transactions/BsuConfirm";
 import { ModeFields, RepeatFields } from "@/components/schedules/RepeatFields";
+import { bsuAsk } from "@/lib/bsu";
 import { now } from "@/lib/clock";
 import { browserTimeZone } from "@/lib/cycleRule";
 import { cycleRange, isOverdue } from "@/lib/cycles";
@@ -672,6 +674,16 @@ export function TransactionForm({
   );
 
   const error = save.error ?? correct.error ?? saveSchedule.error ?? approveSave.error;
+  // A BSU over its limits, or money out of one, asks first (#214).
+  const ask = bsuAsk(save.error) ?? bsuAsk(correct.error);
+  const confirmBsu = () => {
+    if (bsuAsk(save.error) && save.variables) {
+      const v = save.variables;
+      save.mutate({ ...v, body: { ...v.body, bsu_confirmed: true } });
+    } else if (bsuAsk(correct.error) && correct.variables) {
+      correct.mutate({ ...correct.variables, bsu_confirmed: true });
+    }
+  };
   const saving = (addAnother: boolean) =>
     editing
       ? correct.isPending
@@ -768,7 +780,19 @@ export function TransactionForm({
               />
             </Box>
           )}
-          {error && <ErrorAlert error={error} />}
+          {ask ? (
+            <BsuConfirm
+              ask={ask}
+              pending={save.isPending || correct.isPending}
+              onConfirm={confirmBsu}
+              onCancel={() => {
+                save.reset();
+                correct.reset();
+              }}
+            />
+          ) : (
+            error && <ErrorAlert error={error} />
+          )}
           {isDesktop ? (
             <Group
               justify="flex-end"

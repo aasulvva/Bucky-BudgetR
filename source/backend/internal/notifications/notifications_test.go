@@ -491,3 +491,63 @@ func TestSavingsShort(t *testing.T) {
 		t.Errorf("switched off: %+v", got)
 	}
 }
+
+// TestBSU: a BSU over its deposit limits, and a schedule's withdrawal from
+// one, are warnings (#214). A withdrawal the user confirmed isn't.
+func TestBSU(t *testing.T) {
+	e := setup(t)
+	ctx := t.Context()
+	of := func(k notifications.Kind) []notifications.Notification {
+		t.Helper()
+		var out []notifications.Notification
+		for _, n := range e.list(t) {
+			if n.Kind == k {
+				out = append(out, n)
+			}
+		}
+		return out
+	}
+	id := e.newAccount(t, "BSU", sqlc.AccountTypeBsu, "0")
+	if _, err := e.pool.Exec(ctx, "UPDATE bank_accounts SET bsu_set_up_at = now() WHERE id = $1", id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.tx.Create(ctx, e.user, transactions.New{Type: sqlc.TransactionTypeINC, AccountID: id, Amount: dec("27000")}); err != nil {
+		t.Fatal(err)
+	}
+	if got := of(notifications.KindBSUOverLimit); len(got) != 0 {
+		t.Fatalf("within the limit: %+v", got)
+	}
+	if _, err := e.tx.Create(ctx, e.user, transactions.New{Type: sqlc.TransactionTypeINC, AccountID: id, Amount: dec("3000"), BSUConfirmed: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.tx.Create(ctx, e.user, transactions.New{Type: sqlc.TransactionTypeEXP, AccountID: id, Amount: dec("10"), BSUConfirmed: true}); err != nil {
+		t.Fatal(err)
+	}
+	got := of(notifications.KindBSUOverLimit)
+	if len(got) != 1 || got[0].AccountID != id || got[0].Amount.Decimal.StringFixed(2) != "2500.00" || got[0].Currency != "NOK" ||
+		got[0].Severity != notifications.Warning || got[0].Key != "bsu-over:"+id+":2026" {
+		t.Fatalf("over: %+v", got)
+	}
+	if got := of(notifications.KindBSUWithdrawal); len(got) != 0 {
+		t.Fatalf("a confirmed withdrawal: %+v", got)
+	}
+
+	s := e.daily(sqlc.TransactionTypeEXP, sqlc.ScheduleModeAuto, "2026-10-11")
+	s.Transaction.AccountID = id
+	e.schedule(t, s)
+	e.run(t, "2026-10-11T12:00:00Z")
+	got = of(notifications.KindBSUWithdrawal)
+	if len(got) != 1 || got[0].AccountID != id || got[0].Amount.Decimal.StringFixed(2) != "100.00" ||
+		!got[0].At.Equal(at("2026-10-11T12:00:00Z")) || got[0].Severity != notifications.Warning {
+		t.Fatalf("withdrawal: %+v", got)
+	}
+	e.dismiss(t, got[0].Key)
+	if got := of(notifications.KindBSUWithdrawal); len(got) != 0 {
+		t.Fatalf("dismissed: %+v", got)
+	}
+
+	e.prefer(t, `{"bsu_over_limit": false}`)
+	if got := of(notifications.KindBSUOverLimit); len(got) != 0 {
+		t.Errorf("switched off: %+v", got)
+	}
+}

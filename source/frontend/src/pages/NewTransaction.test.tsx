@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import type { CounterpartySuggestion } from "@/api/transactions";
-import { apiMock, testUser } from "@/test/api";
+import { apiMock, problem, testUser } from "@/test/api";
 import { account, bucket } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
@@ -127,6 +127,54 @@ describe("Create transaction", () => {
       to_account_id: "2345",
       amount: "300.00",
     });
+  });
+
+  it("asks before going over a BSU limit, and sends it confirmed (#214)", async () => {
+    localStorage.setItem("bucky.lastAccount", "1234");
+    apiMock.on("POST /api/v1/transactions", (req) =>
+      (req.body as Record<string, unknown>).bsu_confirmed
+        ? saved
+        : problem(409, "bsu_over_limit", "This takes the BSU account over its deposit limit."),
+    );
+    renderRoute("/transactions/new");
+    await userEvent.click(await screen.findByRole("radio", { name: "Transfer" }));
+    await userEvent.click(screen.getByRole("combobox", { name: "To account" }));
+    await userEvent.click(await screen.findByRole("option", { name: /^Buffer account/ }));
+    await userEvent.type(amount(), "30000");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    const ask = await screen.findByRole("alertdialog", { name: "Over the BSU limit" });
+    expect(
+      within(ask).getByText(/over this year's or the total deposit limit/),
+    ).toBeInTheDocument();
+
+    // Cancel leaves it unsent; asked again, Record it anyway sends it.
+    await userEvent.click(within(ask).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await userEvent.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", {
+        name: "Record it anyway",
+      }),
+    );
+    expect(await screen.findByText("Transfer saved.")).toBeInTheDocument();
+    expect(sent()).toEqual({
+      type: "TRF",
+      account_id: "1234",
+      to_account_id: "2345",
+      amount: "30000.00",
+      bsu_confirmed: true,
+    });
+    expect(apiMock.calls("POST /api/v1/transactions")).toHaveLength(3);
+  });
+
+  it("asks before taking money out of a BSU (#214)", async () => {
+    apiMock.on("POST /api/v1/transactions", problem(409, "bsu_withdrawal", "Money out of a BSU."));
+    renderRoute("/transactions/new");
+    await userEvent.type(await screen.findByRole("textbox", { name: "Amount" }), "100");
+    await pick("Account", /^Main account/);
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    const ask = await screen.findByRole("alertdialog", { name: "Money out of a BSU account" });
+    expect(within(ask).getByText(/can cost you the tax deduction/)).toBeInTheDocument();
   });
 
   it("pre-checks Triggers refill for waiting On income buckets, and sends an untick", async () => {

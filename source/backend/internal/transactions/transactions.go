@@ -21,6 +21,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shopspring/decimal"
 
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/bsu"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ids"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
@@ -71,6 +72,10 @@ type New struct {
 	// buckets (spec §6). Nil leaves it to the user's income rules; an
 	// explicit value overrides them.
 	TriggersRefill *bool
+	// BSUConfirmed records it even when it takes a BSU account over its
+	// deposit limits or money out of one (#214); without it, that's
+	// *bsu.OverLimitError or *bsu.WithdrawalError.
+	BSUConfirmed bool
 }
 
 // BucketAmount is a positive amount for one bucket.
@@ -284,6 +289,9 @@ func Check(ctx context.Context, db sqlc.DBTX, userID string, n New) error {
 // (ledger.LockUser), as Create does but at any time n.At, past or future.
 // The scheduler records its occurrences with it.
 func (s *Service) RecordIn(ctx context.Context, tx pgx.Tx, userID string, n New) (Transaction, error) {
+	// A schedule records without asking; a notification tells of a BSU over
+	// its limits or a withdrawal from one (#214).
+	n.BSUConfirmed = true
 	t, err := s.record(ctx, tx, userID, n, "")
 	if err != nil {
 		return Transaction{}, err
@@ -304,6 +312,9 @@ func (s *Service) record(ctx context.Context, tx pgx.Tx, userID string, n New, r
 		return nil, err
 	}
 	if err := checkBuckets(ctx, q, userID, n); err != nil {
+		return nil, err
+	}
+	if err := checkBSU(ctx, tx, userID, n, nil, false); err != nil {
 		return nil, err
 	}
 	triggers := n.TriggersRefill != nil && *n.TriggersRefill
@@ -1085,4 +1096,48 @@ func decodeCursor(c string) (time.Time, string, error) {
 		return time.Time{}, "", invalid
 	}
 	return time.UnixMicro(us).UTC(), id, nil
+}
+
+// checkBSU checks n against the deposit limits of the BSU accounts it
+// touches, unless it's confirmed (#214). before is the family's effective
+// lines when n corrects it, and beforeInterest whether it was interest,
+// which isn't a deposit.
+func checkBSU(ctx context.Context, tx pgx.Tx, userID string, n New, before []BankLine, beforeInterest bool) error {
+	if n.BSUConfirmed {
+		return nil
+	}
+	switch n.Type {
+	case sqlc.TransactionTypeINC, sqlc.TransactionTypeTRF, sqlc.TransactionTypeEXP:
+	default:
+		return nil
+	}
+	after, _, err := signedLines(n)
+	if err != nil {
+		return err
+	}
+	var changes []bsu.Change
+	add := func(id string) int {
+		i := slices.IndexFunc(changes, func(c bsu.Change) bool { return c.AccountID == id })
+		if i < 0 {
+			changes = append(changes, bsu.Change{AccountID: id, Before: decimal.Zero, After: decimal.Zero})
+			i = len(changes) - 1
+		}
+		return i
+	}
+	for _, l := range before {
+		if !beforeInterest || l.Amount.IsNegative() {
+			changes[add(l.AccountID)].Before = l.Amount
+		}
+	}
+	for _, l := range after {
+		changes[add(l.AccountID)].After = l.Amount
+	}
+	return bsu.Check(ctx, tx, userID, n.Type, n.Tags, n.At, changes)
+}
+
+// isInterest reports whether t is an income tagged interest (#70).
+func isInterest(t Transaction) bool {
+	return t.Type == sqlc.TransactionTypeINC && slices.ContainsFunc(t.Tags, func(tag string) bool {
+		return strings.EqualFold(strings.TrimSpace(tag), bsu.InterestTag)
+	})
 }

@@ -193,6 +193,8 @@ func accountError(err error) error {
 			Detail: capitalize(what) + " this account as their source. Choose a new source account for each, or delete them with it."}
 	case errors.Is(err, accounts.ErrNoChange):
 		return &Error{Status: http.StatusBadRequest, Code: "no_change", Detail: "The balance is already this amount."}
+	case errors.Is(err, accounts.ErrBSUCurrency):
+		return &Error{Status: http.StatusBadRequest, Code: "bsu_currency", Detail: "A BSU account must be in NOK."}
 	case errors.Is(err, accounts.ErrCurrencyMismatch):
 		return &Error{Status: http.StatusBadRequest, Code: "currency_mismatch",
 			Detail: "Money and buckets can only move to an account in the same currency."}
@@ -237,6 +239,10 @@ func toAPIAccount(a accounts.Account) api.Account {
 	}
 	if a.ExpectedIncome.Valid {
 		out.ExpectedIncome = nullable.NewNullableWithValue(a.ExpectedIncome.Decimal.StringFixed(money.Places))
+	}
+	out.Bsu = nullable.NewNullNullable[api.BSUStatus]()
+	if a.BSU != nil {
+		out.Bsu = nullable.NewNullableWithValue(toAPIBSUStatus(*a.BSU))
 	}
 	return out
 }

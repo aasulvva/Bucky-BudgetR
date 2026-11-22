@@ -16,6 +16,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/accounts"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/api"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/auth"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/bsu"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/buckets"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/cycles"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
@@ -38,6 +39,7 @@ type server struct {
 	cycles        *cycles.Service
 	buckets       *buckets.Service
 	savings       *savings.Service
+	bsu           *bsu.Service
 	transactions  *transactions.Service
 	refills       *refill.Service
 	schedules     *schedules.Service

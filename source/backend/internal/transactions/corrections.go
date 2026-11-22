@@ -70,6 +70,8 @@ type Changes struct {
 	// TriggersRefill sets whether an income triggers a refill: true refills
 	// now, false undoes the refills it triggered in the active cycle.
 	TriggersRefill *bool
+	// BSUConfirmed is as in New (#214).
+	BSUConfirmed bool
 }
 
 // Correct records an adjustment that turns the transaction into what c
@@ -104,6 +106,7 @@ func (s *Service) correct(ctx context.Context, tx pgx.Tx, userID, id string, c C
 	if err != nil {
 		return "", err
 	}
+	want.BSUConfirmed = c.BSUConfirmed
 	// A transfer that did Done on held savings keeps its amount and accounts,
 	// so it and the money it took off hold stay alike.
 	if len(cur.SavingsLines) > 0 {
@@ -151,6 +154,9 @@ func (s *Service) correct(ctx context.Context, tx pgx.Tx, userID, id string, c C
 		}
 	}
 	if err := checkBuckets(ctx, q, userID, changed); err != nil {
+		return "", err
+	}
+	if err := checkBSU(ctx, tx, userID, want, cur.BankLines, isInterest(cur)); err != nil {
 		return "", err
 	}
 	if _, err := s.ledger.Record(ctx, tx, ledger.Entry{

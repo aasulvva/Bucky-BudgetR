@@ -853,6 +853,8 @@ type BankAccount struct {
 	AccountType    AccountType
 	ExpectedIncome decimal.NullDecimal
 	Bank           string
+	BsuSetUpAt     pgtype.Timestamptz
+	BsuOpenedYear  pgtype.Int2
 }
 
 type BankTransaction struct {
@@ -865,6 +867,15 @@ type BankTransaction struct {
 	ExchangeRate     decimal.NullDecimal
 	CreatedAt        time.Time
 	CreatedBy        pgtype.Text
+}
+
+type BsuRule struct {
+	FromYear    int16
+	YearlyLimit decimal.Decimal
+	TotalLimit  decimal.Decimal
+	CreatedAt   time.Time
+	ModifiedAt  time.Time
+	UpdatedBy   pgtype.Text
 }
 
 type Bucket struct {

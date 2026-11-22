@@ -2489,7 +2489,11 @@
       "savings_transfer": "Sparing å overføre",
       "savings_transferHint": "Pengar sette av til sparemål, som ventar på at du flyttar dei.",
       "savings_short": "Sparebudsjett ikkje dekt",
-      "savings_shortHint": "Eit fast sparebeløp dei ufordelte pengane ikkje dekte."
+      "savings_shortHint": "Eit fast sparebeløp dei ufordelte pengane ikkje dekte.",
+      "bsu_over_limit": "BSU over grensa",
+      "bsu_over_limitHint": "Ein BSU-konto der innskota i år er over den årlege eller samla grensa.",
+      "bsu_withdrawal": "Uttak frå BSU",
+      "bsu_withdrawalHint": "Pengar ein planlagd transaksjon tok ut av ein BSU-konto."
     },
     "savings": {
       "title": "Pengar sette av til {{name}}",
@@ -2501,6 +2505,22 @@
       "title": "Sparte mindre til {{name}}",
       "body": "{{account}} hadde ikkje nok ufordelte pengar, så sparebudsjettet manglar {{amount}} denne perioden.",
       "titleDistributor": "Sparte mindre til sparefordelaren"
+    },
+    "bsu": {
+      "overTitle": "{{name}} er over BSU-grensa",
+      "overBody": "Innskota i år er {{amount}} over den årlege eller samla BSU-grensa.",
+      "withdrawalTitle": "Pengar tekne ut av {{name}}",
+      "withdrawalBody": "Ein planlagd transaksjon tok {{amount}} ut av BSU-kontoen {{date}}, og det kan koste deg skattefrådraget.",
+      "open": "Opne kontoar"
+    }
+  },
+  "bsu": {
+    "confirm": {
+      "overTitle": "Over BSU-grensa",
+      "overBody": "Dette tek ein BSU-konto over årets eller den samla grensa for innskot. Renter tel ikkje som innskot.",
+      "withdrawalTitle": "Pengar ut av ein BSU-konto",
+      "withdrawalBody": "Dette tek pengar ut av ein BSU-konto, og det kan koste deg skattefrådraget.",
+      "record": "Registrer likevel"
     }
   }
 }

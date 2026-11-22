@@ -2489,7 +2489,11 @@
       "savings_transfer": "Savings to transfer",
       "savings_transferHint": "Money held for savings targets, waiting for you to move it.",
       "savings_short": "Savings budget short",
-      "savings_shortHint": "A fixed savings amount the unallocated money didn't cover."
+      "savings_shortHint": "A fixed savings amount the unallocated money didn't cover.",
+      "bsu_over_limit": "BSU over its limit",
+      "bsu_over_limitHint": "A BSU account whose deposits this year are over the yearly or total limit.",
+      "bsu_withdrawal": "BSU withdrawals",
+      "bsu_withdrawalHint": "Money a scheduled transaction took out of a BSU account."
     },
     "savings": {
       "title": "Money held for {{name}}",
@@ -2501,6 +2505,22 @@
       "title": "Saved less for {{name}}",
       "body": "{{account}} didn't have enough unallocated money, so the savings budget is {{amount}} short this cycle.",
       "titleDistributor": "Saved less for the savings distributor"
+    },
+    "bsu": {
+      "overTitle": "{{name}} is over its BSU limit",
+      "overBody": "This year's deposits are {{amount}} over the yearly or total BSU limit.",
+      "withdrawalTitle": "Money taken out of {{name}}",
+      "withdrawalBody": "A scheduled transaction took {{amount}} out of the BSU account {{date}}, which can cost you the tax deduction.",
+      "open": "Open accounts"
+    }
+  },
+  "bsu": {
+    "confirm": {
+      "overTitle": "Over the BSU limit",
+      "overBody": "This takes a BSU account over this year's or the total deposit limit. Interest doesn't count as a deposit.",
+      "withdrawalTitle": "Money out of a BSU account",
+      "withdrawalBody": "This takes money out of a BSU account, which can cost you the tax deduction.",
+      "record": "Record it anyway"
     }
   }
 }
