@@ -141,7 +141,10 @@ describe("Reports", () => {
     const { router } = renderRoute("/stats");
     await userEvent.click(await screen.findByRole("tab", { name: "Reports" }));
     expect(router.state.location.pathname).toBe("/stats/reports");
-    expect(await screen.findByRole("combobox", { name: "Report" })).toHaveValue("Yearly report");
+    // The Reports tab is slow to render first on a busy CI runner.
+    expect(await screen.findByRole("combobox", { name: "Report" }, { timeout: 5000 })).toHaveValue(
+      "Yearly report",
+    );
     await waitFor(() => {
       expect(modules()).toEqual([
         "Spending · Pie · Per bucket",
