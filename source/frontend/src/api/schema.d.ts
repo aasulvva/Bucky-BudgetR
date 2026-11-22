@@ -1731,6 +1731,9 @@ export interface paths {
          *       `account_id` and `cycle_id`.
          *     - `bucket_uncovered`: a priority bucket whose CAF is below its TF,
          *       with `bucket_id` and the missing `amount` and `currency`.
+         *     - `savings_transfer`: a savings target with money held for it that
+         *       the user has still to move there (#231), with `target_id` and the
+         *       held `amount` and `currency`.
          */
         get: operations["listNotifications"];
         put?: never;
@@ -3576,7 +3579,7 @@ export interface components {
             next_cursor: string | null;
         };
         /** @enum {string} */
-        NotificationKind: "approval_queue" | "upcoming_bill" | "investment_balance" | "bucket_uncovered";
+        NotificationKind: "approval_queue" | "upcoming_bill" | "investment_balance" | "bucket_uncovered" | "savings_transfer";
         /**
          * @description A reminder or to-do. The client words it from `kind` and the fields
          *     that kind uses (see `listNotifications`); the others are null.
@@ -3597,7 +3600,8 @@ export interface components {
             /**
              * Format: date-time
              * @description When it applies: the newest queued transaction's queue time, the
-             *     bill's time, or the cycle's start. Null for an uncovered bucket.
+             *     bill's time, or the cycle's start. Null for an uncovered bucket
+             *     and for savings to transfer.
              */
             at: string | null;
             /** @description How many wait for approval. */
@@ -3608,7 +3612,9 @@ export interface components {
             account_id: string | null;
             bucket_id: string | null;
             cycle_id: string | null;
-            /** @description The bill's amount, or what the bucket is missing (TF − CAF). */
+            /** @description The savings target. */
+            target_id: string | null;
+            /** @description The bill's amount, what the bucket is missing (TF − CAF), or what's held for the savings target. */
             amount: string | null;
             currency: string | null;
         };
@@ -3630,6 +3636,8 @@ export interface components {
             investment_balance?: boolean | null;
             /** @description Priority buckets that aren't covered. Null means true. */
             bucket_uncovered?: boolean | null;
+            /** @description Money held for savings targets, waiting to be moved. Null means true. */
+            savings_transfer?: boolean | null;
         };
     };
     responses: {

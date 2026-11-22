@@ -5,7 +5,7 @@ import { Link } from "react-router";
 
 import { accountTypeLabel, type Account, type Bucket } from "@/api/accounts";
 import { shownAccounts, type WidgetInstance } from "@/lib/dashboard";
-import { addAmounts, formatMoney } from "@/lib/money";
+import { addAmounts, compareAmounts, formatMoney } from "@/lib/money";
 
 import { WidgetFrame } from "./frame";
 import { BucketsSummary, Gone, MoneyState, NoBuckets, WidgetCard } from "./Widget";
@@ -63,11 +63,14 @@ function AllAccounts({ accounts, buckets }: { accounts: Account[]; buckets: Buck
         <Group key={a.id} justify="space-between" gap="xs" wrap="nowrap">
           <Box style={{ minWidth: 0 }}>
             <AccountLink account={a} />
-            {buckets.some((b) => b.source_account_id === a.id) && (
+            {(buckets.some((b) => b.source_account_id === a.id) ||
+              compareAmounts(a.reserved, "0") > 0) && (
               <Text size="xs" c="dimmed">
                 {t("dashboard.health.unallocated", {
                   amount: formatMoney(a.unallocated, a.currency),
                 })}
+                {compareAmounts(a.reserved, "0") > 0 &&
+                  ` · ${t("accounts.reserved", { amount: formatMoney(a.reserved, a.currency) })}`}
               </Text>
             )}
           </Box>

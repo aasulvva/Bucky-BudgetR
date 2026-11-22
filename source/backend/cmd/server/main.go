@@ -165,7 +165,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, out, lo
 	bucketsSvc := buckets.NewService(pool, ledgerSvc, buckets.Options{
 		Now: now, OnCreate: refills.OnCreate, ReleaseSavings: savingsSvc.ReleaseBucket,
 	})
-	notificationsSvc := notifications.NewService(pool, notifications.Options{Now: now, Schedules: schedulesSvc, Buckets: bucketsSvc})
+	notificationsSvc := notifications.NewService(pool, notifications.Options{Now: now, Schedules: schedulesSvc, Buckets: bucketsSvc, Savings: savingsSvc})
 	var renderer pdf.Renderer
 	if cfg.PDFChromeURL != "" {
 		chrome := pdf.NewChrome(cfg.PDFChromeURL, cfg.PDFAppURL)

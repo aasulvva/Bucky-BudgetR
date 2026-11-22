@@ -65,7 +65,7 @@ import {
   waitingOnIncome,
   type SplitLine,
 } from "@/lib/transactionForm";
-import { bucketLinesLocked, isCorrectableType } from "@/lib/transactionList";
+import { bucketLinesLocked, isCorrectableType, isSavingsTransfer } from "@/lib/transactionList";
 import {
   approveDate,
   defaultRepeat,
@@ -232,6 +232,8 @@ export function TransactionForm({
   const transfer = type === "TRF";
   const withBuckets = type === "INC" || type === "EXP";
   const locked = editing ? bucketLinesLocked(editing, active) : false;
+  // A Done transfer (#231) keeps its amount and accounts: only its text changes.
+  const heldTransfer = editing ? isSavingsTransfer(editing) : false;
   const account = accounts.find((a) => a.id === accountId);
   const currency = account?.currency;
   const own = buckets.filter((b) => b.source_account_id === accountId);
@@ -504,10 +506,13 @@ export function TransactionForm({
           error={errors.amount}
           size={isDesktop ? "lg" : "xl"}
           styles={{ input: { fontWeight: 600 } }}
-          autoFocus
+          autoFocus={!heldTransfer}
+          disabled={heldTransfer}
         />
         <Text size="xs" c="dimmed">
-          {t(`newTransaction.hints.${isCorrectableType(type) ? type : "EXP"}`)}
+          {heldTransfer
+            ? t("newTransaction.savingsTransferHint")
+            : t(`newTransaction.hints.${isCorrectableType(type) ? type : "EXP"}`)}
         </Text>
       </Stack>
       {editing ? (
@@ -560,8 +565,10 @@ export function TransactionForm({
           if (v) changeAccount(v);
         }}
         error={errors.account}
-        disabled={balance}
-        description={editing && !balance ? t("newTransaction.moveHint") : undefined}
+        disabled={balance || heldTransfer}
+        description={
+          editing && !balance && !heldTransfer ? t("newTransaction.moveHint") : undefined
+        }
       />
       {transfer && (
         <Select
@@ -573,7 +580,7 @@ export function TransactionForm({
           description={
             accountId && others.length === 0 ? t("newTransaction.noOther", { currency }) : undefined
           }
-          disabled={others.length === 0}
+          disabled={others.length === 0 || heldTransfer}
         />
       )}
       {withBuckets && (

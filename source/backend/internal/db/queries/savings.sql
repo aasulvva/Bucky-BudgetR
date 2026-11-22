@@ -75,3 +75,12 @@ JOIN savings_holders h ON h.id = l.holder_id
 WHERE h.user_id = $1
 GROUP BY l.account_id
 HAVING SUM(l.amount) <> 0;
+
+-- name: SavingsNewestLines :many
+-- Each live holder's newest savings line: what a savings notification is
+-- keyed by, so a dismissed one shows again once something changes.
+SELECT DISTINCT ON (s.holder_id) s.holder_id, s.id
+FROM savings_transactions s
+JOIN savings_holders h ON h.id = s.holder_id
+WHERE h.user_id = $1 AND NOT h.deleted
+ORDER BY s.holder_id, s.created_at DESC, s.id DESC;

@@ -348,6 +348,41 @@ func (q *Queries) SavingsHeldOnAccount(ctx context.Context, accountID string) ([
 	return items, nil
 }
 
+const savingsNewestLines = `-- name: SavingsNewestLines :many
+SELECT DISTINCT ON (s.holder_id) s.holder_id, s.id
+FROM savings_transactions s
+JOIN savings_holders h ON h.id = s.holder_id
+WHERE h.user_id = $1 AND NOT h.deleted
+ORDER BY s.holder_id, s.created_at DESC, s.id DESC
+`
+
+type SavingsNewestLinesRow struct {
+	HolderID string
+	ID       string
+}
+
+// Each live holder's newest savings line: what a savings notification is
+// keyed by, so a dismissed one shows again once something changes.
+func (q *Queries) SavingsNewestLines(ctx context.Context, userID string) ([]SavingsNewestLinesRow, error) {
+	rows, err := q.db.Query(ctx, savingsNewestLines, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SavingsNewestLinesRow{}
+	for rows.Next() {
+		var i SavingsNewestLinesRow
+		if err := rows.Scan(&i.HolderID, &i.ID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateSavingsTarget = `-- name: UpdateSavingsTarget :one
 UPDATE savings_holders SET name = $3, goal = $4, note = $5, modified_at = now()
 WHERE id = $1 AND user_id = $2 AND NOT deleted

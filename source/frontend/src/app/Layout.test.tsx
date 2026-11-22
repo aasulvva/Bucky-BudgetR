@@ -40,10 +40,7 @@ describe("desktop layout", () => {
       expect(within(nav).getByRole("link", { name: label })).toBeInTheDocument();
     }
     expect(within(nav).getByRole("link", { name: "Accounts" })).toHaveAttribute("data-active");
-    expect(within(nav).getByRole("link", { name: /Savings Later/ })).toHaveAttribute(
-      "href",
-      "/savings",
-    );
+    expect(within(nav).getByRole("link", { name: "Savings" })).toHaveAttribute("href", "/savings");
     // Setup is closed until opened.
     expect(within(nav).queryByRole("link", { name: "Account setup" })).not.toBeInTheDocument();
     await userEvent.click(within(nav).getByText("Setup"));

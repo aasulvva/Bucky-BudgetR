@@ -229,6 +229,9 @@ function AccountSection({
           ) : (
             <Figure label={t("buckets.unallocated")} value={money(summary.unallocated)} />
           )}
+          {compareAmounts(account.reserved, "0") > 0 && (
+            <Figure label={t("buckets.reserved")} value={money(account.reserved)} />
+          )}
           {uncovered && <ReallocateButton account={account} />}
         </Group>
       </Group>
@@ -249,6 +252,11 @@ function AccountSection({
             </Text>
           </Stack>
         </Alert>
+      )}
+      {compareAmounts(account.reserved_uncovered, "0") > 0 && (
+        <Text size="sm" c="var(--mantine-color-orange-text)" px={4}>
+          {t("buckets.reservedUncovered", { amount: money(account.reserved_uncovered) })}
+        </Text>
       )}
       {view === "list" ? (
         <BucketTable buckets={buckets} figures={figures} active={active} onHistory={onHistory} />

@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import type { Notification } from "@/api/notifications";
 import type { Schedule } from "@/lib/schedules";
 import { apiMock, problem, testUser, type MockRequest } from "@/test/api";
-import { account, bucket } from "@/test/fixtures";
+import { account, bucket, savingsTarget } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
 
@@ -44,6 +44,7 @@ function notification(n: Partial<Notification> & Pick<Notification, "key" | "kin
     account_id: null,
     bucket_id: null,
     cycle_id: null,
+    target_id: null,
     amount: null,
     currency: null,
     ...n,
@@ -165,6 +166,33 @@ describe("Notifications", () => {
     expect(
       await screen.findByText(/It doesn.t exist, or it has been deleted\./),
     ).toBeInTheDocument();
+  });
+
+  it("reminds of savings held for a transfer (#231)", async () => {
+    apiMock.on("GET /api/v1/savings/targets", {
+      body: [savingsTarget({ id: "1000001001", name: "Rainy day", account_id: shares.id })],
+    });
+    apiMock.on("GET /api/v1/notifications", {
+      body: {
+        items: [
+          notification({
+            key: "savings:1000001001:100000100100000000000001",
+            kind: "savings_transfer",
+            target_id: "1000001001",
+            amount: "300.00",
+            currency: "NOK",
+          }),
+        ],
+      },
+    });
+    renderRoute("/notifications");
+    const [row] = (await rows()).map((r) => within(r));
+    if (!row) throw new Error("one row");
+    expect(await row.findByText("Money held for Rainy day")).toBeInTheDocument();
+    expect(
+      row.getByText(/NOK.300\.00 is set aside\. Make the transfer at the bank, then press Done\./),
+    ).toBeInTheDocument();
+    expect(row.getByRole("link", { name: "Open Savings" })).toHaveAttribute("href", "/savings");
   });
 
   it("says when there's nothing to do", async () => {

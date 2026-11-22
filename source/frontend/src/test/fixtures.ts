@@ -2,6 +2,7 @@
 
 import type { Account, Bucket, BucketFigures } from "@/api/accounts";
 import type { Cycle } from "@/api/cycles";
+import type { SavingsTarget } from "@/api/savings";
 import type { Transaction } from "@/api/transactions";
 import { addDays, endAtFor, startAtFor, today } from "@/lib/cycles";
 
@@ -104,6 +105,26 @@ export function transaction(
     savings_lines: [],
     before_reversal: null,
     balances_after: [],
+    ...overrides,
+  };
+}
+
+/** A savings target on an account, with a goal of 10 000 and nothing held; change what a test needs. */
+export function savingsTarget(
+  overrides: Partial<SavingsTarget> & Pick<SavingsTarget, "id" | "name">,
+): SavingsTarget {
+  return {
+    custom_name: null,
+    bucket_id: null,
+    account_id: "2345",
+    currency: "NOK",
+    goal: "10000.00",
+    note: "",
+    current: "0.00",
+    held_total: "0.00",
+    held: [],
+    created_at: "2026-01-01T00:00:00Z",
+    modified_at: "2026-01-01T00:00:00Z",
     ...overrides,
   };
 }

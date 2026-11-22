@@ -205,7 +205,9 @@
     "interestCounterparty": "Interest",
     "interestRegistered": "Interest on {{name}} registered.",
     "enterInterest": "Enter the interest.",
-    "interestPositive": "Interest must be more than 0."
+    "interestPositive": "Interest must be more than 0.",
+    "reserved": "{{amount}} reserved for savings",
+    "reservedUncovered": "{{amount}} reserved for savings ({{uncovered}} not covered)"
   },
   "accountSetup": {
     "newAccount": "New account",
@@ -621,7 +623,9 @@
       "overFunds": "{{name}} only has {{amount}}.",
       "added": "Added {{amount}} to {{name}}.",
       "removed": "Removed {{amount}} from {{name}}."
-    }
+    },
+    "reserved": "Reserved for savings",
+    "reservedUncovered": "{{amount}} of the savings held on this account isn't covered: its buckets take the balance first."
   },
   "bucketSetup": {
     "newBucket": "New bucket",
@@ -796,6 +800,110 @@
     "deletes_one": "Saving also deletes {{count}} bucket: {{names}}.",
     "deletes_other": "Saving also deletes {{count}} buckets: {{names}}."
   },
+  "savings": {
+    "empty": "No savings targets yet",
+    "emptyHint": "A savings target is a Fully manual bucket, or a savings, BSU, fund or investment account, with a goal. Set money aside for it here, and record it as done once you've moved it at the bank.",
+    "setupFor": "Savings setup for {{name}}",
+    "kindBucket": "Bucket",
+    "kindBucketOn": "Bucket on {{account}}",
+    "kindAccount": "Account",
+    "progress": "{{saved}} of {{goal}}",
+    "progressLabel": "{{pct}} % of the goal",
+    "reached": "Goal reached",
+    "left": "{{amount}} to go",
+    "inBucket": "{{amount}} in the bucket",
+    "inAccount": "{{amount}} in the account",
+    "heldTotal": "{{amount}} held",
+    "held": "Held funds",
+    "heldOn": "{{amount}} on {{account}}",
+    "notCovered": "{{amount}} not covered: the account's buckets come first",
+    "heldHintAccount": "Held funds stay in their account until you've moved them. Make the transfer at the bank, then press Done.",
+    "heldHintBucket": "Held funds stay in their account until you've moved them to the bucket's account. Move them at the bank, then press Done.",
+    "amount": "Amount",
+    "enterAmount": "Enter an amount above 0.",
+    "overHeld": "Only {{amount}} is held on this account.",
+    "overCapacity": "The bucket's capacity leaves room for {{amount}}.",
+    "needsCycle": "This records a bucket line, so it needs an active cycle that hasn't ended. Start or extend a cycle first.",
+    "add": {
+      "title": "Add to savings: {{name}}",
+      "name": "Add to savings for {{name}}",
+      "submit": "Add to savings",
+      "from": "From",
+      "unallocated": "{{amount}} unallocated",
+      "noAccounts": "You have no account in {{currency}} to add from.",
+      "overUnallocated": "The account has only {{amount}} unallocated.",
+      "preview": "{{amount}} of {{account}}'s unallocated money is held for {{name}} until you move it.",
+      "previewDirect": "{{amount}} goes straight into {{name}} from {{account}}'s unallocated money.",
+      "pastGoal": "That goes past the goal of {{goal}}, which is fine.",
+      "added": "{{amount}} held for {{name}}.",
+      "addedDirect": "{{amount}} added to {{name}}."
+    },
+    "done": {
+      "title": "Done: {{name}}",
+      "name": "Done for {{name}} on {{account}}",
+      "submit": "Done",
+      "hint": "{{amount}} is held on {{account}}. Record what you've moved.",
+      "when": "When you moved it",
+      "whenHint": "Empty means now.",
+      "description": "Description",
+      "previewAccount": "Records a transfer of {{amount}} from {{from}} to {{to}}.",
+      "previewBucket": "Records {{amount}} moved from {{from}} to {{to}}, into {{name}}.",
+      "previewBucketSame": "Puts {{amount}} into {{name}}.",
+      "recorded": "{{amount}} moved to {{name}}."
+    },
+    "clear": {
+      "title": "Clear: {{name}}",
+      "name": "Clear for {{name}} on {{account}}",
+      "submit": "Clear",
+      "hint": "{{amount}} is held on {{account}}.",
+      "preview": "{{amount}} goes back to {{account}}'s unallocated money.",
+      "cleared": "{{amount}} released from {{name}}."
+    },
+    "release": {
+      "targetHeld": "{{name}} stops being a savings target, and the {{amount}} held for it goes back to unallocated.",
+      "target": "{{name}} stops being a savings target.",
+      "reserved": "The {{amount}} held on it for savings is released."
+    }
+  },
+  "savingsSetup": {
+    "intro": "A savings target is a Fully manual bucket, or a savings, BSU, fund or investment account, with a goal. Its progress counts the bucket's funds or the account's balance, plus what's held for it.",
+    "newTarget": "New savings target",
+    "targets": "Savings targets",
+    "empty": "No savings targets yet.",
+    "pick": "Pick a target, or make a new one.",
+    "kind": "What to save in",
+    "kindBucket": "A bucket",
+    "kindAccount": "An account",
+    "kindBucketHint": "A Fully manual bucket: the money stays in its account, set aside in the bucket.",
+    "kindAccountHint": "A savings, BSU, fund or investment account: the money is moved there.",
+    "noBuckets": "No Fully manual bucket is free. <setup>Make one in Bucket setup</setup>.",
+    "noAccounts": "No savings, BSU, fund or investment account is free. <setup>Add one in Account setup</setup>.",
+    "bucket": "Bucket",
+    "account": "Account",
+    "pickBucket": "Pick a bucket.",
+    "pickAccount": "Pick an account.",
+    "goal": "Goal",
+    "goalLimit": "At most the bucket's capacity, {{amount}}.",
+    "goalBucketHint": "What the bucket should hold.",
+    "goalAccountHint": "The balance to reach.",
+    "enterGoal": "Enter a goal above 0.",
+    "goalAboveCapacity": "The goal can't be above the bucket's capacity, {{amount}}.",
+    "name": "Name",
+    "nameHint": "Empty uses the bucket's or account's name.",
+    "note": "Note",
+    "isBucket": "The bucket {{name}}.",
+    "isAccount": "The account {{name}}.",
+    "create": "Create target",
+    "created": "{{name}} is a savings target now.",
+    "saved": "{{name}} saved.",
+    "delete": "Delete target",
+    "deleteQuestion": "Delete the savings target <b>{{name}}</b>?",
+    "deleteReleases": "What's held for it goes back to unallocated:",
+    "deleteReleasesOn": "{{amount}} on {{account}}",
+    "deleteKeepsBucket": "The bucket, its funds and its transactions stay.",
+    "deleteKeepsAccount": "The account, its balance and its transactions stay.",
+    "deleted": "{{name}} is no longer a savings target."
+  },
   "newTransaction": {
     "type": "Type",
     "types": {
@@ -878,7 +986,8 @@
     "futureNote": "It's in the future, so it's saved as a scheduled transaction, recorded once on {{date}}.",
     "savedRepeating": "Saved. It repeats from {{date}}.",
     "savedEnded": "Saved.",
-    "scheduledFor": "Scheduled for {{date}}."
+    "scheduledFor": "Scheduled for {{date}}.",
+    "savingsTransferHint": "This transfer moved held savings, so its amount and accounts can't change. Reverse it to put the money back on hold."
   },
   "transactionTypes": {
     "INC": "Income",
@@ -965,7 +1074,16 @@
     "scheduledMark": "Recorded by a schedule",
     "makeRecurring": "Make recurring",
     "balanceAfter": "Balance {{amount}}",
-    "balanceAfterDetail": "Balance after: {{amount}}"
+    "balanceAfterDetail": "Balance after: {{amount}}",
+    "savingsLines_one": "Savings",
+    "savingsLines_other": "Savings",
+    "savingsLineOn": "Held on {{account}}",
+    "savingsNote": "Recorded by Savings, so it can't be corrected. You can reverse it.",
+    "savingsTransferNote": "This transfer moved held savings: its amount and accounts can't change. Reversing it puts the money back on hold.",
+    "reverseSavingsReserve": "The money is no longer held for the target.",
+    "reverseSavingsRelease": "The money is held for the target again.",
+    "reverseSavingsDone": "The money is held for the target again.",
+    "unknownTarget": "Savings target #{{id}}"
   },
   "cycles": {
     "plan": "Plan a cycle",
@@ -1828,12 +1946,14 @@
       "504": "Server unreachable"
     },
     "codes": {
+      "above_capacity": "That would take the bucket above its capacity.",
       "account_has_buckets": "Buckets use this account as their source. Choose a new source account for each, or delete them in Bucket setup.",
       "active_cycle_exists": "Another cycle is active. End it first.",
       "admin_only": "Only admins can do this.",
       "already_refilled": "The bucket has already been refilled in this cycle.",
       "already_resolved": "It has already been approved or skipped.",
       "already_reversed": "The transaction has been reversed.",
+      "already_target": "It's a savings target already.",
       "balance_not_zero": "The account still has money in it. Transfer it to another account or adjust the balance to 0.",
       "body_too_large": "The request is too large.",
       "bucket_lines_locked": "The transaction is outside the active cycle, so its bucket lines can't change. You can still change the bank amount, counterparty, description and tags.",
@@ -1846,6 +1966,7 @@
       "cycle_overlap": "The cycle would overlap another cycle.",
       "database_unavailable": "The database is not reachable.",
       "export_too_new": "This export is from a newer version of the app. Update the app first.",
+      "goal_above_capacity": "The goal can't be above the bucket's capacity.",
       "internal_error": "The server ran into a problem.",
       "invalid_credentials": "Wrong username or password.",
       "invalid_export": "This file isn't a Bucky BudgetR export, or it's damaged.",
@@ -1855,7 +1976,10 @@
       "no_active_cycle": "Bucket transactions need an active cycle. Start a cycle first.",
       "no_change": "The balance is already this amount.",
       "not_correctable": "System transactions of this type can't be corrected or reversed.",
+      "not_enough_held": "That much isn't held for the target on this account, or it wasn't held yet at that time.",
+      "not_enough_unallocated": "The account doesn't have that much unallocated money.",
       "not_found": "It doesn't exist, or it has been deleted.",
+      "not_fully_manual": "Only a Fully manual bucket can be a savings target.",
       "not_next_cycle": "An earlier cycle is planned. Start that one first.",
       "own_account": "You can't change your own account here. Use Settings.",
       "password_change_required": "Change your password first.",
@@ -1863,9 +1987,11 @@
       "pdf_unavailable": "PDF export isn't set up on this server, or its renderer can't be reached.",
       "read_only": "This session can only read.",
       "refill_unavailable": "Only income in the active cycle can trigger a refill.",
+      "savings_transfer": "This transfer moved held savings, so its amount and accounts can't change. Reverse it to put the money back on hold.",
       "too_many_renders": "Other PDFs are being made. Try again in a moment.",
       "unauthenticated": "Log in first.",
       "username_taken": "That username is already in use.",
+      "wrong_account_type": "Only a savings, BSU, fund or investment account can be a savings target.",
       "wrong_password": "The current password is wrong.",
       "wrong_refill_mode": "Only buckets with the manual refill mode can be refilled by hand."
     },
@@ -2086,7 +2212,7 @@
     "count_one": "{{count}} open notification",
     "count_other": "{{count}} open notifications",
     "empty": "Nothing to do",
-    "emptyHint": "Reminders and to-dos show up here: scheduled transactions to approve, bills coming up, balances to update and priority buckets that aren't covered.",
+    "emptyHint": "Reminders and to-dos show up here: scheduled transactions to approve, bills coming up, balances to update, priority buckets that aren't covered and savings to move.",
     "settingsLink": "Choose which in Settings.",
     "dismiss": "Dismiss",
     "done": "The balance is right",
@@ -2127,7 +2253,15 @@
       "bucket_uncoveredHint": "Priority buckets that aren't fully covered.",
       "upcomingDays": "Show bills",
       "days_one": "{{count}} day ahead",
-      "days_other": "{{count}} days ahead"
+      "days_other": "{{count}} days ahead",
+      "savings_transfer": "Savings to transfer",
+      "savings_transferHint": "Money held for savings targets, waiting for you to move it."
+    },
+    "savings": {
+      "title": "Money held for {{name}}",
+      "body": "{{amount}} is set aside. Make the transfer at the bank, then press Done.",
+      "bodyBucket": "{{amount}} is set aside on another account. Move it to the bucket's account, then press Done.",
+      "open": "Open Savings"
     }
   }
 }

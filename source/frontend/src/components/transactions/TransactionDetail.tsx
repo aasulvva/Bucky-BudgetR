@@ -1,6 +1,13 @@
 import { ActionIcon, Alert, Anchor, Box, Button, Group, Stack, Text, Title } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { IconBucket, IconBuildingBank, IconRepeat, IconX, type Icon } from "@tabler/icons-react";
+import {
+  IconBucket,
+  IconBuildingBank,
+  IconPigMoney,
+  IconRepeat,
+  IconX,
+  type Icon,
+} from "@tabler/icons-react";
 import { useMutation } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { Trans, useTranslation } from "react-i18next";
@@ -19,7 +26,14 @@ import { cycleRange } from "@/lib/cycles";
 import { formatDateTime } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
 import { isSchedulable, scheduleTitle } from "@/lib/schedules";
-import { bucketLinesLocked, isCorrectable, linesAmount, shownLines } from "@/lib/transactionList";
+import {
+  bucketLinesLocked,
+  isCorrectable,
+  isReversible,
+  isSavingsTransfer,
+  linesAmount,
+  shownLines,
+} from "@/lib/transactionList";
 
 import { signedMoney, transactionTitle, useLookups, type Lookups } from "./lookups";
 
@@ -155,6 +169,23 @@ function Detail({
         </Section>
       )}
 
+      {lines.savings_lines.length > 0 && (
+        <Section
+          title={t("transactions.savingsLines", { count: lines.savings_lines.length })}
+          icon={IconPigMoney}
+        >
+          {lines.savings_lines.map((l) => (
+            <Row
+              key={`${l.holder_id}:${l.account_id}`}
+              label={names.targetName(l.holder_id)}
+              note={t("transactions.savingsLineOn", { account: names.accountName(l.account_id) })}
+            >
+              {signedMoney({ amount: l.amount, signed: true }, currency)}
+            </Row>
+          ))}
+        </Section>
+      )}
+
       {tx.history && tx.history.length > 0 && (
         <Section title={t("transactions.history")}>
           {tx.history.map((v) => {
@@ -196,11 +227,21 @@ function Detail({
         </Text>
       )}
 
-      {isCorrectable(tx) ? (
-        <Actions tx={tx} locked={locked} names={names} />
-      ) : (
+      {isReversible(tx) && <Actions tx={tx} locked={locked} names={names} />}
+      {!isCorrectable(tx) && (
         <Text size="sm" c="dimmed">
-          {t(tx.reversed ? "transactions.reversedNote" : "transactions.systemNote")}
+          {t(
+            tx.reversed
+              ? "transactions.reversedNote"
+              : isReversible(tx)
+                ? "transactions.savingsNote"
+                : "transactions.systemNote",
+          )}
+        </Text>
+      )}
+      {isSavingsTransfer(tx) && !tx.reversed && (
+        <Text size="sm" c="dimmed">
+          {t("transactions.savingsTransferNote")}
         </Text>
       )}
       {isCorrectable(tx) &&
@@ -248,6 +289,7 @@ function Actions({ tx, locked, names }: { tx: Transaction; locked: boolean; name
             <Text size="sm">
               {t("transactions.reverseConfirm")}
               {tx.triggers_refill ? ` ${t("transactions.reverseRefills")}` : ""}
+              {tx.savings_lines.length > 0 ? ` ${t(reverseSavingsKey(tx))}` : ""}
             </Text>
             {reverse.error && <ErrorAlert error={reverse.error} />}
             <Group gap="xs">
@@ -276,10 +318,12 @@ function Actions({ tx, locked, names }: { tx: Transaction; locked: boolean; name
         </Alert>
       ) : (
         <Group gap="xs">
-          <Button variant="outline" component={Link} to={`/transactions/${tx.id}/edit`}>
-            {t("transactions.edit")}
-          </Button>
-          {isSchedulable(tx) && (
+          {isCorrectable(tx) && (
+            <Button variant="outline" component={Link} to={`/transactions/${tx.id}/edit`}>
+              {t("transactions.edit")}
+            </Button>
+          )}
+          {isSchedulable(tx) && !isSavingsTransfer(tx) && (
             <Button
               variant="default"
               component={Link}
@@ -302,6 +346,13 @@ function Actions({ tx, locked, names }: { tx: Transaction; locked: boolean; name
       )}
     </Stack>
   );
+}
+
+/** What reversing does to held savings: holds them again, or releases them. */
+function reverseSavingsKey(tx: Transaction) {
+  if (tx.type === "SVR") return "transactions.reverseSavingsReserve" as const;
+  if (tx.type === "SVC") return "transactions.reverseSavingsRelease" as const;
+  return "transactions.reverseSavingsDone" as const;
 }
 
 /** The schedule that recorded the transaction, linking to it. */

@@ -124,7 +124,7 @@ export default function Accounts() {
                     <AccountCard
                       key={a.id}
                       account={a}
-                      summary={buckets.data && bucketSummary(a, buckets.data)}
+                      summary={buckets.data && accountLine(a, buckets.data)}
                       selected={a.id === selected?.id}
                       {...actions(a)}
                     />
@@ -186,6 +186,23 @@ function Totals({ accounts }: { accounts: Account[] }) {
       ))}
     </Group>
   );
+}
+
+/** The account's line: its buckets, then what's reserved for savings (#231). */
+function accountLine(account: Account, buckets: Bucket[]): string {
+  const parts = [bucketSummary(account, buckets)];
+  if (compareAmounts(account.reserved, "0") > 0) {
+    const reserved = formatMoney(account.reserved, account.currency);
+    parts.push(
+      compareAmounts(account.reserved_uncovered, "0") > 0
+        ? i18n.t("accounts.reservedUncovered", {
+            amount: reserved,
+            uncovered: formatMoney(account.reserved_uncovered, account.currency),
+          })
+        : i18n.t("accounts.reserved", { amount: reserved }),
+    );
+  }
+  return parts.join(" · ");
 }
 
 /**

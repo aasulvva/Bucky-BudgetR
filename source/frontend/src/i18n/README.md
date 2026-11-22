@@ -23,6 +23,13 @@ The words for the app's concepts, so the same thing is called the same everywher
 | clear (an overspend)        | nullstille                                        | nullstille                              |
 | unallocated                 | ufordelt                                          | ufordelt                                |
 | reallocate                  | fordele på nytt                                   | fordele på nytt                         |
+| savings target              | sparemål                                          | sparemål                                |
+| goal (of a savings target)  | mål                                               | mål                                     |
+| held funds / held (for)     | avsatte midler / satt av (til)                    | avsette midlar / sett av (til)          |
+| reserved for savings        | satt av til sparing                               | sett av til sparing                     |
+| Add to savings              | Legg til sparing                                  | Legg til sparing                        |
+| Done / Clear (held funds)   | Utført / Frigjør                                  | Utført / Frigjer                        |
+| not covered                 | ikke dekket                                       | ikkje dekt                              |
 | Keep funds                  | Behold midler                                     | Behald midlar                           |
 | income / expense / transfer | inntekt / utgift / overføring                     | inntekt / utgift / overføring           |
 | balance                     | saldo                                             | saldo                                   |
