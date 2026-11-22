@@ -3201,10 +3201,10 @@ paths:
     get:
       operationId: listSavingsBudget
       tags: [savings]
-      summary: The savings budget's fixed amounts
+      summary: The savings budget's fixed amounts and sweeps
       description: |
-        The user's entries (#234, spec §8.6), oldest first, each with its
-        run in the active cycle (`this_cycle`, null before it runs).
+        The user's entries (#234, #235, spec §8.6), oldest first, each with
+        its run in the active cycle (`this_cycle`, null before it runs).
       responses:
         "200":
           description: The entries.
@@ -3221,17 +3221,25 @@ paths:
     post:
       operationId: createSavingsBudgetEntry
       tags: [savings]
-      summary: Add a fixed amount to the savings budget
+      summary: Add a fixed amount or a sweep to the savings budget
       description: |
-        An amount per cycle from a source account, for a savings target in
-        its currency (not the account itself) or, without `target_id`, the
-        distributor. It runs once per cycle, `when` says: at cycle start
-        or on income (after the refills of the same moment), or by hand
+        An entry saves from a source account, for a savings target in its
+        currency (not the account itself) or, without `target_id`, the
+        distributor, once per cycle when `when` says.
+
+        A fixed amount (`amount`) runs at cycle start or on income (after
+        the refills of the same moment), or by hand
         (`saveSavingsBudgetEntry`). It reserves up to what the account has
-        unallocated, with an SVR; a target takes up to its goal, the
-        distributor the rest. An `cycle_start` entry set up while a cycle
-        runs reserves now, or with `this_cycle: false` waits for the next
-        cycle.
+        unallocated, with an SVR.
+
+        A sweep (#235, `after_refills` or `cycle_end`, with `keep` and no
+        `amount`) reserves what's unallocated above `keep`. An account has
+        at most one sweep per mode; a second is 409 `sweep_exists`.
+
+        A target takes up to its goal, the distributor the rest. A
+        `cycle_start` entry, or an `after_refills` sweep on an account
+        refilled already, set up while a cycle runs reserves now, or with
+        `this_cycle: false` waits for the next cycle.
       requestBody:
         required: true
         content:
@@ -3262,12 +3270,15 @@ paths:
     patch:
       operationId: updateSavingsBudgetEntry
       tags: [savings]
-      summary: Change a fixed amount
+      summary: Change a savings budget entry
       description: |
         Changes the destination (`target_id` null is the distributor), the
-        amount or `when`; the source account stays, and so does what it
-        reserved. A change to `cycle_start` while a cycle runs is as in
-        `createSavingsBudgetEntry`.
+        amount (a fixed amount's) or `keep` (a sweep's), or `when`, within
+        its kind (a fixed amount can't become a sweep, 400). The source
+        account stays, and so does what it reserved. A change to
+        `cycle_start` or `after_refills` while a cycle runs is as in
+        `createSavingsBudgetEntry`; one to a sweep mode the account has
+        already is 409 `sweep_exists`.
       requestBody:
         required: true
         content:
@@ -6094,11 +6105,14 @@ components:
 
     SavingsBudgetWhen:
       type: string
-      enum: [cycle_start, on_income, manual]
+      enum: [cycle_start, on_income, manual, after_refills, cycle_end]
       description: |
-        When an entry runs: `cycle_start` after the Auto refills,
-        `on_income` after the On income refills of the same income (spec
-        §6), `manual` when the user saves it.
+        When an entry runs. A fixed amount: `cycle_start` after the Auto
+        refills, `on_income` after the On income refills of the same
+        income (spec §6), `manual` when the user saves it. A sweep (#235):
+        `after_refills` once every bucket funded from the account but the
+        Fully manual ones is refilled in the cycle, `cycle_end` after the
+        cycle-end routine's OVFs.
 
     SavingsBudgetRun:
       type: object
@@ -6108,7 +6122,7 @@ components:
         wanted:
           allOf:
             - $ref: "#/components/schemas/Amount"
-          description: The amount then; 0 for an entry set up mid-cycle to wait for the next cycle.
+          description: The amount then (a sweep's, what was above `keep`); 0 for an entry set up mid-cycle to wait for the next cycle.
         reserved:
           allOf:
             - $ref: "#/components/schemas/Amount"
@@ -6122,7 +6136,7 @@ components:
     SavingsBudgetEntry:
       type: object
       additionalProperties: false
-      required: [id, account_id, target_id, amount, when, stopped, this_cycle, created_at, modified_at]
+      required: [id, account_id, target_id, amount, keep, when, stopped, this_cycle, created_at, modified_at]
       properties:
         id:
           $ref: "#/components/schemas/SavingsBudgetEntryId"
@@ -6137,9 +6151,17 @@ components:
           nullable: true
           description: The savings target; null is the distributor.
         amount:
+          type: string
           allOf:
             - $ref: "#/components/schemas/Amount"
-          description: Per cycle, above 0.
+          nullable: true
+          description: A fixed amount's, per cycle, above 0; null for a sweep.
+        keep:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          nullable: true
+          description: What a sweep leaves unallocated, 0 or more; null for a fixed amount.
         when:
           $ref: "#/components/schemas/SavingsBudgetWhen"
         stopped:
@@ -6161,7 +6183,7 @@ components:
     NewSavingsBudgetEntry:
       type: object
       additionalProperties: false
-      required: [account_id, amount, when]
+      required: [account_id, when]
       properties:
         account_id:
           $ref: "#/components/schemas/AccountId"
@@ -6172,12 +6194,16 @@ components:
         amount:
           allOf:
             - $ref: "#/components/schemas/Amount"
-          description: Above 0.
+          description: A fixed amount's, above 0; a sweep has none.
+        keep:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: A sweep's amount to leave unallocated, 0 or more (the default 0); a fixed amount has none.
         when:
           $ref: "#/components/schemas/SavingsBudgetWhen"
         this_cycle:
           type: boolean
-          description: For `cycle_start` while a cycle runs, true (the default) reserves now and false waits for the next cycle.
+          description: For `cycle_start`, or `after_refills` on an account refilled already, while a cycle runs, true (the default) reserves now and false waits for the next cycle.
 
     SavingsBudgetEntryUpdate:
       type: object
@@ -6192,12 +6218,16 @@ components:
         amount:
           allOf:
             - $ref: "#/components/schemas/Amount"
-          description: Above 0.
+          description: A fixed amount's, above 0.
+        keep:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: A sweep's, 0 or more.
         when:
           $ref: "#/components/schemas/SavingsBudgetWhen"
         this_cycle:
           type: boolean
-          description: As in `NewSavingsBudgetEntry`, for a change to `cycle_start`.
+          description: As in `NewSavingsBudgetEntry`, for a change to `cycle_start` or `after_refills`.
 
     TransactionType:
       type: string

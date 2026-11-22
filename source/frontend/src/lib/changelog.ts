@@ -16,6 +16,26 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.28.01",
+    date: "2026-11-22",
+    title: {
+      en: "Savings sweeps, behind the scenes",
+      nb: "Sparefeiing, bak kulissene",
+      nn: "Sparefeiing, bak kulissane",
+    },
+    changes: {
+      en: [
+        "The groundwork for sweeping an account's unallocated money to savings: once its buckets are refilled, or at cycle end, keeping an amount you choose. Its screens come in the next update.",
+      ],
+      nb: [
+        "Grunnlaget for å feie de ufordelte pengene på en konto til sparing: når bøttene er fylt på, eller ved periodeslutt, med et beløp du velger å beholde. Skjermbildene kommer i neste oppdatering.",
+      ],
+      nn: [
+        "Grunnlaget for å feie dei ufordelte pengane på ein konto til sparing: når bøttene er fylte på, eller ved periodeslutt, med eit beløp du vel å halde att. Skjermbileta kjem i neste oppdatering.",
+      ],
+    },
+  },
+  {
     version: "v2.28.00",
     date: "2026-11-22",
     title: {

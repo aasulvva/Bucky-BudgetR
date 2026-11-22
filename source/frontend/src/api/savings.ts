@@ -1,7 +1,9 @@
-// Savings targets (#231), the distributor (#232) and the savings budget (#234): what the screens share. Money moves refresh them
+// Savings targets (#231), the distributor (#232) and the savings budget (#234, #235): what the screens share. Money moves refresh them
 // with the accounts (useRefreshMoney), since held funds change unallocated.
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+
+import { fixedEntries } from "@/lib/savings";
 
 import { api } from "./client";
 import { unwrap } from "./errors";
@@ -66,12 +68,31 @@ export type SavingsBudgetWhen = components["schemas"]["SavingsBudgetWhen"];
 export type NewSavingsBudgetEntry = components["schemas"]["NewSavingsBudgetEntry"];
 export type SavingsBudgetEntryUpdate = components["schemas"]["SavingsBudgetEntryUpdate"];
 
-export const BUDGET_WHEN: SavingsBudgetWhen[] = ["cycle_start", "on_income", "manual"];
+/** The modes of a fixed amount (#234); a sweep's are `after_refills` and `cycle_end` (#235). */
+export type FixedBudgetWhen = Exclude<SavingsBudgetWhen, "after_refills" | "cycle_end">;
 
-/** The savings budget's fixed amounts (#234), oldest first, with this cycle's runs. */
+/** A savings budget entry with a fixed amount, not a sweep. */
+export type FixedBudgetEntry = SavingsBudgetEntry & {
+  amount: string;
+  keep: null;
+  when: FixedBudgetWhen;
+};
+
+export const BUDGET_WHEN: FixedBudgetWhen[] = ["cycle_start", "on_income", "manual"];
+
+/** The savings budget's fixed amounts (#234) and sweeps (#235), oldest first, with this cycle's runs. */
 export function useSavingsBudget() {
   return useQuery({
     queryKey: [...SAVINGS_KEY, "budget"],
     queryFn: () => unwrap(api.GET("/api/v1/savings/budget")),
+  });
+}
+
+/** The savings budget's fixed amounts only, from the same query. */
+export function useFixedBudget() {
+  return useQuery({
+    queryKey: [...SAVINGS_KEY, "budget"],
+    queryFn: () => unwrap(api.GET("/api/v1/savings/budget")),
+    select: fixedEntries,
   });
 }

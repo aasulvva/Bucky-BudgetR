@@ -295,7 +295,7 @@ A bucket is refilled **at most once per cycle** (tracked per bucket and cycle). 
 
 A REF or OVF of 0 isn't recorded, but the refill still counts.
 
-The **savings budget** (§8.6) runs right after the refills of the same moment: its *At cycle start* entries after the Auto refills, its *On income* entries after the *On income* refills of the same income (and its account's recalculation). Undoing the income undoes them too.
+The **savings budget** (§8.6) runs right after the refills of the same moment: its *At cycle start* entries after the Auto refills, its *On income* entries after the *On income* refills of the same income (and its account's recalculation). Undoing the income undoes them too. Its **sweeps** (#235) follow: an *After the refills* sweep runs after the refill that leaves every bucket on its account refilled (all but the *Fully manual* ones, at cycle start, on income, a manual refill or a new bucket), and is undone with a refill on the account. An *At cycle end* sweep runs at the end of the cycle, after the OVFs that empty the buckets, so it sweeps what they gave back too; it runs when the cycle is ended early too, and before the next cycle's refills.
 
 A refill raises TF without adding money, so on its own it only moves CAF when the account crosses Σ TF (§7). An income that triggers a refill is money no bucket owns, so its account is recalculated with the refilled TFs (and again when its refills are undone).
 
@@ -410,7 +410,7 @@ A bucket's overflow (§6: at cycle end without Keep funds, or when a refill take
 
 ### 8.6 Savings budget
 
-What the user saves each cycle (#234): **fixed amounts** here, the sweep of leftover money in #235.
+What the user saves each cycle: **fixed amounts** (#234) and **sweeps** of the money left unallocated (#235).
 
 An **entry** (`/savings/budget`, ID `<6-digit User-ID><4-digit random>`) has a **source account**, where the money is reserved; a **destination**, a savings target in the account's currency (not the account itself) or the distributor; an **amount** per cycle; and **when** it runs:
 - **At cycle start**, after the Auto refills, dated at the cycle's start.
@@ -425,6 +425,17 @@ Rules:
 - **Undo:** reversing the income (or moving it to another account) reverses its entries' SVRs the way overflow is undone (§8.5): what the distributor split or a bucket target got straight in is taken back first, then the hold is released, as far as the money is still there. They can run again in the cycle.
 - **Changes** to the destination, amount or *when* apply from the next run; what's reserved stays. Deleting an entry leaves what it reserved held.
 - **A target that goes away** stops its entries (*stopped*): they don't run until they get another destination. **A deleted account** deletes its entries.
+
+**Sweeps** (#235) are entries without an amount: they reserve what the account has **unallocated above an amount to keep** (`keep`, 0 by default), once per cycle, to a target or the distributor like a fixed amount. **When** is one of:
+- **After the refills**, once every bucket funded from the account is refilled in the cycle, all but the *Fully manual* ones (*Manual* buckets count, so it waits for them), dated at the last refill: at cycle start, an income, a manual refill or a new bucket. An account without such buckets sweeps at cycle start. It runs after the refill's fixed amounts.
+- **At cycle end**, after the OVFs of the cycle-end routine (§6), dated at the cycle's end (now when ended early). It runs before the next cycle's refills, so the amount to keep should cover them.
+
+Rules:
+- **One per mode** per account: a second *After the refills* or *At cycle end* sweep on the account is 409 `sweep_exists`. An entry can't change between a fixed amount and a sweep.
+- **Nothing to sweep:** a sweep with nothing above the amount to keep still counts for the cycle (a run of 0). It's never short, so it has no notification.
+- **The goal** and the distributor's split are as for a fixed amount.
+- **Set up mid-cycle:** an *After the refills* sweep created (or switched to it) while a cycle runs, on an account refilled already, sweeps now (`this_cycle`, the default) or waits for the next cycle (`this_cycle: false`). On an account still waiting for a refill, it runs after it.
+- **Undo:** undoing a refill on the account (reversing or moving its income) undoes its *After the refills* sweep first, as fixed amounts are undone, so it runs again once the account is refilled again.
 
 ## 9. UI
 

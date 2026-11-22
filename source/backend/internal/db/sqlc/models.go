@@ -499,9 +499,11 @@ func (e RefillMode) Valid() bool {
 type SavingsBudgetWhen string
 
 const (
-	SavingsBudgetWhenCycleStart SavingsBudgetWhen = "cycle_start"
-	SavingsBudgetWhenOnIncome   SavingsBudgetWhen = "on_income"
-	SavingsBudgetWhenManual     SavingsBudgetWhen = "manual"
+	SavingsBudgetWhenCycleStart   SavingsBudgetWhen = "cycle_start"
+	SavingsBudgetWhenOnIncome     SavingsBudgetWhen = "on_income"
+	SavingsBudgetWhenManual       SavingsBudgetWhen = "manual"
+	SavingsBudgetWhenAfterRefills SavingsBudgetWhen = "after_refills"
+	SavingsBudgetWhenCycleEnd     SavingsBudgetWhen = "cycle_end"
 )
 
 func (e *SavingsBudgetWhen) Scan(src interface{}) error {
@@ -543,7 +545,9 @@ func (e SavingsBudgetWhen) Valid() bool {
 	switch e {
 	case SavingsBudgetWhenCycleStart,
 		SavingsBudgetWhenOnIncome,
-		SavingsBudgetWhenManual:
+		SavingsBudgetWhenManual,
+		SavingsBudgetWhenAfterRefills,
+		SavingsBudgetWhenCycleEnd:
 		return true
 	}
 	return false
@@ -956,11 +960,12 @@ type SavingsBudgetEntry struct {
 	UserID     string
 	AccountID  string
 	TargetID   pgtype.Text
-	Amount     decimal.Decimal
+	Amount     decimal.NullDecimal
 	RunWhen    SavingsBudgetWhen
 	Deleted    bool
 	CreatedAt  time.Time
 	ModifiedAt time.Time
+	Keep       decimal.NullDecimal
 }
 
 type SavingsBudgetRun struct {

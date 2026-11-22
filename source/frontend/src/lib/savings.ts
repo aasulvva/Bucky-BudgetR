@@ -4,6 +4,7 @@
 
 import { accountTypeLabel, type Account, type AccountType, type Bucket } from "@/api/accounts";
 import type {
+  FixedBudgetEntry,
   SavingsBudgetEntry,
   SavingsDistributor,
   SavingsRule,
@@ -312,6 +313,16 @@ export function overflowingInto(buckets: Bucket[], targetId: string): Bucket[] {
   return buckets.filter((b) => b.overflow_target_id === targetId);
 }
 
+/** Whether a savings budget entry is a sweep of unallocated money (#235). */
+export function isSweep(entry: SavingsBudgetEntry): boolean {
+  return entry.when === "after_refills" || entry.when === "cycle_end";
+}
+
+/** The entries with a fixed amount, not the sweeps. */
+export function fixedEntries(entries: SavingsBudgetEntry[]): FixedBudgetEntry[] {
+  return entries.filter((e): e is FixedBudgetEntry => !isSweep(e) && e.amount !== null);
+}
+
 /** Where a savings budget entry saves to (#234): its target's name, or the distributor. */
 export function budgetDestination(entry: SavingsBudgetEntry, targets: SavingsTarget[]): string {
   if (entry.target_id === null) return i18n.t("savingsSetup.distributor.title");
@@ -330,7 +341,7 @@ export function budgetDestination(entry: SavingsBudgetEntry, targets: SavingsTar
 export type BudgetStatus =
   "stopped" | "saved" | "short" | "nextCycle" | "waitingIncome" | "saveNow" | "noCycle";
 
-export function budgetStatus(entry: SavingsBudgetEntry, running: boolean): BudgetStatus {
+export function budgetStatus(entry: FixedBudgetEntry, running: boolean): BudgetStatus {
   if (entry.stopped) return "stopped";
   const run = entry.this_cycle;
   if (run) {
@@ -349,7 +360,7 @@ export function budgetStatus(entry: SavingsBudgetEntry, running: boolean): Budge
 }
 
 /** What an account's live savings budget entries add up to per cycle. */
-export function budgetTotal(entries: SavingsBudgetEntry[], accountId: string): string {
+export function budgetTotal(entries: FixedBudgetEntry[], accountId: string): string {
   return addAmounts(
     ...entries.filter((e) => e.account_id === accountId && !e.stopped).map((e) => e.amount),
   );

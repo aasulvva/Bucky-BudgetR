@@ -54,7 +54,7 @@ func TestSavingsBudgetAPI(t *testing.T) {
 	})
 	expect(t, "create", w, http.StatusCreated, "")
 	e := decode[api.SavingsBudgetEntry](t, w)
-	if e.TargetId.MustGet() != target.Id || e.Amount != "200.00" || e.When != api.SavingsBudgetWhenManual || !e.ThisCycle.IsNull() {
+	if e.TargetId.MustGet() != target.Id || e.Amount.MustGet() != "200.00" || !e.Keep.IsNull() || e.When != api.SavingsBudgetWhenManual || !e.ThisCycle.IsNull() {
 		t.Errorf("created %+v", e)
 	}
 	expect(t, "its own account", do(http.MethodPost, "/api/v1/savings/budget", map[string]any{
@@ -97,6 +97,33 @@ func TestSavingsBudgetAPI(t *testing.T) {
 	expect(t, "list", w, http.StatusOK, "")
 	if list := decode[[]api.SavingsBudgetEntry](t, w); len(list) != 1 {
 		t.Errorf("listed %+v", list)
+	}
+
+	// A sweep (#235): keep instead of an amount, one per mode and account.
+	w = do(http.MethodPost, "/api/v1/savings/budget", map[string]any{
+		"account_id": main.Id, "keep": "100.00", "when": "cycle_end",
+	})
+	expect(t, "sweep", w, http.StatusCreated, "")
+	sw := decode[api.SavingsBudgetEntry](t, w)
+	if !sw.Amount.IsNull() || sw.Keep.MustGet() != "100.00" || sw.When != api.SavingsBudgetWhenCycleEnd {
+		t.Errorf("created %+v", sw)
+	}
+	expect(t, "a second sweep at cycle end", do(http.MethodPost, "/api/v1/savings/budget", map[string]any{
+		"account_id": main.Id, "when": "cycle_end",
+	}), http.StatusConflict, "sweep_exists")
+	expect(t, "a sweep with an amount", do(http.MethodPost, "/api/v1/savings/budget", map[string]any{
+		"account_id": main.Id, "amount": "5.00", "when": "after_refills",
+	}), http.StatusBadRequest, "invalid_request")
+	expect(t, "a fixed amount with keep", do(http.MethodPost, "/api/v1/savings/budget", map[string]any{
+		"account_id": main.Id, "amount": "5.00", "keep": "1.00", "when": "manual",
+	}), http.StatusBadRequest, "invalid_request")
+	expect(t, "a sweep becoming a fixed amount", do(http.MethodPatch, "/api/v1/savings/budget/"+sw.Id, map[string]any{
+		"when": "manual",
+	}), http.StatusBadRequest, "invalid_request")
+	w = do(http.MethodPatch, "/api/v1/savings/budget/"+sw.Id, map[string]any{"keep": "0.00", "when": "after_refills"})
+	expect(t, "sweep after the refills", w, http.StatusOK, "")
+	if got := decode[api.SavingsBudgetEntry](t, w); got.Keep.MustGet() != "0.00" || got.When != api.SavingsBudgetWhenAfterRefills {
+		t.Errorf("updated %+v", got)
 	}
 }
 

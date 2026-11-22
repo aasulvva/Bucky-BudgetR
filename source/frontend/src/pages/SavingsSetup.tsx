@@ -16,11 +16,11 @@ import { useSearchParams } from "react-router";
 
 import { useAccounts, useBuckets, type Account, type Bucket } from "@/api/accounts";
 import {
-  useSavingsBudget,
+  useFixedBudget,
   useSavingsDistributor,
   useSavingsRules,
   useSavingsTargets,
-  type SavingsBudgetEntry,
+  type FixedBudgetEntry,
   type SavingsDistributor,
   type SavingsTarget,
 } from "@/api/savings";
@@ -53,7 +53,7 @@ export default function SavingsSetup() {
   const targets = useSavingsTargets();
   const distributor = useSavingsDistributor();
   const rules = useSavingsRules();
-  const budget = useSavingsBudget();
+  const budget = useFixedBudget();
   const [params, setParams] = useSearchParams();
   const selection: Selection = params.has("new")
     ? "new"
@@ -233,7 +233,7 @@ function TargetList({
 }: {
   targets: SavingsTarget[];
   distributor: SavingsDistributor;
-  entries: SavingsBudgetEntry[];
+  entries: FixedBudgetEntry[];
   accounts: Account[];
   buckets: Bucket[];
   selected: string | null;

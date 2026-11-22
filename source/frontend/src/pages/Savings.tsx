@@ -17,7 +17,7 @@ import { Link } from "react-router";
 
 import { useAccounts, useBuckets, type Account, type Bucket } from "@/api/accounts";
 import {
-  useSavingsBudget,
+  useFixedBudget,
   useSavingsDistributor,
   useSavingsRules,
   useSavingsTargets,
@@ -42,7 +42,7 @@ export default function Savings() {
   const targets = useSavingsTargets();
   const distributor = useSavingsDistributor();
   const rules = useSavingsRules();
-  const budget = useSavingsBudget();
+  const budget = useFixedBudget();
   return (
     <Stack gap="lg">
       <Group justify="space-between">

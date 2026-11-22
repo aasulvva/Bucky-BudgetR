@@ -1,4 +1,4 @@
-import type { SavingsBudgetEntry, SavingsDistributor, SavingsRule } from "@/api/savings";
+import type { FixedBudgetEntry, SavingsDistributor, SavingsRule } from "@/api/savings";
 import { account, budgetEntry, bucket, savingsTarget } from "@/test/fixtures";
 
 import { formatMoney } from "./money";
@@ -11,6 +11,8 @@ import {
   budgetStatus,
   budgetTargets,
   budgetTotal,
+  fixedEntries,
+  isSweep,
   freeAccounts,
   freeBuckets,
   gapsOf,
@@ -211,8 +213,16 @@ describe("the distributor's rules (#232)", () => {
 });
 
 describe("the savings budget (#234)", () => {
-  const entry = (over: Partial<SavingsBudgetEntry>) => budgetEntry({ id: "1234000001", ...over });
+  const entry = (over: Partial<FixedBudgetEntry>) => budgetEntry({ id: "1234000001", ...over });
   const run = (wanted: string, reserved: string) => ({ wanted, reserved, at: null });
+
+  it("tells the sweeps (#235) from the fixed amounts", () => {
+    const sweep = budgetEntry({ id: "1234000009" });
+    const swept = { ...sweep, amount: null, keep: "0.00", when: "cycle_end" as const };
+    expect(isSweep(swept)).toBe(true);
+    expect(isSweep(sweep)).toBe(false);
+    expect(fixedEntries([swept, sweep]).map((e) => e.id)).toEqual([sweep.id]);
+  });
 
   it("says where each entry is this cycle", () => {
     expect(budgetStatus(entry({ stopped: true, this_cycle: run("5.00", "5.00") }), true)).toBe(

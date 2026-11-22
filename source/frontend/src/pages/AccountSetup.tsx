@@ -33,7 +33,7 @@ import {
 import { api } from "@/api/client";
 import { useCurrentCycles } from "@/api/cycles";
 import { ApiError, unwrap } from "@/api/errors";
-import { useSavingsBudget, useSavingsTargets } from "@/api/savings";
+import { useFixedBudget, useSavingsTargets } from "@/api/savings";
 import type { components } from "@/api/schema";
 import { AmountInput } from "@/components/AmountInput";
 import { DateTimeInput } from "@/components/DateTimeInput";
@@ -626,7 +626,7 @@ function DeleteAccount({
   const refresh = useRefreshMoney();
   const buckets = useBuckets();
   // The savings budget's fixed amounts from it go with it (#234).
-  const entries = (useSavingsBudget().data ?? []).filter((e) => e.account_id === account.id);
+  const entries = (useFixedBudget().data ?? []).filter((e) => e.account_id === account.id);
   const targets = useSavingsTargets().data ?? [];
   const others = accounts
     .filter((a) => a.id !== account.id && a.currency === account.currency)

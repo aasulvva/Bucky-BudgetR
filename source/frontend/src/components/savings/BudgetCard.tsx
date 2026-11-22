@@ -12,7 +12,7 @@ import { useRefreshMoney, type Account } from "@/api/accounts";
 import { api } from "@/api/client";
 import { useCurrentCycles } from "@/api/cycles";
 import { unwrap } from "@/api/errors";
-import type { SavingsBudgetEntry, SavingsTarget } from "@/api/savings";
+import type { FixedBudgetEntry, SavingsTarget } from "@/api/savings";
 import { isOverdue } from "@/lib/cycles";
 import { formatMoney, subtractAmounts } from "@/lib/money";
 import { budgetDestination, budgetStatus } from "@/lib/savings";
@@ -22,7 +22,7 @@ export function BudgetCard({
   targets,
   accounts,
 }: {
-  entries: SavingsBudgetEntry[];
+  entries: FixedBudgetEntry[];
   targets: SavingsTarget[];
   accounts: Account[];
 }) {
@@ -88,7 +88,7 @@ function EntryRow({
   account,
   running,
 }: {
-  entry: SavingsBudgetEntry;
+  entry: FixedBudgetEntry;
   targets: SavingsTarget[];
   account: Account | undefined;
   running: boolean;
@@ -111,7 +111,11 @@ function EntryRow({
     onSuccess: async (saved) => {
       const reserved = saved.this_cycle?.reserved ?? "0";
       notifications.show({
-        color: saved.this_cycle && budgetStatus(saved, true) === "short" ? "orange" : "green",
+        // Save now is for a Manually entry, so it's a fixed amount.
+        color:
+          saved.this_cycle && budgetStatus(saved as FixedBudgetEntry, true) === "short"
+            ? "orange"
+            : "green",
         message: t("savings.budget.savedNow", { amount: money(reserved), name }),
       });
       await refresh();

@@ -14,7 +14,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/savings"
 )
 
-// The savings budget's fixed amounts (#234).
+// The savings budget's fixed amounts (#234) and sweeps (#235).
 
 func (s *server) ListSavingsBudget(ctx context.Context, _ api.ListSavingsBudgetRequestObject) (api.ListSavingsBudgetResponseObject, error) {
 	svc, err := s.savingsService()
@@ -37,13 +37,20 @@ func (s *server) CreateSavingsBudgetEntry(ctx context.Context, req api.CreateSav
 	if err != nil {
 		return nil, err
 	}
-	amount, err := parseAmount(req.Body.Amount)
-	if err != nil {
-		return nil, err
-	}
 	n := savings.NewBudget{
-		AccountID: req.Body.AccountId, Amount: amount, When: sqlc.SavingsBudgetWhen(req.Body.When),
-		ThisCycle: req.Body.ThisCycle,
+		AccountID: req.Body.AccountId, When: sqlc.SavingsBudgetWhen(req.Body.When), ThisCycle: req.Body.ThisCycle,
+	}
+	if req.Body.Amount != nil {
+		if n.Amount, err = parseAmount(*req.Body.Amount); err != nil {
+			return nil, err
+		}
+	}
+	if req.Body.Keep != nil {
+		d, err := parseAmount(*req.Body.Keep)
+		if err != nil {
+			return nil, err
+		}
+		n.Keep = &d
 	}
 	if req.Body.TargetId != nil {
 		n.TargetID = *req.Body.TargetId
@@ -74,6 +81,13 @@ func (s *server) UpdateSavingsBudgetEntry(ctx context.Context, req api.UpdateSav
 			return nil, err
 		}
 		c.Amount = &d
+	}
+	if req.Body.Keep != nil {
+		d, err := parseAmount(*req.Body.Keep)
+		if err != nil {
+			return nil, err
+		}
+		c.Keep = &d
 	}
 	if req.Body.When != nil {
 		w := sqlc.SavingsBudgetWhen(*req.Body.When)
@@ -115,6 +129,8 @@ func budgetError(err error) error {
 	switch {
 	case errors.Is(err, savings.ErrAlreadySaved):
 		return &Error{Status: http.StatusConflict, Code: "already_saved", Detail: "It has saved in this cycle already."}
+	case errors.Is(err, savings.ErrSweepExists):
+		return &Error{Status: http.StatusConflict, Code: "sweep_exists", Detail: "The account has a sweep with this mode already."}
 	case errors.Is(err, savings.ErrNoCycle):
 		return &Error{Status: http.StatusConflict, Code: "no_active_cycle",
 			Detail: "Saving needs an active cycle that holds the current time.", Err: err}
@@ -125,8 +141,14 @@ func budgetError(err error) error {
 func toAPIBudgetEntry(e savings.BudgetEntry) api.SavingsBudgetEntry {
 	out := api.SavingsBudgetEntry{
 		Id: e.ID, AccountId: e.AccountID, TargetId: nullable.NewNullNullable[api.SavingsHolderId](),
-		Amount: e.Amount.StringFixed(money.Places), When: api.SavingsBudgetWhen(e.When), Stopped: e.Stopped,
+		Amount: nullable.NewNullNullable[api.Amount](), Keep: nullable.NewNullNullable[api.Amount](),
+		When: api.SavingsBudgetWhen(e.When), Stopped: e.Stopped,
 		ThisCycle: nullable.NewNullNullable[api.SavingsBudgetRun](), CreatedAt: e.CreatedAt.UTC(), ModifiedAt: e.ModifiedAt.UTC(),
+	}
+	if e.IsSweep() {
+		out.Keep.Set(e.Keep.StringFixed(money.Places))
+	} else {
+		out.Amount.Set(e.Amount.StringFixed(money.Places))
 	}
 	if e.TargetID != "" {
 		out.TargetId.Set(e.TargetID)

@@ -13,11 +13,35 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+const accountRefilled = `-- name: AccountRefilled :one
+SELECT NOT EXISTS (
+    SELECT 1 FROM buckets b
+    WHERE b.user_id = $1 AND b.source_account_id = $2 AND NOT b.deleted
+        AND b.refill_mode <> 'fully_manual'
+        AND NOT EXISTS (SELECT 1 FROM refills r WHERE r.bucket_id = b.id AND r.cycle_id = $3)
+)::boolean
+`
+
+type AccountRefilledParams struct {
+	UserID    string
+	AccountID string
+	CycleID   string
+}
+
+// Whether every live bucket funded from the account, but the Fully manual
+// ones, is refilled in the cycle (#235): true for an account without any.
+func (q *Queries) AccountRefilled(ctx context.Context, arg AccountRefilledParams) (pgtype.Bool, error) {
+	row := q.db.QueryRow(ctx, accountRefilled, arg.UserID, arg.AccountID, arg.CycleID)
+	var column_1 pgtype.Bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createBudgetEntry = `-- name: CreateBudgetEntry :one
-INSERT INTO savings_budget_entries (id, user_id, account_id, target_id, amount, run_when)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO savings_budget_entries (id, user_id, account_id, target_id, amount, run_when, keep)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (id) DO NOTHING
-RETURNING id, user_id, account_id, target_id, amount, run_when, deleted, created_at, modified_at
+RETURNING id, user_id, account_id, target_id, amount, run_when, deleted, created_at, modified_at, keep
 `
 
 type CreateBudgetEntryParams struct {
@@ -25,11 +49,13 @@ type CreateBudgetEntryParams struct {
 	UserID    string
 	AccountID string
 	TargetID  pgtype.Text
-	Amount    decimal.Decimal
+	Amount    decimal.NullDecimal
 	RunWhen   SavingsBudgetWhen
+	Keep      decimal.NullDecimal
 }
 
-// Use with ids.Insert: a taken ID returns no row.
+// Use with ids.Insert: a taken ID returns no row. A second live sweep with
+// the same mode on the account fails savings_budget_entries_one_sweep_idx.
 func (q *Queries) CreateBudgetEntry(ctx context.Context, arg CreateBudgetEntryParams) (SavingsBudgetEntry, error) {
 	row := q.db.QueryRow(ctx, createBudgetEntry,
 		arg.ID,
@@ -38,6 +64,7 @@ func (q *Queries) CreateBudgetEntry(ctx context.Context, arg CreateBudgetEntryPa
 		arg.TargetID,
 		arg.Amount,
 		arg.RunWhen,
+		arg.Keep,
 	)
 	var i SavingsBudgetEntry
 	err := row.Scan(
@@ -50,6 +77,7 @@ func (q *Queries) CreateBudgetEntry(ctx context.Context, arg CreateBudgetEntryPa
 		&i.Deleted,
 		&i.CreatedAt,
 		&i.ModifiedAt,
+		&i.Keep,
 	)
 	return i, err
 }
@@ -132,7 +160,7 @@ func (q *Queries) DeleteBudgetRun(ctx context.Context, arg DeleteBudgetRunParams
 }
 
 const getBudgetEntryForUpdate = `-- name: GetBudgetEntryForUpdate :one
-SELECT id, user_id, account_id, target_id, amount, run_when, deleted, created_at, modified_at FROM savings_budget_entries WHERE id = $1 AND user_id = $2 AND NOT deleted FOR UPDATE
+SELECT id, user_id, account_id, target_id, amount, run_when, deleted, created_at, modified_at, keep FROM savings_budget_entries WHERE id = $1 AND user_id = $2 AND NOT deleted FOR UPDATE
 `
 
 type GetBudgetEntryForUpdateParams struct {
@@ -153,6 +181,7 @@ func (q *Queries) GetBudgetEntryForUpdate(ctx context.Context, arg GetBudgetEntr
 		&i.Deleted,
 		&i.CreatedAt,
 		&i.ModifiedAt,
+		&i.Keep,
 	)
 	return i, err
 }
@@ -185,7 +214,7 @@ func (q *Queries) GetBudgetRun(ctx context.Context, arg GetBudgetRunParams) (Sav
 
 const listBudgetEntries = `-- name: ListBudgetEntries :many
 
-SELECT e.id, e.user_id, e.account_id, e.target_id, e.amount, e.run_when, e.deleted, e.created_at, e.modified_at, (e.target_id IS NOT NULL AND COALESCE(h.deleted, true))::boolean AS stopped
+SELECT e.id, e.user_id, e.account_id, e.target_id, e.amount, e.run_when, e.deleted, e.created_at, e.modified_at, e.keep, (e.target_id IS NOT NULL AND COALESCE(h.deleted, true))::boolean AS stopped
 FROM savings_budget_entries e
 LEFT JOIN savings_holders h ON h.id = e.target_id
 WHERE e.user_id = $1 AND NOT e.deleted
@@ -197,15 +226,16 @@ type ListBudgetEntriesRow struct {
 	UserID     string
 	AccountID  string
 	TargetID   pgtype.Text
-	Amount     decimal.Decimal
+	Amount     decimal.NullDecimal
 	RunWhen    SavingsBudgetWhen
 	Deleted    bool
 	CreatedAt  time.Time
 	ModifiedAt time.Time
+	Keep       decimal.NullDecimal
 	Stopped    bool
 }
 
-// The savings budget's fixed amounts (#234, spec §8.6). Callers hold the
+// The savings budget's fixed amounts (#234) and sweeps (#235), spec §8.6. Callers hold the
 // user's lock (ledger.LockUser), so checking whether an entry ran in a cycle
 // and recording the run can't race.
 // The user's live entries, oldest first; stopped is an entry whose target
@@ -229,6 +259,7 @@ func (q *Queries) ListBudgetEntries(ctx context.Context, userID string) ([]ListB
 			&i.Deleted,
 			&i.CreatedAt,
 			&i.ModifiedAt,
+			&i.Keep,
 			&i.Stopped,
 		); err != nil {
 			return nil, err
@@ -242,7 +273,7 @@ func (q *Queries) ListBudgetEntries(ctx context.Context, userID string) ([]ListB
 }
 
 const listBudgetEntriesToRun = `-- name: ListBudgetEntriesToRun :many
-SELECT e.id, e.user_id, e.account_id, e.target_id, e.amount, e.run_when, e.deleted, e.created_at, e.modified_at FROM savings_budget_entries e
+SELECT e.id, e.user_id, e.account_id, e.target_id, e.amount, e.run_when, e.deleted, e.created_at, e.modified_at, e.keep FROM savings_budget_entries e
 LEFT JOIN savings_holders h ON h.id = e.target_id
 WHERE e.user_id = $1 AND NOT e.deleted AND e.run_when = $2
     AND ($3::text IS NULL OR e.account_id = $3)
@@ -284,6 +315,7 @@ func (q *Queries) ListBudgetEntriesToRun(ctx context.Context, arg ListBudgetEntr
 			&i.Deleted,
 			&i.CreatedAt,
 			&i.ModifiedAt,
+			&i.Keep,
 		); err != nil {
 			return nil, err
 		}
@@ -393,18 +425,64 @@ func (q *Queries) ListBudgetRunsByIncome(ctx context.Context, arg ListBudgetRuns
 	return items, nil
 }
 
+const listSweepRunsOfAccounts = `-- name: ListSweepRunsOfAccounts :many
+SELECT r.entry_id, r.cycle_id, r.user_id, r.trigger, r.wanted, r.reserved, r.svr_id, r.income_id, r.created_at FROM savings_budget_runs r
+JOIN savings_budget_entries e ON e.id = r.entry_id
+WHERE r.user_id = $1 AND r.cycle_id = $2 AND r.trigger = 'after_refills'
+    AND e.account_id = ANY ($3::text[])
+ORDER BY r.entry_id
+`
+
+type ListSweepRunsOfAccountsParams struct {
+	UserID     string
+	CycleID    string
+	AccountIds []string
+}
+
+// The After the refills sweeps' runs in the cycle on these accounts (#235).
+func (q *Queries) ListSweepRunsOfAccounts(ctx context.Context, arg ListSweepRunsOfAccountsParams) ([]SavingsBudgetRun, error) {
+	rows, err := q.db.Query(ctx, listSweepRunsOfAccounts, arg.UserID, arg.CycleID, arg.AccountIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SavingsBudgetRun{}
+	for rows.Next() {
+		var i SavingsBudgetRun
+		if err := rows.Scan(
+			&i.EntryID,
+			&i.CycleID,
+			&i.UserID,
+			&i.Trigger,
+			&i.Wanted,
+			&i.Reserved,
+			&i.SvrID,
+			&i.IncomeID,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateBudgetEntry = `-- name: UpdateBudgetEntry :one
-UPDATE savings_budget_entries SET target_id = $3, amount = $4, run_when = $5, modified_at = now()
+UPDATE savings_budget_entries SET target_id = $3, amount = $4, run_when = $5, keep = $6, modified_at = now()
 WHERE id = $1 AND user_id = $2 AND NOT deleted
-RETURNING id, user_id, account_id, target_id, amount, run_when, deleted, created_at, modified_at
+RETURNING id, user_id, account_id, target_id, amount, run_when, deleted, created_at, modified_at, keep
 `
 
 type UpdateBudgetEntryParams struct {
 	ID       string
 	UserID   string
 	TargetID pgtype.Text
-	Amount   decimal.Decimal
+	Amount   decimal.NullDecimal
 	RunWhen  SavingsBudgetWhen
+	Keep     decimal.NullDecimal
 }
 
 func (q *Queries) UpdateBudgetEntry(ctx context.Context, arg UpdateBudgetEntryParams) (SavingsBudgetEntry, error) {
@@ -414,6 +492,7 @@ func (q *Queries) UpdateBudgetEntry(ctx context.Context, arg UpdateBudgetEntryPa
 		arg.TargetID,
 		arg.Amount,
 		arg.RunWhen,
+		arg.Keep,
 	)
 	var i SavingsBudgetEntry
 	err := row.Scan(
@@ -426,6 +505,7 @@ func (q *Queries) UpdateBudgetEntry(ctx context.Context, arg UpdateBudgetEntryPa
 		&i.Deleted,
 		&i.CreatedAt,
 		&i.ModifiedAt,
+		&i.Keep,
 	)
 	return i, err
 }

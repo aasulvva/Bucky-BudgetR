@@ -80,7 +80,7 @@ cycles: created_at, end_at, generated, id, modified_at, start_at, state, user_id
 buckets: caf, cap_amount, cap_mode, cap_multiplier, created_at, deleted, id, importance, keep_funds, modified_at, name, negative_tf, overflow_destination, overflow_target_id, priority, refill_amount, refill_mode, source_account_id, user_id
 savings_holders: account_id, bucket_id, created_at, deleted, goal, hold_mode, id, kind, min_amount, modified_at, name, note, user_id
 savings_rules: created_at, id, modified_at, past_goal, priority, range_from, range_to, target_id, user_id
-savings_budget_entries: account_id, amount, created_at, deleted, id, modified_at, run_when, target_id, user_id
+savings_budget_entries: account_id, amount, created_at, deleted, id, keep, modified_at, run_when, target_id, user_id
 tags: created_at, id, name, user_id
 transaction_headers: correction_type, counterparty, created_at, created_by, description, id, parent_id, replaces_id, transaction_at, transaction_type, triggers_refill, user_id
 bank_transactions: account_id, amount, created_at, created_by, exchange_rate, id, original_amount, original_currency, transaction_id
