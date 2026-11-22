@@ -48,7 +48,7 @@ var correctable = []sqlc.TransactionType{
 // reversible are the types the user may reverse: the correctable ones, and
 // the savings module's (#231), which can't be corrected.
 var reversible = append(slices.Clone(correctable),
-	sqlc.TransactionTypeSVR, sqlc.TransactionTypeSVC, sqlc.TransactionTypeSVB)
+	sqlc.TransactionTypeSVR, sqlc.TransactionTypeSVC, sqlc.TransactionTypeSVB, sqlc.TransactionTypeSVD)
 
 // Changes are a correction's desired values; nil leaves a field as it is.
 // Amounts are positive like in New, except for OPB and BLA, whose signed
@@ -436,7 +436,9 @@ func correctionError(err error) error {
 // Taking a reservation back can't leave less than nothing held, which it
 // would once the money has been moved on or released. Reserving released
 // money again (reversing an SVC) needs it to be unallocated still; a
-// reversal with bank lines brings its money back along.
+// reversal with bank lines brings its money back along, and reversing a
+// distribution (SVD, #232) only moves money from the targets back to the
+// distributor.
 func checkSavingsReversal(ctx context.Context, tx pgx.Tx, userID string, cur Transaction) error {
 	if len(cur.SavingsLines) == 0 {
 		return nil
@@ -462,7 +464,7 @@ func checkSavingsReversal(ctx context.Context, tx pgx.Tx, userID string, cur Tra
 			}
 			continue
 		}
-		if len(cur.BankLines) > 0 || len(cur.BucketLines) > 0 {
+		if len(cur.BankLines) > 0 || len(cur.BucketLines) > 0 || cur.Type == sqlc.TransactionTypeSVD {
 			continue
 		}
 		if free == nil {

@@ -38,6 +38,7 @@ var tables = []table{
 	{"cycles", "user_id = $1", "id"},
 	{"buckets", "user_id = $1", "id"},
 	{"savings_holders", "user_id = $1", "id"},
+	{"savings_rules", "user_id = $1", "id"},
 	{"tags", "user_id = $1", "id"},
 	{"transaction_headers", "user_id = $1", "id"},
 	{"bank_transactions", "account_id IN (SELECT id FROM bank_accounts WHERE user_id = $1)", "id"},

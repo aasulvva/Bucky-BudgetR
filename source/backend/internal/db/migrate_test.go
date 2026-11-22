@@ -5,9 +5,15 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/shopspring/decimal"
 
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/accounts"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/allocation"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/authtest"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/savings"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/testdb"
 )
 
@@ -81,4 +87,61 @@ func TestSavedModulesMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 	is(alice.ID, after)
+}
+
+// Migration 00028 (#232) goes down with a distributor, its rules and a split
+// in place: everything that touched the distributor goes, the target and its
+// other lines stay.
+func TestSavingsDistributorMigrationDown(t *testing.T) {
+	pool := testdb.New(t)
+	ctx := t.Context()
+	l := ledger.New(ledger.Options{AfterRecord: allocation.AfterRecord})
+	sv := savings.NewService(pool, l, savings.Options{})
+	acc := accounts.NewService(pool, l, accounts.Options{Savings: sv})
+	user := authtest.NewUser(t, pool, "alice").ID
+	main, err := acc.Create(ctx, user, accounts.New{Name: "Main", OpeningBalance: decimal.RequireFromString("1000")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	buffer, err := acc.Create(ctx, user, accounts.New{Name: "Buffer", Type: sqlc.AccountTypeSavings})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := sv.Create(ctx, user, savings.New{AccountID: buffer.ID, Goal: decimal.RequireFromString("5000")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sv.Add(ctx, user, target.ID, main.ID, decimal.RequireFromString("50")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sv.CreateRule(ctx, user, target.ID, savings.RuleInput{Priority: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := sv.AddToDistributor(ctx, user, main.ID, decimal.RequireFromString("100")); err != nil {
+		t.Fatal(err)
+	}
+
+	sqlDB := stdlib.OpenDBFromPool(pool)
+	defer sqlDB.Close()
+	p, err := db.NewProvider(sqlDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.DownTo(ctx, 26); err != nil {
+		t.Fatal(err)
+	}
+	var holders, lines int
+	var held string
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM savings_holders WHERE user_id = $1`, user).Scan(&holders); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT count(*), COALESCE(SUM(amount), 0)::text FROM savings_transactions WHERE holder_id = $1`, target.ID).Scan(&lines, &held); err != nil {
+		t.Fatal(err)
+	}
+	if holders != 1 || lines != 1 || held != "50.00" {
+		t.Errorf("after down: %d holders, the target's %d lines hold %s", holders, lines, held)
+	}
+	if _, err := p.Up(ctx); err != nil {
+		t.Fatal(err)
+	}
 }

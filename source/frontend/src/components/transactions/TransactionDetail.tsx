@@ -352,6 +352,7 @@ function Actions({ tx, locked, names }: { tx: Transaction; locked: boolean; name
 function reverseSavingsKey(tx: Transaction) {
   if (tx.type === "SVR") return "transactions.reverseSavingsReserve" as const;
   if (tx.type === "SVC") return "transactions.reverseSavingsRelease" as const;
+  if (tx.type === "SVD") return "transactions.reverseSavingsDistribution" as const;
   return "transactions.reverseSavingsDone" as const;
 }
 

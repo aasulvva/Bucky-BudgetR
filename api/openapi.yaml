@@ -2143,7 +2143,7 @@ paths:
         time. The transaction stays in the list, marked `reversed`. The same
         rules as for corrections apply: bucket lines must be in the active
         cycle (409 `bucket_lines_locked`), only INC, EXP, TRF, OPB and BLA,
-        and the savings types SVR, SVC and SVB (409 `not_correctable`), and
+        and the savings types SVR, SVC, SVB and SVD (409 `not_correctable`), and
         only once (409 `already_reversed`).
 
         Savings lines (#231) are cancelled too: reversing a *Done* transfer
@@ -2151,6 +2151,8 @@ paths:
         SVR) is refused once it's no longer held (409 `not_enough_held`), and
         reversing a release (an SVC) unless the account has enough
         unallocated money to hold it again (409 `not_enough_unallocated`).
+        Reversing a distribution (an SVD, #232) puts the money back in the
+        distributor, refused once a target's share has been moved on.
 
         Reversing an income undoes the refills it triggered in the active
         cycle (their REF and OVF are reversed), so those buckets can be
@@ -2920,6 +2922,279 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/v1/savings/distributor:
+    get:
+      operationId: getSavingsDistributor
+      tags: [savings]
+      summary: The savings distributor
+      description: |
+        The user's savings distributor (#232, spec §8): its hold mode and what
+        it holds per source account. Before it's first used or set up, `id`
+        is null and the hold mode is `immediate`.
+      responses:
+        "200":
+          description: The distributor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavingsDistributor"
+        "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+    patch:
+      operationId: updateSavingsDistributor
+      tags: [savings]
+      summary: Set the distributor's hold mode
+      description: |
+        `minimum` needs `min_amount`; the other modes drop it. Changing the
+        mode doesn't move money: `…/distribute` splits what's waiting.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavingsDistributorUpdate"
+      responses:
+        "200":
+          description: The distributor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavingsDistributor"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/savings/distributor/add:
+    post:
+      operationId: addToSavingsDistributor
+      tags: [savings]
+      summary: Add to the distributor
+      description: |
+        Reserves `amount` of the account's unallocated money for the
+        distributor (an SVR). More than is unallocated is 409
+        `not_enough_unallocated`, whose detail says how much is. By the hold
+        mode it's then split at once (`immediate`), once the account's
+        holdings reach `min_amount` (`minimum`), or not (`manual`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavingsAmount"
+      responses:
+        "200":
+          description: The distributor, and the split it recorded, if any.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavingsDistribution"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/savings/distributor/distribute:
+    post:
+      operationId: distributeSavings
+      tags: [savings]
+      summary: Distribute now
+      description: |
+        Splits what the distributor holds on the account, or on every account
+        without `account_id`, among the targets in its currency by their rules
+        (spec §8), whatever the hold mode: one savings distribution (SVD) per
+        account. A bucket target funded from the account gets its share
+        straight into the bucket (a bucket line) while a cycle is active;
+        every other share is held for its target. What no target takes stays
+        in the distributor.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavingsDistribute"
+      responses:
+        "200":
+          description: The distributor, and the splits it recorded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavingsDistribution"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/savings/distributor/clear:
+    post:
+      operationId: clearSavingsDistributor
+      tags: [savings]
+      summary: Clear the distributor's holdings
+      description: Gives `amount` of what the distributor holds on the account back to unallocated (SVC). At most what it holds (409 `not_enough_held`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavingsAmount"
+      responses:
+        "200":
+          description: The distributor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavingsDistributor"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/savings/distributor/preview:
+    get:
+      operationId: previewSavingsDistribution
+      tags: [savings]
+      summary: Preview a split
+      description: What splitting `amount` from the account would give each target now, and what would stay in the distributor. Records nothing.
+      parameters:
+        - name: account_id
+          in: query
+          required: true
+          schema:
+            $ref: "#/components/schemas/AccountId"
+        - name: amount
+          in: query
+          required: true
+          schema:
+            $ref: "#/components/schemas/Amount"
+      responses:
+        "200":
+          description: The split.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavingsPreview"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/savings/rules:
+    get:
+      operationId: listSavingsRules
+      tags: [savings]
+      summary: The distributor's rules
+      description: The rules of the user's live targets, by target, then range.
+      responses:
+        "200":
+          description: The rules.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SavingsRule"
+        "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+    post:
+      operationId: createSavingsRule
+      tags: [savings]
+      summary: Add a rule to a target
+      description: |
+        A range of the target's position (its balance or TF plus what's held
+        for it), from `from` up to, not including, `to` (none: no end), with
+        a priority. A range that overlaps another of the target's is 409
+        `rule_overlap`; a target has at most 20 rules (409 `too_many_rules`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewSavingsRule"
+      responses:
+        "201":
+          description: The rule.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavingsRule"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/savings/rules/{ruleId}:
+    parameters:
+      - $ref: "#/components/parameters/SavingsRuleId"
+    patch:
+      operationId: updateSavingsRule
+      tags: [savings]
+      summary: Change a rule
+      description: Sets the rule's range, priority and `past_goal`; its target stays. An overlap is 409 `rule_overlap`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavingsRuleInput"
+      responses:
+        "200":
+          description: The rule.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavingsRule"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+    delete:
+      operationId: deleteSavingsRule
+      tags: [savings]
+      summary: Delete a rule
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
   /api/v1/notifications:
     get:
       operationId: listNotifications
@@ -3034,6 +3309,13 @@ components:
       required: true
       schema:
         $ref: "#/components/schemas/SavingsHolderId"
+
+    SavingsRuleId:
+      name: ruleId
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/SavingsRuleId"
 
     TransactionId:
       name: transactionId
@@ -5468,14 +5750,185 @@ components:
           maxLength: 500
           description: An optional description for the transaction.
 
+    SavingsHoldMode:
+      type: string
+      enum: [immediate, minimum, manual]
+      description: When the distributor splits what it gets (#232) — as it comes in, once an account's holdings reach `min_amount`, or only when asked.
+
+    SavingsDistributor:
+      type: object
+      additionalProperties: false
+      required: [id, hold_mode, min_amount, held]
+      description: The user's savings distributor (#232, spec §8).
+      properties:
+        id:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/SavingsHolderId"
+          nullable: true
+          description: Null until it's first used or set up.
+        hold_mode:
+          $ref: "#/components/schemas/SavingsHoldMode"
+        min_amount:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          nullable: true
+          description: Set with the `minimum` hold mode, checked per source account.
+        held:
+          type: array
+          description: What it holds, per source account.
+          items:
+            $ref: "#/components/schemas/SavingsHeld"
+
+    SavingsDistributorUpdate:
+      type: object
+      additionalProperties: false
+      required: [hold_mode]
+      properties:
+        hold_mode:
+          $ref: "#/components/schemas/SavingsHoldMode"
+        min_amount:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Above 0; needed with `minimum`.
+
+    SavingsDistribute:
+      type: object
+      additionalProperties: false
+      properties:
+        account_id:
+          allOf:
+            - $ref: "#/components/schemas/AccountId"
+          description: Split only what's held on this account.
+
+    SavingsDistribution:
+      type: object
+      additionalProperties: false
+      required: [distributor, distributed]
+      properties:
+        distributor:
+          $ref: "#/components/schemas/SavingsDistributor"
+        distributed:
+          type: array
+          description: The savings distributions (SVD) recorded, one per account split.
+          items:
+            $ref: "#/components/schemas/TransactionId"
+
+    SavingsShare:
+      type: object
+      additionalProperties: false
+      required: [target_id, amount, into_bucket]
+      properties:
+        target_id:
+          $ref: "#/components/schemas/SavingsHolderId"
+        amount:
+          $ref: "#/components/schemas/Amount"
+        into_bucket:
+          type: boolean
+          description: It goes straight into the target's bucket (funded from the account, with a cycle active), instead of being held for it.
+
+    SavingsPreview:
+      type: object
+      additionalProperties: false
+      required: [shares, left]
+      properties:
+        shares:
+          type: array
+          description: The targets that would get something, in the order of the target list.
+          items:
+            $ref: "#/components/schemas/SavingsShare"
+        left:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: What would stay in the distributor.
+
+    SavingsRuleId:
+      type: string
+      description: 12-digit distributor rule ID, its target's ID and 2 random digits.
+      pattern: "^[1-9][0-9]{11}$"
+      example: "482913552107"
+
+    SavingsRuleInput:
+      type: object
+      additionalProperties: false
+      required: [from, priority]
+      properties:
+        from:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Where the range starts, 0 or more.
+        to:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          nullable: true
+          description: Where it ends (not included), above `from`; null or none for no end.
+        priority:
+          type: integer
+          minimum: 0
+          maximum: 6
+          description: The target's weight in the split; 0 gives it nothing in this range.
+        past_goal:
+          type: boolean
+          default: false
+          description: The rule may take the target past its goal (a bucket's fixed capacity still holds).
+
+    NewSavingsRule:
+      type: object
+      additionalProperties: false
+      required: [target_id, from, priority]
+      description: A rule for a target; the fields as in `SavingsRuleInput`.
+      properties:
+        target_id:
+          $ref: "#/components/schemas/SavingsHolderId"
+        from:
+          $ref: "#/components/schemas/Amount"
+        to:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          nullable: true
+        priority:
+          type: integer
+          minimum: 0
+          maximum: 6
+        past_goal:
+          type: boolean
+          default: false
+
+    SavingsRule:
+      type: object
+      additionalProperties: false
+      required: [id, target_id, from, to, priority, past_goal]
+      properties:
+        id:
+          $ref: "#/components/schemas/SavingsRuleId"
+        target_id:
+          $ref: "#/components/schemas/SavingsHolderId"
+        from:
+          $ref: "#/components/schemas/Amount"
+        to:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          nullable: true
+        priority:
+          type: integer
+          minimum: 0
+          maximum: 6
+        past_goal:
+          type: boolean
+
     TransactionType:
       type: string
-      enum: [OPB, BLA, INC, EXP, TRF, INP, OPF, REF, BUA, BAT, OVF, SVR, SVC, SVB]
+      enum: [OPB, BLA, INC, EXP, TRF, INP, OPF, REF, BUA, BAT, OVF, SVR, SVC, SVB, SVD]
       description: |
         See spec §5.4. Only INC, EXP and TRF can be created with
         `POST /transactions`. SVR (savings reserve), SVC (savings cancel) and
-        SVB (savings to bucket) come from the savings endpoints (#231); they
-        can be reversed, not corrected.
+        SVB (savings to bucket) come from the savings endpoints (#231), and
+        SVD (savings distribution) from the distributor (#232); they can be
+        reversed, not corrected.
 
     CorrectionType:
       type: string

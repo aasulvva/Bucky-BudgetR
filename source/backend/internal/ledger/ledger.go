@@ -149,7 +149,7 @@ type shape struct {
 	// bankOptional allows no bank lines instead of bank.
 	bankOptional           bool
 	minBucket, maxBucket   int // maxBucket < 0: no limit
-	minSavings, maxSavings int
+	minSavings, maxSavings int // maxSavings < 0: no limit
 }
 
 var shapes = map[sqlc.TransactionType]shape{
@@ -169,6 +169,10 @@ var shapes = map[sqlc.TransactionType]shape{
 	// Savings to a bucket: straight from unallocated (bucket line only), or
 	// held funds (a savings line), moved from another account (2 bank lines).
 	sqlc.TransactionTypeSVB: {bank: 2, bankOptional: true, minBucket: 1, maxBucket: 1, maxSavings: 1},
+	// A savings distribution (#232) on one source account: a line off the
+	// distributor and one per target it gave to, or a bucket line for a
+	// bucket target funded from that account.
+	sqlc.TransactionTypeSVD: {minSavings: 1, maxSavings: -1, maxBucket: -1},
 }
 
 // Create records e in a new database transaction.
@@ -435,7 +439,7 @@ func normalize(e Entry) (Entry, error) {
 			}
 			return invalid("%s can't have bucket lines", e.Type)
 		}
-		if n := len(e.SavingsLines); n < s.minSavings || n > s.maxSavings {
+		if n := len(e.SavingsLines); n < s.minSavings || (s.maxSavings >= 0 && n > s.maxSavings) {
 			if s.maxSavings == 0 {
 				return invalid("%s can't have savings lines", e.Type)
 			}
@@ -460,7 +464,7 @@ func normalize(e Entry) (Entry, error) {
 		if s.maxBucket >= 0 && len(e.BucketLines) > s.maxBucket {
 			return invalid("%s has at most %d bucket line(s)", e.Type, s.maxBucket)
 		}
-		if len(e.SavingsLines) > s.maxSavings {
+		if s.maxSavings >= 0 && len(e.SavingsLines) > s.maxSavings {
 			return invalid("%s has at most %d savings line(s)", e.Type, s.maxSavings)
 		}
 	default:

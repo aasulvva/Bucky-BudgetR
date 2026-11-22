@@ -30,6 +30,7 @@ const (
 	kOccurrence
 	kHolder
 	kSavingsLine
+	kRule
 	// kKept is kept as it is: a notification dismissal's key (#57). It names
 	// IDs, so a clone's no longer match and are forgotten when its
 	// notifications are next read.
@@ -48,6 +49,7 @@ var idColumns = map[string]map[string]kind{
 	"bank_transactions":       {"id": kBankLine, "transaction_id": kTransaction, "account_id": kAccount, "created_by": kUser},
 	"bucket_transactions":     {"id": kBucketLine, "transaction_id": kTransaction, "bucket_id": kBucket, "cycle_id": kCycle, "created_by": kUser},
 	"savings_holders":         {"id": kHolder, "user_id": kUser, "bucket_id": kBucket, "account_id": kAccount},
+	"savings_rules":           {"id": kRule, "target_id": kHolder, "user_id": kUser},
 	"savings_transactions":    {"id": kSavingsLine, "transaction_id": kTransaction, "holder_id": kHolder, "account_id": kAccount, "cycle_id": kCycle, "created_by": kUser},
 	"transaction_tags":        {"transaction_id": kTransaction, "tag_id": kTag, "user_id": kUser},
 	"refills":                 {"bucket_id": kBucket, "cycle_id": kCycle, "user_id": kUser, "ref_id": kTransaction, "ovf_id": kTransaction, "income_id": kTransaction},
@@ -100,6 +102,22 @@ func remap(ctx context.Context, tx pgx.Tx, userID string, data Data) (Data, erro
 	if m[kHolder], err = newIDs(ctx, tx, userID, "savings_holders", keys(data.Tables["savings_holders"], "id"),
 		func(string) string { return ids.NewSavingsHolder(userID) }); err != nil {
 		return Data{}, err
+	}
+	// A rule's ID is its target's and 2 random digits: drawn unique per
+	// target, as the new targets' IDs are unique.
+	m[kRule] = map[string]string{}
+	usedRule := map[string]bool{}
+	for _, r := range data.Tables["savings_rules"] {
+		holder, ok := m[kHolder][fmt.Sprint(r["target_id"])]
+		if !ok {
+			return Data{}, fmt.Errorf("%w: savings_rules.target_id %v refers to nothing in the snapshot", ErrInvalid, r["target_id"])
+		}
+		id := ids.NewSavingsRule(holder)
+		for usedRule[id] {
+			id = ids.NewSavingsRule(holder)
+		}
+		usedRule[id] = true
+		m[kRule][fmt.Sprint(r["id"])] = id
 	}
 	m[kBankLine] = map[string]string{}
 	m[kBucketLine] = map[string]string{}

@@ -214,6 +214,7 @@ For foreign-currency transactions, record the amount in the account currency as 
 | SVR | Savings Reserve | – | – | system (Savings) | Holds unallocated money for a savings target: 1 savings line (§8) |
 | SVC | Savings Cancel | – | – | system (Savings) | Releases held funds back to unallocated: 1 savings line (§8) |
 | SVB | Savings to Bucket | 0 or 2 | 1 | system (Savings) | Money into a bucket target, from unallocated or held funds: 0–1 savings lines, and a transfer's bank lines when the bucket is on another account (§8) |
+| SVD | Savings Distribution | – | 0..n | system (Savings) | The distributor splits what it holds on one account among the targets: a savings line off the distributor, and a savings line per target, or a bucket line for a bucket target funded from that account (§8.4) |
 
 A TRF can also have 1 savings line, when it records *Done* for an account target (§8). No other type has savings lines.
 
@@ -322,7 +323,7 @@ Funds the buckets: works out how much of each source account's money backs each 
 
 ## 8. Savings module
 
-Savings targets and the money held for them (#231). The distributor (#232), overflow to savings (#233), a fixed amount per cycle (#234), the sweep (#235), the BSU cap (#236) and the Dashboard widget (#237) build on it; #35 tracks the module.
+Savings targets and the money held for them (#231), and the distributor that splits money among them (#232). Overflow to savings (#233), a fixed amount per cycle (#234), the sweep (#235), the BSU cap (#236) and the Dashboard widget (#237) build on it; #35 tracks the module.
 
 ### 8.1 Savings targets
 
@@ -338,7 +339,7 @@ Savings targets and the money held for them (#231). The distributor (#232), over
 
 **Progress** is *current* (the bucket's TF or the account's balance) plus *held* (below) against the goal.
 
-**A target goes away**, releasing its held funds in the same step (one SVC per source account), when it's deleted, its bucket is deleted or stops being Fully manual, or its account is deleted or gets a type that can't be a target.
+**A target goes away**, releasing its held funds in the same step (one SVC per source account) and deleting its distributor rules, when it's deleted, its bucket is deleted or stops being Fully manual, or its account is deleted or gets a type that can't be a target.
 
 ### 8.2 Held funds
 
@@ -362,7 +363,35 @@ What a holder has **held** on an account is the sum of its lines there; an accou
 - **Clear** (`…/clear`): releases held money back to unallocated, with an **SVC**.
 - **Reversals:** SVR, SVC and SVB can be reversed, not corrected. Reversing an SVR is refused once its money is no longer held (moved on or released); reversing an SVC is refused unless the account has enough unallocated money to hold it again. Reversing a Done TRF or SVB puts the money back on hold.
 
-**Figures:** an SVB's bucket line counts as an adjustment (§4 *Figures per cycle*) and its bank lines as a transfer. SVR and SVC move no money, so they count nowhere but in held funds and unallocated.
+**Figures:** an SVB's or SVD's bucket line counts as an adjustment (§4 *Figures per cycle*) and an SVB's bank lines as a transfer. SVR and SVC move no money, and an SVD's savings lines only move it between holders, so they count nowhere but in held funds and unallocated.
+
+### 8.4 The distributor
+
+One per user, a savings holder like the targets (#232). It's created when first set up or given money; before that it reads as *Immediately* with nothing held. Money comes in with **Add to savings** to the distributor (`POST /savings/distributor/add`, an SVR on it; later also bucket overflow #233 and the savings budget #234/#235), and it's **reserved** on its source account like any held funds.
+
+**Rules**, per target:
+
+| Field | Notes |
+| ----- | ----- |
+| Rule-ID | `<10-digit target Holder-ID><2-digit random>` (12 digits) |
+| Range | from (≥ 0) up to, but not including, to (none: no end), of the target's **position**: `max(current, 0) + held`, its balance or TF plus everything held for it |
+| Priority | 0–6; 0 gives the target nothing in that range |
+| Past the goal | off by default: without it the target stops at its goal |
+
+One target's ranges can't overlap (409 `rule_overlap`; touching ones are fine), and a target has at most 20 rules (409 `too_many_rules`). A target with no rule for where it stands, e.g. in a gap between two ranges, gets nothing. A bucket target never passes its fixed BC, even past the goal.
+
+**The split** of an amount on one source account, among the live targets in that account's currency (not the account itself, if it's a target):
+
+1. Every target with a rule for its position, a priority above 0 and room below its **limit** (the range's end, the goal unless the rule goes past it, and a bucket's fixed BC, whichever comes first) gets `amount × priority / Σ priorities`.
+2. **In steps:** a share goes only as far as the first target reaches its limit; then the rest is split again with the rules that apply from there. E.g. 5 000 with Down payment (priority 6), Buffer at 39 500 (30 000–40 000 at 4, then 40 000 and up at 1) and Hobby (2): 1 500 first brings Buffer to 40 000 (750 · 500 · 250), then 3 500 by 6 + 1 + 2 (2 333.33 · 388.89 · 777.78, rounded once at the end: 3 083.33 · 888.89 · 1 027.78).
+3. It stops when everything is placed or no target takes more; the rest **stays in the distributor**.
+4. **Rounding** as in §7: shares at full precision, rounded down to cents, and the leftover cents one each to the largest remainders, never past a target's goal or BC.
+
+A split is one **SVD** per account: a savings line taking what's placed off the distributor, and per target a savings line holding its share there, or, for a bucket target funded from that account while a cycle is active, a bucket line putting it straight into the bucket.
+
+**Hold modes:** *Immediately* (the default) splits as money comes in, in the same step; *At a minimum amount* splits an account's holdings once they reach the amount (checked per source account); *Manual only* waits. **Distribute now** (`POST /savings/distributor/distribute`) splits what's waiting on one account or all, whatever the mode; **Preview** (`GET /savings/distributor/preview`) shows a split without recording it. Changing the mode or the rules never moves money already held. **Clear** (`POST /savings/distributor/clear`) gives what the distributor holds back to unallocated (SVC).
+
+**Reversing an SVD** puts the money back in the distributor (a bucket line comes out of the bucket); it's refused once a target's share has been moved on with Done or Clear.
 
 ## 9. UI
 
