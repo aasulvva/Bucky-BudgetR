@@ -72,6 +72,43 @@ describe("endPreview", () => {
     expect(endPreview([full], true).refilled).toEqual([]);
   });
 
+  it("leaves out what the buckets left take back on an underfunded account (demouser's Regningskonto)", () => {
+    const rent = bucket({
+      ...base,
+      id: "1000000005",
+      name: "Rent",
+      refill_amount: "12500.00",
+      capacity: "12500.00",
+      target_funds: "12500.00",
+      current_available_funds: "6594.56",
+    });
+    const insurance = bucket({
+      ...base,
+      id: "1000000006",
+      name: "Insurance",
+      keep_funds: true,
+      target_funds: "2400.00",
+      current_available_funds: "0.00",
+    });
+    const bills = {
+      id: "1234",
+      currency: "NOK",
+      balance: "6594.56",
+      reserved: "0.00",
+      unallocated: "0.00",
+    };
+    // Insurance keeps its TF and takes 2 400 of Rent's 6 594.56.
+    expect(endPreview([rent, insurance], false, [bills]).backToUnallocated).toEqual([
+      { currency: "NOK", amount: "4194.56" },
+    ]);
+    // A fully funded account gets all of the funded part back.
+    const funded = { ...bills, balance: "8994.56", unallocated: "0.00" };
+    const full = { ...insurance, current_available_funds: "2400.00" };
+    expect(endPreview([rent, full], false, [funded]).backToUnallocated).toEqual([
+      { currency: "NOK", amount: "6594.56" },
+    ]);
+  });
+
   it("counts what goes to savings apart from what goes back to unallocated (#233)", () => {
     const saved = { ...hobby, overflow_destination: "savings_distribution" as const };
     const p = endPreview([groceries, saved], false);

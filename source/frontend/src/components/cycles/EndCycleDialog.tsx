@@ -122,7 +122,7 @@ function EndForm({
 
       <QueryState query={buckets}>
         {(list) => {
-          const preview = endPreview(list, refills);
+          const preview = endPreview(list, refills, accounts);
           const to = (b: (typeof list)[number]) => overflowTo(b, targets);
           return (
             <Stack gap="md">
