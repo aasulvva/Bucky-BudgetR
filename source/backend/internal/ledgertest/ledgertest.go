@@ -57,11 +57,21 @@ func Bucket(t testing.TB, pool *pgxpool.Pool, userID, accountID string) string {
 	})
 }
 
-// Delete soft-deletes an account or bucket (table is "bank_accounts" or
-// "buckets").
+// Target creates a savings target (#231) for userID on accountID, with a goal
+// of 1000, and returns its ID.
+func Target(t testing.TB, pool *pgxpool.Pool, userID, accountID string) string {
+	t.Helper()
+	return insert(t, ids.SavingsHolder, func() string { return ids.NewSavingsHolder(userID) }, func(ctx context.Context, id string) error {
+		return pool.QueryRow(ctx, `INSERT INTO savings_holders (id, user_id, kind, account_id, goal) VALUES ($1, $2, 'target', $3, 1000)
+			ON CONFLICT (id) DO NOTHING RETURNING id`, id, userID, accountID).Scan(&id)
+	})
+}
+
+// Delete soft-deletes an account, bucket or savings target (table is
+// "bank_accounts", "buckets" or "savings_holders").
 func Delete(t testing.TB, pool *pgxpool.Pool, table, id string) {
 	t.Helper()
-	if table != "bank_accounts" && table != "buckets" {
+	if table != "bank_accounts" && table != "buckets" && table != "savings_holders" {
 		t.Fatalf("ledgertest.Delete: unknown table %q", table)
 	}
 	if _, err := pool.Exec(context.Background(), "UPDATE "+table+" SET deleted = true WHERE id = $1", id); err != nil {

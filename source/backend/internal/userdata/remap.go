@@ -28,6 +28,8 @@ const (
 	kBucketLine
 	kSchedule
 	kOccurrence
+	kHolder
+	kSavingsLine
 	// kKept is kept as it is: a notification dismissal's key (#57). It names
 	// IDs, so a clone's no longer match and are forgotten when its
 	// notifications are next read.
@@ -45,6 +47,8 @@ var idColumns = map[string]map[string]kind{
 	"transaction_headers":     {"id": kTransaction, "user_id": kUser, "parent_id": kTransaction, "replaces_id": kTransaction, "created_by": kUser},
 	"bank_transactions":       {"id": kBankLine, "transaction_id": kTransaction, "account_id": kAccount, "created_by": kUser},
 	"bucket_transactions":     {"id": kBucketLine, "transaction_id": kTransaction, "bucket_id": kBucket, "cycle_id": kCycle, "created_by": kUser},
+	"savings_holders":         {"id": kHolder, "user_id": kUser, "bucket_id": kBucket, "account_id": kAccount},
+	"savings_transactions":    {"id": kSavingsLine, "transaction_id": kTransaction, "holder_id": kHolder, "account_id": kAccount, "cycle_id": kCycle, "created_by": kUser},
 	"transaction_tags":        {"transaction_id": kTransaction, "tag_id": kTag, "user_id": kUser},
 	"refills":                 {"bucket_id": kBucket, "cycle_id": kCycle, "user_id": kUser, "ref_id": kTransaction, "ovf_id": kTransaction, "income_id": kTransaction},
 	"schedules":               {"id": kSchedule, "user_id": kUser, "account_id": kAccount, "to_account_id": kAccount},
@@ -54,7 +58,8 @@ var idColumns = map[string]map[string]kind{
 }
 
 // remap returns data with new IDs for userID: new accounts, cycles, buckets,
-// tags, transactions, lines, schedules and occurrences, with every reference
+// savings targets, tags, transactions, lines, schedules and occurrences,
+// with every reference
 // following. IDs are
 // unique across users, so the new ones are checked against other users' rows.
 func remap(ctx context.Context, tx pgx.Tx, userID string, data Data) (Data, error) {
@@ -92,9 +97,14 @@ func remap(ctx context.Context, tx pgx.Tx, userID string, data Data) (Data, erro
 		func(string) string { return ids.NewSchedule(userID) }); err != nil {
 		return Data{}, err
 	}
+	if m[kHolder], err = newIDs(ctx, tx, userID, "savings_holders", keys(data.Tables["savings_holders"], "id"),
+		func(string) string { return ids.NewSavingsHolder(userID) }); err != nil {
+		return Data{}, err
+	}
 	m[kBankLine] = map[string]string{}
 	m[kBucketLine] = map[string]string{}
 	m[kOccurrence] = map[string]string{}
+	m[kSavingsLine] = map[string]string{}
 
 	out := Data{Tables: map[string][]row{}}
 	for name, rows := range data.Tables {
@@ -118,6 +128,8 @@ func remap(ctx context.Context, tx pgx.Tx, userID string, data Data) (Data, erro
 					n[col] = lineID(m[kBankLine], old, func() string { return ids.NewBankLine(m[kAccount][fmt.Sprint(r["account_id"])]) })
 				case kBucketLine:
 					n[col] = lineID(m[kBucketLine], old, func() string { return ids.NewBucketLine(m[kBucket][fmt.Sprint(r["bucket_id"])]) })
+				case kSavingsLine:
+					n[col] = lineID(m[kSavingsLine], old, func() string { return ids.NewSavingsLine(m[kHolder][fmt.Sprint(r["holder_id"])]) })
 				case kOccurrence:
 					n[col] = lineID(m[kOccurrence], old, func() string { return ids.NewOccurrence(m[kSchedule][fmt.Sprint(r["schedule_id"])]) })
 				default:

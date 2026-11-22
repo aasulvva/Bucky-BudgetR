@@ -107,6 +107,9 @@ type Transaction struct {
 	// that sum to zero are left out.
 	BankLines   []BankLine
 	BucketLines []BucketLine
+	// SavingsLines are the effective amounts held (positive) or released per
+	// savings holder and source account (#231).
+	SavingsLines []SavingsLine
 	// BeforeReversal is set on a reversed transaction: its effective lines
 	// just before the reversal, which are what it amounted to.
 	BeforeReversal *Lines
@@ -124,6 +127,14 @@ type Transaction struct {
 type Lines struct {
 	Bank    []BankLine
 	Buckets []BucketLine
+	Savings []SavingsLine
+}
+
+// SavingsLine is an amount held for a savings holder on a source account.
+type SavingsLine struct {
+	HolderID  string
+	AccountID string
+	Amount    decimal.Decimal
 }
 
 // BankLine is an amount on an account.
@@ -148,12 +159,13 @@ type BucketLine struct {
 // Version is one recorded transaction in a transaction's history: the
 // original or a correction, with its own lines.
 type Version struct {
-	ID          string
-	Correction  sqlc.CorrectionType
-	CreatedAt   time.Time
-	CreatedBy   string
-	BankLines   []BankLine
-	BucketLines []BucketLine
+	ID           string
+	Correction   sqlc.CorrectionType
+	CreatedAt    time.Time
+	CreatedBy    string
+	BankLines    []BankLine
+	BucketLines  []BucketLine
+	SavingsLines []SavingsLine
 }
 
 // Filter narrows List. Zero fields match everything.
@@ -234,7 +246,7 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Transaction
 		if err != nil {
 			return err
 		}
-		out = merge([]sqlc.TransactionHeader{t.Header}, t.BankLines, t.BucketLines, t.Tags, false)
+		out = merge([]sqlc.TransactionHeader{t.Header}, t.BankLines, t.BucketLines, t.SavingsLines, t.Tags, false)
 		return nil
 	})
 	if err != nil {
@@ -276,7 +288,7 @@ func (s *Service) RecordIn(ctx context.Context, tx pgx.Tx, userID string, n New)
 	if err != nil {
 		return Transaction{}, err
 	}
-	return merge([]sqlc.TransactionHeader{t.Header}, t.BankLines, t.BucketLines, t.Tags, false), nil
+	return merge([]sqlc.TransactionHeader{t.Header}, t.BankLines, t.BucketLines, t.SavingsLines, t.Tags, false), nil
 }
 
 // record checks n and records it inside tx. replaces is the transaction it
@@ -806,6 +818,10 @@ func (s *Service) load(ctx context.Context, q *sqlc.Queries, userID string, orig
 	if err != nil {
 		return nil, err
 	}
+	savings, err := q.ListSavingsLinesFor(ctx, all)
+	if err != nil {
+		return nil, err
+	}
 	tags, err := q.ListTagsFor(ctx, all)
 	if err != nil {
 		return nil, err
@@ -839,6 +855,7 @@ func (s *Service) load(ctx context.Context, q *sqlc.Queries, userID string, orig
 		t := merge(fam,
 			filter(bank, func(l sqlc.BankTransaction) bool { return inFamily(l.TransactionID) }),
 			filter(buckets, func(l sqlc.BucketTransaction) bool { return inFamily(l.TransactionID) }),
+			filter(savings, func(l sqlc.SavingsTransaction) bool { return inFamily(l.TransactionID) }),
 			famTags, history)
 		for _, r := range replaced {
 			if r.ReplacesID == id {
@@ -886,11 +903,33 @@ func sumLines(fam []sqlc.TransactionHeader, bank []sqlc.BankTransaction, buckets
 	return bankOut, bucketOut
 }
 
+// sumSavings sums the savings lines of these headers per holder and account,
+// in the order they first appear, leaving out sums of 0.
+func sumSavings(fam []sqlc.TransactionHeader, savings []sqlc.SavingsTransaction) []SavingsLine {
+	out := []SavingsLine{}
+	for _, h := range fam {
+		for _, l := range savings {
+			if l.TransactionID != h.ID {
+				continue
+			}
+			if i := slices.IndexFunc(out, func(s SavingsLine) bool {
+				return s.HolderID == l.HolderID && s.AccountID == l.AccountID
+			}); i >= 0 {
+				out[i].Amount = out[i].Amount.Add(l.Amount)
+			} else {
+				out = append(out, SavingsLine{HolderID: l.HolderID, AccountID: l.AccountID, Amount: l.Amount})
+			}
+		}
+	}
+	return slices.DeleteFunc(out, func(l SavingsLine) bool { return l.Amount.IsZero() })
+}
+
 // merge builds a Transaction from a family: the original header first, then
 // its corrections, with all their lines. tags are the newest header's, which
 // like its counterparty and description are the effective ones: every
 // correction carries them.
-func merge(fam []sqlc.TransactionHeader, bank []sqlc.BankTransaction, buckets []sqlc.BucketTransaction, tags []string, history bool) Transaction {
+func merge(fam []sqlc.TransactionHeader, bank []sqlc.BankTransaction, buckets []sqlc.BucketTransaction,
+	savings []sqlc.SavingsTransaction, tags []string, history bool) Transaction {
 	orig := fam[0]
 	t := Transaction{
 		ID: orig.ID, Type: orig.TransactionType, At: orig.TransactionAt, Counterparty: fam[len(fam)-1].Counterparty,
@@ -910,11 +949,13 @@ func merge(fam []sqlc.TransactionHeader, bank []sqlc.BankTransaction, buckets []
 	}
 
 	t.BankLines, t.BucketLines = sumLines(fam, bank, buckets)
+	t.SavingsLines = sumSavings(fam, savings)
 	if i := slices.IndexFunc(fam, func(h sqlc.TransactionHeader) bool {
 		return h.CorrectionType == sqlc.CorrectionTypeReversal
 	}); i > 0 {
 		var before Lines
 		before.Bank, before.Buckets = sumLines(fam[:i], bank, buckets)
+		before.Savings = sumSavings(fam[:i], savings)
 		t.BeforeReversal = &before
 	}
 
@@ -922,7 +963,7 @@ func merge(fam []sqlc.TransactionHeader, bank []sqlc.BankTransaction, buckets []
 		t.History = make([]Version, len(fam))
 		for i, h := range fam {
 			v := Version{ID: h.ID, Correction: h.CorrectionType, CreatedAt: h.CreatedAt, CreatedBy: h.CreatedBy.String,
-				BankLines: []BankLine{}, BucketLines: []BucketLine{}}
+				BankLines: []BankLine{}, BucketLines: []BucketLine{}, SavingsLines: []SavingsLine{}}
 			for _, l := range bank {
 				if l.TransactionID == h.ID {
 					v.BankLines = append(v.BankLines, BankLine{AccountID: l.AccountID, Amount: l.Amount})
@@ -931,6 +972,11 @@ func merge(fam []sqlc.TransactionHeader, bank []sqlc.BankTransaction, buckets []
 			for _, l := range buckets {
 				if l.TransactionID == h.ID {
 					v.BucketLines = append(v.BucketLines, BucketLine{BucketID: l.BucketID, CycleID: l.CycleID, Amount: l.Amount})
+				}
+			}
+			for _, l := range savings {
+				if l.TransactionID == h.ID {
+					v.SavingsLines = append(v.SavingsLines, SavingsLine{HolderID: l.HolderID, AccountID: l.AccountID, Amount: l.Amount})
 				}
 			}
 			t.History[i] = v

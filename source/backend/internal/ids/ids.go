@@ -12,6 +12,8 @@
 //	BucketLine   Bucket + 14 random   24 digits
 //	Schedule     User + 4 random      10 digits
 //	Occurrence   Schedule + 8 random  18 digits
+//	SavingsHolder User + 4 random     10 digits
+//	SavingsLine  SavingsHolder + 14 random  24 digits
 //
 // The database stores them as text with a CHECK on Kind.Pattern. They are
 // drawn with crypto/rand; see Insert for handling collisions.
@@ -51,6 +53,9 @@ var (
 	BucketLine  = newKind("bucket line", 24, `^[1-9][0-9]{23}$`)
 	Schedule    = newKind("schedule", 10, `^[1-9][0-9]{9}$`)
 	Occurrence  = newKind("occurrence", 18, `^[1-9][0-9]{17}$`)
+	// SavingsHolder is a savings target or a user's savings distributor.
+	SavingsHolder = newKind("savings holder", 10, `^[1-9][0-9]{9}$`)
+	SavingsLine   = newKind("savings line", 24, `^[1-9][0-9]{23}$`)
 )
 
 // Valid reports whether s is a well-formed ID of this kind. For transactions
@@ -94,6 +99,13 @@ func NewSchedule(userID string) string { return withPrefix(User, userID, 4) }
 
 // NewOccurrence returns a random ID for an occurrence of scheduleID.
 func NewOccurrence(scheduleID string) string { return withPrefix(Schedule, scheduleID, 8) }
+
+// NewSavingsHolder returns a random ID for a savings target or distributor
+// owned by userID.
+func NewSavingsHolder(userID string) string { return withPrefix(User, userID, 4) }
+
+// NewSavingsLine returns a random ID for a savings line of holderID.
+func NewSavingsLine(holderID string) string { return withPrefix(SavingsHolder, holderID, 14) }
 
 // withPrefix appends n random digits to an owner ID. A malformed owner ID is
 // a programming error, so it panics rather than returning an error.

@@ -113,6 +113,48 @@ func (q *Queries) CreateBucketLine(ctx context.Context, arg CreateBucketLinePara
 	return i, err
 }
 
+const createSavingsLine = `-- name: CreateSavingsLine :one
+INSERT INTO savings_transactions (id, transaction_id, holder_id, account_id, cycle_id, amount, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (id) DO NOTHING
+RETURNING id, transaction_id, holder_id, account_id, cycle_id, amount, created_at, created_by
+`
+
+type CreateSavingsLineParams struct {
+	ID            string
+	TransactionID string
+	HolderID      string
+	AccountID     string
+	CycleID       pgtype.Text
+	Amount        decimal.Decimal
+	CreatedBy     pgtype.Text
+}
+
+// Use with ids.Insert: a taken ID returns no row.
+func (q *Queries) CreateSavingsLine(ctx context.Context, arg CreateSavingsLineParams) (SavingsTransaction, error) {
+	row := q.db.QueryRow(ctx, createSavingsLine,
+		arg.ID,
+		arg.TransactionID,
+		arg.HolderID,
+		arg.AccountID,
+		arg.CycleID,
+		arg.Amount,
+		arg.CreatedBy,
+	)
+	var i SavingsTransaction
+	err := row.Scan(
+		&i.ID,
+		&i.TransactionID,
+		&i.HolderID,
+		&i.AccountID,
+		&i.CycleID,
+		&i.Amount,
+		&i.CreatedAt,
+		&i.CreatedBy,
+	)
+	return i, err
+}
+
 const createTransactionHeader = `-- name: CreateTransactionHeader :one
 INSERT INTO transaction_headers (
     id, user_id, parent_id, correction_type, transaction_type, transaction_at, counterparty, created_by, replaces_id,
@@ -167,6 +209,24 @@ func (q *Queries) CreateTransactionHeader(ctx context.Context, arg CreateTransac
 		&i.Description,
 	)
 	return i, err
+}
+
+const cycleAt = `-- name: CycleAt :one
+SELECT id FROM cycles
+WHERE user_id = $1 AND start_at <= $2::timestamptz AND $2::timestamptz < end_at
+`
+
+type CycleAtParams struct {
+	UserID string
+	At     time.Time
+}
+
+// The user's cycle that contains the moment, whatever its state.
+func (q *Queries) CycleAt(ctx context.Context, arg CycleAtParams) (string, error) {
+	row := q.db.QueryRow(ctx, cycleAt, arg.UserID, arg.At)
+	var id string
+	err := row.Scan(&id)
+	return id, err
 }
 
 const getActiveCycle = `-- name: GetActiveCycle :one
@@ -266,6 +326,39 @@ func (q *Queries) GetOwnedBuckets(ctx context.Context, arg GetOwnedBucketsParams
 	return items, nil
 }
 
+const getOwnedSavingsHolders = `-- name: GetOwnedSavingsHolders :many
+SELECT id FROM savings_holders
+WHERE id = ANY($1::text[]) AND user_id = $2 AND NOT deleted
+FOR SHARE
+`
+
+type GetOwnedSavingsHoldersParams struct {
+	Ids    []string
+	UserID string
+}
+
+// FOR SHARE: waits for a concurrent delete of the holder, then sees whether it
+// still exists.
+func (q *Queries) GetOwnedSavingsHolders(ctx context.Context, arg GetOwnedSavingsHoldersParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, getOwnedSavingsHolders, arg.Ids, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTransactionHeader = `-- name: GetTransactionHeader :one
 SELECT id, user_id, parent_id, correction_type, transaction_type, transaction_at, counterparty, created_at, created_by, replaces_id, triggers_refill, description FROM transaction_headers WHERE id = $1 AND user_id = $2
 `
@@ -346,6 +439,39 @@ func (q *Queries) ListBucketLines(ctx context.Context, transactionID string) ([]
 			&i.ID,
 			&i.TransactionID,
 			&i.BucketID,
+			&i.CycleID,
+			&i.Amount,
+			&i.CreatedAt,
+			&i.CreatedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSavingsLines = `-- name: ListSavingsLines :many
+SELECT id, transaction_id, holder_id, account_id, cycle_id, amount, created_at, created_by FROM savings_transactions WHERE transaction_id = $1 ORDER BY id
+`
+
+func (q *Queries) ListSavingsLines(ctx context.Context, transactionID string) ([]SavingsTransaction, error) {
+	rows, err := q.db.Query(ctx, listSavingsLines, transactionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SavingsTransaction{}
+	for rows.Next() {
+		var i SavingsTransaction
+		if err := rows.Scan(
+			&i.ID,
+			&i.TransactionID,
+			&i.HolderID,
+			&i.AccountID,
 			&i.CycleID,
 			&i.Amount,
 			&i.CreatedAt,

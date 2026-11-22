@@ -14,6 +14,7 @@ const draws = 2000
 func TestGenerators(t *testing.T) {
 	user, account := ids.NewUser(), ids.NewAccount()
 	bucket := ids.NewBucket(user)
+	holder := ids.NewSavingsHolder(user)
 
 	for _, tc := range []struct {
 		kind   ids.Kind
@@ -28,6 +29,8 @@ func TestGenerators(t *testing.T) {
 		{ids.Transaction, func() string { return ids.NewTransaction(time.Now()) }, "", 1e8},
 		{ids.BankLine, func() string { return ids.NewBankLine(account) }, account, 1e12},
 		{ids.BucketLine, func() string { return ids.NewBucketLine(bucket) }, bucket, 1e14},
+		{ids.SavingsHolder, func() string { return ids.NewSavingsHolder(user) }, user, 1e4},
+		{ids.SavingsLine, func() string { return ids.NewSavingsLine(holder) }, holder, 1e14},
 	} {
 		t.Run(tc.kind.Name, func(t *testing.T) {
 			seen := make(map[string]bool, draws)

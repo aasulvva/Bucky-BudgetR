@@ -496,6 +496,57 @@ func (e RefillMode) Valid() bool {
 	return false
 }
 
+type SavingsHolderKind string
+
+const (
+	SavingsHolderKindTarget      SavingsHolderKind = "target"
+	SavingsHolderKindDistributor SavingsHolderKind = "distributor"
+)
+
+func (e *SavingsHolderKind) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = SavingsHolderKind(s)
+	case string:
+		*e = SavingsHolderKind(s)
+	default:
+		return fmt.Errorf("unsupported scan type for SavingsHolderKind: %T", src)
+	}
+	return nil
+}
+
+type NullSavingsHolderKind struct {
+	SavingsHolderKind SavingsHolderKind
+	Valid             bool // Valid is true if SavingsHolderKind is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullSavingsHolderKind) Scan(value interface{}) error {
+	if value == nil {
+		ns.SavingsHolderKind, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.SavingsHolderKind.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullSavingsHolderKind) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.SavingsHolderKind), nil
+}
+
+func (e SavingsHolderKind) Valid() bool {
+	switch e {
+	case SavingsHolderKindTarget,
+		SavingsHolderKindDistributor:
+		return true
+	}
+	return false
+}
+
 type ScheduleFrequency string
 
 const (
@@ -618,6 +669,9 @@ const (
 	TransactionTypeBUA TransactionType = "BUA"
 	TransactionTypeBAT TransactionType = "BAT"
 	TransactionTypeOVF TransactionType = "OVF"
+	TransactionTypeSVR TransactionType = "SVR"
+	TransactionTypeSVC TransactionType = "SVC"
+	TransactionTypeSVB TransactionType = "SVB"
 )
 
 func (e *TransactionType) Scan(src interface{}) error {
@@ -667,7 +721,10 @@ func (e TransactionType) Valid() bool {
 		TransactionTypeREF,
 		TransactionTypeBUA,
 		TransactionTypeBAT,
-		TransactionTypeOVF:
+		TransactionTypeOVF,
+		TransactionTypeSVR,
+		TransactionTypeSVC,
+		TransactionTypeSVB:
 		return true
 	}
 	return false
@@ -783,6 +840,31 @@ type Refill struct {
 	OvfID     pgtype.Text
 	IncomeID  pgtype.Text
 	CreatedAt time.Time
+}
+
+type SavingsHolder struct {
+	ID         string
+	UserID     string
+	Kind       SavingsHolderKind
+	BucketID   pgtype.Text
+	AccountID  pgtype.Text
+	Name       pgtype.Text
+	Goal       decimal.NullDecimal
+	Note       string
+	Deleted    bool
+	CreatedAt  time.Time
+	ModifiedAt time.Time
+}
+
+type SavingsTransaction struct {
+	ID            string
+	TransactionID string
+	HolderID      string
+	AccountID     string
+	CycleID       pgtype.Text
+	Amount        decimal.Decimal
+	CreatedAt     time.Time
+	CreatedBy     pgtype.Text
 }
 
 type Schedule struct {

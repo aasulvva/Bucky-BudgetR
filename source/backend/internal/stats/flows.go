@@ -102,14 +102,14 @@ var accountTypes = []string{
 	string(sqlc.TransactionTypeOPB), string(sqlc.TransactionTypeBLA), string(sqlc.TransactionTypeINC),
 	string(sqlc.TransactionTypeEXP), string(sqlc.TransactionTypeTRF), string(sqlc.TransactionTypeINP),
 	string(sqlc.TransactionTypeOPF), string(sqlc.TransactionTypeREF), string(sqlc.TransactionTypeBUA),
-	string(sqlc.TransactionTypeBAT), string(sqlc.TransactionTypeOVF),
+	string(sqlc.TransactionTypeBAT), string(sqlc.TransactionTypeOVF), string(sqlc.TransactionTypeSVB),
 }
 
 // bucketTypes are the types with bucket lines that move a bucket's TF.
 var bucketTypes = []string{
 	string(sqlc.TransactionTypeREF), string(sqlc.TransactionTypeINC), string(sqlc.TransactionTypeOPF),
 	string(sqlc.TransactionTypeBUA), string(sqlc.TransactionTypeBAT),
-	string(sqlc.TransactionTypeEXP), string(sqlc.TransactionTypeOVF),
+	string(sqlc.TransactionTypeEXP), string(sqlc.TransactionTypeOVF), string(sqlc.TransactionTypeSVB),
 }
 
 // Flows sums each bucket's and account's money in and out per interval. A
@@ -199,7 +199,8 @@ func bucketFlows(ctx context.Context, queries *sqlc.Queries, userID string, q Fl
 			v.Spent = v.Spent.Sub(net)
 		case sqlc.TransactionTypeOVF:
 			v.Overflow = v.Overflow.Sub(net)
-		case sqlc.TransactionTypeBUA:
+		case sqlc.TransactionTypeBUA, sqlc.TransactionTypeSVB:
+			// Savings into a bucket (#231) count as an adjustment in.
 			if net.IsPositive() {
 				v.AdjustmentsIn = v.AdjustmentsIn.Add(net)
 			} else {
@@ -300,7 +301,7 @@ func accountFlows(ctx context.Context, queries *sqlc.Queries, userID string, q F
 			v.Income = v.Income.Add(net)
 		case r.TransactionType == sqlc.TransactionTypeEXP:
 			v.Expenses = v.Expenses.Sub(net)
-		case r.TransactionType != sqlc.TransactionTypeTRF:
+		case !isTransfer(r.TransactionType):
 			v.Other = v.Other.Add(net)
 		case net.IsPositive():
 			v.TransfersIn = v.TransfersIn.Add(net)

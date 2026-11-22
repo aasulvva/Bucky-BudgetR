@@ -8,6 +8,10 @@
 // bucket lines fall in the owner's active cycle (§5.5). Rules that belong to
 // one kind of transaction, like signs or which buckets an income may fund,
 // are up to its caller.
+//
+// Savings lines (#231) are a third kind of line: money reserved in a source
+// account for a savings holder (a target or the distributor). They get the
+// cycle their time falls in, if any, but don't need an active one.
 package ledger
 
 import (
@@ -80,6 +84,8 @@ type Entry struct {
 	Tags        []string
 	BankLines   []BankLine
 	BucketLines []BucketLine
+	// SavingsLines reserve money for savings (positive) or release it.
+	SavingsLines []SavingsLine
 }
 
 // BankLine is an amount on a bank account, in the account's currency.
@@ -103,11 +109,20 @@ type BucketLine struct {
 	Amount   decimal.Decimal
 }
 
+// SavingsLine is an amount held for a savings holder, reserved on a source
+// account.
+type SavingsLine struct {
+	HolderID  string
+	AccountID string
+	Amount    decimal.Decimal
+}
+
 // Transaction is a recorded transaction.
 type Transaction struct {
-	Header      sqlc.TransactionHeader
-	BankLines   []sqlc.BankTransaction
-	BucketLines []sqlc.BucketTransaction
+	Header       sqlc.TransactionHeader
+	BankLines    []sqlc.BankTransaction
+	BucketLines  []sqlc.BucketTransaction
+	SavingsLines []sqlc.SavingsTransaction
 	// Tags are sorted case-insensitively.
 	Tags []string
 }
@@ -130,8 +145,11 @@ func New(opts Options) *Ledger { return &Ledger{opts: opts} }
 
 // shape is how many lines an original transaction of a type has (§5.4).
 type shape struct {
-	bank                 int
-	minBucket, maxBucket int // maxBucket < 0: no limit
+	bank int
+	// bankOptional allows no bank lines instead of bank.
+	bankOptional           bool
+	minBucket, maxBucket   int // maxBucket < 0: no limit
+	minSavings, maxSavings int
 }
 
 var shapes = map[sqlc.TransactionType]shape{
@@ -139,12 +157,18 @@ var shapes = map[sqlc.TransactionType]shape{
 	sqlc.TransactionTypeBLA: {bank: 1},
 	sqlc.TransactionTypeINC: {bank: 1, maxBucket: -1},
 	sqlc.TransactionTypeEXP: {bank: 1, maxBucket: -1},
-	sqlc.TransactionTypeTRF: {bank: 2},
+	// A transfer that does Done on held funds (#231) has a savings line.
+	sqlc.TransactionTypeTRF: {bank: 2, maxSavings: 1},
 	sqlc.TransactionTypeOPF: {minBucket: 1, maxBucket: 1},
 	sqlc.TransactionTypeREF: {minBucket: 1, maxBucket: 1},
 	sqlc.TransactionTypeBUA: {minBucket: 1, maxBucket: 1},
 	sqlc.TransactionTypeBAT: {minBucket: 2, maxBucket: 2},
 	sqlc.TransactionTypeOVF: {minBucket: 1, maxBucket: 1},
+	sqlc.TransactionTypeSVR: {minSavings: 1, maxSavings: 1},
+	sqlc.TransactionTypeSVC: {minSavings: 1, maxSavings: 1},
+	// Savings to a bucket: straight from unallocated (bucket line only), or
+	// held funds (a savings line), moved from another account (2 bank lines).
+	sqlc.TransactionTypeSVB: {bank: 2, bankOptional: true, minBucket: 1, maxBucket: 1, maxSavings: 1},
 }
 
 // Create records e in a new database transaction.
@@ -185,6 +209,16 @@ func (l *Ledger) Record(ctx context.Context, tx pgx.Tx, e Entry) (*Transaction, 
 	var cycleID string
 	if len(e.BucketLines) > 0 {
 		if cycleID, err = activeCycle(ctx, q, e); err != nil {
+			return nil, err
+		}
+	}
+	var savingsCycle pgtype.Text
+	if len(e.SavingsLines) > 0 {
+		if cycleID != "" {
+			savingsCycle = pgtype.Text{String: cycleID, Valid: true}
+		} else if id, err := q.CycleAt(ctx, sqlc.CycleAtParams{UserID: e.UserID, At: e.At}); err == nil {
+			savingsCycle = pgtype.Text{String: id, Valid: true}
+		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return nil, err
 		}
 	}
@@ -260,6 +294,28 @@ func (l *Ledger) Record(ctx context.Context, tx pgx.Tx, e Entry) (*Transaction, 
 		t.BucketLines = append(t.BucketLines, row)
 	}
 
+	for _, line := range e.SavingsLines {
+		var row sqlc.SavingsTransaction
+		_, err := ids.Insert(ctx, ids.SavingsLine, func() string { return ids.NewSavingsLine(line.HolderID) },
+			func(ctx context.Context, id string) (bool, error) {
+				var err error
+				row, err = q.CreateSavingsLine(ctx, sqlc.CreateSavingsLineParams{
+					ID:            id,
+					TransactionID: t.Header.ID,
+					HolderID:      line.HolderID,
+					AccountID:     line.AccountID,
+					CycleID:       savingsCycle,
+					Amount:        line.Amount,
+					CreatedBy:     createdBy,
+				})
+				return ids.Inserted(err)
+			})
+		if err != nil {
+			return nil, fmt.Errorf("create savings line: %w", err)
+		}
+		t.SavingsLines = append(t.SavingsLines, row)
+	}
+
 	for _, name := range e.Tags {
 		tag, err := q.UpsertTag(ctx, sqlc.UpsertTagParams{UserID: e.UserID, Name: name})
 		if err != nil {
@@ -311,6 +367,9 @@ func Get(ctx context.Context, db sqlc.DBTX, userID, id string) (*Transaction, er
 		return nil, err
 	}
 	if t.BucketLines, err = q.ListBucketLines(ctx, id); err != nil {
+		return nil, err
+	}
+	if t.SavingsLines, err = q.ListSavingsLines(ctx, id); err != nil {
 		return nil, err
 	}
 	if t.Tags, err = q.ListTransactionTags(ctx, id); err != nil {
@@ -367,14 +426,20 @@ func normalize(e Entry) (Entry, error) {
 		if e.ReplacesID != "" && !ids.Transaction.Valid(e.ReplacesID) {
 			return invalid("replaces %q", e.ReplacesID)
 		}
-		if len(e.BankLines) != s.bank {
-			return invalid("%s needs %d bank line(s), got %d", e.Type, s.bank, len(e.BankLines))
+		if n := len(e.BankLines); n != s.bank && (n != 0 || !s.bankOptional) {
+			return invalid("%s needs %d bank line(s), got %d", e.Type, s.bank, n)
 		}
 		if n := len(e.BucketLines); n < s.minBucket || (s.maxBucket >= 0 && n > s.maxBucket) {
 			if s.minBucket == s.maxBucket {
 				return invalid("%s needs %d bucket line(s), got %d", e.Type, s.minBucket, n)
 			}
 			return invalid("%s can't have bucket lines", e.Type)
+		}
+		if n := len(e.SavingsLines); n < s.minSavings || n > s.maxSavings {
+			if s.maxSavings == 0 {
+				return invalid("%s can't have savings lines", e.Type)
+			}
+			return invalid("%s needs %d to %d savings line(s), got %d", e.Type, s.minSavings, s.maxSavings, n)
 		}
 	case sqlc.CorrectionTypeAdjustment, sqlc.CorrectionTypeReversal:
 		if !ids.Transaction.Valid(e.ParentID) {
@@ -386,7 +451,7 @@ func normalize(e Entry) (Entry, error) {
 		// A correction changes some of its parent's lines, so it can have
 		// fewer lines than the type needs, but none of a kind the type lacks.
 		// An adjustment without lines changes only the counterparty or tags.
-		if e.Correction == sqlc.CorrectionTypeReversal && len(e.BankLines)+len(e.BucketLines) == 0 {
+		if e.Correction == sqlc.CorrectionTypeReversal && len(e.BankLines)+len(e.BucketLines)+len(e.SavingsLines) == 0 {
 			return invalid("a reversal needs at least one line")
 		}
 		if len(e.BankLines) > s.bank {
@@ -394,6 +459,9 @@ func normalize(e Entry) (Entry, error) {
 		}
 		if s.maxBucket >= 0 && len(e.BucketLines) > s.maxBucket {
 			return invalid("%s has at most %d bucket line(s)", e.Type, s.maxBucket)
+		}
+		if len(e.SavingsLines) > s.maxSavings {
+			return invalid("%s has at most %d savings line(s)", e.Type, s.maxSavings)
 		}
 	default:
 		return invalid("unknown correction type %q", e.Correction)
@@ -428,6 +496,22 @@ func normalize(e Entry) (Entry, error) {
 			return invalid("bucket %s appears twice", line.BucketID)
 		}
 		seen[line.BucketID] = true
+		if err := checkAmount(line.Amount); err != nil {
+			return Entry{}, err
+		}
+	}
+	for _, line := range e.SavingsLines {
+		if !ids.SavingsHolder.Valid(line.HolderID) {
+			return invalid("savings holder ID %q", line.HolderID)
+		}
+		if !ids.Account.Valid(line.AccountID) {
+			return invalid("account ID %q", line.AccountID)
+		}
+		key := "savings " + line.HolderID + " " + line.AccountID
+		if seen[key] {
+			return invalid("savings holder %s appears twice on account %s", line.HolderID, line.AccountID)
+		}
+		seen[key] = true
 		if err := checkAmount(line.Amount); err != nil {
 			return Entry{}, err
 		}
@@ -489,14 +573,19 @@ func checkParent(ctx context.Context, q *sqlc.Queries, e Entry) error {
 	return nil
 }
 
-// checkOwned checks that the accounts and buckets exist, belong to the user
+// checkOwned checks that the accounts, buckets and savings holders exist, belong to the user
 // and aren't deleted.
 func checkOwned(ctx context.Context, q *sqlc.Queries, e Entry) error {
-	if len(e.BankLines) > 0 {
-		want := make([]string, len(e.BankLines))
-		for i, line := range e.BankLines {
-			want[i] = line.AccountID
+	var want []string
+	for _, line := range e.BankLines {
+		want = append(want, line.AccountID)
+	}
+	for _, line := range e.SavingsLines {
+		if !slices.Contains(want, line.AccountID) {
+			want = append(want, line.AccountID)
 		}
+	}
+	if len(want) > 0 {
 		rows, err := q.GetOwnedAccounts(ctx, sqlc.GetOwnedAccountsParams{Ids: want, UserID: e.UserID})
 		if err != nil {
 			return err
@@ -516,6 +605,21 @@ func checkOwned(ctx context.Context, q *sqlc.Queries, e Entry) error {
 		}
 		if missing := firstMissing(want, rows, func(r sqlc.GetOwnedBucketsRow) string { return r.ID }); missing != "" {
 			return fmt.Errorf("%w: bucket %s", ErrNotFound, missing)
+		}
+	}
+	if len(e.SavingsLines) > 0 {
+		var holders []string
+		for _, line := range e.SavingsLines {
+			if !slices.Contains(holders, line.HolderID) {
+				holders = append(holders, line.HolderID)
+			}
+		}
+		rows, err := q.GetOwnedSavingsHolders(ctx, sqlc.GetOwnedSavingsHoldersParams{Ids: holders, UserID: e.UserID})
+		if err != nil {
+			return err
+		}
+		if missing := firstMissing(holders, rows, func(id string) string { return id }); missing != "" {
+			return fmt.Errorf("%w: savings target %s", ErrNotFound, missing)
 		}
 	}
 	return nil

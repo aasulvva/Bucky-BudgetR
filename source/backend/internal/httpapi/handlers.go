@@ -23,6 +23,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/notifications"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/pdf"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/refill"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/savings"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/schedules"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/transactions"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/userdata"
@@ -36,6 +37,7 @@ type server struct {
 	accounts      *accounts.Service
 	cycles        *cycles.Service
 	buckets       *buckets.Service
+	savings       *savings.Service
 	transactions  *transactions.Service
 	refills       *refill.Service
 	schedules     *schedules.Service

@@ -318,6 +318,13 @@ func (s *sums) addFlow(q Query, currency, account string, typ sqlc.TransactionTy
 	}
 }
 
+// isTransfer is whether a type's bank lines move money between the user's
+// own accounts: a transfer, or savings moved into a bucket on another
+// account (SVB, #231).
+func isTransfer(typ sqlc.TransactionType) bool {
+	return typ == sqlc.TransactionTypeTRF || typ == sqlc.TransactionTypeSVB
+}
+
 // flowKey is the series a family's amount goes to, grouped by none, account
 // or counterparty.
 func (s *sums) flowKey(q Query, currency, account string, typ sqlc.TransactionType, counterparty string) key {
@@ -325,7 +332,7 @@ func (s *sums) flowKey(q Query, currency, account string, typ sqlc.TransactionTy
 		return s.keyFor(q, currency, account)
 	}
 	switch name := strings.ToLower(strings.TrimSpace(counterparty)); {
-	case typ == sqlc.TransactionTypeTRF:
+	case isTransfer(typ):
 		return key{currency: currency, transfers: true}
 	case name == "":
 		return key{currency: currency, noCounterparty: true}
@@ -341,12 +348,12 @@ func (s *sums) flows(ctx context.Context, queries *sqlc.Queries, userID string, 
 		types = []string{string(sqlc.TransactionTypeINC)}
 	}
 	if q.Transfers {
-		types = append(types, string(sqlc.TransactionTypeTRF))
+		types = append(types, string(sqlc.TransactionTypeTRF), string(sqlc.TransactionTypeSVB))
 	}
 	// The value an amount adds: spending is money out, income money in. A
 	// transfer counts only on the side that matches.
 	value := func(typ sqlc.TransactionType, net decimal.Decimal) (decimal.Decimal, bool) {
-		if typ == sqlc.TransactionTypeTRF && (net.IsPositive() == (q.Metric == Spending)) {
+		if isTransfer(typ) && (net.IsPositive() == (q.Metric == Spending)) {
 			return decimal.Zero, false
 		}
 		if q.Metric == Spending {

@@ -223,15 +223,17 @@ func parseAmount(s string) (decimal.Decimal, error) {
 
 func toAPIAccount(a accounts.Account) api.Account {
 	out := api.Account{
-		Id:             a.ID,
-		Name:           a.Name,
-		Type:           api.AccountType(a.Type),
-		Currency:       a.Currency,
-		Bank:           a.Bank,
-		Balance:        a.Balance.StringFixed(money.Places),
-		Unallocated:    a.Unallocated.StringFixed(money.Places),
-		ExpectedIncome: nullable.NewNullNullable[api.Amount](),
-		CreatedAt:      a.CreatedAt.UTC(),
+		Id:                a.ID,
+		Name:              a.Name,
+		Type:              api.AccountType(a.Type),
+		Currency:          a.Currency,
+		Bank:              a.Bank,
+		Balance:           a.Balance.StringFixed(money.Places),
+		Unallocated:       a.Unallocated.StringFixed(money.Places),
+		Reserved:          a.Reserved.StringFixed(money.Places),
+		ReservedUncovered: a.ReservedUncovered.StringFixed(money.Places),
+		ExpectedIncome:    nullable.NewNullNullable[api.Amount](),
+		CreatedAt:         a.CreatedAt.UTC(),
 	}
 	if a.ExpectedIncome.Valid {
 		out.ExpectedIncome = nullable.NewNullableWithValue(a.ExpectedIncome.Decimal.StringFixed(money.Places))

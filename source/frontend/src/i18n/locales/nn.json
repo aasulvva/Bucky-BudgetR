@@ -891,7 +891,10 @@
     "OPF": "Startmidlar",
     "BUA": "Bøttejustering",
     "BAT": "Bøtteoverføring",
-    "INP": "Intern betaling"
+    "INP": "Intern betaling",
+    "SVR": "Sett av til sparing",
+    "SVC": "Sparing frigjort",
+    "SVB": "Sparing til bøtte"
   },
   "transactions": {
     "new": "Ny transaksjon",

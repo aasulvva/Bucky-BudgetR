@@ -408,3 +408,86 @@ func TestAfterRecord(t *testing.T) {
 		}
 	}
 }
+
+func savingsLine(holder, account, amount string) []ledger.SavingsLine {
+	return []ledger.SavingsLine{{HolderID: holder, AccountID: account, Amount: dec(amount)}}
+}
+
+// TestSavingsLines: the shapes of the savings types (#231), whose holders
+// must be the user's and live, and the cycle a savings line gets.
+func TestSavingsLines(t *testing.T) {
+	w := setup(t)
+	target := ledgertest.Target(t, w.pool, w.user, w.acc2)
+	twoBank := append(bank(w.acc1, "-10"), bank(w.acc2, "10")...)
+	held := savingsLine(target, w.acc1, "10")
+	type tc struct {
+		typ     sqlc.TransactionType
+		bank    []ledger.BankLine
+		bucket  []ledger.BucketLine
+		savings []ledger.SavingsLine
+		ok      bool
+	}
+	for i, c := range []tc{
+		{sqlc.TransactionTypeSVR, nil, nil, held, true},
+		{sqlc.TransactionTypeSVR, nil, nil, nil, false},
+		{sqlc.TransactionTypeSVR, bank(w.acc1, "10"), nil, held, false},
+		{sqlc.TransactionTypeSVR, nil, nil, append(held, savingsLine(target, w.acc2, "1")...), false},
+		{sqlc.TransactionTypeSVC, nil, nil, savingsLine(target, w.acc1, "-10"), true},
+		{sqlc.TransactionTypeSVC, nil, buckets(w.bucket1, "1"), held, false},
+		{sqlc.TransactionTypeTRF, twoBank, nil, savingsLine(target, w.acc1, "-10"), true},
+		{sqlc.TransactionTypeTRF, twoBank, nil, append(held, held...), false},
+		{sqlc.TransactionTypeSVB, nil, buckets(w.bucket1, "10"), nil, true},
+		{sqlc.TransactionTypeSVB, twoBank, buckets(w.bucket1, "10"), savingsLine(target, w.acc2, "-10"), true},
+		{sqlc.TransactionTypeSVB, bank(w.acc1, "10"), buckets(w.bucket1, "10"), nil, false},
+		{sqlc.TransactionTypeSVB, nil, nil, held, false},
+		{sqlc.TransactionTypeSVB, nil, buckets(w.bucket1, "10", w.bucket2, "1"), nil, false},
+		{sqlc.TransactionTypeINC, bank(w.acc1, "10"), nil, held, false},
+		{sqlc.TransactionTypeBUA, nil, buckets(w.bucket1, "10"), held, false},
+		{sqlc.TransactionTypeSVR, nil, nil, savingsLine(target, w.otherAc, "10"), false},
+	} {
+		e := w.entry(c.typ)
+		e.BankLines, e.BucketLines, e.SavingsLines = c.bank, c.bucket, c.savings
+		_, err := w.ledger.Create(t.Context(), w.pool, e)
+		switch {
+		case c.ok && err != nil:
+			t.Errorf("%d: %s: %v", i, c.typ, err)
+		case !c.ok && err == nil:
+			t.Errorf("%d: %s: recorded, want an error", i, c.typ)
+		}
+	}
+
+	// Someone else's holder, or a deleted one, isn't found.
+	theirs := ledgertest.Target(t, w.pool, w.otherUser, w.otherAc)
+	e := w.entry(sqlc.TransactionTypeSVR)
+	e.SavingsLines = savingsLine(theirs, w.acc1, "10")
+	if _, err := w.ledger.Create(t.Context(), w.pool, e); !errors.Is(err, ledger.ErrNotFound) {
+		t.Errorf("another user's target: %v", err)
+	}
+	gone := ledgertest.Target(t, w.pool, w.user, w.acc1)
+	ledgertest.Delete(t, w.pool, "savings_holders", gone)
+	e.SavingsLines = savingsLine(gone, w.acc2, "10")
+	if _, err := w.ledger.Create(t.Context(), w.pool, e); !errors.Is(err, ledger.ErrNotFound) {
+		t.Errorf("a deleted target: %v", err)
+	}
+
+	// A savings line gets the cycle its time falls in, or none, and needs no
+	// active cycle.
+	e.SavingsLines = held
+	for _, c := range []struct {
+		at    time.Time
+		cycle string
+	}{{at("2026-10-15T10:00:00Z"), w.cycle}, {octEnd.Add(time.Hour), ""}} {
+		e.At = c.at
+		tx, err := w.ledger.Create(t.Context(), w.pool, e)
+		if err != nil {
+			t.Fatalf("%s: %v", c.at, err)
+		}
+		if got := tx.SavingsLines[0].CycleID.String; got != c.cycle {
+			t.Errorf("%s: cycle %q, want %q", c.at, got, c.cycle)
+		}
+		got, err := ledger.Get(t.Context(), w.pool, w.user, tx.Header.ID)
+		if err != nil || len(got.SavingsLines) != 1 || !got.SavingsLines[0].Amount.Equal(dec("10")) {
+			t.Errorf("read back: %v %+v", err, got)
+		}
+	}
+}
