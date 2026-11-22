@@ -449,3 +449,45 @@ func TestSavingsTransfer(t *testing.T) {
 		t.Errorf("all moved: %+v", got)
 	}
 }
+
+// TestSavingsShort: a savings budget entry that reserved less than its
+// amount this cycle is a warning with what's missing (#234).
+func TestSavingsShort(t *testing.T) {
+	e := setup(t)
+	ctx := t.Context()
+	clock := func() time.Time { return *e.now }
+	sv := savings.NewService(e.pool, ledger.New(ledger.Options{AfterRecord: allocation.AfterRecord}), savings.Options{Now: clock})
+	e.svc = notifications.NewService(e.pool, notifications.Options{Now: clock, Savings: sv})
+	short := func() []notifications.Notification {
+		t.Helper()
+		var out []notifications.Notification
+		for _, n := range e.list(t) {
+			if n.Kind == notifications.KindSavingsShort {
+				out = append(out, n)
+			}
+		}
+		return out
+	}
+	enough, err := sv.CreateBudget(ctx, e.user, savings.NewBudget{AccountID: e.account, Amount: dec("4000"), When: sqlc.SavingsBudgetWhenManual})
+	if err != nil {
+		t.Fatal(err)
+	}
+	more, err := sv.CreateBudget(ctx, e.user, savings.NewBudget{AccountID: e.account, Amount: dec("8000"), When: sqlc.SavingsBudgetWhenManual})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{enough.ID, more.ID} {
+		if _, err := sv.SaveNow(ctx, e.user, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := short()
+	if len(got) != 1 || got[0].Amount.Decimal.StringFixed(2) != "2000.00" || got[0].AccountID != e.account ||
+		got[0].CycleID != e.cycle.ID || got[0].Currency != "NOK" || got[0].Severity != notifications.Warning {
+		t.Fatalf("short: %+v", got)
+	}
+	e.prefer(t, `{"savings_short": false}`)
+	if got := short(); len(got) != 0 {
+		t.Errorf("switched off: %+v", got)
+	}
+}

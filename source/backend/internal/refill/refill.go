@@ -19,6 +19,10 @@
 // covered can be held for the savings distributor or a savings target, with
 // savings lines on the OVF (Options.Savings).
 //
+// The savings budget's fixed amounts (#234, spec §8.6) run after the refills
+// of the same moment, at cycle start and on income, and are undone with the
+// income (Options.Savings).
+//
 // Every routine runs inside the caller's database transaction, under the
 // user's lock (ledger.LockUser), and records through the ledger, so the
 // allocation routine follows each REF and OVF.
@@ -68,8 +72,9 @@ type Rule struct {
 	MinAmount    decimal.Decimal `json:"min_amount"`
 }
 
-// Savings sends overflow to savings (#233). The savings service implements
-// it; it's an interface so the packages don't import each other.
+// Savings sends overflow to savings (#233) and runs the savings budget
+// (#234). The savings service implements it; it's an interface so the
+// packages don't import each other.
 type Savings interface {
 	// OverflowLines are the savings lines for the funded part of b's
 	// overflow, none for unallocated.
@@ -78,14 +83,19 @@ type Savings interface {
 	AfterOverflow(ctx context.Context, tx pgx.Tx, userID, accountID string, at time.Time, lines []ledger.SavingsLine) error
 	// ReleasableOverflow is what reversing the OVF t takes off hold.
 	ReleasableOverflow(ctx context.Context, tx pgx.Tx, userID string, t *ledger.Transaction) ([]ledger.SavingsLine, error)
+	// RunBudget runs the savings budget entries with this mode in cycle c,
+	// dated at: for On income those from accountID, triggered by incomeID.
+	RunBudget(ctx context.Context, tx pgx.Tx, userID string, c sqlc.Cycle, when sqlc.SavingsBudgetWhen, accountID string, at time.Time, incomeID string) error
+	// UndoBudget undoes the runs the income triggered in the cycle.
+	UndoBudget(ctx context.Context, tx pgx.Tx, userID, incomeID, cycleID string) error
 }
 
 // Options configures a Service.
 type Options struct {
 	// Now returns the current time. Defaults to time.Now.
 	Now func() time.Time
-	// Savings sends overflow to savings; without it, overflow is always
-	// unallocated.
+	// Savings sends overflow to savings and runs the savings budget; without
+	// it, overflow is always unallocated and nothing is saved.
 	Savings Savings
 }
 
@@ -105,10 +115,16 @@ func NewService(pool *pgxpool.Pool, l *ledger.Ledger, opts Options) *Service {
 	return &Service{pool: pool, ledger: l, now: opts.Now, savings: opts.Savings}
 }
 
-// OnStart refills the Auto buckets, dated at the cycle's start. It is the
-// cycles OnStart hook.
+// OnStart refills the Auto buckets, dated at the cycle's start, then runs
+// the At cycle start savings budget entries. It is the cycles OnStart hook.
 func (s *Service) OnStart(ctx context.Context, tx pgx.Tx, c sqlc.Cycle) error {
-	return s.refillAll(ctx, tx, c, sqlc.RefillModeAuto, "", c.StartAt, "")
+	if err := s.refillAll(ctx, tx, c, sqlc.RefillModeAuto, "", c.StartAt, ""); err != nil {
+		return err
+	}
+	if s.savings == nil {
+		return nil
+	}
+	return s.savings.RunBudget(ctx, tx, c.UserID, c, sqlc.SavingsBudgetWhenCycleStart, "", c.StartAt, "")
 }
 
 // OnEnd empties the buckets without Keep funds: an OVF brings a positive TF
@@ -259,18 +275,30 @@ func (s *Service) OnIncome(ctx context.Context, tx pgx.Tx, userID, incomeID, acc
 	if err := s.refillAll(ctx, tx, *c, sqlc.RefillModeOnIncome, accountID, at, incomeID); err != nil {
 		return err
 	}
-	return allocation.Run(ctx, tx, userID, []string{accountID}, true)
+	if err := allocation.Run(ctx, tx, userID, []string{accountID}, true); err != nil {
+		return err
+	}
+	// The savings budget takes what the buckets left (#234).
+	if s.savings == nil {
+		return nil
+	}
+	return s.savings.RunBudget(ctx, tx, userID, *c, sqlc.SavingsBudgetWhenOnIncome, accountID, at, incomeID)
 }
 
 // UndoIncome undoes the refills an income triggered in the active cycle: their
-// REF and OVF are reversed, and the buckets can be refilled again. Refills in
-// finished cycles stay; their bucket lines can't change. Like OnIncome, the
-// accounts are then recalculated.
+// REF and OVF are reversed, and the buckets can be refilled again. So are its
+// savings budget runs (#234). Refills in finished cycles stay; their bucket
+// lines can't change. Like OnIncome, the accounts are then recalculated.
 func (s *Service) UndoIncome(ctx context.Context, tx pgx.Tx, userID, incomeID string) error {
 	q := sqlc.New(tx)
 	c, err := activeCycle(ctx, q, userID)
 	if err != nil || c == nil {
 		return err
+	}
+	if s.savings != nil {
+		if err := s.savings.UndoBudget(ctx, tx, userID, incomeID, c.ID); err != nil {
+			return err
+		}
 	}
 	refills, err := q.ListRefillsByIncome(ctx, sqlc.ListRefillsByIncomeParams{
 		IncomeID: pgtype.Text{String: incomeID, Valid: true}, CycleID: c.ID,

@@ -3197,6 +3197,144 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/v1/savings/budget:
+    get:
+      operationId: listSavingsBudget
+      tags: [savings]
+      summary: The savings budget's fixed amounts
+      description: |
+        The user's entries (#234, spec §8.6), oldest first, each with its
+        run in the active cycle (`this_cycle`, null before it runs).
+      responses:
+        "200":
+          description: The entries.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SavingsBudgetEntry"
+        "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+    post:
+      operationId: createSavingsBudgetEntry
+      tags: [savings]
+      summary: Add a fixed amount to the savings budget
+      description: |
+        An amount per cycle from a source account, for a savings target in
+        its currency (not the account itself) or, without `target_id`, the
+        distributor. It runs once per cycle, `when` says: at cycle start
+        or on income (after the refills of the same moment), or by hand
+        (`saveSavingsBudgetEntry`). It reserves up to what the account has
+        unallocated, with an SVR; a target takes up to its goal, the
+        distributor the rest. An `cycle_start` entry set up while a cycle
+        runs reserves now, or with `this_cycle: false` waits for the next
+        cycle.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewSavingsBudgetEntry"
+      responses:
+        "201":
+          description: The entry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavingsBudgetEntry"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/savings/budget/{entryId}:
+    parameters:
+      - $ref: "#/components/parameters/SavingsBudgetEntryId"
+    patch:
+      operationId: updateSavingsBudgetEntry
+      tags: [savings]
+      summary: Change a fixed amount
+      description: |
+        Changes the destination (`target_id` null is the distributor), the
+        amount or `when`; the source account stays, and so does what it
+        reserved. A change to `cycle_start` while a cycle runs is as in
+        `createSavingsBudgetEntry`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavingsBudgetEntryUpdate"
+      responses:
+        "200":
+          description: The entry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavingsBudgetEntry"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+    delete:
+      operationId: deleteSavingsBudgetEntry
+      tags: [savings]
+      summary: Delete a fixed amount
+      description: What it reserved stays held.
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/savings/budget/{entryId}/save-now:
+    parameters:
+      - $ref: "#/components/parameters/SavingsBudgetEntryId"
+    post:
+      operationId: saveSavingsBudgetEntry
+      tags: [savings]
+      summary: Save a Manually entry now
+      description: |
+        Runs a `manual` entry, once per cycle (409 `already_saved`), in an
+        active cycle that holds now (409 `no_active_cycle`). Another mode,
+        or a stopped entry, is 400.
+      responses:
+        "200":
+          description: The entry, with its run.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavingsBudgetEntry"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
   /api/v1/notifications:
     get:
       operationId: listNotifications
@@ -3221,6 +3359,10 @@ paths:
         - `savings_transfer`: a savings target with money held for it that
           the user has still to move there (#231), with `target_id` and the
           held `amount` and `currency`.
+        - `savings_short`: a savings budget entry that reserved less than its
+          amount this cycle (#234), with `account_id`, `cycle_id`,
+          `target_id` (null for the distributor), `at`, and the missing
+          `amount` and `currency`.
       responses:
         "200":
           description: The open notifications.
@@ -3318,6 +3460,13 @@ components:
       required: true
       schema:
         $ref: "#/components/schemas/SavingsRuleId"
+
+    SavingsBudgetEntryId:
+      name: entryId
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/SavingsBudgetEntryId"
 
     TransactionId:
       name: transactionId
@@ -5937,6 +6086,119 @@ components:
         past_goal:
           type: boolean
 
+    SavingsBudgetEntryId:
+      type: string
+      description: 10-digit savings budget entry ID (User ID + 4 random digits).
+      pattern: "^[1-9][0-9]{9}$"
+      example: "4829131234"
+
+    SavingsBudgetWhen:
+      type: string
+      enum: [cycle_start, on_income, manual]
+      description: |
+        When an entry runs: `cycle_start` after the Auto refills,
+        `on_income` after the On income refills of the same income (spec
+        §6), `manual` when the user saves it.
+
+    SavingsBudgetRun:
+      type: object
+      additionalProperties: false
+      required: [wanted, reserved, at]
+      properties:
+        wanted:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: The amount then; 0 for an entry set up mid-cycle to wait for the next cycle.
+        reserved:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: What the account's unallocated money allowed; below `wanted` is short.
+        at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When it reserved; null if it reserved nothing.
+
+    SavingsBudgetEntry:
+      type: object
+      additionalProperties: false
+      required: [id, account_id, target_id, amount, when, stopped, this_cycle, created_at, modified_at]
+      properties:
+        id:
+          $ref: "#/components/schemas/SavingsBudgetEntryId"
+        account_id:
+          allOf:
+            - $ref: "#/components/schemas/AccountId"
+          description: The source account the money is reserved on.
+        target_id:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/SavingsHolderId"
+          nullable: true
+          description: The savings target; null is the distributor.
+        amount:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Per cycle, above 0.
+        when:
+          $ref: "#/components/schemas/SavingsBudgetWhen"
+        stopped:
+          type: boolean
+          description: Its target went away, so it doesn't run until it gets another destination.
+        this_cycle:
+          type: object
+          allOf:
+            - $ref: "#/components/schemas/SavingsBudgetRun"
+          nullable: true
+          description: Its run in the active cycle; null before it runs, or without an active cycle.
+        created_at:
+          type: string
+          format: date-time
+        modified_at:
+          type: string
+          format: date-time
+
+    NewSavingsBudgetEntry:
+      type: object
+      additionalProperties: false
+      required: [account_id, amount, when]
+      properties:
+        account_id:
+          $ref: "#/components/schemas/AccountId"
+        target_id:
+          allOf:
+            - $ref: "#/components/schemas/SavingsHolderId"
+          description: A live target in the account's currency, not the account itself; without it, the distributor.
+        amount:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Above 0.
+        when:
+          $ref: "#/components/schemas/SavingsBudgetWhen"
+        this_cycle:
+          type: boolean
+          description: For `cycle_start` while a cycle runs, true (the default) reserves now and false waits for the next cycle.
+
+    SavingsBudgetEntryUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        target_id:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/SavingsHolderId"
+          nullable: true
+          description: The new destination; null is the distributor.
+        amount:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Above 0.
+        when:
+          $ref: "#/components/schemas/SavingsBudgetWhen"
+        this_cycle:
+          type: boolean
+          description: As in `NewSavingsBudgetEntry`, for a change to `cycle_start`.
+
     TransactionType:
       type: string
       enum: [OPB, BLA, INC, EXP, TRF, INP, OPF, REF, BUA, BAT, OVF, SVR, SVC, SVB, SVD]
@@ -5946,7 +6208,8 @@ components:
         SVB (savings to bucket) come from the savings endpoints (#231), and
         SVD (savings distribution) from the distributor (#232); they can be
         reversed, not corrected. An OVF can have up to two savings lines,
-        holding the overflow for a savings target and the distributor (#233).
+        holding the overflow for a savings target and the distributor (#233),
+        and so can a savings budget SVR cut at a target's goal (#234).
 
     CorrectionType:
       type: string
@@ -6682,7 +6945,7 @@ components:
 
     NotificationKind:
       type: string
-      enum: [approval_queue, upcoming_bill, investment_balance, bucket_uncovered, savings_transfer]
+      enum: [approval_queue, upcoming_bill, investment_balance, bucket_uncovered, savings_transfer, savings_short]
 
     Notification:
       type: object
@@ -6704,7 +6967,8 @@ components:
           enum: [info, warning, alert]
           description: |
             `alert` for an overdue approval or an uncovered bucket,
-            `warning` for an approval that isn't overdue, else `info`.
+            `warning` for an approval that isn't overdue or a short savings
+            budget entry, else `info`.
         at:
           type: string
           format: date-time
@@ -6740,7 +7004,7 @@ components:
         amount:
           type: string
           nullable: true
-          description: The bill's amount, what the bucket is missing (TF − CAF), or what's held for the savings target.
+          description: The bill's amount, what the bucket is missing (TF − CAF), what's held for the savings target, or what a savings budget entry fell short by.
         currency:
           type: string
           nullable: true
@@ -6796,3 +7060,7 @@ components:
           type: boolean
           nullable: true
           description: Money held for savings targets, waiting to be moved. Null means true.
+        savings_short:
+          type: boolean
+          nullable: true
+          description: Savings budget amounts the unallocated money fell short of. Null means true.

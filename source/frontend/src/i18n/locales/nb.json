@@ -2367,13 +2367,20 @@
       "days_one": "{{count}} dag fram",
       "days_other": "{{count}} dager fram",
       "savings_transfer": "Sparing å overføre",
-      "savings_transferHint": "Penger satt av til sparemål, som venter på at du flytter dem."
+      "savings_transferHint": "Penger satt av til sparemål, som venter på at du flytter dem.",
+      "savings_short": "Sparebudsjett ikke dekket",
+      "savings_shortHint": "Et fast sparebeløp de ufordelte pengene ikke dekket."
     },
     "savings": {
       "title": "Penger satt av til {{name}}",
       "body": "{{amount}} er satt av. Gjør overføringen i banken, og trykk Utført.",
       "bodyBucket": "{{amount}} er satt av på en annen konto. Flytt det til bøttas konto, og trykk Utført.",
       "open": "Åpne Sparing"
+    },
+    "savingsShort": {
+      "title": "Sparte mindre til {{name}}",
+      "body": "{{account}} hadde ikke nok ufordelte penger, så sparebudsjettet mangler {{amount}} denne perioden.",
+      "titleDistributor": "Sparte mindre til sparefordeleren"
     }
   }
 }

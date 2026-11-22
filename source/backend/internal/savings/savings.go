@@ -520,9 +520,16 @@ func (s *Service) ReleaseAccountTarget(ctx context.Context, tx pgx.Tx, userID, a
 }
 
 // ReleaseAccount is run before an account is deleted: its own target goes,
-// and every reservation on it is released, whoever it's for.
+// its savings budget entries are deleted, and every reservation on it is
+// released, whoever it's for.
 func (s *Service) ReleaseAccount(ctx context.Context, tx pgx.Tx, userID, accountID string) error {
 	if err := s.ReleaseAccountTarget(ctx, tx, userID, accountID); err != nil {
+		return err
+	}
+	// Its savings budget entries go with it (#234).
+	if err := sqlc.New(tx).DeleteBudgetEntriesOfAccount(ctx, sqlc.DeleteBudgetEntriesOfAccountParams{
+		AccountID: accountID, UserID: userID,
+	}); err != nil {
 		return err
 	}
 	rows, err := sqlc.New(tx).SavingsHeldOnAccount(ctx, accountID)

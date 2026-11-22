@@ -496,6 +496,59 @@ func (e RefillMode) Valid() bool {
 	return false
 }
 
+type SavingsBudgetWhen string
+
+const (
+	SavingsBudgetWhenCycleStart SavingsBudgetWhen = "cycle_start"
+	SavingsBudgetWhenOnIncome   SavingsBudgetWhen = "on_income"
+	SavingsBudgetWhenManual     SavingsBudgetWhen = "manual"
+)
+
+func (e *SavingsBudgetWhen) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = SavingsBudgetWhen(s)
+	case string:
+		*e = SavingsBudgetWhen(s)
+	default:
+		return fmt.Errorf("unsupported scan type for SavingsBudgetWhen: %T", src)
+	}
+	return nil
+}
+
+type NullSavingsBudgetWhen struct {
+	SavingsBudgetWhen SavingsBudgetWhen
+	Valid             bool // Valid is true if SavingsBudgetWhen is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullSavingsBudgetWhen) Scan(value interface{}) error {
+	if value == nil {
+		ns.SavingsBudgetWhen, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.SavingsBudgetWhen.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullSavingsBudgetWhen) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.SavingsBudgetWhen), nil
+}
+
+func (e SavingsBudgetWhen) Valid() bool {
+	switch e {
+	case SavingsBudgetWhenCycleStart,
+		SavingsBudgetWhenOnIncome,
+		SavingsBudgetWhenManual:
+		return true
+	}
+	return false
+}
+
 type SavingsHoldMode string
 
 const (
@@ -894,6 +947,30 @@ type Refill struct {
 	Trigger   RefillMode
 	RefID     pgtype.Text
 	OvfID     pgtype.Text
+	IncomeID  pgtype.Text
+	CreatedAt time.Time
+}
+
+type SavingsBudgetEntry struct {
+	ID         string
+	UserID     string
+	AccountID  string
+	TargetID   pgtype.Text
+	Amount     decimal.Decimal
+	RunWhen    SavingsBudgetWhen
+	Deleted    bool
+	CreatedAt  time.Time
+	ModifiedAt time.Time
+}
+
+type SavingsBudgetRun struct {
+	EntryID   string
+	CycleID   string
+	UserID    string
+	Trigger   SavingsBudgetWhen
+	Wanted    decimal.Decimal
+	Reserved  decimal.Decimal
+	SvrID     pgtype.Text
 	IncomeID  pgtype.Text
 	CreatedAt time.Time
 }

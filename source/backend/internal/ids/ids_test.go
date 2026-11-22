@@ -32,6 +32,7 @@ func TestGenerators(t *testing.T) {
 		{ids.SavingsHolder, func() string { return ids.NewSavingsHolder(user) }, user, 1e4},
 		{ids.SavingsLine, func() string { return ids.NewSavingsLine(holder) }, holder, 1e14},
 		{ids.SavingsRule, func() string { return ids.NewSavingsRule(holder) }, holder, 1e2},
+		{ids.SavingsBudgetEntry, func() string { return ids.NewSavingsBudgetEntry(user) }, user, 1e4},
 	} {
 		t.Run(tc.kind.Name, func(t *testing.T) {
 			seen := make(map[string]bool, draws)

@@ -2367,13 +2367,20 @@
       "days_one": "{{count}} day ahead",
       "days_other": "{{count}} days ahead",
       "savings_transfer": "Savings to transfer",
-      "savings_transferHint": "Money held for savings targets, waiting for you to move it."
+      "savings_transferHint": "Money held for savings targets, waiting for you to move it.",
+      "savings_short": "Savings budget short",
+      "savings_shortHint": "A fixed savings amount the unallocated money didn't cover."
     },
     "savings": {
       "title": "Money held for {{name}}",
       "body": "{{amount}} is set aside. Make the transfer at the bank, then press Done.",
       "bodyBucket": "{{amount}} is set aside on another account. Move it to the bucket's account, then press Done.",
       "open": "Open Savings"
+    },
+    "savingsShort": {
+      "title": "Saved less for {{name}}",
+      "body": "{{account}} didn't have enough unallocated money, so the savings budget is {{amount}} short this cycle.",
+      "titleDistributor": "Saved less for the savings distributor"
     }
   }
 }

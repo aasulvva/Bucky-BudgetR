@@ -52,12 +52,15 @@ const (
 	// KindSavings is a savings target with money held for it, waiting for
 	// the user to move it (#231).
 	KindSavings Kind = "savings_transfer"
+	// KindSavingsShort is a savings budget entry that reserved less than its
+	// amount in the active cycle, for want of unallocated money (#234).
+	KindSavingsShort Kind = "savings_short"
 )
 
 // keyPrefix is each kind's key prefix.
 var keyPrefix = map[Kind]string{
 	KindQueue: "queue:", KindBill: "bill:", KindBalance: "balance:", KindBucket: "bucket:",
-	KindSavings: "savings:",
+	KindSavings: "savings:", KindSavingsShort: "savings-short:",
 }
 
 // Severity orders notifications: alerts first.
@@ -106,6 +109,7 @@ type Settings struct {
 	InvestmentBalance *bool `json:"investment_balance"`
 	BucketUncovered   *bool `json:"bucket_uncovered"`
 	SavingsTransfer   *bool `json:"savings_transfer"`
+	SavingsShort      *bool `json:"savings_short"`
 }
 
 // On reports whether a kind shows.
@@ -113,6 +117,7 @@ func (s Settings) On(k Kind) bool {
 	v := map[Kind]*bool{
 		KindQueue: s.ApprovalQueue, KindBill: s.UpcomingBills,
 		KindBalance: s.InvestmentBalance, KindBucket: s.BucketUncovered, KindSavings: s.SavingsTransfer,
+		KindSavingsShort: s.SavingsShort,
 	}[k]
 	return v == nil || *v
 }
@@ -139,6 +144,7 @@ type Buckets interface {
 // *savings.Service).
 type Savings interface {
 	List(ctx context.Context, userID string) ([]savings.Target, error)
+	ListBudget(ctx context.Context, userID string) ([]savings.BudgetEntry, error)
 }
 
 // Options configures a Service.
@@ -276,7 +282,7 @@ func (s *Service) work(ctx context.Context, q *sqlc.Queries, userID string, sett
 		run  func(context.Context, *sqlc.Queries, string, Settings) ([]Notification, error)
 	}{
 		{KindQueue, s.queue}, {KindBill, s.bills}, {KindBalance, s.balances}, {KindBucket, s.uncovered},
-		{KindSavings, s.held},
+		{KindSavings, s.held}, {KindSavingsShort, s.short},
 	}
 	for _, step := range steps {
 		if !settings.On(step.kind) {
@@ -431,6 +437,50 @@ func (s *Service) held(ctx context.Context, q *sqlc.Queries, userID string, _ Se
 			Key: keyPrefix[KindSavings] + t.ID + ":" + newest[t.ID], Kind: KindSavings, Severity: Info, TargetID: t.ID,
 			Amount: decimal.NullDecimal{Decimal: held, Valid: true}, Currency: t.Currency,
 		})
+	}
+	return out, nil
+}
+
+// short is one notification per savings budget entry that fell short of its
+// amount in the active cycle (#234), with what's missing, keyed by entry and
+// cycle.
+func (s *Service) short(ctx context.Context, q *sqlc.Queries, userID string, _ Settings) ([]Notification, error) {
+	if s.savings == nil {
+		return nil, nil
+	}
+	c, err := q.GetActiveCycle(ctx, userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	list, err := s.savings.ListBudget(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	accounts, err := q.ListAccounts(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	currency := make(map[string]string, len(accounts))
+	for _, a := range accounts {
+		currency[a.ID] = a.Currency
+	}
+	out := []Notification{}
+	for _, e := range list {
+		if e.ThisCycle == nil || !e.ThisCycle.Short().IsPositive() {
+			continue
+		}
+		n := Notification{
+			Key: keyPrefix[KindSavingsShort] + e.ID + ":" + c.ID, Kind: KindSavingsShort, Severity: Warning,
+			At: c.StartAt, AccountID: e.AccountID, CycleID: c.ID, TargetID: e.TargetID,
+			Amount: decimal.NullDecimal{Decimal: e.ThisCycle.Short(), Valid: true}, Currency: currency[e.AccountID],
+		}
+		if e.ThisCycle.At != nil {
+			n.At = *e.ThisCycle.At
+		}
+		out = append(out, n)
 	}
 	return out, nil
 }

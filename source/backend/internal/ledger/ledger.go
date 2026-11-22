@@ -164,7 +164,9 @@ var shapes = map[sqlc.TransactionType]shape{
 	sqlc.TransactionTypeBUA: {minBucket: 1, maxBucket: 1},
 	sqlc.TransactionTypeBAT: {minBucket: 2, maxBucket: 2},
 	sqlc.TransactionTypeOVF: {minBucket: 1, maxBucket: 1, maxSavings: 2},
-	sqlc.TransactionTypeSVR: {minSavings: 1, maxSavings: 1},
+	// A savings budget amount (#234) cut at a target's goal holds the rest
+	// for the distributor.
+	sqlc.TransactionTypeSVR: {minSavings: 1, maxSavings: 2},
 	sqlc.TransactionTypeSVC: {minSavings: 1, maxSavings: 1},
 	// Savings to a bucket: straight from unallocated (bucket line only), or
 	// held funds (a savings line), moved from another account (2 bank lines).
