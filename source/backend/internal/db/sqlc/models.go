@@ -975,6 +975,13 @@ type SavingsBudgetRun struct {
 	CreatedAt time.Time
 }
 
+type SavingsFollowOn struct {
+	SourceID  string
+	FollowID  string
+	UserID    string
+	CreatedAt time.Time
+}
+
 type SavingsHolder struct {
 	ID         string
 	UserID     string

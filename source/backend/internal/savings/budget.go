@@ -326,7 +326,7 @@ func (s *Service) run(ctx context.Context, tx pgx.Tx, userID, createdBy, cycleID
 			return err
 		}
 		svr = text(t.Header.ID)
-		if err := s.AfterOverflow(ctx, tx, userID, e.AccountID, at, lines); err != nil {
+		if err := s.AfterOverflow(ctx, tx, userID, e.AccountID, t.Header.ID, at, lines); err != nil {
 			return err
 		}
 	}
@@ -361,13 +361,14 @@ func (s *Service) startMidCycle(ctx context.Context, tx pgx.Tx, userID string, e
 }
 
 // reverseHold reverses an SVR the savings budget recorded, dated at its
-// time, as far as its money is still held.
+// time: what it moved on comes back first, then what's held is released,
+// each as far as the money is still there (ReleaseOverflow).
 func (s *Service) reverseHold(ctx context.Context, tx pgx.Tx, userID, id string) error {
 	t, err := ledger.Get(ctx, tx, userID, id)
 	if err != nil {
 		return err
 	}
-	lines, err := s.ReleasableOverflow(ctx, tx, userID, t)
+	lines, err := s.ReleaseOverflow(ctx, tx, userID, t)
 	if err != nil || len(lines) == 0 {
 		return err
 	}

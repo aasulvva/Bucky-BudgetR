@@ -281,7 +281,7 @@ A refill happens according to each bucket's **refill mode**:
   - its **"Triggers refill"** flag is set (the UI pre-checks it when the account has *On income* buckets left to refill, or a rule matches), or
   - the flag isn't given and one of the user's **income rules** (preferences) matches: the same counterparty, ignoring case, and an amount of at least the rule's minimum (e.g. the employer, ≥ 20 000). An explicit flag overrides the rules.
 
-  The income must fall inside the active cycle; an explicit flag on an income outside it is refused. The flag can also be set or cleared later with a correction. **Reversing** the income (or moving it to another account) undoes its refills: their REF and OVF are reversed and the buckets can be refilled again. An OVF's savings come back only as far as they're still held where they went (§8.5). Refills in a finished cycle stay.
+  The income must fall inside the active cycle; an explicit flag on an income outside it is refused. The flag can also be set or cleared later with a correction. **Reversing** the income (or moving it to another account) undoes its refills: their REF and OVF are reversed and the buckets can be refilled again. An OVF's savings come back the way they went, as far as the money is still there (§8.5). Refills in a finished cycle stay.
 
 - **New bucket:** a bucket created while a cycle is running can be refilled at once (`refill` on `POST /buckets`, Bucket setup's *Refill now*), dated now, whatever its mode. Creating it with **opening funds** (OPF) instead also counts as its refill for that cycle, so no later refill in the cycle changes the amount. *Start at 0* leaves it to its refill mode: a *Manual* or *On income* bucket can still be refilled in the cycle, an *Auto* one waits for the next cycle's start.
 
@@ -405,7 +405,7 @@ A bucket's overflow (§6: at cycle end without Keep funds, or when a refill take
   - *Specific savings target*: a line for the target, up to its goal (unless the rule at its position has *Past the goal*) and a bucket target's fixed BC. The rest has a line for the distributor.
   - A bucket target funded from the same account gets its share straight into the bucket: an **SVB** with the savings line and the bucket line, at the overflow's time, while the cycle holds it.
   - An account target that is the bucket's own source account already has the money, so it gets no line.
-- **Undoing a refill** (reversing its income, §6) reverses the OVF: the bucket gets its funds back, and each savings line is taken off hold only as far as its holder still holds it there. What was distributed or moved on with Done stays where it went, so the account can end up short (*not covered*).
+- **Undoing a refill** (reversing its income, §6) reverses the OVF: the bucket gets its funds back, and its savings come back the way they went (#234 testing). What the overflow moved on at once (the SVB straight into a bucket target, the distributor's SVD) is recorded with it and reversed first, newest first: a target gives back at most what it still holds on the account, a bucket target at most its TF, and from an SVD only the overflow's share of what it split (what the distributor already held stays split). Then each of the OVF's savings lines is taken off hold as far as its holder holds it. What was moved at the bank with Done, cleared, spent from a bucket, or held for a target deleted since stays as it is, so the account can end up short (*not covered*).
 - **A target that goes away** (deleted, or its bucket or account stops being one) switches the buckets that sent their overflow to it to *Savings distribution*.
 
 ### 8.6 Savings budget
@@ -422,7 +422,7 @@ Rules:
 - **The buckets come first:** it reserves its amount with an **SVR**, or what the account has unallocated if that's less. The run still counts, and a *Savings budget short* notification says what's missing (§9).
 - **The goal:** a target takes up to its goal (unless the rule at its position has *Past the goal*) and a bucket target's fixed BC; the rest is held for the distributor, on a 2nd savings line. The distributor then splits by its hold mode (§8.4), and a bucket target funded from the same account gets its share straight into the bucket (an SVB), as with overflow (§8.5).
 - **Set up mid-cycle:** an *At cycle start* entry created (or switched to it) while a cycle runs reserves now (`this_cycle`, the default), or waits for the next cycle (`this_cycle: false`, recorded as a run of 0). Other entries wait for their income or *Save now*.
-- **Undo:** reversing the income (or moving it to another account) reverses its entries' SVRs as far as the money is still held, like overflow (§8.5), and they can run again in the cycle.
+- **Undo:** reversing the income (or moving it to another account) reverses its entries' SVRs the way overflow is undone (§8.5): what the distributor split or a bucket target got straight in is taken back first, then the hold is released, as far as the money is still there. They can run again in the cycle.
 - **Changes** to the destination, amount or *when* apply from the next run; what's reserved stays. Deleting an entry leaves what it reserved held.
 - **A target that goes away** stops its entries (*stopped*): they don't run until they get another destination. **A deleted account** deletes its entries.
 

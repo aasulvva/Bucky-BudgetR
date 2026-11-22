@@ -56,6 +56,7 @@ var idColumns = map[string]map[string]kind{
 	"refills":                 {"bucket_id": kBucket, "cycle_id": kCycle, "user_id": kUser, "ref_id": kTransaction, "ovf_id": kTransaction, "income_id": kTransaction},
 	"savings_budget_entries":  {"id": kBudget, "user_id": kUser, "account_id": kAccount, "target_id": kHolder},
 	"savings_budget_runs":     {"entry_id": kBudget, "cycle_id": kCycle, "user_id": kUser, "svr_id": kTransaction, "income_id": kTransaction},
+	"savings_follow_ons":      {"source_id": kTransaction, "follow_id": kTransaction, "user_id": kUser},
 	"schedules":               {"id": kSchedule, "user_id": kUser, "account_id": kAccount, "to_account_id": kAccount},
 	"schedule_bucket_lines":   {"schedule_id": kSchedule, "bucket_id": kBucket, "user_id": kUser},
 	"schedule_occurrences":    {"id": kOccurrence, "schedule_id": kSchedule, "user_id": kUser, "transaction_id": kTransaction},

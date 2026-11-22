@@ -48,6 +48,7 @@ var tables = []table{
 	{"transaction_tags", "user_id = $1", "transaction_id, tag_id"},
 	{"refills", "user_id = $1", "bucket_id, cycle_id"},
 	{"savings_budget_runs", "user_id = $1", "entry_id, cycle_id"},
+	{"savings_follow_ons", "user_id = $1", "source_id, follow_id"},
 	{"schedules", "user_id = $1", "id"},
 	{"schedule_bucket_lines", "user_id = $1", "schedule_id, bucket_id"},
 	{"schedule_occurrences", "user_id = $1", "id"},

@@ -247,3 +247,59 @@ func TestDeletedTargetSendsOverflowToTheDistributor(t *testing.T) {
 		t.Errorf("the distributor holds %s", got)
 	}
 }
+
+func TestOverflowUndoTakesBackWhatTheDistributorSplit(t *testing.T) {
+	e := setupOverflow(t)
+	buffer, _, holiday := e.splitting(t)
+	food := e.food(t, sqlc.OverflowDestinationSavingsDistribution, "")
+
+	income := e.salary(t)
+	// Food's 300 overflow is split 2:1 at once.
+	if got, _ := e.held(t, buffer, e.main); got != "200.00" {
+		t.Errorf("held for Buffer %s", got)
+	}
+	if got := e.tf(t, holiday); got != "100.00" {
+		t.Errorf("Holiday's TF %s", got)
+	}
+	if _, err := e.txs.Reverse(t.Context(), e.user, income); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.tf(t, food); got != "400.00" {
+		t.Errorf("after the undo Food's TF %s", got)
+	}
+	if got, _ := e.held(t, buffer, e.main); got != "0.00" {
+		t.Errorf("after the undo %s is held for Buffer", got)
+	}
+	if got := e.tf(t, holiday); got != "0.00" {
+		t.Errorf("after the undo Holiday's TF %s", got)
+	}
+	if got := e.distributorHeld(t, e.main); got != "0.00" {
+		t.Errorf("after the undo the distributor holds %s", got)
+	}
+}
+
+func TestOverflowUndoTakesBackFromABucketTarget(t *testing.T) {
+	e := setupOverflow(t)
+	holiday := e.bucket(t, buckets.New{
+		Name: "Holiday", SourceAccountID: e.main, RefillMode: sqlc.RefillModeFullyManual,
+		CapMode: sqlc.BucketCapModeFixed, CapAmount: dec("3000"),
+	})
+	tg, err := e.savings.Create(t.Context(), e.user, savings.New{BucketID: holiday, Goal: dec("3000")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.food(t, sqlc.OverflowDestinationSavingsTarget, tg.ID)
+	income := e.salary(t)
+	if got := e.tf(t, holiday); got != "300.00" {
+		t.Errorf("Holiday's TF %s", got)
+	}
+	if _, err := e.txs.Reverse(t.Context(), e.user, income); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.tf(t, holiday); got != "0.00" {
+		t.Errorf("after the undo Holiday's TF %s", got)
+	}
+	if got, _ := e.held(t, tg.ID, e.main); got != "0.00" {
+		t.Errorf("after the undo %s is held for Holiday", got)
+	}
+}
