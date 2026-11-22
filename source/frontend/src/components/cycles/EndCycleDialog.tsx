@@ -8,7 +8,7 @@ import { useAccounts, useBuckets } from "@/api/accounts";
 import { api } from "@/api/client";
 import { useRefreshCycles, type Cycle } from "@/api/cycles";
 import { unwrap } from "@/api/errors";
-import { useSavingsBudget, useSavingsTargets } from "@/api/savings";
+import { useFixedBudget, useSavingsTargets } from "@/api/savings";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { QueryState } from "@/components/QueryState";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
@@ -56,7 +56,7 @@ function EndForm({
   const targets = useSavingsTargets().data ?? [];
   const accounts = useAccounts().data ?? [];
   // The savings budget's At cycle start amounts (#234), after the refills.
-  const atStart = (useSavingsBudget().data ?? []).filter(
+  const atStart = (useFixedBudget().data ?? []).filter(
     (e) => e.when === "cycle_start" && !e.stopped,
   );
   const now = clockNow();

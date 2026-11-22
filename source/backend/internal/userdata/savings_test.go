@@ -90,6 +90,10 @@ func TestExportImportDistributor(t *testing.T) {
 		AccountID: main.ID, TargetID: target.ID, Amount: dec("50"), When: sqlc.SavingsBudgetWhenManual,
 	}))
 	must[savings.BudgetEntry](t)(sv.SaveNow(ctx, alice.ID, entry.ID))
+	keep := dec("250")
+	must[savings.BudgetEntry](t)(sv.CreateBudget(ctx, alice.ID, savings.NewBudget{
+		AccountID: main.ID, Keep: &keep, When: sqlc.SavingsBudgetWhenCycleEnd,
+	}))
 
 	f, _ := e.file(t, alice.ID)
 	if n, m := len(f.Data.Tables["savings_holders"]), len(f.Data.Tables["savings_rules"]); n != 2 || m != 2 {
@@ -122,9 +126,12 @@ func TestExportImportDistributor(t *testing.T) {
 		t.Errorf("bob's buckets %+v, target %s", bobBuckets, list[0].ID)
 	}
 	budget := must[[]savings.BudgetEntry](t)(sv.ListBudget(ctx, bob.ID))
-	if len(budget) != 1 || budget[0].TargetID != list[0].ID || !strings.HasPrefix(budget[0].ID, bob.ID) ||
+	if len(budget) != 2 || budget[0].TargetID != list[0].ID || !strings.HasPrefix(budget[0].ID, bob.ID) ||
 		budget[0].ThisCycle == nil || budget[0].ThisCycle.Reserved.StringFixed(2) != "50.00" {
 		t.Errorf("bob's savings budget %+v, target %s", budget, list[0].ID)
+	}
+	if sw := budget[len(budget)-1]; !sw.IsSweep() || sw.Keep.StringFixed(2) != "250.00" || sw.TargetID != "" {
+		t.Errorf("bob's sweep %+v", sw)
 	}
 	if d := must[savings.Distributor](t)(sv.Distributor(ctx, bob.ID)); d.ID == "" || !strings.HasPrefix(d.ID, bob.ID) || len(d.Held) != 0 {
 		t.Errorf("bob's distributor %+v", d)

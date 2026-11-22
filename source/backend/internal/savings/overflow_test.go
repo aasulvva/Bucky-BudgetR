@@ -23,8 +23,9 @@ import (
 // gives the user an active cycle around now and a main account.
 type overflowEnv struct {
 	distributorEnv
-	cycles *cycles.Service
-	cycle  sqlc.Cycle
+	cycles  *cycles.Service
+	refills *refill.Service
+	cycle   sqlc.Cycle
 }
 
 func setupOverflow(t *testing.T) overflowEnv {
@@ -45,7 +46,8 @@ func setupOverflow(t *testing.T) overflowEnv {
 			}),
 			txs: transactions.NewService(pool, l, transactions.Options{Now: clock, Refills: r}),
 		}},
-		cycles: cycles.NewService(pool, cycles.Options{Now: clock, OnEnd: r.OnEnd, OnStart: r.OnStart}),
+		cycles:  cycles.NewService(pool, cycles.Options{Now: clock, OnEnd: r.OnEnd, OnStart: r.OnStart}),
+		refills: r,
 	}
 	c, err := e.cycles.Create(ctx, e.user, now.Add(-day), now.Add(29*day))
 	if err != nil {

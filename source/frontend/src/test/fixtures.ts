@@ -2,7 +2,7 @@
 
 import type { Account, Bucket, BucketFigures } from "@/api/accounts";
 import type { Cycle } from "@/api/cycles";
-import type { SavingsBudgetEntry, SavingsTarget } from "@/api/savings";
+import type { FixedBudgetEntry, SavingsTarget } from "@/api/savings";
 import type { Transaction } from "@/api/transactions";
 import { addDays, endAtFor, startAtFor, today } from "@/lib/cycles";
 
@@ -132,12 +132,13 @@ export function savingsTarget(
 
 /** A savings budget entry (#234): from account 1234 to the distributor, not run this cycle. */
 export function budgetEntry(
-  overrides: Partial<SavingsBudgetEntry> & Pick<SavingsBudgetEntry, "id">,
-): SavingsBudgetEntry {
+  overrides: Partial<FixedBudgetEntry> & Pick<FixedBudgetEntry, "id">,
+): FixedBudgetEntry {
   return {
     account_id: "1234",
     target_id: null,
     amount: "500.00",
+    keep: null,
     when: "cycle_start",
     stopped: false,
     this_cycle: null,

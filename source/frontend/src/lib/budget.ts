@@ -2,7 +2,7 @@
 // edited, what they add up to per account, and what saving them sends.
 
 import type { Account, Bucket } from "@/api/accounts";
-import type { SavingsBudgetEntry } from "@/api/savings";
+import type { FixedBudgetEntry } from "@/api/savings";
 import type { components } from "@/api/schema";
 
 import {
@@ -72,7 +72,7 @@ export function draftRefill(draft: BudgetDraft, bucket: Bucket): string | null {
 }
 
 /** The amount shown for a savings budget entry (#234). */
-export function draftSaving(draft: BudgetDraft, entry: SavingsBudgetEntry): string | null {
+export function draftSaving(draft: BudgetDraft, entry: FixedBudgetEntry): string | null {
   const edited = draft.savings ?? {};
   return entry.id in edited ? (edited[entry.id] ?? null) : canonicalAmount(entry.amount);
 }
@@ -84,7 +84,7 @@ export function savingProblem(amount: string | null): "empty" | "notPositive" | 
 }
 
 /** The account's savings budget entries Budget setup lists: those that still run. */
-export function savingsFor(entries: SavingsBudgetEntry[], accountId: string): SavingsBudgetEntry[] {
+export function savingsFor(entries: FixedBudgetEntry[], accountId: string): FixedBudgetEntry[] {
   return entries.filter((e) => e.account_id === accountId && !e.stopped);
 }
 
@@ -128,7 +128,7 @@ export function accountBudget(
   draft: BudgetDraft,
   account: Account,
   buckets: Bucket[],
-  entries: SavingsBudgetEntry[] = [],
+  entries: FixedBudgetEntry[] = [],
 ): AccountBudget {
   const expected = draftIncome(draft, account);
   const allocated = addAmounts(
@@ -201,7 +201,7 @@ export function budgetChanges(
   draft: BudgetDraft,
   accounts: Account[],
   buckets: Bucket[],
-  entries: SavingsBudgetEntry[] = [],
+  entries: FixedBudgetEntry[] = [],
 ): BudgetChanges {
   const same = (a: string | null, b: string | null) =>
     a === null || b === null ? a === b : compareAmounts(a, b) === 0;

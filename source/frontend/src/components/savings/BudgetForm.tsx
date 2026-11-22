@@ -27,8 +27,8 @@ import { useCurrentCycles } from "@/api/cycles";
 import { unwrap } from "@/api/errors";
 import {
   BUDGET_WHEN,
-  type SavingsBudgetEntry,
-  type SavingsBudgetWhen,
+  type FixedBudgetEntry,
+  type FixedBudgetWhen,
   type SavingsTarget,
 } from "@/api/savings";
 import { AmountInput } from "@/components/AmountInput";
@@ -49,7 +49,7 @@ export function BudgetForm({
   targets,
   accounts,
 }: {
-  entries: SavingsBudgetEntry[];
+  entries: FixedBudgetEntry[];
   targets: SavingsTarget[];
   accounts: Account[];
 }) {
@@ -77,7 +77,7 @@ function BudgetList({
   accounts,
   onEdit,
 }: {
-  entries: SavingsBudgetEntry[];
+  entries: FixedBudgetEntry[];
   targets: SavingsTarget[];
   accounts: Account[];
   onEdit: (id: Editing) => void;
@@ -161,7 +161,7 @@ function EntryForm({
   accounts,
   onDone,
 }: {
-  entry: SavingsBudgetEntry | undefined;
+  entry: FixedBudgetEntry | undefined;
   targets: SavingsTarget[];
   accounts: Account[];
   onDone: () => void;
@@ -177,7 +177,7 @@ function EntryForm({
     entry && !entry.stopped ? (entry.target_id ?? DISTRIBUTOR) : DISTRIBUTOR,
   );
   const [amount, setAmount] = useState<string | null>(entry?.amount ?? null);
-  const [when, setWhen] = useState<SavingsBudgetWhen>(entry?.when ?? "cycle_start");
+  const [when, setWhen] = useState<FixedBudgetWhen>(entry?.when ?? "cycle_start");
   const [startNow, setStartNow] = useState(true);
   const [validate, setValidate] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -392,7 +392,7 @@ function DeleteEntry({
   onCancel,
   onDone,
 }: {
-  entry: SavingsBudgetEntry;
+  entry: FixedBudgetEntry;
   targets: SavingsTarget[];
   account: Account | undefined;
   onCancel: () => void;

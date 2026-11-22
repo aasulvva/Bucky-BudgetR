@@ -21,7 +21,8 @@
 //
 // The savings budget's fixed amounts (#234, spec §8.6) run after the refills
 // of the same moment, at cycle start and on income, and are undone with the
-// income (Options.Savings).
+// income (Options.Savings). Its sweeps (#235) run after each refill once the
+// account is refilled, undone with a refill on it, and at cycle end.
 //
 // Every routine runs inside the caller's database transaction, under the
 // user's lock (ledger.LockUser), and records through the ledger, so the
@@ -89,6 +90,9 @@ type Savings interface {
 	RunBudget(ctx context.Context, tx pgx.Tx, userID string, c sqlc.Cycle, when sqlc.SavingsBudgetWhen, accountID string, at time.Time, incomeID string) error
 	// UndoBudget undoes the runs the income triggered in the cycle.
 	UndoBudget(ctx context.Context, tx pgx.Tx, userID, incomeID, cycleID string) error
+	// UndoSweeps undoes the After the refills sweeps on the accounts in the
+	// cycle (#235), when a refill on them is undone.
+	UndoSweeps(ctx context.Context, tx pgx.Tx, userID, cycleID string, accountIDs []string) error
 }
 
 // Options configures a Service.
@@ -117,7 +121,9 @@ func NewService(pool *pgxpool.Pool, l *ledger.Ledger, opts Options) *Service {
 }
 
 // OnStart refills the Auto buckets, dated at the cycle's start, then runs
-// the At cycle start savings budget entries. It is the cycles OnStart hook.
+// the At cycle start savings budget entries, and the After the refills
+// sweeps of the accounts that are refilled now (#235). It is the cycles
+// OnStart hook.
 func (s *Service) OnStart(ctx context.Context, tx pgx.Tx, c sqlc.Cycle) error {
 	if err := s.refillAll(ctx, tx, c, sqlc.RefillModeAuto, "", c.StartAt, ""); err != nil {
 		return err
@@ -125,13 +131,26 @@ func (s *Service) OnStart(ctx context.Context, tx pgx.Tx, c sqlc.Cycle) error {
 	if s.savings == nil {
 		return nil
 	}
-	return s.savings.RunBudget(ctx, tx, c.UserID, c, sqlc.SavingsBudgetWhenCycleStart, "", c.StartAt, "")
+	if err := s.savings.RunBudget(ctx, tx, c.UserID, c, sqlc.SavingsBudgetWhenCycleStart, "", c.StartAt, ""); err != nil {
+		return err
+	}
+	return s.sweep(ctx, tx, c.UserID, c, "", c.StartAt)
+}
+
+// sweep runs the After the refills sweeps (of accountID, or all for "")
+// whose accounts are refilled now, after a refill (#235).
+func (s *Service) sweep(ctx context.Context, tx pgx.Tx, userID string, c sqlc.Cycle, accountID string, at time.Time) error {
+	if s.savings == nil {
+		return nil
+	}
+	return s.savings.RunBudget(ctx, tx, userID, c, sqlc.SavingsBudgetWhenAfterRefills, accountID, at, "")
 }
 
 // OnEnd empties the buckets without Keep funds: an OVF brings a positive TF
 // to 0. It first checks that CAF fits the accounts, so the funded part is
-// known, without reallocating otherwise. It is the cycles OnEnd hook and runs
-// while the cycle is still active.
+// known, without reallocating otherwise. Then the At cycle end sweeps take
+// what's unallocated (#235). It is the cycles OnEnd hook and runs while the
+// cycle is still active.
 func (s *Service) OnEnd(ctx context.Context, tx pgx.Tx, c sqlc.Cycle) error {
 	if err := ledger.LockUser(ctx, tx, c.UserID); err != nil {
 		return err
@@ -166,7 +185,10 @@ func (s *Service) OnEnd(ctx context.Context, tx pgx.Tx, c sqlc.Cycle) error {
 			return fmt.Errorf("overflow of bucket %s: %w", b.ID, err)
 		}
 	}
-	return nil
+	if s.savings == nil {
+		return nil
+	}
+	return s.savings.RunBudget(ctx, tx, c.UserID, c, sqlc.SavingsBudgetWhenCycleEnd, "", at, "")
 }
 
 // Manual refills a bucket with the Manual refill mode, dated now.
@@ -204,7 +226,11 @@ func (s *Service) Manual(ctx context.Context, userID, bucketID string) error {
 		if err != nil {
 			return err
 		}
-		return s.refill(ctx, tx, b, tf[b.ID], c.ID, sqlc.RefillModeManual, s.now(), "")
+		now := s.now()
+		if err := s.refill(ctx, tx, b, tf[b.ID], c.ID, sqlc.RefillModeManual, now, ""); err != nil {
+			return err
+		}
+		return s.sweep(ctx, tx, userID, *c, b.SourceAccountID, now)
 	})
 }
 
@@ -228,13 +254,18 @@ func (s *Service) OnCreate(ctx context.Context, tx pgx.Tx, userID, bucketID stri
 	if c == nil {
 		return ledger.ErrNoActiveCycle
 	}
+	now := s.now()
 	if refill {
 		// A new bucket's TF is 0: REF = RA either way, and BC ≥ RA.
-		return s.refill(ctx, tx, b, decimal.Zero, c.ID, sqlc.RefillModeManual, s.now(), "")
-	}
-	return q.CreateRefill(ctx, sqlc.CreateRefillParams{
+		if err := s.refill(ctx, tx, b, decimal.Zero, c.ID, sqlc.RefillModeManual, now, ""); err != nil {
+			return err
+		}
+	} else if err := q.CreateRefill(ctx, sqlc.CreateRefillParams{
 		BucketID: b.ID, CycleID: c.ID, UserID: userID, Trigger: sqlc.RefillModeManual,
-	})
+	}); err != nil {
+		return err
+	}
+	return s.sweep(ctx, tx, userID, *c, b.SourceAccountID, now)
 }
 
 // Triggers reports whether an income from counterparty of amount matches one
@@ -279,16 +310,20 @@ func (s *Service) OnIncome(ctx context.Context, tx pgx.Tx, userID, incomeID, acc
 	if err := allocation.Run(ctx, tx, userID, []string{accountID}, true); err != nil {
 		return err
 	}
-	// The savings budget takes what the buckets left (#234).
+	// The savings budget takes what the buckets left (#234), its fixed
+	// amounts first and then the sweep (#235).
 	if s.savings == nil {
 		return nil
 	}
-	return s.savings.RunBudget(ctx, tx, userID, *c, sqlc.SavingsBudgetWhenOnIncome, accountID, at, incomeID)
+	if err := s.savings.RunBudget(ctx, tx, userID, *c, sqlc.SavingsBudgetWhenOnIncome, accountID, at, incomeID); err != nil {
+		return err
+	}
+	return s.sweep(ctx, tx, userID, *c, accountID, at)
 }
 
 // UndoIncome undoes the refills an income triggered in the active cycle: their
 // REF and OVF are reversed, and the buckets can be refilled again. So are its
-// savings budget runs (#234). Refills in finished cycles stay; their bucket
+// savings budget runs (#234) and the sweeps on those accounts (#235). Refills in finished cycles stay; their bucket
 // lines can't change. Like OnIncome, the accounts are then recalculated.
 func (s *Service) UndoIncome(ctx context.Context, tx pgx.Tx, userID, incomeID string) error {
 	q := sqlc.New(tx)
@@ -311,6 +346,17 @@ func (s *Service) UndoIncome(ctx context.Context, tx pgx.Tx, userID, incomeID st
 	for i, r := range refills {
 		ids[i] = r.BucketID
 	}
+	accounts, err := q.BucketSourceAccounts(ctx, ids)
+	if err != nil {
+		return err
+	}
+	// The sweeps ran after these refills: they go first, and run again once
+	// the accounts are refilled again (#235).
+	if s.savings != nil {
+		if err := s.savings.UndoSweeps(ctx, tx, userID, c.ID, accounts); err != nil {
+			return err
+		}
+	}
 	for _, r := range refills {
 		for _, id := range []pgtype.Text{r.OvfID, r.RefID} {
 			if !id.Valid {
@@ -323,10 +369,6 @@ func (s *Service) UndoIncome(ctx context.Context, tx pgx.Tx, userID, incomeID st
 		if err := q.DeleteRefill(ctx, sqlc.DeleteRefillParams{BucketID: r.BucketID, CycleID: r.CycleID}); err != nil {
 			return err
 		}
-	}
-	accounts, err := q.BucketSourceAccounts(ctx, ids)
-	if err != nil {
-		return err
 	}
 	return allocation.Run(ctx, tx, userID, accounts, true)
 }

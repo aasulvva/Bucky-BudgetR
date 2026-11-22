@@ -42,9 +42,9 @@ import { api } from "@/api/client";
 import { useCurrentCycles } from "@/api/cycles";
 import { unwrap } from "@/api/errors";
 import {
-  useSavingsBudget,
+  useFixedBudget,
   useSavingsTargets,
-  type SavingsBudgetEntry,
+  type FixedBudgetEntry,
   type SavingsTarget,
 } from "@/api/savings";
 import { useSession } from "@/app/session";
@@ -99,7 +99,7 @@ export default function BudgetSetup() {
   const accounts = useAccounts();
   const buckets = useBuckets();
   // Not waited for: Budget setup works without them.
-  const entries = useSavingsBudget().data ?? [];
+  const entries = useFixedBudget().data ?? [];
   const targets = useSavingsTargets().data ?? [];
   const preferences = useSession().data?.preferences;
   const theme = useMantineTheme();
@@ -278,7 +278,7 @@ function Budget({
 }: {
   accounts: Account[];
   buckets: Bucket[];
-  entries: SavingsBudgetEntry[];
+  entries: FixedBudgetEntry[];
   targets: SavingsTarget[];
   draft: BudgetDraft;
   setDraft: Dispatch<SetStateAction<BudgetDraft>>;
@@ -595,7 +595,7 @@ function AccountSection({
   account: Account;
   buckets: Bucket[];
   /** The account's savings budget entries that run (#234). */
-  entries: SavingsBudgetEntry[];
+  entries: FixedBudgetEntry[];
   targets: SavingsTarget[];
   draft: BudgetDraft;
   onEdit: Edit;
@@ -1047,7 +1047,7 @@ function BucketCard(props: BucketProps) {
 }
 
 interface SavingProps {
-  entry: SavingsBudgetEntry;
+  entry: FixedBudgetEntry;
   targets: SavingsTarget[];
   account: Account;
   draft: BudgetDraft;
