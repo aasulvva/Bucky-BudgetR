@@ -95,6 +95,12 @@ export function TargetForm({
         "")
     : (bucket?.name ?? account?.name ?? "");
   const comboboxProps = isTouch() ? { withinPortal: false } : undefined;
+  // What the bucket (TF) or the account (balance) has now, once one is picked.
+  const current = bucket
+    ? t("savings.inBucket", { amount: formatMoney(bucket.target_funds, bucket.currency) })
+    : account
+      ? t("savings.inAccount", { amount: formatMoney(account.balance, account.currency) })
+      : undefined;
 
   const save = useMutation({
     mutationFn: async () => {
@@ -178,11 +184,14 @@ export function TargetForm({
     >
       <Stack gap="lg">
         {target ? (
-          <Text size="sm" c="dimmed">
-            {t(target.bucket_id !== null ? "savingsSetup.isBucket" : "savingsSetup.isAccount", {
-              name: fallbackName,
-            })}
-          </Text>
+          <div>
+            <Text size="sm" c="dimmed">
+              {t(target.bucket_id !== null ? "savingsSetup.isBucket" : "savingsSetup.isAccount", {
+                name: fallbackName,
+              })}
+            </Text>
+            {current && <Text size="sm">{current}</Text>}
+          </div>
         ) : (
           <Stack gap="sm">
             <SegmentedControl
@@ -222,6 +231,8 @@ export function TargetForm({
                 data={bucketChoices.map((b) => ({ value: b.id, label: b.name }))}
                 value={bucketId}
                 onChange={setBucketId}
+                description={current}
+                inputWrapperOrder={["label", "input", "description", "error"]}
                 error={errors.what}
                 comboboxProps={comboboxProps}
                 searchable
@@ -235,6 +246,8 @@ export function TargetForm({
                 }))}
                 value={accountId}
                 onChange={setAccountId}
+                description={current}
+                inputWrapperOrder={["label", "input", "description", "error"]}
                 error={errors.what}
                 comboboxProps={comboboxProps}
                 searchable

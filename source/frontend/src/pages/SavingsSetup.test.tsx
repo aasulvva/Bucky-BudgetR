@@ -12,7 +12,7 @@ const m = (amount: string) => formatMoney(amount, "NOK").replace(/\s/g, " ");
 
 const main = account({ id: "1234", name: "Main" });
 const buffer = account({ id: "2345", name: "Buffer", type: "savings" });
-const bsu = account({ id: "4567", name: "Home", type: "bsu" });
+const bsu = account({ id: "4567", name: "Home", type: "bsu", balance: "25000.00" });
 const holiday = bucket({
   id: "1000000001",
   name: "Holiday",
@@ -20,6 +20,7 @@ const holiday = bucket({
   refill_mode: "fully_manual",
   cap_mode: "fixed",
   capacity: "3000.00",
+  target_funds: "1200.00",
 });
 const food = bucket({ id: "1000000002", name: "Food", source_account_id: main.id });
 const rainy = savingsTarget({
@@ -54,6 +55,7 @@ describe("Savings setup", () => {
     // Only the Fully manual bucket.
     expect(screen.queryByRole("option", { name: "Food" })).not.toBeInTheDocument();
     await userEvent.click(await screen.findByRole("option", { name: "Holiday" }));
+    expect(form.getByText(`${m("1200.00")} in the bucket`)).toBeInTheDocument();
     expect(form.getByText(`At most the bucket's capacity, ${m("3000.00")}.`)).toBeInTheDocument();
 
     const goal = form.getByRole("textbox", { name: "Goal" });
@@ -81,15 +83,17 @@ describe("Savings setup", () => {
     const form = within(await screen.findByRole("form", { name: "New savings target" }));
     await userEvent.click(form.getByRole("radio", { name: "An account" }));
     await userEvent.click(form.getByRole("combobox", { name: "Account" }));
-    expect(await screen.findByRole("option", { name: "Home (BSU)" })).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: /^Buffer/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("option", { name: /^Main/ })).not.toBeInTheDocument();
+    await userEvent.click(await screen.findByRole("option", { name: "Home (BSU)" }));
+    expect(form.getByText(`${m("25000.00")} in the account`)).toBeInTheDocument();
   });
 
   it("deletes a target, saying what's released", async () => {
     apiMock.on("DELETE /api/v1/savings/targets/1000001001", { status: 204 });
     const { router } = renderRoute("/savings/setup?edit=1000001001");
     const form = within(await screen.findByRole("form", { name: "Buffer" }));
+    expect(form.getByText(`${m("0.00")} in the account`)).toBeInTheDocument();
     await userEvent.click(form.getByRole("button", { name: "Delete target" }));
     expect(screen.getByText("What's held for it goes back to unallocated:")).toBeInTheDocument();
     expect(screen.getByText(`${m("300.00")} on Main`)).toBeInTheDocument();
