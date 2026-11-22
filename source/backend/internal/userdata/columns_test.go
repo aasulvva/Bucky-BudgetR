@@ -78,10 +78,12 @@ func TestColumns(t *testing.T) {
 const exportedColumns = `bank_accounts: account_type, bank, created_at, currency, deleted, expected_income, id, modified_at, name, user_id
 cycles: created_at, end_at, generated, id, modified_at, start_at, state, user_id
 buckets: caf, cap_amount, cap_mode, cap_multiplier, created_at, deleted, id, importance, keep_funds, modified_at, name, negative_tf, overflow_destination, priority, refill_amount, refill_mode, source_account_id, user_id
+savings_holders: account_id, bucket_id, created_at, deleted, goal, id, kind, modified_at, name, note, user_id
 tags: created_at, id, name, user_id
 transaction_headers: correction_type, counterparty, created_at, created_by, description, id, parent_id, replaces_id, transaction_at, transaction_type, triggers_refill, user_id
 bank_transactions: account_id, amount, created_at, created_by, exchange_rate, id, original_amount, original_currency, transaction_id
 bucket_transactions: amount, bucket_id, created_at, created_by, cycle_id, id, transaction_id
+savings_transactions: account_id, amount, created_at, created_by, cycle_id, holder_id, id, transaction_id
 transaction_tags: tag_id, transaction_id, user_id
 refills: bucket_id, created_at, cycle_id, income_id, ovf_id, ref_id, trigger, user_id
 schedules: account_id, amount, counterparty, created_at, description, due_days, end_count, end_date, every, frequency, id, mode, name, next_at, next_index, paused, start_date, tags, time_of_day, time_zone, to_account_id, transaction_type, triggers_refill, updated_at, user_id

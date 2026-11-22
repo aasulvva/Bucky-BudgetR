@@ -62,6 +62,8 @@ tags:
     description: Scheduled and recurring transactions and their approval queue (#31).
   - name: notifications
     description: Reminders and to-dos the app can't do for the user (#57).
+  - name: savings
+    description: Savings targets and the money held for them (#231).
 
 paths:
   /healthz:
@@ -2094,6 +2096,11 @@ paths:
         the old one. Refills the income triggered on the old account are
         undone, and it triggers them on the new one if it can.
 
+        A transfer that took held savings off hold (it has `savings_lines`,
+        #231) keeps its amount and accounts (409 `savings_transfer`): only
+        `counterparty`, `description` and `tags` can change. Reverse it to
+        put the money back on hold.
+
         Bucket lines can only change while the original time is in the
         active cycle (409 `bucket_lines_locked`); the bank amount,
         counterparty, description and tags can change at any time. Only INC, EXP, TRF, OPB
@@ -2135,8 +2142,15 @@ paths:
         Records a reversal that cancels every effective line, at the original
         time. The transaction stays in the list, marked `reversed`. The same
         rules as for corrections apply: bucket lines must be in the active
-        cycle (409 `bucket_lines_locked`), only INC, EXP, TRF, OPB and BLA
-        (409 `not_correctable`), and only once (409 `already_reversed`).
+        cycle (409 `bucket_lines_locked`), only INC, EXP, TRF, OPB and BLA,
+        and the savings types SVR, SVC and SVB (409 `not_correctable`), and
+        only once (409 `already_reversed`).
+
+        Savings lines (#231) are cancelled too: reversing a *Done* transfer
+        or SVB puts the money back on hold. Reversing what holds money (an
+        SVR) is refused once it's no longer held (409 `not_enough_held`), and
+        reversing a release (an SVC) unless the account has enough
+        unallocated money to hold it again (409 `not_enough_unallocated`).
 
         Reversing an income undoes the refills it triggered in the active
         cycle (their REF and OVF are reversed), so those buckets can be
@@ -2667,6 +2681,245 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/v1/savings/targets:
+    get:
+      operationId: listSavingsTargets
+      tags: [savings]
+      summary: List savings targets
+      description: The user's savings targets (#231, spec §8), oldest first, each with its progress and the money held for it.
+      responses:
+        "200":
+          description: The targets.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SavingsTarget"
+        "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+    post:
+      operationId: createSavingsTarget
+      tags: [savings]
+      summary: Create a savings target
+      description: |
+        A target is a `fully_manual` bucket (400 `not_fully_manual`
+        otherwise) or a savings, BSU, fund or investment account (400
+        `wrong_account_type`), each a target once at most (409
+        `already_target`). A bucket target's goal can't be above its fixed
+        capacity (400 `goal_above_capacity`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewSavingsTarget"
+      responses:
+        "201":
+          description: The new target.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavingsTarget"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/savings/targets/{targetId}:
+    parameters:
+      - $ref: "#/components/parameters/SavingsTargetId"
+    get:
+      operationId: getSavingsTarget
+      tags: [savings]
+      summary: Get a savings target
+      responses:
+        "200":
+          description: The target.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavingsTarget"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+    patch:
+      operationId: updateSavingsTarget
+      tags: [savings]
+      summary: Change a savings target's name, goal or note
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavingsTargetUpdate"
+      responses:
+        "200":
+          description: The changed target.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavingsTarget"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+    delete:
+      operationId: deleteSavingsTarget
+      tags: [savings]
+      summary: Delete a savings target
+      description: |
+        Releases the money held for the target with a savings cancel (SVC)
+        per source account, so it's unallocated again, then deletes the
+        target. Its transactions stay. A target also goes, the same way,
+        when its bucket is deleted or stops being `fully_manual`, or its
+        account is deleted or gets a type that can't be a target.
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/savings/targets/{targetId}/add:
+    parameters:
+      - $ref: "#/components/parameters/SavingsTargetId"
+    post:
+      operationId: addToSavingsTarget
+      tags: [savings]
+      summary: Add to savings
+      description: |
+        Reserves `amount` of the account's unallocated money for the target:
+        a savings reserve (SVR), held until *Done* or *Clear*. More than is
+        unallocated is 409 `not_enough_unallocated`, whose detail says how
+        much is. The account is in the target's currency (400
+        `currency_mismatch`) and isn't the target account itself.
+
+        For a bucket target funded from this account, the money goes into the
+        bucket at once: a savings to bucket (SVB) with just a bucket line,
+        which needs an active cycle (409 `no_active_cycle` or
+        `cycle_overdue`) and room below a fixed capacity (409
+        `above_capacity`). The goal doesn't limit a manual add.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavingsAmount"
+      responses:
+        "200":
+          description: The target with its new held funds or funds.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavingsTarget"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/savings/targets/{targetId}/done:
+    parameters:
+      - $ref: "#/components/parameters/SavingsTargetId"
+    post:
+      operationId: savingsTargetDone
+      tags: [savings]
+      summary: Record held funds as moved
+      description: |
+        The user has moved held money to the target (e.g. made the transfer
+        at the bank). For an account target it records a transfer (TRF) from
+        the source account to the target account; for a bucket target a
+        savings to bucket (SVB), with the transfer's bank lines when the
+        bucket is on another account. Either has a savings line that takes
+        `amount` off what's held, so less than all of it leaves the rest
+        held. An SVB needs an active cycle that contains `at` (409
+        `no_active_cycle` or `cycle_overdue`) and room below a fixed capacity
+        (409 `above_capacity`).
+
+        `at` can't be in the future, and at least `amount` must be held both
+        now and at `at` (409 `not_enough_held`). Reversing the transaction
+        puts the money back on hold; it can't be corrected other than its
+        counterparty, description and tags.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavingsDone"
+      responses:
+        "200":
+          description: The target with what's still held.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavingsTarget"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/savings/targets/{targetId}/clear:
+    parameters:
+      - $ref: "#/components/parameters/SavingsTargetId"
+    post:
+      operationId: clearSavingsTarget
+      tags: [savings]
+      summary: Clear held funds
+      description: Gives `amount` of the money held for the target on the account back to unallocated, with a savings cancel (SVC). At most what's held (409 `not_enough_held`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavingsAmount"
+      responses:
+        "200":
+          description: The target with what's still held.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavingsTarget"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
   /api/v1/notifications:
     get:
       operationId: listNotifications
@@ -2771,6 +3024,13 @@ components:
       required: true
       schema:
         $ref: "#/components/schemas/BucketId"
+
+    SavingsTargetId:
+      name: targetId
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/SavingsHolderId"
 
     TransactionId:
       name: transactionId
@@ -3660,7 +3920,7 @@ components:
     Account:
       type: object
       additionalProperties: false
-      required: [id, name, type, currency, balance, unallocated, expected_income, bank, created_at]
+      required: [id, name, type, currency, balance, unallocated, reserved, reserved_uncovered, expected_income, bank, created_at]
       properties:
         id:
           $ref: "#/components/schemas/AccountId"
@@ -3677,7 +3937,18 @@ components:
         unallocated:
           allOf:
             - $ref: "#/components/schemas/Amount"
-          description: The part of the balance that backs no bucket, balance − Σ CAF of its buckets (spec §7). Negative when the account is overdrawn.
+          description: |
+            The part of the balance that neither backs a bucket nor is reserved
+            for savings: balance − Σ CAF of its buckets − the covered part of
+            `reserved` (spec §7, §8). Negative when the account is overdrawn.
+        reserved:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: What's held on the account for savings (#231), whether or not the balance covers it.
+        reserved_uncovered:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: The part of `reserved` the balance doesn't cover. The buckets are funded first, so reservations are short first.
         expected_income:
           type: string
           allOf:
@@ -5041,10 +5312,167 @@ components:
       pattern: "^[0-9]{16}$"
       example: "2026102512345678"
 
+    SavingsHolderId:
+      type: string
+      description: 10-digit savings target (or distributor) ID.
+      pattern: "^[1-9][0-9]{9}$"
+      example: "4829135521"
+
+    SavingsTarget:
+      type: object
+      additionalProperties: false
+      required: [id, name, custom_name, bucket_id, account_id, currency, goal, note, current, held_total, held, created_at, modified_at]
+      description: A savings target (#231, spec §8) with its progress.
+      properties:
+        id:
+          $ref: "#/components/schemas/SavingsHolderId"
+        name:
+          type: string
+          description: The target's own name, else its bucket's or account's.
+        custom_name:
+          type: string
+          nullable: true
+          description: The target's own name, or null when it uses its bucket's or account's.
+        bucket_id:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/BucketId"
+          nullable: true
+          description: Set when the target is a `fully_manual` bucket.
+        account_id:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/AccountId"
+          nullable: true
+          description: Set when the target is an account.
+        currency:
+          $ref: "#/components/schemas/Currency"
+        goal:
+          $ref: "#/components/schemas/Amount"
+        note:
+          type: string
+          description: The target's note, or "".
+        current:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: The bucket's TF or the account's balance.
+        held_total:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: What's held for the target on all accounts.
+        held:
+          type: array
+          description: What's held for the target, per source account.
+          items:
+            $ref: "#/components/schemas/SavingsHeld"
+        created_at:
+          type: string
+          format: date-time
+        modified_at:
+          type: string
+          format: date-time
+
+    SavingsHeld:
+      type: object
+      additionalProperties: false
+      required: [account_id, amount, covered]
+      properties:
+        account_id:
+          $ref: "#/components/schemas/AccountId"
+        amount:
+          $ref: "#/components/schemas/Amount"
+        covered:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: The part of `amount` the account's balance covers, after its buckets. An account short of its reservations splits what it covers among them by their amounts.
+
+    SavingsTargetName:
+      type: string
+      maxLength: 100
+      description: The target's own name, trimmed; "" (or none) uses the bucket's or account's.
+
+    SavingsNote:
+      type: string
+      maxLength: 500
+      description: A note on the target, trimmed, possibly several lines.
+
+    NewSavingsTarget:
+      type: object
+      additionalProperties: false
+      required: [goal]
+      description: Give either `bucket_id` or `account_id`.
+      properties:
+        bucket_id:
+          $ref: "#/components/schemas/BucketId"
+        account_id:
+          $ref: "#/components/schemas/AccountId"
+        name:
+          $ref: "#/components/schemas/SavingsTargetName"
+        goal:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Above 0. A bucket's TF goal, or an account's balance goal.
+        note:
+          $ref: "#/components/schemas/SavingsNote"
+
+    SavingsTargetUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          $ref: "#/components/schemas/SavingsTargetName"
+        goal:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Above 0.
+        note:
+          $ref: "#/components/schemas/SavingsNote"
+
+    SavingsAmount:
+      type: object
+      additionalProperties: false
+      required: [account_id, amount]
+      properties:
+        account_id:
+          allOf:
+            - $ref: "#/components/schemas/AccountId"
+          description: The source account the money is (to be) held on.
+        amount:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Above 0.
+
+    SavingsDone:
+      type: object
+      additionalProperties: false
+      required: [account_id, amount]
+      properties:
+        account_id:
+          allOf:
+            - $ref: "#/components/schemas/AccountId"
+          description: The source account the money is held on.
+        amount:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Above 0, at most what's held.
+        at:
+          type: string
+          format: date-time
+          description: When the money was moved. Defaults to now.
+        description:
+          type: string
+          maxLength: 500
+          description: An optional description for the transaction.
+
     TransactionType:
       type: string
-      enum: [OPB, BLA, INC, EXP, TRF, INP, OPF, REF, BUA, BAT, OVF]
-      description: See spec §5.4. Only INC, EXP and TRF can be created with `POST /transactions`.
+      enum: [OPB, BLA, INC, EXP, TRF, INP, OPF, REF, BUA, BAT, OVF, SVR, SVC, SVB]
+      description: |
+        See spec §5.4. Only INC, EXP and TRF can be created with
+        `POST /transactions`. SVR (savings reserve), SVC (savings cancel) and
+        SVB (savings to bucket) come from the savings endpoints (#231); they
+        can be reversed, not corrected.
 
     CorrectionType:
       type: string
@@ -5061,6 +5489,24 @@ components:
           allOf:
             - $ref: "#/components/schemas/Amount"
           description: Signed, in the account's currency.
+
+    TransactionSavingsLine:
+      type: object
+      additionalProperties: false
+      required: [holder_id, account_id, amount]
+      properties:
+        holder_id:
+          allOf:
+            - $ref: "#/components/schemas/SavingsHolderId"
+          description: The savings target (or distributor) the money is held for.
+        account_id:
+          allOf:
+            - $ref: "#/components/schemas/AccountId"
+          description: The source account the money is reserved on.
+        amount:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Signed, in the account's currency. Positive holds money, negative releases it or takes it off hold.
 
     TransactionBalance:
       type: object
@@ -5091,7 +5537,7 @@ components:
     Transaction:
       type: object
       additionalProperties: false
-      required: [id, type, at, counterparty, description, tags, triggers_refill, created_at, created_by, corrected, reversed, replaces, replaced_by, schedule_id, bank_lines, bucket_lines, before_reversal, balances_after]
+      required: [id, type, at, counterparty, description, tags, triggers_refill, created_at, created_by, corrected, reversed, replaces, replaced_by, schedule_id, bank_lines, bucket_lines, savings_lines, before_reversal, balances_after]
       properties:
         id:
           $ref: "#/components/schemas/TransactionId"
@@ -5150,6 +5596,11 @@ components:
           description: Effective amounts per bucket, the original plus its corrections. Lines that sum to 0 are left out.
           items:
             $ref: "#/components/schemas/TransactionBucketLine"
+        savings_lines:
+          type: array
+          description: Effective amounts held for savings per holder and source account (#231), as `bank_lines`.
+          items:
+            $ref: "#/components/schemas/TransactionSavingsLine"
         before_reversal:
           description: |
             Set on a reversed transaction: its effective lines just before the
@@ -5178,7 +5629,7 @@ components:
     TransactionVersion:
       type: object
       additionalProperties: false
-      required: [id, correction_type, created_at, created_by, bank_lines, bucket_lines]
+      required: [id, correction_type, created_at, created_by, bank_lines, bucket_lines, savings_lines]
       properties:
         id:
           $ref: "#/components/schemas/TransactionId"
@@ -5198,11 +5649,15 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TransactionBucketLine"
+        savings_lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransactionSavingsLine"
 
     TransactionLines:
       type: object
       additionalProperties: false
-      required: [bank_lines, bucket_lines]
+      required: [bank_lines, bucket_lines, savings_lines]
       properties:
         bank_lines:
           type: array
@@ -5212,6 +5667,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TransactionBucketLine"
+        savings_lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransactionSavingsLine"
 
     TransactionPage:
       type: object

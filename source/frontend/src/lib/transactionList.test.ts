@@ -147,7 +147,11 @@ describe("rows", () => {
       id: "t2",
       reversed: true,
       bank_lines: [],
-      before_reversal: { bank_lines: [{ account_id: "1234", amount: "-80.00" }], bucket_lines: [] },
+      before_reversal: {
+        bank_lines: [{ account_id: "1234", amount: "-80.00" }],
+        bucket_lines: [],
+        savings_lines: [],
+      },
     });
     expect(rowAmount(reversed, { accountId: null, bucketId: null }).amount).toBe("-80.00");
     expect(isCorrectable(reversed)).toBe(false);

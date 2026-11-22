@@ -294,7 +294,7 @@ describe("a bucket's transactions", () => {
     const query = apiMock.calls("GET /api/v1/transactions")[0]?.query;
     expect(query?.get("bucket_id")).toBe(groceries.id);
     expect(query?.get("cycle_id")).toBe(active);
-    expect(query?.getAll("type")).toHaveLength(10);
+    expect(query?.getAll("type")).toHaveLength(13);
     // A row opens it on the Transactions screen.
     expect(dialog.getByRole("link", { name: /Rema 1000/ })).toHaveAttribute(
       "href",

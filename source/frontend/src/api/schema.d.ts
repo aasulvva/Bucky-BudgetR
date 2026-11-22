@@ -1189,6 +1189,11 @@ export interface paths {
          *     the old one. Refills the income triggered on the old account are
          *     undone, and it triggers them on the new one if it can.
          *
+         *     A transfer that took held savings off hold (it has `savings_lines`,
+         *     #231) keeps its amount and accounts (409 `savings_transfer`): only
+         *     `counterparty`, `description` and `tags` can change. Reverse it to
+         *     put the money back on hold.
+         *
          *     Bucket lines can only change while the original time is in the
          *     active cycle (409 `bucket_lines_locked`); the bank amount,
          *     counterparty, description and tags can change at any time. Only INC, EXP, TRF, OPB
@@ -1219,8 +1224,15 @@ export interface paths {
          * @description Records a reversal that cancels every effective line, at the original
          *     time. The transaction stays in the list, marked `reversed`. The same
          *     rules as for corrections apply: bucket lines must be in the active
-         *     cycle (409 `bucket_lines_locked`), only INC, EXP, TRF, OPB and BLA
-         *     (409 `not_correctable`), and only once (409 `already_reversed`).
+         *     cycle (409 `bucket_lines_locked`), only INC, EXP, TRF, OPB and BLA,
+         *     and the savings types SVR, SVC and SVB (409 `not_correctable`), and
+         *     only once (409 `already_reversed`).
+         *
+         *     Savings lines (#231) are cancelled too: reversing a *Done* transfer
+         *     or SVB puts the money back on hold. Reversing what holds money (an
+         *     SVR) is refused once it's no longer held (409 `not_enough_held`), and
+         *     reversing a release (an SVC) unless the account has enough
+         *     unallocated money to hold it again (409 `not_enough_unallocated`).
          *
          *     Reversing an income undoes the refills it triggered in the active
          *     cycle (their REF and OVF are reversed), so those buckets can be
@@ -1544,6 +1556,151 @@ export interface paths {
         get: operations["listUpcomingTransactions"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/savings/targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List savings targets
+         * @description The user's savings targets (#231, spec §8), oldest first, each with its progress and the money held for it.
+         */
+        get: operations["listSavingsTargets"];
+        put?: never;
+        /**
+         * Create a savings target
+         * @description A target is a `fully_manual` bucket (400 `not_fully_manual`
+         *     otherwise) or a savings, BSU, fund or investment account (400
+         *     `wrong_account_type`), each a target once at most (409
+         *     `already_target`). A bucket target's goal can't be above its fixed
+         *     capacity (400 `goal_above_capacity`).
+         */
+        post: operations["createSavingsTarget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/savings/targets/{targetId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                targetId: components["parameters"]["SavingsTargetId"];
+            };
+            cookie?: never;
+        };
+        /** Get a savings target */
+        get: operations["getSavingsTarget"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a savings target
+         * @description Releases the money held for the target with a savings cancel (SVC)
+         *     per source account, so it's unallocated again, then deletes the
+         *     target. Its transactions stay. A target also goes, the same way,
+         *     when its bucket is deleted or stops being `fully_manual`, or its
+         *     account is deleted or gets a type that can't be a target.
+         */
+        delete: operations["deleteSavingsTarget"];
+        options?: never;
+        head?: never;
+        /** Change a savings target's name, goal or note */
+        patch: operations["updateSavingsTarget"];
+        trace?: never;
+    };
+    "/api/v1/savings/targets/{targetId}/add": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                targetId: components["parameters"]["SavingsTargetId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add to savings
+         * @description Reserves `amount` of the account's unallocated money for the target:
+         *     a savings reserve (SVR), held until *Done* or *Clear*. More than is
+         *     unallocated is 409 `not_enough_unallocated`, whose detail says how
+         *     much is. The account is in the target's currency (400
+         *     `currency_mismatch`) and isn't the target account itself.
+         *
+         *     For a bucket target funded from this account, the money goes into the
+         *     bucket at once: a savings to bucket (SVB) with just a bucket line,
+         *     which needs an active cycle (409 `no_active_cycle` or
+         *     `cycle_overdue`) and room below a fixed capacity (409
+         *     `above_capacity`). The goal doesn't limit a manual add.
+         */
+        post: operations["addToSavingsTarget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/savings/targets/{targetId}/done": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                targetId: components["parameters"]["SavingsTargetId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record held funds as moved
+         * @description The user has moved held money to the target (e.g. made the transfer
+         *     at the bank). For an account target it records a transfer (TRF) from
+         *     the source account to the target account; for a bucket target a
+         *     savings to bucket (SVB), with the transfer's bank lines when the
+         *     bucket is on another account. Either has a savings line that takes
+         *     `amount` off what's held, so less than all of it leaves the rest
+         *     held. An SVB needs an active cycle that contains `at` (409
+         *     `no_active_cycle` or `cycle_overdue`) and room below a fixed capacity
+         *     (409 `above_capacity`).
+         *
+         *     `at` can't be in the future, and at least `amount` must be held both
+         *     now and at `at` (409 `not_enough_held`). Reversing the transaction
+         *     puts the money back on hold; it can't be corrected other than its
+         *     counterparty, description and tags.
+         */
+        post: operations["savingsTargetDone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/savings/targets/{targetId}/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                targetId: components["parameters"]["SavingsTargetId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clear held funds
+         * @description Gives `amount` of the money held for the target on the account back to unallocated, with a savings cancel (SVC). At most what's held (409 `not_enough_held`).
+         */
+        post: operations["clearSavingsTarget"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2152,8 +2309,16 @@ export interface components {
             currency: components["schemas"]["Currency"];
             bank: components["schemas"]["AccountBank"];
             balance: components["schemas"]["Amount"];
-            /** @description The part of the balance that backs no bucket, balance − Σ CAF of its buckets (spec §7). Negative when the account is overdrawn. */
+            /**
+             * @description The part of the balance that neither backs a bucket nor is reserved
+             *     for savings: balance − Σ CAF of its buckets − the covered part of
+             *     `reserved` (spec §7, §8). Negative when the account is overdrawn.
+             */
             unallocated: components["schemas"]["Amount"];
+            /** @description What's held on the account for savings (#231), whether or not the balance covers it. */
+            reserved: components["schemas"]["Amount"];
+            /** @description The part of `reserved` the balance doesn't cover. The buckets are funded first, so reservations are short first. */
+            reserved_uncovered: components["schemas"]["Amount"];
             /** @description The income expected on the account per cycle, which Budget setup compares the buckets' refill amounts with (spec §9). Null until entered. */
             expected_income: (string & components["schemas"]["Amount"]) | null;
             /** Format: date-time */
@@ -2924,15 +3089,101 @@ export interface components {
          */
         TransactionId: string;
         /**
-         * @description See spec §5.4. Only INC, EXP and TRF can be created with `POST /transactions`.
+         * @description 10-digit savings target (or distributor) ID.
+         * @example 4829135521
+         */
+        SavingsHolderId: string;
+        /** @description A savings target (#231, spec §8) with its progress. */
+        SavingsTarget: {
+            id: components["schemas"]["SavingsHolderId"];
+            /** @description The target's own name, else its bucket's or account's. */
+            name: string;
+            /** @description The target's own name, or null when it uses its bucket's or account's. */
+            custom_name: string | null;
+            /** @description Set when the target is a `fully_manual` bucket. */
+            bucket_id: (string & components["schemas"]["BucketId"]) | null;
+            /** @description Set when the target is an account. */
+            account_id: (string & components["schemas"]["AccountId"]) | null;
+            currency: components["schemas"]["Currency"];
+            goal: components["schemas"]["Amount"];
+            /** @description The target's note, or "". */
+            note: string;
+            /** @description The bucket's TF or the account's balance. */
+            current: components["schemas"]["Amount"];
+            /** @description What's held for the target on all accounts. */
+            held_total: components["schemas"]["Amount"];
+            /** @description What's held for the target, per source account. */
+            held: components["schemas"]["SavingsHeld"][];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            modified_at: string;
+        };
+        SavingsHeld: {
+            account_id: components["schemas"]["AccountId"];
+            amount: components["schemas"]["Amount"];
+            /** @description The part of `amount` the account's balance covers, after its buckets. An account short of its reservations splits what it covers among them by their amounts. */
+            covered: components["schemas"]["Amount"];
+        };
+        /** @description The target's own name, trimmed; "" (or none) uses the bucket's or account's. */
+        SavingsTargetName: string;
+        /** @description A note on the target, trimmed, possibly several lines. */
+        SavingsNote: string;
+        /** @description Give either `bucket_id` or `account_id`. */
+        NewSavingsTarget: {
+            bucket_id?: components["schemas"]["BucketId"];
+            account_id?: components["schemas"]["AccountId"];
+            name?: components["schemas"]["SavingsTargetName"];
+            /** @description Above 0. A bucket's TF goal, or an account's balance goal. */
+            goal: components["schemas"]["Amount"];
+            note?: components["schemas"]["SavingsNote"];
+        };
+        SavingsTargetUpdate: {
+            name?: components["schemas"]["SavingsTargetName"];
+            /** @description Above 0. */
+            goal?: components["schemas"]["Amount"];
+            note?: components["schemas"]["SavingsNote"];
+        };
+        SavingsAmount: {
+            /** @description The source account the money is (to be) held on. */
+            account_id: components["schemas"]["AccountId"];
+            /** @description Above 0. */
+            amount: components["schemas"]["Amount"];
+        };
+        SavingsDone: {
+            /** @description The source account the money is held on. */
+            account_id: components["schemas"]["AccountId"];
+            /** @description Above 0, at most what's held. */
+            amount: components["schemas"]["Amount"];
+            /**
+             * Format: date-time
+             * @description When the money was moved. Defaults to now.
+             */
+            at?: string;
+            /** @description An optional description for the transaction. */
+            description?: string;
+        };
+        /**
+         * @description See spec §5.4. Only INC, EXP and TRF can be created with
+         *     `POST /transactions`. SVR (savings reserve), SVC (savings cancel) and
+         *     SVB (savings to bucket) come from the savings endpoints (#231); they
+         *     can be reversed, not corrected.
          * @enum {string}
          */
-        TransactionType: "OPB" | "BLA" | "INC" | "EXP" | "TRF" | "INP" | "OPF" | "REF" | "BUA" | "BAT" | "OVF";
+        TransactionType: "OPB" | "BLA" | "INC" | "EXP" | "TRF" | "INP" | "OPF" | "REF" | "BUA" | "BAT" | "OVF" | "SVR" | "SVC" | "SVB";
         /** @enum {string} */
         CorrectionType: "none" | "adjustment" | "reversal";
         TransactionBankLine: {
             account_id: components["schemas"]["AccountId"];
             /** @description Signed, in the account's currency. */
+            amount: components["schemas"]["Amount"];
+        };
+        TransactionSavingsLine: {
+            /** @description The savings target (or distributor) the money is held for. */
+            holder_id: components["schemas"]["SavingsHolderId"];
+            /** @description The source account the money is reserved on. */
+            account_id: components["schemas"]["AccountId"];
+            /** @description Signed, in the account's currency. Positive holds money, negative releases it or takes it off hold. */
             amount: components["schemas"]["Amount"];
         };
         TransactionBalance: {
@@ -2980,6 +3231,8 @@ export interface components {
             bank_lines: components["schemas"]["TransactionBankLine"][];
             /** @description Effective amounts per bucket, the original plus its corrections. Lines that sum to 0 are left out. */
             bucket_lines: components["schemas"]["TransactionBucketLine"][];
+            /** @description Effective amounts held for savings per holder and source account (#231), as `bank_lines`. */
+            savings_lines: components["schemas"]["TransactionSavingsLine"][];
             /**
              * @description Set on a reversed transaction: its effective lines just before the
              *     reversal, so what it amounted to can still be shown. Null otherwise.
@@ -3005,10 +3258,12 @@ export interface components {
             created_by: string | null;
             bank_lines: components["schemas"]["TransactionBankLine"][];
             bucket_lines: components["schemas"]["TransactionBucketLine"][];
+            savings_lines: components["schemas"]["TransactionSavingsLine"][];
         };
         TransactionLines: {
             bank_lines: components["schemas"]["TransactionBankLine"][];
             bucket_lines: components["schemas"]["TransactionBucketLine"][];
+            savings_lines: components["schemas"]["TransactionSavingsLine"][];
         };
         TransactionPage: {
             items: components["schemas"]["Transaction"][];
@@ -3393,6 +3648,7 @@ export interface components {
         AccountId: components["schemas"]["AccountId"];
         CycleId: components["schemas"]["CycleId"];
         BucketId: components["schemas"]["BucketId"];
+        SavingsTargetId: components["schemas"]["SavingsHolderId"];
         TransactionId: components["schemas"]["TransactionId"];
         ScheduleId: components["schemas"]["ScheduleId"];
         ScheduledTransactionId: components["schemas"]["ScheduledTransactionId"];
@@ -5374,6 +5630,228 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listSavingsTargets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The targets. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsTarget"][];
+                };
+            };
+            401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createSavingsTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewSavingsTarget"];
+            };
+        };
+        responses: {
+            /** @description The new target. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsTarget"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getSavingsTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                targetId: components["parameters"]["SavingsTargetId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The target. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsTarget"];
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteSavingsTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                targetId: components["parameters"]["SavingsTargetId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    updateSavingsTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                targetId: components["parameters"]["SavingsTargetId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavingsTargetUpdate"];
+            };
+        };
+        responses: {
+            /** @description The changed target. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsTarget"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    addToSavingsTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                targetId: components["parameters"]["SavingsTargetId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavingsAmount"];
+            };
+        };
+        responses: {
+            /** @description The target with its new held funds or funds. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsTarget"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    savingsTargetDone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                targetId: components["parameters"]["SavingsTargetId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavingsDone"];
+            };
+        };
+        responses: {
+            /** @description The target with what's still held. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsTarget"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    clearSavingsTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                targetId: components["parameters"]["SavingsTargetId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavingsAmount"];
+            };
+        };
+        responses: {
+            /** @description The target with what's still held. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavingsTarget"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };

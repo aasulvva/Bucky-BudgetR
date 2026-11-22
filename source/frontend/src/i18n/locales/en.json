@@ -891,7 +891,10 @@
     "OPF": "Opening funds",
     "BUA": "Bucket adjustment",
     "BAT": "Bucket transfer",
-    "INP": "Internal payment"
+    "INP": "Internal payment",
+    "SVR": "Reserved for savings",
+    "SVC": "Savings released",
+    "SVB": "Savings to bucket"
   },
   "transactions": {
     "new": "New transaction",

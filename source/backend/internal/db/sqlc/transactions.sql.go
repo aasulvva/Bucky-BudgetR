@@ -273,6 +273,39 @@ func (q *Queries) ListReplacedBy(ctx context.Context, ids []string) ([]ListRepla
 	return items, nil
 }
 
+const listSavingsLinesFor = `-- name: ListSavingsLinesFor :many
+SELECT id, transaction_id, holder_id, account_id, cycle_id, amount, created_at, created_by FROM savings_transactions WHERE transaction_id = ANY($1::text[]) ORDER BY id
+`
+
+func (q *Queries) ListSavingsLinesFor(ctx context.Context, ids []string) ([]SavingsTransaction, error) {
+	rows, err := q.db.Query(ctx, listSavingsLinesFor, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SavingsTransaction{}
+	for rows.Next() {
+		var i SavingsTransaction
+		if err := rows.Scan(
+			&i.ID,
+			&i.TransactionID,
+			&i.HolderID,
+			&i.AccountID,
+			&i.CycleID,
+			&i.Amount,
+			&i.CreatedAt,
+			&i.CreatedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSchedulesFor = `-- name: ListSchedulesFor :many
 SELECT transaction_id::text AS transaction_id, schedule_id FROM schedule_occurrences
 WHERE transaction_id = ANY($1::text[])

@@ -88,8 +88,14 @@ type Account struct {
 	// Bank is the bank the account is in (#70), "" when not given.
 	Bank    string
 	Balance decimal.Decimal
-	// Unallocated is the part of the balance no bucket's CAF uses (spec §7).
+	// Unallocated is the part of the balance that neither a bucket's CAF nor
+	// a savings reservation uses (spec §7, §8).
 	Unallocated decimal.Decimal
+	// Reserved is what's held on the account for savings (#231), and
+	// ReservedUncovered the part of it the balance doesn't cover, since the
+	// buckets are funded first.
+	Reserved          decimal.Decimal
+	ReservedUncovered decimal.Decimal
 	// ExpectedIncome is the income expected per cycle, for Budget setup
 	// (spec §9). Invalid until entered.
 	ExpectedIncome decimal.NullDecimal
@@ -148,17 +154,36 @@ type Remaining struct {
 	Adjust     bool
 }
 
+// Savings is what the savings module (#231) does when accounts or their
+// buckets go away, inside the same database transaction. The savings package
+// implements it (it imports this package's neighbours, not the other way).
+type Savings interface {
+	// ReleaseBucket releases the money held for the bucket's savings target
+	// and deletes the target, if the bucket is one.
+	ReleaseBucket(ctx context.Context, tx pgx.Tx, userID, bucketID string) error
+	// ReleaseAccount releases every reservation on the account, and the
+	// money held for the account's own target, which it deletes.
+	ReleaseAccount(ctx context.Context, tx pgx.Tx, userID, accountID string) error
+	// ReleaseAccountTarget releases and deletes the account's target only,
+	// when the account's type can't be a target any more.
+	ReleaseAccountTarget(ctx context.Context, tx pgx.Tx, userID, accountID string) error
+}
+
 // Options configures a Service.
 type Options struct {
 	// Now returns the current time. Defaults to time.Now.
 	Now func() time.Time
+	// Savings releases savings when an account or bucket goes away. Nil
+	// skips it (tests without savings).
+	Savings Savings
 }
 
 // Service manages bank accounts.
 type Service struct {
-	pool   *pgxpool.Pool
-	ledger *ledger.Ledger
-	now    func() time.Time
+	pool    *pgxpool.Pool
+	ledger  *ledger.Ledger
+	now     func() time.Time
+	savings Savings
 }
 
 // NewService returns a Service that records money movements in l.
@@ -166,7 +191,12 @@ func NewService(pool *pgxpool.Pool, l *ledger.Ledger, opts Options) *Service {
 	if opts.Now == nil {
 		opts.Now = time.Now
 	}
-	return &Service{pool: pool, ledger: l, now: opts.Now}
+	return &Service{pool: pool, ledger: l, now: opts.Now, savings: opts.Savings}
+}
+
+// TargetTypes are the account types that can be a savings target (#231).
+var TargetTypes = []sqlc.AccountType{
+	sqlc.AccountTypeSavings, sqlc.AccountTypeBsu, sqlc.AccountTypeFund, sqlc.AccountTypeInvestment,
 }
 
 // List returns the user's accounts, sorted by name.
@@ -196,17 +226,13 @@ func (s *Service) List(ctx context.Context, userID string) ([]Account, error) {
 	if err != nil {
 		return nil, err
 	}
-	balances, err := balance.Accounts(ctx, s.pool, userID)
-	if err != nil {
-		return nil, err
-	}
-	allocated, err := allocatedByAccount(ctx, s.pool, userID)
+	money, err := balance.AccountMoney(ctx, s.pool, userID)
 	if err != nil {
 		return nil, err
 	}
 	out := make([]Account, len(rows))
 	for i, r := range rows {
-		out[i] = toAccount(r, balances[r.ID], allocated[r.ID])
+		out[i] = toAccount(r, money[r.ID])
 	}
 	return out, nil
 }
@@ -270,7 +296,7 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Account, er
 				return fmt.Errorf("record opening balance: %w", err)
 			}
 		}
-		out = toAccount(row, n.OpeningBalance, decimal.Zero)
+		out = toAccount(row, balance.NewMoney(n.OpeningBalance, decimal.Zero, decimal.Zero))
 		return nil
 	})
 	if err != nil {
@@ -323,6 +349,12 @@ func (s *Service) Update(ctx context.Context, userID, id string, c Changes) (Acc
 		}
 		if _, err := q.UpdateAccount(ctx, params); err != nil {
 			return nameTaken(err)
+		}
+		// An account that can't be a savings target any more stops being one.
+		if s.savings != nil && params.AccountType != row.AccountType && !slices.Contains(TargetTypes, params.AccountType) {
+			if err := s.savings.ReleaseAccountTarget(ctx, tx, userID, id); err != nil {
+				return err
+			}
 		}
 		out, err = s.get(ctx, tx, userID, id)
 		return err
@@ -458,6 +490,12 @@ func (s *Service) Delete(ctx context.Context, userID, id string, st Settlement) 
 		if err := s.deleteBuckets(ctx, tx, userID, st.DeleteBuckets); err != nil {
 			return err
 		}
+		// Savings held on the account, or for it, are released (#231).
+		if s.savings != nil {
+			if err := s.savings.ReleaseAccount(ctx, tx, userID, id); err != nil {
+				return err
+			}
+		}
 
 		balances, err := balance.Accounts(ctx, tx, userID)
 		if err != nil {
@@ -499,6 +537,11 @@ func (s *Service) deleteBuckets(ctx context.Context, tx pgx.Tx, userID string, i
 	q := sqlc.New(tx)
 	// Once each, even if the list repeats one.
 	for _, b := range slices.Compact(slices.Sorted(slices.Values(ids))) {
+		if s.savings != nil {
+			if err := s.savings.ReleaseBucket(ctx, tx, userID, b); err != nil {
+				return err
+			}
+		}
 		// Before the delete: the ledger refuses lines on deleted buckets.
 		if !tf[b].IsZero() {
 			if _, err := s.ledger.Record(ctx, tx, ledger.Entry{
@@ -567,35 +610,19 @@ func (s *Service) get(ctx context.Context, db sqlc.DBTX, userID, id string) (Acc
 	if err != nil {
 		return Account{}, notFound(err, id)
 	}
-	balances, err := balance.Accounts(ctx, db, userID)
+	money, err := balance.AccountMoney(ctx, db, userID)
 	if err != nil {
 		return Account{}, err
 	}
-	allocated, err := allocatedByAccount(ctx, db, userID)
-	if err != nil {
-		return Account{}, err
-	}
-	return toAccount(row, balances[id], allocated[id]), nil
+	return toAccount(row, money[id]), nil
 }
 
-func toAccount(r sqlc.BankAccount, bal, allocated decimal.Decimal) Account {
+func toAccount(r sqlc.BankAccount, m balance.Money) Account {
 	return Account{
 		ID: r.ID, Name: r.Name, Type: r.AccountType, Currency: r.Currency, Bank: r.Bank,
-		Balance: bal, Unallocated: bal.Sub(allocated), ExpectedIncome: r.ExpectedIncome, CreatedAt: r.CreatedAt,
+		Balance: m.Balance, Unallocated: m.Unallocated, Reserved: m.Reserved, ReservedUncovered: m.Uncovered(),
+		ExpectedIncome: r.ExpectedIncome, CreatedAt: r.CreatedAt,
 	}
-}
-
-// allocatedByAccount returns Σ CAF of the live buckets per source account.
-func allocatedByAccount(ctx context.Context, db sqlc.DBTX, userID string) (map[string]decimal.Decimal, error) {
-	rows, err := sqlc.New(db).AllocatedByAccount(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	out := make(map[string]decimal.Decimal, len(rows))
-	for _, r := range rows {
-		out[r.SourceAccountID] = r.Allocated
-	}
-	return out, nil
 }
 
 func checkName(name string) (string, error) {
