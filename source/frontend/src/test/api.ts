@@ -60,6 +60,7 @@ function defaults(): Map<string, Handler> {
       { body: { id: null, hold_mode: "immediate", min_amount: null, held: [] } },
     ],
     ["GET /api/v1/savings/rules", { body: [] }],
+    ["GET /api/v1/savings/budget", { body: [] }],
   ]);
 }
 

@@ -2,7 +2,7 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { apiMock, problem } from "@/test/api";
-import { account, bucket } from "@/test/fixtures";
+import { account, budgetEntry, bucket, savingsTarget } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 
 const main = account({ id: "1234", name: "Main account", balance: "100.00" });
@@ -230,6 +230,26 @@ describe("Account setup", () => {
     await userEvent.click(await dialog.findByRole("button", { name: "Delete account" }));
     await screen.findByText("Buffer account deleted.");
     expect(apiMock.calls("POST /api/v1/accounts/2345/delete")[0]?.body).toBeUndefined();
+  });
+
+  it("names the savings budget's fixed amounts it deletes (#234)", async () => {
+    apiMock.on("GET /api/v1/savings/targets", {
+      body: [savingsTarget({ id: "1000001001", name: "Rainy day" })],
+    });
+    apiMock.on("GET /api/v1/savings/budget", {
+      body: [
+        budgetEntry({ id: "2345000001", account_id: "2345", target_id: "1000001001" }),
+        budgetEntry({ id: "1234000001", account_id: "1234" }),
+      ],
+    });
+    renderRoute("/accounts/setup?edit=2345");
+    const dialog = within(await screen.findByRole("dialog", { name: "Edit account" }));
+    await userEvent.click(dialog.getByRole("button", { name: "Delete…" }));
+    expect(
+      await dialog.findByText(
+        /^Deletes 1 fixed amount in the savings budget: .*500\.00 to Rainy day\. What it reserved/,
+      ),
+    ).toBeInTheDocument();
   });
 
   it("explains when buckets have nowhere to go", async () => {

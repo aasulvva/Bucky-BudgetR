@@ -145,6 +145,7 @@ describe("budgetChanges", () => {
       created: [],
       incomes: [{ account_id: buffer.id, expected_income: "5000.00" }],
       ras: [{ bucket_id: rent.id, refill_amount: "11000.00" }],
+      savings: [],
       count: 2,
       invalid: false,
     });

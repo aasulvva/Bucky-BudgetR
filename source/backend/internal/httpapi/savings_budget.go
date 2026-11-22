@@ -126,7 +126,7 @@ func toAPIBudgetEntry(e savings.BudgetEntry) api.SavingsBudgetEntry {
 	out := api.SavingsBudgetEntry{
 		Id: e.ID, AccountId: e.AccountID, TargetId: nullable.NewNullNullable[api.SavingsHolderId](),
 		Amount: e.Amount.StringFixed(money.Places), When: api.SavingsBudgetWhen(e.When), Stopped: e.Stopped,
-		ThisCycle: nullable.NewNullNullable[api.SavingsBudgetRun](), CreatedAt: e.CreatedAt, ModifiedAt: e.ModifiedAt,
+		ThisCycle: nullable.NewNullNullable[api.SavingsBudgetRun](), CreatedAt: e.CreatedAt.UTC(), ModifiedAt: e.ModifiedAt.UTC(),
 	}
 	if e.TargetID != "" {
 		out.TargetId.Set(e.TargetID)
@@ -137,7 +137,7 @@ func toAPIBudgetEntry(e savings.BudgetEntry) api.SavingsBudgetEntry {
 			At: nullable.NewNullNullable[time.Time](),
 		}
 		if r.At != nil {
-			run.At.Set(*r.At)
+			run.At.Set(r.At.UTC())
 		}
 		out.ThisCycle.Set(run)
 	}

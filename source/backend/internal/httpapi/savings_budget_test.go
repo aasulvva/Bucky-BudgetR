@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"testing"
 	"time"
 
@@ -65,6 +66,10 @@ func TestSavingsBudgetAPI(t *testing.T) {
 
 	w = do(http.MethodPost, "/api/v1/savings/budget/"+e.Id+"/save-now", nil)
 	expect(t, "save now", w, http.StatusOK, "")
+	// Times go out in UTC (pgx reads them in the local zone).
+	if body := w.Body.String(); !utcTimes.MatchString(body) || localTimes.MatchString(body) {
+		t.Errorf("times not in UTC: %s", body)
+	}
 	if run := decode[api.SavingsBudgetEntry](t, w).ThisCycle.MustGet(); run.Reserved != "200.00" || run.At.IsNull() {
 		t.Errorf("saved %+v", run)
 	}
@@ -94,3 +99,8 @@ func TestSavingsBudgetAPI(t *testing.T) {
 		t.Errorf("listed %+v", list)
 	}
 }
+
+var (
+	utcTimes   = regexp.MustCompile(`"at":"[^"]+Z"`)
+	localTimes = regexp.MustCompile(`"(at|created_at|modified_at)":"[^"]+[+-]\d\d:\d\d"`)
+)

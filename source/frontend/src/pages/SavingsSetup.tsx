@@ -10,20 +10,23 @@ import {
   useMantineTheme,
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
-import { IconArrowsSplit, IconPlus } from "@tabler/icons-react";
+import { IconArrowsSplit, IconCalendarDollar, IconPlus } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router";
 
 import { useAccounts, useBuckets, type Account, type Bucket } from "@/api/accounts";
 import {
+  useSavingsBudget,
   useSavingsDistributor,
   useSavingsRules,
   useSavingsTargets,
+  type SavingsBudgetEntry,
   type SavingsDistributor,
   type SavingsTarget,
 } from "@/api/savings";
 import { QueryState } from "@/components/QueryState";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
+import { BudgetForm } from "@/components/savings/BudgetForm";
 import { DistributorForm } from "@/components/savings/DistributorForm";
 import { TargetForm, TargetTitle } from "@/components/savings/TargetForm";
 import { formatMoney } from "@/lib/money";
@@ -31,7 +34,7 @@ import { targetKindText } from "@/lib/savings";
 
 /**
  * What's selected in the URL: a target's ID (`?edit=<id>`), "new" (`?new`),
- * "distributor" (`?distributor`, #232), or null.
+ * "distributor" (`?distributor`, #232), "budget" (`?budget`, #234), or null.
  */
 type Selection = string | null;
 
@@ -39,7 +42,7 @@ type Selection = string | null;
  * Savings setup (spec §9): the savings distributor and the targets, and the
  * selected one's form beside them (full screen on mobile). `?edit=<id>` opens
  * a target, as its cog on the Savings screen does; `?distributor` the
- * distributor.
+ * distributor; `?budget` the savings budget.
  */
 export default function SavingsSetup() {
   const { t } = useTranslation();
@@ -50,12 +53,15 @@ export default function SavingsSetup() {
   const targets = useSavingsTargets();
   const distributor = useSavingsDistributor();
   const rules = useSavingsRules();
+  const budget = useSavingsBudget();
   const [params, setParams] = useSearchParams();
   const selection: Selection = params.has("new")
     ? "new"
     : params.has("distributor")
       ? "distributor"
-      : params.get("edit");
+      : params.has("budget")
+        ? "budget"
+        : params.get("edit");
 
   const select = (next: Selection) => {
     setParams(
@@ -63,6 +69,7 @@ export default function SavingsSetup() {
         const p = new URLSearchParams();
         if (next === "new") p.set("new", "");
         else if (next === "distributor") p.set("distributor", "");
+        else if (next === "budget") p.set("budget", "");
         else if (next !== null) p.set("edit", next);
         return p;
       },
@@ -95,90 +102,113 @@ export default function SavingsSetup() {
                   <QueryState query={distributor}>
                     {(dist) => (
                       <QueryState query={rules}>
-                        {(ruleList) => {
-                          const onDistributor = selection === "distributor";
-                          const editing =
-                            selection && selection !== "new" && !onDistributor
-                              ? targetList.find((x) => x.id === selection)
-                              : undefined;
-                          const open =
-                            selection === "new" || onDistributor || editing !== undefined;
-                          const form = onDistributor ? (
-                            <DistributorForm
-                              distributor={dist}
-                              targets={targetList}
-                              rules={ruleList}
-                              accounts={accountList}
-                              buckets={bucketList}
-                            />
-                          ) : (
-                            open && (
-                              <TargetForm
-                                key={editing?.id ?? "new"}
-                                target={editing}
-                                targets={targetList}
-                                accounts={accountList}
-                                buckets={bucketList}
-                                ruleCount={
-                                  ruleList.filter((r) => r.target_id === editing?.id).length
-                                }
-                                onDone={(saved) => {
-                                  select(isDesktop ? saved : null);
-                                }}
-                              />
-                            )
-                          );
-                          const title = onDistributor ? (
-                            t("savingsSetup.distributor.title")
-                          ) : (
-                            <TargetTitle target={editing} />
-                          );
-                          const list = (
-                            <TargetList
-                              targets={targetList}
-                              distributor={dist}
-                              accounts={accountList}
-                              buckets={bucketList}
-                              selected={onDistributor ? "distributor" : (editing?.id ?? null)}
-                              onSelect={select}
-                            />
-                          );
-                          if (!isDesktop) {
-                            return (
-                              <>
-                                {list}
-                                <ResponsiveModal
-                                  opened={open}
-                                  title={title}
-                                  onClose={() => {
-                                    select(null);
-                                  }}
-                                >
-                                  {form}
-                                </ResponsiveModal>
-                              </>
-                            );
-                          }
-                          return (
-                            <Group align="flex-start" gap="lg" wrap="nowrap">
-                              <Box w={320} style={{ flexShrink: 0 }}>
-                                {list}
-                              </Box>
-                              <Card withBorder style={{ flex: 1, minWidth: 0 }}>
-                                {form ? (
-                                  <Stack gap="md">
-                                    <Title order={3} size="h4">
-                                      {title}
-                                    </Title>
-                                    {form}
-                                  </Stack>
-                                ) : (
-                                  <Text c="dimmed">{t("savingsSetup.pick")}</Text>
-                                )}
-                              </Card>
-                            </Group>
-                          );
-                        }}
+                        {(ruleList) => (
+                          <QueryState query={budget}>
+                            {(entries) => {
+                              const onDistributor = selection === "distributor";
+                              const onBudget = selection === "budget";
+                              const editing =
+                                selection && selection !== "new" && !onDistributor && !onBudget
+                                  ? targetList.find((x) => x.id === selection)
+                                  : undefined;
+                              const open =
+                                selection === "new" ||
+                                onDistributor ||
+                                onBudget ||
+                                editing !== undefined;
+                              const form = onBudget ? (
+                                <BudgetForm
+                                  entries={entries}
+                                  targets={targetList}
+                                  accounts={accountList}
+                                />
+                              ) : onDistributor ? (
+                                <DistributorForm
+                                  distributor={dist}
+                                  targets={targetList}
+                                  rules={ruleList}
+                                  accounts={accountList}
+                                  buckets={bucketList}
+                                />
+                              ) : (
+                                open && (
+                                  <TargetForm
+                                    key={editing?.id ?? "new"}
+                                    target={editing}
+                                    targets={targetList}
+                                    accounts={accountList}
+                                    buckets={bucketList}
+                                    ruleCount={
+                                      ruleList.filter((r) => r.target_id === editing?.id).length
+                                    }
+                                    onDone={(saved) => {
+                                      select(isDesktop ? saved : null);
+                                    }}
+                                  />
+                                )
+                              );
+                              const title = onBudget ? (
+                                t("savingsSetup.budget.title")
+                              ) : onDistributor ? (
+                                t("savingsSetup.distributor.title")
+                              ) : (
+                                <TargetTitle target={editing} />
+                              );
+                              const list = (
+                                <TargetList
+                                  targets={targetList}
+                                  distributor={dist}
+                                  entries={entries}
+                                  accounts={accountList}
+                                  buckets={bucketList}
+                                  selected={
+                                    onBudget
+                                      ? "budget"
+                                      : onDistributor
+                                        ? "distributor"
+                                        : (editing?.id ?? null)
+                                  }
+                                  onSelect={select}
+                                />
+                              );
+                              if (!isDesktop) {
+                                return (
+                                  <>
+                                    {list}
+                                    <ResponsiveModal
+                                      opened={open}
+                                      title={title}
+                                      onClose={() => {
+                                        select(null);
+                                      }}
+                                    >
+                                      {form}
+                                    </ResponsiveModal>
+                                  </>
+                                );
+                              }
+                              return (
+                                <Group align="flex-start" gap="lg" wrap="nowrap">
+                                  <Box w={320} style={{ flexShrink: 0 }}>
+                                    {list}
+                                  </Box>
+                                  <Card withBorder style={{ flex: 1, minWidth: 0 }}>
+                                    {form ? (
+                                      <Stack gap="md">
+                                        <Title order={3} size="h4">
+                                          {title}
+                                        </Title>
+                                        {form}
+                                      </Stack>
+                                    ) : (
+                                      <Text c="dimmed">{t("savingsSetup.pick")}</Text>
+                                    )}
+                                  </Card>
+                                </Group>
+                              );
+                            }}
+                          </QueryState>
+                        )}
                       </QueryState>
                     )}
                   </QueryState>
@@ -195,6 +225,7 @@ export default function SavingsSetup() {
 function TargetList({
   targets,
   distributor,
+  entries,
   accounts,
   buckets,
   selected,
@@ -202,6 +233,7 @@ function TargetList({
 }: {
   targets: SavingsTarget[];
   distributor: SavingsDistributor;
+  entries: SavingsBudgetEntry[];
   accounts: Account[];
   buckets: Bucket[];
   selected: string | null;
@@ -221,6 +253,22 @@ function TargetList({
         aria-current={onDistributor ? "true" : undefined}
         onClick={() => {
           onSelect("distributor");
+        }}
+      />
+      <NavLink
+        component="button"
+        type="button"
+        label={t("savingsSetup.budget.title")}
+        description={
+          entries.length === 0
+            ? t("savingsSetup.budget.none")
+            : t("savingsSetup.budget.count", { count: entries.length })
+        }
+        leftSection={<IconCalendarDollar size={18} />}
+        active={selected === "budget"}
+        aria-current={selected === "budget" ? "true" : undefined}
+        onClick={() => {
+          onSelect("budget");
         }}
       />
       {targets.length === 0 ? (

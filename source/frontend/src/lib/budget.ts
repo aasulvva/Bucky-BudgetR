@@ -2,6 +2,7 @@
 // edited, what they add up to per account, and what saving them sends.
 
 import type { Account, Bucket } from "@/api/accounts";
+import type { SavingsBudgetEntry } from "@/api/savings";
 import type { components } from "@/api/schema";
 
 import {
@@ -25,16 +26,24 @@ export interface NewBucket {
  * The values edited and not saved yet, by account and bucket ID. A value is
  * canonical, or null when the field is empty or invalid. What isn't here
  * shows the saved value. `created` are new buckets, in the order added, and
- * `deleted` the IDs of saved buckets to delete (#174).
+ * `deleted` the IDs of saved buckets to delete (#174). `savings` are the
+ * savings budget's fixed amounts, by entry ID (#234).
  */
 export interface BudgetDraft {
   incomes: Partial<Record<string, string | null>>;
   ras: Partial<Record<string, string | null>>;
+  savings?: Partial<Record<string, string | null>>;
   created: NewBucket[];
   deleted: string[];
 }
 
-export const EMPTY_DRAFT: BudgetDraft = { incomes: {}, ras: {}, created: [], deleted: [] };
+export const EMPTY_DRAFT: BudgetDraft = {
+  incomes: {},
+  ras: {},
+  savings: {},
+  created: [],
+  deleted: [],
+};
 
 /** The draft's new buckets on an account. */
 export function draftBucketsFor(draft: BudgetDraft, accountId: string): NewBucket[] {
@@ -62,6 +71,23 @@ export function draftRefill(draft: BudgetDraft, bucket: Bucket): string | null {
   return bucket.id in draft.ras ? (draft.ras[bucket.id] ?? null) : saved(bucket.refill_amount);
 }
 
+/** The amount shown for a savings budget entry (#234). */
+export function draftSaving(draft: BudgetDraft, entry: SavingsBudgetEntry): string | null {
+  const edited = draft.savings ?? {};
+  return entry.id in edited ? (edited[entry.id] ?? null) : canonicalAmount(entry.amount);
+}
+
+/** Why a savings budget amount can't be saved: it must be above 0. */
+export function savingProblem(amount: string | null): "empty" | "notPositive" | null {
+  if (amount === null) return "empty";
+  return compareAmounts(amount, "0") <= 0 ? "notPositive" : null;
+}
+
+/** The account's savings budget entries Budget setup lists: those that still run. */
+export function savingsFor(entries: SavingsBudgetEntry[], accountId: string): SavingsBudgetEntry[] {
+  return entries.filter((e) => e.account_id === accountId && !e.stopped);
+}
+
 /** Why a refill amount can't be saved, if it can't. */
 export function refillProblem(ra: string | null): "empty" | "negative" | null {
   if (ra === null) return "empty";
@@ -81,7 +107,10 @@ export function shareOf(part: string, whole: string | null): number | null {
 
 export interface AccountBudget {
   expected: string | null;
-  /** Σ RA of the account's buckets; an empty field counts as 0. */
+  /**
+   * Σ RA of the account's buckets, and its savings budget's fixed amounts
+   * (#234); an empty field counts as 0.
+   */
   allocated: string;
   /** allocated as a % of expected; null without an income. */
   percent: number | null;
@@ -92,13 +121,14 @@ export interface AccountBudget {
 }
 
 /**
- * What an account's buckets take of its expected income, as edited: new ones
- * included, deleted ones left out.
+ * What an account's buckets and savings budget take of its expected income,
+ * as edited: new buckets included, deleted ones left out.
  */
 export function accountBudget(
   draft: BudgetDraft,
   account: Account,
   buckets: Bucket[],
+  entries: SavingsBudgetEntry[] = [],
 ): AccountBudget {
   const expected = draftIncome(draft, account);
   const allocated = addAmounts(
@@ -108,6 +138,7 @@ export function accountBudget(
     ...draftBucketsFor(draft, account.id)
       .filter((n) => budgeted(n.body))
       .map((n) => n.body.refill_amount ?? "0"),
+    ...savingsFor(entries, account.id).map((e) => draftSaving(draft, e) ?? "0"),
   );
   const valid = expected !== null && incomeProblem(expected) === null;
   const remainder = valid ? subtractAmounts(expected, allocated) : null;
@@ -157,6 +188,8 @@ export interface BudgetChanges {
   created: NewBucket[];
   incomes: { account_id: string; expected_income: string | null }[];
   ras: { bucket_id: string; refill_amount: string }[];
+  /** Savings budget amounts to PATCH, after the refill amounts (#234). */
+  savings: { entry_id: string; amount: string }[];
   /** How many fields differ from what's saved, and new buckets. */
   count: number;
   /** Some edited field can't be saved. */
@@ -168,6 +201,7 @@ export function budgetChanges(
   draft: BudgetDraft,
   accounts: Account[],
   buckets: Bucket[],
+  entries: SavingsBudgetEntry[] = [],
 ): BudgetChanges {
   const same = (a: string | null, b: string | null) =>
     a === null || b === null ? a === b : compareAmounts(a, b) === 0;
@@ -177,6 +211,7 @@ export function budgetChanges(
     created: draft.created,
     incomes: [],
     ras: [],
+    savings: [],
     count: deleted.length + draft.created.length,
     invalid: false,
   };
@@ -196,6 +231,14 @@ export function budgetChanges(
     out.count++;
     if (value === null || refillProblem(value)) out.invalid = true;
     else out.ras.push({ bucket_id: b.id, refill_amount: value });
+  }
+  for (const e of entries) {
+    if (!(e.id in (draft.savings ?? {})) || e.stopped) continue;
+    const value = draftSaving(draft, e);
+    if (same(value, canonicalAmount(e.amount))) continue;
+    out.count++;
+    if (value === null || savingProblem(value)) out.invalid = true;
+    else out.savings.push({ entry_id: e.id, amount: value });
   }
   return out;
 }

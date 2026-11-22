@@ -17,7 +17,7 @@ import {
   today,
 } from "@/lib/cycles";
 import { apiMock, problem, testUser } from "@/test/api";
-import { bucket, cycle, savingsTarget } from "@/test/fixtures";
+import { account, budgetEntry, bucket, cycle, savingsTarget } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
 
@@ -389,6 +389,27 @@ describe("ending a cycle", () => {
     expect(
       dialog.getByText(new RegExp(`${plain(formatMoney("500.00"))} overflows to Rainy day`)),
     ).toBeInTheDocument();
+  });
+
+  it("lists what the savings budget reserves at the next start (#234)", async () => {
+    given({ active, next: planned });
+    apiMock.on("GET /api/v1/accounts", { body: [account({ id: "1234", name: "Main" })] });
+    apiMock.on("GET /api/v1/savings/targets", {
+      body: [savingsTarget({ id: "1000001001", name: "Rainy day" })],
+    });
+    apiMock.on("GET /api/v1/savings/budget", {
+      body: [
+        budgetEntry({ id: "1234000001", target_id: "1000001001", amount: "750.00" }),
+        // Not at cycle start, or stopped: not listed.
+        budgetEntry({ id: "1234000002", when: "on_income" }),
+        budgetEntry({ id: "1234000003", target_id: "1000001999", stopped: true }),
+      ],
+    });
+    const dialog = await openEnd();
+    expect(await dialog.findByText("Then the savings budget reserves")).toBeInTheDocument();
+    expect(dialog.getByText("Rainy day, from Main")).toBeInTheDocument();
+    expect(dialog.getByText(`up to ${plain(formatMoney("750.00"))}`)).toBeInTheDocument();
+    expect(dialog.getAllByText(/, from Main$/)).toHaveLength(1);
   });
 
   it("can leave a gap, and says what that means", async () => {

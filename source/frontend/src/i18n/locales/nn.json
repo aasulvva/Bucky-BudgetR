@@ -263,7 +263,10 @@
     "bucketEmpty": "Ingenting att i ho",
     "chooseFate": "Vel ein konto, eller slett ho.",
     "deletesBuckets_one": "Slettar {{count}} bøtte saman med kontoen: {{names}}. Transaksjonane vert haldne på.",
-    "deletesBuckets_other": "Slettar {{count}} bøtter saman med kontoen: {{names}}. Transaksjonane vert haldne på."
+    "deletesBuckets_other": "Slettar {{count}} bøtter saman med kontoen: {{names}}. Transaksjonane vert haldne på.",
+    "deletesBudget_one": "Slettar {{count}} fast beløp i sparebudsjettet: {{names}}. Det som er reservert, blir frigjort med kontoen.",
+    "deletesBudget_other": "Slettar {{count}} faste beløp i sparebudsjettet: {{names}}. Det som er reservert, blir frigjort med kontoen.",
+    "budgetEntry": "{{amount}} til {{name}}"
   },
   "dashboard": {
     "settings": "Innstillingar",
@@ -802,7 +805,11 @@
     "undo": "Angre",
     "undoDelete": "Angre slettinga av {{name}}",
     "deletes_one": "Lagringa slettar òg {{count}} bøtte: {{names}}.",
-    "deletes_other": "Lagringa slettar òg {{count}} bøtter: {{names}}."
+    "deletes_other": "Lagringa slettar òg {{count}} bøtter: {{names}}.",
+    "enterSaving": "Skriv inn eit beløp.",
+    "savingBadge": "Sparing",
+    "savingAmountFor": "Beløp å spare til {{name}}",
+    "savingsBudget": "Sparebudsjett"
   },
   "savings": {
     "empty": "Ingen sparemål enno",
@@ -905,6 +912,24 @@
         "name": "Frigjer sparefordelaren på {{account}}",
         "cleared": "{{amount}} frigjort frå sparefordelaren."
       }
+    },
+    "budget": {
+      "hint": "Faste beløp som blir spart kvar periode.",
+      "setup": "Set opp sparebudsjettet",
+      "empty": "Ingen faste beløp å spare kvar periode. <setup>Legg dei til i Spareoppsett</setup>.",
+      "line": "{{amount}} til {{name}} frå {{account}} · {{when}}",
+      "status": {
+        "stopped": "Stoppa: sparemålet finst ikkje lenger.",
+        "saved": "Reserverte {{reserved}} denne perioden.",
+        "short": "Reserverte {{reserved}} av {{wanted}}: manglar {{short}}, {{account}} hadde ikkje meir ufordelt.",
+        "nextCycle": "Startar neste periode.",
+        "waitingIncome": "Ventar på ei inntekt på {{account}}.",
+        "saveNow": "Ikkje spart enno denne perioden.",
+        "noCycle": "Blir køyrt i ein aktiv periode."
+      },
+      "saveNow": "Spar no",
+      "saveNowName": "Spar {{amount}} til {{name}} no",
+      "savedNow": "Reserverte {{amount}} til {{name}}."
     }
   },
   "savingsSetup": {
@@ -1006,7 +1031,54 @@
     "deleteRules_one": "Regelen i sparefordelaren blir sletta.",
     "deleteRules_other": "Dei {{count}} reglane i sparefordelaren blir sletta.",
     "deleteOverflow_one": "{{names}} sender overløpet sitt hit; det går til sparefordelaren i staden.",
-    "deleteOverflow_other": "{{names}} sender overløpet sitt hit; det går til sparefordelaren i staden."
+    "deleteOverflow_other": "{{names}} sender overløpet sitt hit; det går til sparefordelaren i staden.",
+    "budget": {
+      "title": "Sparebudsjett",
+      "none": "Ingen faste beløp enno",
+      "count_one": "{{count}} fast beløp per periode",
+      "count_other": "{{count}} faste beløp per periode",
+      "intro": "Faste beløp å spare kvar periode. Kvart reserverer beløpet sitt av dei ufordelte pengane på kontoen, éin gong per periode, etter bøttene som blir fylte på samstundes. Har kontoen mindre, blir det som er der reservert, og eit varsel seier kva som manglar.",
+      "empty": "Ingen faste beløp enno.",
+      "perCycle": "{{amount}} per periode",
+      "editName": "{{amount}} til {{name}}",
+      "stoppedBadge": "Stoppa",
+      "stopped": "Sparemålet finst ikkje lenger, så det blir ikkje køyrt. Vel eit anna mål, eller slett det.",
+      "add": "Legg til eit fast beløp",
+      "newTitle": "Nytt fast beløp",
+      "editTitle": "Fast beløp",
+      "fromAccount": "Frå {{name}}.",
+      "account": "Frå konto",
+      "accountHint": "Der beløpet blir reservert, av dei ufordelte pengane.",
+      "pickAccount": "Vel ein konto.",
+      "destination": "Spar til",
+      "destinationHint": "Eit sparemål i valutaen til kontoen, eller sparefordelaren, som deler det etter reglane sine. Eit mål tek inntil målbeløpet; resten går til fordelaren.",
+      "amount": "Beløp per periode",
+      "whenLabel": "Når",
+      "when": {
+        "cycle_start": "Ved periodestart",
+        "on_income": "Ved inntekt",
+        "manual": "Manuelt"
+      },
+      "whenHints": {
+        "cycle_start": "Når ein periode startar, etter dei automatiske påfyllingane.",
+        "on_income": "Når ei inntekt på kontoen fyller på «Ved inntekt»-bøttene, etter dei påfyllingane. Éin gong per periode, same kor mange inntekter som kjem.",
+        "manual": "Når du trykkjer Spar no på Sparing-sida, éin gong per periode."
+      },
+      "start": "Denne perioden",
+      "startNow": "Reserver no",
+      "startNowHint": "Så mykje av det som {{account}} har ufordelt, {{amount}} no.",
+      "startNext": "Start neste periode",
+      "startNextHint": "Ingenting blir reservert før neste periode startar.",
+      "create": "Legg til",
+      "created": "Fast beløp lagt til i sparebudsjettet.",
+      "saved": "Fast beløp lagra.",
+      "delete": "Slett",
+      "deleteQuestion": "Slette det faste beløpet på <b>{{amount}}</b> til {{name}}?",
+      "deleteKeeps": "Det som er reservert, blir halde av framleis.",
+      "deleted": "Fast beløp sletta."
+    },
+    "deleteBudget_one": "{{count}} fast beløp i sparebudsjettet stoppar til det får eit anna mål.",
+    "deleteBudget_other": "{{count}} faste beløp i sparebudsjettet stoppar til dei får eit anna mål."
   },
   "newTransaction": {
     "type": "Type",
@@ -1276,7 +1348,10 @@
     "ended": "Perioden er avslutta. Det er ingen aktiv periode før du startar ein.",
     "overflowTo": "→ {{to}}",
     "toSavings": "Til sparing",
-    "overflowsTo": " ({{amount}} i overløp til {{to}})"
+    "overflowsTo": " ({{amount}} i overløp til {{to}})",
+    "savingsBudget": "Så reserverer sparebudsjettet",
+    "savingsBudgetLine": "{{name}}, frå {{account}}",
+    "upTo": "inntil {{amount}}"
   },
   "stats": {
     "period": {

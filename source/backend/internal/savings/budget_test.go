@@ -4,6 +4,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/accounts"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/buckets"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
@@ -273,5 +275,122 @@ func TestBudgetStopsWithItsTargetAndGoesWithItsAccount(t *testing.T) {
 		if x.ID == gone.ID {
 			t.Error("the deleted account's entry is still listed")
 		}
+	}
+}
+
+// splitting sets the distributor to split at once, Buffer (an account) and
+// Holiday (a bucket target on main) getting 2:1, as #234's test on the dev
+// data did.
+func (e overflowEnv) splitting(t *testing.T) (buffer, holidayTarget, holiday string) {
+	t.Helper()
+	ctx := t.Context()
+	buffer = e.newTarget(t, "Buffer", "50000")
+	holiday = e.bucket(t, buckets.New{
+		Name: "Holiday", SourceAccountID: e.main, RefillMode: sqlc.RefillModeFullyManual,
+		CapMode: sqlc.BucketCapModeFixed, CapAmount: dec("5000"),
+	})
+	tg, err := e.savings.Create(ctx, e.user, savings.New{BucketID: holiday, Goal: dec("5000")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for id, p := range map[string]int{buffer: 2, tg.ID: 1} {
+		if _, err := e.savings.CreateRule(ctx, e.user, id, savings.RuleInput{Priority: p}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := e.savings.UpdateDistributor(ctx, e.user, sqlc.SavingsHoldModeImmediate, decimal.NullDecimal{}); err != nil {
+		t.Fatal(err)
+	}
+	return buffer, tg.ID, holiday
+}
+
+func TestBudgetUndoTakesBackWhatTheDistributorSplit(t *testing.T) {
+	e := setupOverflow(t)
+	buffer, _, holiday := e.splitting(t)
+	e.budget(t, "", "900", sqlc.SavingsBudgetWhenOnIncome, nil)
+	_, before, _ := e.money(t, e.main)
+
+	income := e.salary(t)
+	if got, _ := e.held(t, buffer, e.main); got != "600.00" {
+		t.Errorf("held for Buffer %s", got)
+	}
+	if got := e.tf(t, holiday); got != "300.00" {
+		t.Errorf("Holiday's TF %s", got)
+	}
+	if _, err := e.txs.Reverse(t.Context(), e.user, income); err != nil {
+		t.Fatal(err)
+	}
+	// All of it comes back the way it went.
+	if got, _ := e.held(t, buffer, e.main); got != "0.00" {
+		t.Errorf("after the undo %s is held for Buffer", got)
+	}
+	if got := e.tf(t, holiday); got != "0.00" {
+		t.Errorf("after the undo Holiday's TF %s", got)
+	}
+	if got := e.distributorHeld(t, e.main); got != "0.00" {
+		t.Errorf("after the undo the distributor holds %s", got)
+	}
+	if _, after, _ := e.money(t, e.main); after != before {
+		t.Errorf("unallocated %s, was %s", after, before)
+	}
+}
+
+func TestBudgetUndoLeavesWhatWasMoved(t *testing.T) {
+	e := setupOverflow(t)
+	ctx := t.Context()
+	buffer, _, holiday := e.splitting(t)
+	e.budget(t, "", "900", sqlc.SavingsBudgetWhenOnIncome, nil)
+	income := e.salary(t)
+	// 250 of Buffer's 600 is moved at the bank, and Holiday spends 100.
+	if _, err := e.savings.Done(ctx, e.user, buffer, savings.Done{AccountID: e.main, Amount: dec("250")}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.buckets.Adjust(ctx, e.user, holiday, buckets.Adjustment{
+		Mode: buckets.ModeTemporary, TargetFunds: ptr(dec("200")),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.txs.Reverse(ctx, e.user, income); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := e.held(t, buffer, e.main); got != "0.00" {
+		t.Errorf("after the undo %s is held for Buffer", got)
+	}
+	if got := e.tf(t, holiday); got != "0.00" {
+		t.Errorf("after the undo Holiday's TF %s", got)
+	}
+	// What was moved or spent can't come back, so the distributor has none.
+	if got := e.distributorHeld(t, e.main); got != "0.00" {
+		t.Errorf("after the undo the distributor holds %s", got)
+	}
+}
+
+func TestBudgetUndoTakesBackOnlyItsShareOfASplit(t *testing.T) {
+	e := setupOverflow(t)
+	ctx := t.Context()
+	buffer, _, _ := e.splitting(t)
+	// The distributor already waits with 300 when the 600 comes in, and
+	// splits the 900 together: only the 600 is the budget's.
+	if _, err := e.savings.UpdateDistributor(ctx, e.user, sqlc.SavingsHoldModeMinimum, decimal.NewNullDecimal(dec("800"))); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := e.savings.AddToDistributor(ctx, e.user, e.main, dec("300")); err != nil {
+		t.Fatal(err)
+	}
+	e.budget(t, "", "600", sqlc.SavingsBudgetWhenOnIncome, nil)
+	income := e.salary(t)
+	if got, _ := e.held(t, buffer, e.main); got != "600.00" {
+		t.Errorf("held for Buffer %s", got)
+	}
+	if _, err := e.txs.Reverse(ctx, e.user, income); err != nil {
+		t.Fatal(err)
+	}
+	// 2/3 of each share comes back and is released; the 300 added by hand
+	// stays split.
+	if got, _ := e.held(t, buffer, e.main); got != "200.00" {
+		t.Errorf("after the undo %s is held for Buffer", got)
+	}
+	if got := e.distributorHeld(t, e.main); got != "0.00" {
+		t.Errorf("after the undo the distributor holds %s", got)
 	}
 }

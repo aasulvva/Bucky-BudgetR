@@ -79,10 +79,11 @@ type Savings interface {
 	// OverflowLines are the savings lines for the funded part of b's
 	// overflow, none for unallocated.
 	OverflowLines(ctx context.Context, tx pgx.Tx, userID string, b sqlc.Bucket, funded decimal.Decimal) ([]ledger.SavingsLine, error)
-	// AfterOverflow moves them on once the OVF is recorded at at.
-	AfterOverflow(ctx context.Context, tx pgx.Tx, userID, accountID string, at time.Time, lines []ledger.SavingsLine) error
-	// ReleasableOverflow is what reversing the OVF t takes off hold.
-	ReleasableOverflow(ctx context.Context, tx pgx.Tx, userID string, t *ledger.Transaction) ([]ledger.SavingsLine, error)
+	// AfterOverflow moves them on once the OVF sourceID is recorded at at.
+	AfterOverflow(ctx context.Context, tx pgx.Tx, userID, accountID, sourceID string, at time.Time, lines []ledger.SavingsLine) error
+	// ReleaseOverflow takes back what the OVF t moved on, and returns what
+	// reversing it then takes off hold.
+	ReleaseOverflow(ctx context.Context, tx pgx.Tx, userID string, t *ledger.Transaction) ([]ledger.SavingsLine, error)
 	// RunBudget runs the savings budget entries with this mode in cycle c,
 	// dated at: for On income those from accountID, triggered by incomeID.
 	RunBudget(ctx context.Context, tx pgx.Tx, userID string, c sqlc.Cycle, when sqlc.SavingsBudgetWhen, accountID string, at time.Time, incomeID string) error
@@ -413,7 +414,7 @@ func (s *Service) overflow(ctx context.Context, tx pgx.Tx, b sqlc.Bucket, excess
 		return "", err
 	}
 	if len(e.SavingsLines) > 0 {
-		if err := s.savings.AfterOverflow(ctx, tx, b.UserID, b.SourceAccountID, at, e.SavingsLines); err != nil {
+		if err := s.savings.AfterOverflow(ctx, tx, b.UserID, b.SourceAccountID, t.Header.ID, at, e.SavingsLines); err != nil {
 			return "", err
 		}
 	}
@@ -445,10 +446,11 @@ func (s *Service) reverse(ctx context.Context, tx pgx.Tx, userID, id string) err
 	for _, l := range t.BucketLines {
 		e.BucketLines = append(e.BucketLines, ledger.BucketLine{BucketID: l.BucketID, Amount: l.Amount.Neg()})
 	}
-	// An overflow's savings come back only as far as they're still held
-	// (#233): what was distributed or moved on stays where it went.
+	// An overflow's savings come back the way they went (#233): what it
+	// moved on is taken back first, then what's held is released, each as
+	// far as the money is still there.
 	if len(t.SavingsLines) > 0 && s.savings != nil {
-		if e.SavingsLines, err = s.savings.ReleasableOverflow(ctx, tx, userID, t); err != nil {
+		if e.SavingsLines, err = s.savings.ReleaseOverflow(ctx, tx, userID, t); err != nil {
 			return err
 		}
 	}

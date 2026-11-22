@@ -33,6 +33,7 @@ import {
 import { api } from "@/api/client";
 import { useCurrentCycles } from "@/api/cycles";
 import { ApiError, unwrap } from "@/api/errors";
+import { useSavingsBudget, useSavingsTargets } from "@/api/savings";
 import type { components } from "@/api/schema";
 import { AmountInput } from "@/components/AmountInput";
 import { DateTimeInput } from "@/components/DateTimeInput";
@@ -47,7 +48,7 @@ import { CURRENCY } from "@/lib/locale";
 import { INTEREST_TAG } from "@/lib/interest";
 import { LANGUAGES } from "@/lib/language";
 import { checkName } from "@/lib/names";
-import { TARGET_ACCOUNT_TYPES } from "@/lib/savings";
+import { TARGET_ACCOUNT_TYPES, budgetDestination } from "@/lib/savings";
 import { compareAmounts, currencyOptions, formatMoney, subtractAmounts } from "@/lib/money";
 import { autofocusField } from "@/lib/device";
 
@@ -624,6 +625,9 @@ function DeleteAccount({
   const { t } = useTranslation();
   const refresh = useRefreshMoney();
   const buckets = useBuckets();
+  // The savings budget's fixed amounts from it go with it (#234).
+  const entries = (useSavingsBudget().data ?? []).filter((e) => e.account_id === account.id);
+  const targets = useSavingsTargets().data ?? [];
   const others = accounts
     .filter((a) => a.id !== account.id && a.currency === account.currency)
     .map((a) => ({ value: a.id, label: a.name }));
@@ -812,6 +816,21 @@ function DeleteAccount({
                     </Text>
                   )}
                 </Stack>
+              )}
+              {entries.length > 0 && (
+                <Text size="sm">
+                  {t("accountSetup.deletesBudget", {
+                    count: entries.length,
+                    names: entries
+                      .map((e) =>
+                        t("accountSetup.budgetEntry", {
+                          amount: formatMoney(e.amount, account.currency),
+                          name: budgetDestination(e, targets),
+                        }),
+                      )
+                      .join(", "),
+                  })}
+                </Text>
               )}
               {remove.error && <ErrorAlert error={remove.error} />}
               <Group justify="flex-end" gap="xs">
