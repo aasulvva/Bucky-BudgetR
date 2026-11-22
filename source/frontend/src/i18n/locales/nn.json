@@ -667,8 +667,8 @@
     },
     "overflow": "Overløp går til",
     "overflowUnallocated": "Ufordelt (vert verande på kontoen)",
-    "overflowDistribution": "Sparefordeling (seinare)",
-    "overflowTarget": "Eit sparemål (seinare)",
+    "overflowDistribution": "Sparefordelaren",
+    "overflowTarget": "Eit sparemål",
     "start": "Startmidlar",
     "startRefill": "Fyll på no (+{{amount}})",
     "startRefillHint": "Tel som påfyllinga for perioden.",
@@ -737,7 +737,11 @@
       }
     },
     "defaultModeHint": "Nye bøtter startar som {{mode}}. <open>Endre standarden</open>",
-    "noIncomeRules": "Du har ingen inntektsreglar enno, så denne bøtta vert berre fylt på av ei inntekt der du kryssar av for «Utløyser påfyll». <open>Set opp inntektsreglar</open>"
+    "noIncomeRules": "Du har ingen inntektsreglar enno, så denne bøtta vert berre fylt på av ei inntekt der du kryssar av for «Utløyser påfyll». <open>Set opp inntektsreglar</open>",
+    "overflowSavingsHint": "Berre den delen pengane på kontoen dekkjer, blir spart; resten av overløpet frå ei underfinansiert bøtte forsvinn.",
+    "overflowTargetPick": "Sparemål",
+    "overflowTargetHint": "Det stoppar ved målet til sparemålet, med mindre ein regel i sparefordelaren lèt det gå forbi; resten går til sparefordelaren.",
+    "pickOverflowTarget": "Vel eit sparemål."
   },
   "budgetSetup": {
     "intro": "Planlegg påfylla i kvar periode mot inntekta du ventar på kvar konto.",
@@ -1000,7 +1004,9 @@
       "editRules": "Rediger i sparefordelaren"
     },
     "deleteRules_one": "Regelen i sparefordelaren blir sletta.",
-    "deleteRules_other": "Dei {{count}} reglane i sparefordelaren blir sletta."
+    "deleteRules_other": "Dei {{count}} reglane i sparefordelaren blir sletta.",
+    "deleteOverflow_one": "{{names}} sender overløpet sitt hit; det går til sparefordelaren i staden.",
+    "deleteOverflow_other": "{{names}} sender overløpet sitt hit; det går til sparefordelaren i staden."
   },
   "newTransaction": {
     "type": "Type",
@@ -1267,7 +1273,10 @@
     "noneAfterText": "Planlegg ein for å fylle på bøttene dine. Til ein periode er aktiv, kan ikkje transaksjonar fordelast på bøtter.",
     "previewNote": "Ei førehandsvising: beløpa kan endre seg litt, fordi pengane vert fordelte på nytt først.",
     "endedStarted": "Perioden er avslutta. {{range}} har starta.",
-    "ended": "Perioden er avslutta. Det er ingen aktiv periode før du startar ein."
+    "ended": "Perioden er avslutta. Det er ingen aktiv periode før du startar ein.",
+    "overflowTo": "→ {{to}}",
+    "toSavings": "Til sparing",
+    "overflowsTo": " ({{amount}} i overløp til {{to}})"
   },
   "stats": {
     "period": {

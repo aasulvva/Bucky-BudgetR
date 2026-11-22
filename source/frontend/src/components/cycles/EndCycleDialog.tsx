@@ -8,6 +8,7 @@ import { useBuckets } from "@/api/accounts";
 import { api } from "@/api/client";
 import { useRefreshCycles, type Cycle } from "@/api/cycles";
 import { unwrap } from "@/api/errors";
+import { useSavingsTargets } from "@/api/savings";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { QueryState } from "@/components/QueryState";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
@@ -16,6 +17,7 @@ import { endPreview } from "@/lib/cycleEnd";
 import { cycleRange, daysLeft, isOverdue, lastDay } from "@/lib/cycles";
 import { formatDate } from "@/lib/dates";
 import { compareAmounts, formatMoney } from "@/lib/money";
+import { overflowTo } from "@/lib/savings";
 
 interface EndCycleDialogProps {
   opened: boolean;
@@ -51,6 +53,7 @@ function EndForm({
   const { t } = useTranslation();
   const refresh = useRefreshCycles();
   const buckets = useBuckets();
+  const targets = useSavingsTargets().data ?? [];
   const now = clockNow();
   const early = !isOverdue(active, now);
   // Where the cycle will end: now when early, else its planned end.
@@ -114,6 +117,7 @@ function EndForm({
       <QueryState query={buckets}>
         {(list) => {
           const preview = endPreview(list, refills);
+          const to = (b: (typeof list)[number]) => overflowTo(b, targets);
           return (
             <Stack gap="md">
               <Stack gap={6}>
@@ -128,7 +132,15 @@ function EndForm({
                   <>
                     {preview.emptied.map((e) => (
                       <Group key={e.bucket.id} justify="space-between" gap="sm">
-                        <Text size="sm">{e.bucket.name}</Text>
+                        <Text size="sm">
+                          {e.bucket.name}
+                          {to(e.bucket) !== null && (
+                            <Text span size="sm" c="dimmed">
+                              {" "}
+                              {t("cycles.overflowTo", { to: to(e.bucket) })}
+                            </Text>
+                          )}
+                        </Text>
                         <Text size="sm">{formatMoney(`-${e.amount}`, e.bucket.currency)}</Text>
                       </Group>
                     ))}
@@ -137,6 +149,16 @@ function EndForm({
                       <Group key={total.currency} justify="space-between" gap="sm">
                         <Text size="sm" fw={600}>
                           {t("cycles.backToUnallocated")}
+                        </Text>
+                        <Text size="sm" fw={600}>
+                          {formatMoney(total.amount, total.currency)}
+                        </Text>
+                      </Group>
+                    ))}
+                    {preview.toSavings.map((total) => (
+                      <Group key={`savings-${total.currency}`} justify="space-between" gap="sm">
+                        <Text size="sm" fw={600}>
+                          {t("cycles.toSavings")}
                         </Text>
                         <Text size="sm" fw={600}>
                           {formatMoney(total.amount, total.currency)}
@@ -164,9 +186,14 @@ function EndForm({
                             {compareAmounts(r.amount, "0") > 0 ? "+" : ""}
                             {formatMoney(r.amount, r.bucket.currency)}
                             {compareAmounts(r.overflow, "0") > 0 &&
-                              t("cycles.overflows", {
-                                amount: formatMoney(r.overflow, r.bucket.currency),
-                              })}
+                              (to(r.bucket) === null
+                                ? t("cycles.overflows", {
+                                    amount: formatMoney(r.overflow, r.bucket.currency),
+                                  })
+                                : t("cycles.overflowsTo", {
+                                    amount: formatMoney(r.overflow, r.bucket.currency),
+                                    to: to(r.bucket),
+                                  }))}
                           </Text>
                         </Group>
                       ))

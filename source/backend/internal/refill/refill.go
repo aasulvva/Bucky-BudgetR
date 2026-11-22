@@ -15,6 +15,10 @@
 //
 // At cycle end (OnEnd), buckets without Keep funds are emptied.
 //
+// Overflow goes where the bucket says (#233, spec §8.5): the part its CAF
+// covered can be held for the savings distributor or a savings target, with
+// savings lines on the OVF (Options.Savings).
+//
 // Every routine runs inside the caller's database transaction, under the
 // user's lock (ledger.LockUser), and records through the ledger, so the
 // allocation routine follows each REF and OVF.
@@ -64,17 +68,33 @@ type Rule struct {
 	MinAmount    decimal.Decimal `json:"min_amount"`
 }
 
+// Savings sends overflow to savings (#233). The savings service implements
+// it; it's an interface so the packages don't import each other.
+type Savings interface {
+	// OverflowLines are the savings lines for the funded part of b's
+	// overflow, none for unallocated.
+	OverflowLines(ctx context.Context, tx pgx.Tx, userID string, b sqlc.Bucket, funded decimal.Decimal) ([]ledger.SavingsLine, error)
+	// AfterOverflow moves them on once the OVF is recorded at at.
+	AfterOverflow(ctx context.Context, tx pgx.Tx, userID, accountID string, at time.Time, lines []ledger.SavingsLine) error
+	// ReleasableOverflow is what reversing the OVF t takes off hold.
+	ReleasableOverflow(ctx context.Context, tx pgx.Tx, userID string, t *ledger.Transaction) ([]ledger.SavingsLine, error)
+}
+
 // Options configures a Service.
 type Options struct {
 	// Now returns the current time. Defaults to time.Now.
 	Now func() time.Time
+	// Savings sends overflow to savings; without it, overflow is always
+	// unallocated.
+	Savings Savings
 }
 
 // Service runs the cycle routines.
 type Service struct {
-	pool   *pgxpool.Pool
-	ledger *ledger.Ledger
-	now    func() time.Time
+	pool    *pgxpool.Pool
+	ledger  *ledger.Ledger
+	now     func() time.Time
+	savings Savings
 }
 
 // NewService returns a Service.
@@ -82,7 +102,7 @@ func NewService(pool *pgxpool.Pool, l *ledger.Ledger, opts Options) *Service {
 	if opts.Now == nil {
 		opts.Now = time.Now
 	}
-	return &Service{pool: pool, ledger: l, now: opts.Now}
+	return &Service{pool: pool, ledger: l, now: opts.Now, savings: opts.Savings}
 }
 
 // OnStart refills the Auto buckets, dated at the cycle's start. It is the
@@ -125,7 +145,7 @@ func (s *Service) OnEnd(ctx context.Context, tx pgx.Tx, c sqlc.Cycle) error {
 		if !tf[b.ID].IsPositive() {
 			continue
 		}
-		if _, err := s.record(ctx, tx, c.UserID, sqlc.TransactionTypeOVF, b.ID, tf[b.ID].Neg(), at); err != nil {
+		if _, err := s.overflow(ctx, tx, b, tf[b.ID], decimal.Zero, at); err != nil {
 			return fmt.Errorf("overflow of bucket %s: %w", b.ID, err)
 		}
 	}
@@ -331,14 +351,45 @@ func (s *Service) refill(ctx context.Context, tx pgx.Tx, b sqlc.Bucket, tf decim
 		r.RefID = pgtype.Text{String: id, Valid: true}
 	}
 	// Only a Fully manual bucket, which is never refilled, has no capacity.
-	if excess := tf.Add(ref).Sub(buckets.Capacity(b).Decimal); b.KeepFunds && excess.IsPositive() {
-		id, err := s.record(ctx, tx, b.UserID, sqlc.TransactionTypeOVF, b.ID, excess.Neg(), at)
+	bc := buckets.Capacity(b).Decimal
+	if excess := tf.Add(ref).Sub(bc); b.KeepFunds && excess.IsPositive() {
+		id, err := s.overflow(ctx, tx, b, excess, bc, at)
 		if err != nil {
 			return fmt.Errorf("overflow of bucket %s: %w", b.ID, err)
 		}
 		r.OvfID = pgtype.Text{String: id, Valid: true}
 	}
 	return sqlc.New(tx).CreateRefill(ctx, r)
+}
+
+// overflow records an OVF that takes excess off b, leaving after. The part
+// of it the bucket's CAF covered, read now as earlier lines may have moved
+// it, is real money: it goes where the bucket's overflow goes (#233).
+func (s *Service) overflow(ctx context.Context, tx pgx.Tx, b sqlc.Bucket, excess, after decimal.Decimal, at time.Time) (string, error) {
+	e := ledger.Entry{
+		UserID: b.UserID, Type: sqlc.TransactionTypeOVF, At: at,
+		BucketLines: []ledger.BucketLine{{BucketID: b.ID, Amount: excess.Neg()}},
+	}
+	if s.savings != nil && b.OverflowDestination != sqlc.OverflowDestinationUnallocated {
+		cur, err := sqlc.New(tx).GetBucketForUpdate(ctx, sqlc.GetBucketForUpdateParams{ID: b.ID, UserID: b.UserID})
+		if err != nil {
+			return "", err
+		}
+		funded := decimal.Min(decimal.Max(cur.Caf.Sub(after), decimal.Zero), excess)
+		if e.SavingsLines, err = s.savings.OverflowLines(ctx, tx, b.UserID, cur, funded); err != nil {
+			return "", err
+		}
+	}
+	t, err := s.ledger.Record(ctx, tx, e)
+	if err != nil {
+		return "", err
+	}
+	if len(e.SavingsLines) > 0 {
+		if err := s.savings.AfterOverflow(ctx, tx, b.UserID, b.SourceAccountID, at, e.SavingsLines); err != nil {
+			return "", err
+		}
+	}
+	return t.Header.ID, nil
 }
 
 // record records a system transaction with one bucket line.
@@ -365,6 +416,13 @@ func (s *Service) reverse(ctx context.Context, tx pgx.Tx, userID, id string) err
 	}
 	for _, l := range t.BucketLines {
 		e.BucketLines = append(e.BucketLines, ledger.BucketLine{BucketID: l.BucketID, Amount: l.Amount.Neg()})
+	}
+	// An overflow's savings come back only as far as they're still held
+	// (#233): what was distributed or moved on stays where it went.
+	if len(t.SavingsLines) > 0 && s.savings != nil {
+		if e.SavingsLines, err = s.savings.ReleasableOverflow(ctx, tx, userID, t); err != nil {
+			return err
+		}
 	}
 	_, err = s.ledger.Record(ctx, tx, e)
 	return err

@@ -27,7 +27,7 @@ import { AmountInput } from "@/components/AmountInput";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { autofocusField, isTouch } from "@/lib/device";
 import { formatMoney } from "@/lib/money";
-import { freeAccounts, freeBuckets, goalLimit, goalProblem } from "@/lib/savings";
+import { freeAccounts, freeBuckets, goalLimit, goalProblem, overflowingInto } from "@/lib/savings";
 
 type Kind = "bucket" | "account";
 
@@ -144,6 +144,7 @@ export function TargetForm({
       <DeleteTarget
         target={target}
         accounts={accounts}
+        buckets={buckets}
         ruleCount={ruleCount}
         onCancel={() => {
           setDeleting(false);
@@ -347,18 +348,21 @@ export function TargetForm({
 function DeleteTarget({
   target,
   accounts,
+  buckets,
   ruleCount,
   onCancel,
   onDone,
 }: {
   target: SavingsTarget;
   accounts: Account[];
+  buckets: Bucket[];
   ruleCount: number;
   onCancel: () => void;
   onDone: () => void;
 }) {
   const { t } = useTranslation();
   const refresh = useRefreshMoney();
+  const overflowing = overflowingInto(buckets, target.id);
   const remove = useMutation({
     mutationFn: () =>
       unwrap(
@@ -406,6 +410,14 @@ function DeleteTarget({
         )}
         {ruleCount > 0 && ` ${t("savingsSetup.deleteRules", { count: ruleCount })}`}
       </Text>
+      {overflowing.length > 0 && (
+        <Text size="sm">
+          {t("savingsSetup.deleteOverflow", {
+            count: overflowing.length,
+            names: overflowing.map((b) => b.name).join(", "),
+          })}
+        </Text>
+      )}
       {remove.error && <ErrorAlert error={remove.error} />}
       <Group justify="flex-end" gap="xs">
         <Button variant="default" onClick={onCancel}>

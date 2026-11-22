@@ -50,6 +50,7 @@ describe("endPreview", () => {
       ["Hobby", "299.50", "299.50"],
     ]);
     expect(p.backToUnallocated).toEqual([{ currency: "NOK", amount: "799.50" }]);
+    expect(p.toSavings).toEqual([]);
     expect(p.refilled.map((r) => [r.bucket.name, r.amount, r.overflow])).toEqual([
       // Emptied to 0, then set to RA.
       ["Groceries", "4000.00", "0.00"],
@@ -69,5 +70,12 @@ describe("endPreview", () => {
   it("leaves out refills of 0", () => {
     const full = bucket({ ...base, id: "1000000005", name: "Zero", refill_amount: "0.00" });
     expect(endPreview([full], true).refilled).toEqual([]);
+  });
+
+  it("counts what goes to savings apart from what goes back to unallocated (#233)", () => {
+    const saved = { ...hobby, overflow_destination: "savings_distribution" as const };
+    const p = endPreview([groceries, saved], false);
+    expect(p.backToUnallocated).toEqual([{ currency: "NOK", amount: "500.00" }]);
+    expect(p.toSavings).toEqual([{ currency: "NOK", amount: "299.50" }]);
   });
 });

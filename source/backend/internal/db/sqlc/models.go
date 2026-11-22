@@ -829,6 +829,7 @@ type Bucket struct {
 	Priority            bool
 	Importance          int16
 	NegativeTf          NegativeTf
+	OverflowTargetID    pgtype.Text
 }
 
 type BucketTransaction struct {

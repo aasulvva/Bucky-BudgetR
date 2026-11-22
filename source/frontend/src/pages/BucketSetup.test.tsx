@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 
 import { formatMoney } from "@/lib/money";
 import { apiMock, problem, testUser, type MockRequest } from "@/test/api";
-import { account, bucket } from "@/test/fixtures";
+import { account, bucket, savingsTarget } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
 
@@ -549,6 +549,62 @@ describe("Bucket setup, Bucket settings (#102)", () => {
     await userEvent.click(within(drawer).getByRole("option", { name: "Manual" }));
     expect(apiMock.calls("PATCH /api/v1/me/preferences")[0]?.body).toEqual({
       default_refill_mode: "manual",
+    });
+  });
+});
+
+describe("Bucket setup, overflow to savings (#233)", () => {
+  const rainy = savingsTarget({ id: "1000001001", name: "Rainy day", account_id: buffer.id });
+  const abroad = savingsTarget({
+    id: "1000001002",
+    name: "Abroad",
+    account_id: euro.id,
+    currency: "EUR",
+  });
+  const itself = savingsTarget({
+    id: "1000001003",
+    name: "Groceries goal",
+    account_id: null,
+    bucket_id: groceries.id,
+  });
+
+  beforeEach(() => {
+    apiMock.on("GET /api/v1/savings/targets", { body: [rainy, abroad, itself] });
+    apiMock.on("PATCH /api/v1/buckets/1000000001", (req) => ({
+      body: { ...groceries, ...(req.body as object) },
+    }));
+  });
+
+  it("sends overflow to a target in the bucket's currency, not itself", async () => {
+    renderRoute("/buckets/setup?edit=1000000001");
+    const form = within(await screen.findByRole("form", { name: "Groceries" }));
+    await pick(/Overflow goes to/, "A savings target");
+    expect(form.getByText(/Only the part the account's money covers is saved/)).toBeInTheDocument();
+
+    await userEvent.click(form.getByRole("button", { name: "Save" }));
+    expect(await form.findByText("Pick a savings target.")).toBeInTheDocument();
+    expect(apiMock.calls("PATCH /api/v1/buckets/1000000001")).toHaveLength(0);
+
+    await userEvent.click(form.getByRole("combobox", { name: /^Savings target/ }));
+    expect(screen.queryByRole("option", { name: "Abroad" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Groceries goal" })).not.toBeInTheDocument();
+    await userEvent.click(await screen.findByRole("option", { name: "Rainy day" }));
+    await userEvent.click(form.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("Groceries saved.")).toBeInTheDocument();
+    expect(apiMock.calls("PATCH /api/v1/buckets/1000000001")[0]?.body).toEqual({
+      overflow_destination: "savings_target",
+      overflow_target_id: rainy.id,
+    });
+  });
+
+  it("sends overflow to the distributor", async () => {
+    renderRoute("/buckets/setup?edit=1000000001");
+    const form = within(await screen.findByRole("form", { name: "Groceries" }));
+    await pick(/Overflow goes to/, "The savings distributor");
+    await userEvent.click(form.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("Groceries saved.")).toBeInTheDocument();
+    expect(apiMock.calls("PATCH /api/v1/buckets/1000000001")[0]?.body).toEqual({
+      overflow_destination: "savings_distribution",
     });
   });
 });

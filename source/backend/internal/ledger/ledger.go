@@ -163,7 +163,7 @@ var shapes = map[sqlc.TransactionType]shape{
 	sqlc.TransactionTypeREF: {minBucket: 1, maxBucket: 1},
 	sqlc.TransactionTypeBUA: {minBucket: 1, maxBucket: 1},
 	sqlc.TransactionTypeBAT: {minBucket: 2, maxBucket: 2},
-	sqlc.TransactionTypeOVF: {minBucket: 1, maxBucket: 1},
+	sqlc.TransactionTypeOVF: {minBucket: 1, maxBucket: 1, maxSavings: 2},
 	sqlc.TransactionTypeSVR: {minSavings: 1, maxSavings: 1},
 	sqlc.TransactionTypeSVC: {minSavings: 1, maxSavings: 1},
 	// Savings to a bucket: straight from unallocated (bucket line only), or

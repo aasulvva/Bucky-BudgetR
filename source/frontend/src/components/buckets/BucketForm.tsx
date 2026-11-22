@@ -32,6 +32,7 @@ import {
 import { api } from "@/api/client";
 import { useCurrentCycles } from "@/api/cycles";
 import { ApiError, unwrap } from "@/api/errors";
+import { useSavingsTargets } from "@/api/savings";
 import type { components } from "@/api/schema";
 import { useSession } from "@/app/session";
 import { AmountInput } from "@/components/AmountInput";
@@ -40,7 +41,7 @@ import { ReleaseNote } from "@/components/savings/ReleaseNote";
 import i18n from "@/i18n";
 import { isOverdue } from "@/lib/cycles";
 import { compareAmounts, formatMoney, multiplyAmount, subtractAmounts } from "@/lib/money";
-import { autofocusField } from "@/lib/device";
+import { autofocusField, isTouch } from "@/lib/device";
 import { checkName } from "@/lib/names";
 
 type BucketCreate = components["schemas"]["BucketCreate"];
@@ -48,6 +49,11 @@ type BucketUpdate = components["schemas"]["BucketUpdate"];
 type CapMode = components["schemas"]["CapMode"];
 type NegativeTf = components["schemas"]["NegativeTf"];
 type OverflowDestination = components["schemas"]["OverflowDestination"];
+const OVERFLOW_DESTINATIONS: OverflowDestination[] = [
+  "unallocated",
+  "savings_distribution",
+  "savings_target",
+];
 
 const REFILL_MODES: RefillMode[] = ["auto", "manual", "on_income", "fully_manual"];
 const NEGATIVE_TFS: NegativeTf[] = ["debt", "clear"];
@@ -102,6 +108,7 @@ interface FormErrors {
   multiplier?: string;
   capAmount?: string;
   opening?: string;
+  overflowTarget?: string;
 }
 
 /**
@@ -183,6 +190,10 @@ export function BucketForm({
   const [overflow, setOverflow] = useState<OverflowDestination>(
     from?.overflow_destination ?? "unallocated",
   );
+  const [overflowTarget, setOverflowTarget] = useState<string | null>(
+    from?.overflow_target_id ?? null,
+  );
+  const savingsTargets = useSavingsTargets().data ?? [];
   const [chosenStart, setStart] = useState<Start>(() => {
     if (!initial) return "refill";
     if (initial.refill) return "refill";
@@ -225,6 +236,18 @@ export function BucketForm({
         ? { cap_mode: capMode, cap_amount: fixed ?? "" }
         : { cap_mode: capMode };
 
+  // Where overflow goes (#233): never anywhere for a Fully manual bucket,
+  // and a target in the bucket's currency, not the bucket itself.
+  const overflowTargets = savingsTargets.filter(
+    (x) => x.currency === currency && x.bucket_id !== bucket?.id,
+  );
+  const dest: OverflowDestination = manual ? "unallocated" : overflow;
+  const destTarget = dest === "savings_target" ? overflowTarget : null;
+  const overflowFields = {
+    overflow_destination: dest,
+    ...(destTarget ? { overflow_target_id: destTarget } : {}),
+  };
+
   const changes: BucketUpdate = bucket
     ? {
         ...(name.trim() !== bucket.name ? { name: name.trim() } : {}),
@@ -236,7 +259,9 @@ export function BucketForm({
         ...(refillMode !== bucket.refill_mode ? { refill_mode: refillMode } : {}),
         ...(keeps !== bucket.keep_funds ? { keep_funds: keeps } : {}),
         ...(negativeTf !== bucket.negative_tf ? { negative_tf: negativeTf } : {}),
-        ...(overflow !== bucket.overflow_destination ? { overflow_destination: overflow } : {}),
+        ...(dest !== bucket.overflow_destination || destTarget !== bucket.overflow_target_id
+          ? overflowFields
+          : {}),
       }
     : {};
   const changed = !bucket || Object.keys(changes).length > 0;
@@ -252,7 +277,7 @@ export function BucketForm({
     refill_mode: refillMode,
     keep_funds: keeps,
     negative_tf: negativeTf,
-    overflow_destination: overflow,
+    ...overflowFields,
     ...(usable && start === "refill" ? { refill: true } : {}),
     ...(usable && start === "amount" && opening !== null ? { opening_funds: opening } : {}),
   });
@@ -296,6 +321,10 @@ export function BucketForm({
           ? t("common.notNegative")
           : undefined,
     multiplier: capMode === "multiplier" && !mult ? t("bucketSetup.invalidMultiplier") : undefined,
+    overflowTarget:
+      dest === "savings_target" && !overflowTargets.some((x) => x.id === overflowTarget)
+        ? t("bucketSetup.pickOverflowTarget")
+        : undefined,
     capAmount:
       capMode !== "fixed"
         ? undefined
@@ -563,20 +592,38 @@ export function BucketForm({
           {!manual && (
             <Select
               label={t("bucketSetup.overflow")}
+              description={
+                overflow === "unallocated" ? undefined : t("bucketSetup.overflowSavingsHint")
+              }
               data={[
                 { value: "unallocated", label: t("bucketSetup.overflowUnallocated") },
+                { value: "savings_distribution", label: t("bucketSetup.overflowDistribution") },
                 {
-                  value: "savings_distribution",
-                  label: t("bucketSetup.overflowDistribution"),
-                  disabled: true,
+                  value: "savings_target",
+                  label: t("bucketSetup.overflowTarget"),
+                  disabled: overflowTargets.length === 0,
                 },
-                { value: "savings_target", label: t("bucketSetup.overflowTarget"), disabled: true },
               ]}
               value={overflow}
               allowDeselect={false}
               onChange={(v) => {
-                if (v === "unallocated") setOverflow(v);
+                const next = OVERFLOW_DESTINATIONS.find((d) => d === v);
+                if (next) setOverflow(next);
               }}
+              comboboxProps={isTouch() ? { withinPortal: false } : undefined}
+            />
+          )}
+          {!manual && overflow === "savings_target" && (
+            <Select
+              label={t("bucketSetup.overflowTargetPick")}
+              description={t("bucketSetup.overflowTargetHint")}
+              data={overflowTargets.map((x) => ({ value: x.id, label: x.name }))}
+              value={overflowTarget}
+              allowDeselect={false}
+              onChange={setOverflowTarget}
+              error={errors.overflowTarget}
+              comboboxProps={isTouch() ? { withinPortal: false } : undefined}
+              ml="xl"
             />
           )}
           {!bucket &&

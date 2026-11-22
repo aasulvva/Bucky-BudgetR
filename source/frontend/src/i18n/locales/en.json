@@ -667,8 +667,8 @@
     },
     "overflow": "Overflow goes to",
     "overflowUnallocated": "Unallocated (stays in the account)",
-    "overflowDistribution": "Savings distribution (later)",
-    "overflowTarget": "A savings target (later)",
+    "overflowDistribution": "The savings distributor",
+    "overflowTarget": "A savings target",
     "start": "Starting funds",
     "startRefill": "Refill now (+{{amount}})",
     "startRefillHint": "Counts as this cycle's refill.",
@@ -737,7 +737,11 @@
       }
     },
     "defaultModeHint": "New buckets start as {{mode}}. <open>Change the default</open>",
-    "noIncomeRules": "You have no income rules yet, so this bucket is only refilled by an income where you tick “Triggers refill”. <open>Set up income rules</open>"
+    "noIncomeRules": "You have no income rules yet, so this bucket is only refilled by an income where you tick “Triggers refill”. <open>Set up income rules</open>",
+    "overflowSavingsHint": "Only the part the account's money covers is saved; the rest of an underfunded bucket's overflow just goes.",
+    "overflowTargetPick": "Savings target",
+    "overflowTargetHint": "It stops at the target's goal, unless a distributor rule lets it go past; the rest goes to the savings distributor.",
+    "pickOverflowTarget": "Pick a savings target."
   },
   "budgetSetup": {
     "intro": "Plan each cycle's refills against the income you expect on each account.",
@@ -1000,7 +1004,9 @@
       "editRules": "Edit in the distributor"
     },
     "deleteRules_one": "Its distributor rule is deleted.",
-    "deleteRules_other": "Its {{count}} distributor rules are deleted."
+    "deleteRules_other": "Its {{count}} distributor rules are deleted.",
+    "deleteOverflow_one": "{{names}} sends its overflow here; it goes to the savings distributor instead.",
+    "deleteOverflow_other": "{{names}} send their overflow here; it goes to the savings distributor instead."
   },
   "newTransaction": {
     "type": "Type",
@@ -1267,7 +1273,10 @@
     "noneAfterText": "Plan one to refill your buckets. Until a cycle is active, transactions can't be split into buckets.",
     "previewNote": "A preview: the amounts can change slightly, because the money is reallocated first.",
     "endedStarted": "Cycle ended. {{range}} has started.",
-    "ended": "Cycle ended. There's no active cycle until you start one."
+    "ended": "Cycle ended. There's no active cycle until you start one.",
+    "overflowTo": "→ {{to}}",
+    "toSavings": "To savings",
+    "overflowsTo": " ({{amount}} overflows to {{to}})"
   },
   "stats": {
     "period": {

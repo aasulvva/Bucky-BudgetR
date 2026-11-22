@@ -17,7 +17,7 @@ import {
   today,
 } from "@/lib/cycles";
 import { apiMock, problem, testUser } from "@/test/api";
-import { bucket, cycle } from "@/test/fixtures";
+import { bucket, cycle, savingsTarget } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
 
@@ -367,6 +367,28 @@ describe("ending a cycle", () => {
     expect(apiMock.calls(`POST /api/v1/cycles/${active.id}/end`)[0]?.body).toEqual({
       start_next: true,
     });
+  });
+
+  it("says where overflow to savings goes (#233)", async () => {
+    given({ active, next: planned });
+    apiMock.on("GET /api/v1/savings/targets", {
+      body: [savingsTarget({ id: "1000001001", name: "Rainy day" })],
+    });
+    apiMock.on("GET /api/v1/buckets", {
+      // Groceries is emptied to the distributor; Car overflows to the target.
+      body: buckets.map((b) =>
+        b.keep_funds
+          ? { ...b, overflow_destination: "savings_target", overflow_target_id: "1000001001" }
+          : { ...b, overflow_destination: "savings_distribution" },
+      ),
+    });
+    const dialog = await openEnd();
+    expect(await dialog.findByText("→ Savings distributor")).toBeInTheDocument();
+    expect(dialog.getByText("To savings")).toBeInTheDocument();
+    expect(dialog.queryByText("Back to unallocated")).not.toBeInTheDocument();
+    expect(
+      dialog.getByText(new RegExp(`${plain(formatMoney("500.00"))} overflows to Rainy day`)),
+    ).toBeInTheDocument();
   });
 
   it("can leave a gap, and says what that means", async () => {

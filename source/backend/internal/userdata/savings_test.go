@@ -9,6 +9,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/accounts"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/allocation"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/authtest"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/buckets"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/savings"
@@ -57,7 +58,8 @@ func TestExportImportSavings(t *testing.T) {
 }
 
 // TestExportImportDistributor: the distributor, its rules and its SVD
-// (#232) round-trip, and a copy's rules follow their target's new ID.
+// (#232) round-trip, and a copy's rules and a bucket's overflow target (#233)
+// follow their target's new ID.
 func TestExportImportDistributor(t *testing.T) {
 	e := setup(t)
 	ctx := t.Context()
@@ -67,6 +69,10 @@ func TestExportImportDistributor(t *testing.T) {
 	main := must[accounts.Account](t)(e.accounts.Create(ctx, alice.ID, accounts.New{Name: "Main", OpeningBalance: dec("1000")}))
 	buffer := must[accounts.Account](t)(e.accounts.Create(ctx, alice.ID, accounts.New{Name: "Buffer", Type: sqlc.AccountTypeSavings}))
 	target := must[savings.Target](t)(sv.Create(ctx, alice.ID, savings.New{AccountID: buffer.ID, Goal: dec("5000")}))
+	must[buckets.Bucket](t)(e.buckets.Create(ctx, alice.ID, buckets.New{
+		Name: "Food", SourceAccountID: main.ID, RefillAmount: dec("100"), RefillMode: sqlc.RefillModeManual,
+		OverflowDestination: sqlc.OverflowDestinationSavingsTarget, OverflowTargetID: target.ID,
+	}))
 	for _, r := range []savings.RuleInput{
 		{From: dec("0"), To: decimal.NewNullDecimal(dec("1000")), Priority: 3},
 		{From: dec("1000"), Priority: 1, PastGoal: true},
@@ -101,6 +107,10 @@ func TestExportImportDistributor(t *testing.T) {
 		if r.TargetID != list[0].ID || !strings.HasPrefix(r.ID, list[0].ID) {
 			t.Errorf("bob's rule %+v, target %s", r, list[0].ID)
 		}
+	}
+	bobBuckets := must[[]buckets.Bucket](t)(e.buckets.List(ctx, bob.ID))
+	if len(bobBuckets) != 1 || bobBuckets[0].OverflowTargetID.String != list[0].ID {
+		t.Errorf("bob's buckets %+v, target %s", bobBuckets, list[0].ID)
 	}
 	if d := must[savings.Distributor](t)(sv.Distributor(ctx, bob.ID)); d.ID == "" || !strings.HasPrefix(d.ID, bob.ID) || len(d.Held) != 0 {
 		t.Errorf("bob's distributor %+v", d)

@@ -73,6 +73,13 @@ export function transactionSubLine(tx: Transaction, names: Lookups): string {
         buckets.length > 0 ? buckets.join(", ") : i18n.t("transactions.noBuckets"),
       ];
       break;
+    case "OVF":
+      parts = [
+        i18n.t("transactionTypes.OVF"),
+        buckets.join(", "),
+        ...lines.savings_lines.map((l) => names.targetName(l.holder_id)),
+      ];
+      break;
     case "SVR":
     case "SVC":
     case "SVD":

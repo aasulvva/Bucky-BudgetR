@@ -10,6 +10,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/api"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/auth"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/authtest"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/buckets"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/httpapi"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/savings"
@@ -109,5 +110,72 @@ func TestSavingsDistributorAPI(t *testing.T) {
 	w = do(http.MethodGet, "/api/v1/savings/rules", nil)
 	if rules := decode[[]api.SavingsRule](t, w); len(rules) != 1 || rules[0].TargetId != ht.Id {
 		t.Errorf("rules %+v", rules)
+	}
+}
+
+// TestBucketOverflowTargetAPI: a bucket's overflow can go to a savings target
+// in its currency (#233), and goes to the distributor once that target goes.
+func TestBucketOverflowTargetAPI(t *testing.T) {
+	pool := testdb.New(t)
+	l := ledger.New(ledger.Options{AfterRecord: allocation.AfterRecord})
+	sv := savings.NewService(pool, l, savings.Options{})
+	h := newHandler(t, discard(), pool, httpapi.Options{
+		Auth:     auth.NewService(pool, discard(), auth.Options{IdleTimeout: idle, MaxAge: maxAge}),
+		Accounts: accounts.NewService(pool, l, accounts.Options{Savings: sv}),
+		Buckets:  buckets.NewService(pool, l, buckets.Options{ReleaseSavings: sv.ReleaseBucket}),
+		Savings:  sv,
+	})
+	authtest.NewUser(t, pool, "alice")
+	alice := authtest.Login(t, h, "alice")
+	do := func(method, path string, body any) *httptest.ResponseRecorder {
+		t.Helper()
+		return authtest.Do(t, h, method, path, body, alice)
+	}
+	account := func(body map[string]any) api.Account {
+		t.Helper()
+		w := do(http.MethodPost, "/api/v1/accounts", body)
+		expect(t, "create account", w, http.StatusCreated, "")
+		return decode[api.Account](t, w)
+	}
+	main := account(map[string]any{"name": "Main", "opening_balance": "1000.00"})
+	buffer := account(map[string]any{"name": "Buffer", "type": "savings"})
+	euro := account(map[string]any{"name": "Euro", "type": "savings", "currency": "EUR"})
+	target := func(a api.Account) api.SavingsTarget {
+		t.Helper()
+		w := do(http.MethodPost, "/api/v1/savings/targets", map[string]any{"account_id": a.Id, "goal": "5000.00"})
+		expect(t, "target "+a.Name, w, http.StatusCreated, "")
+		return decode[api.SavingsTarget](t, w)
+	}
+	bt, et := target(buffer), target(euro)
+
+	bucket := map[string]any{
+		"name": "Food", "source_account_id": main.Id, "refill_amount": "100.00",
+		"overflow_destination": "savings_target", "overflow_target_id": bt.Id,
+	}
+	w := do(http.MethodPost, "/api/v1/buckets", bucket)
+	expect(t, "create", w, http.StatusCreated, "")
+	b := decode[api.Bucket](t, w)
+	if b.OverflowDestination != api.OverflowDestinationSavingsTarget || b.OverflowTargetId.MustGet() != bt.Id {
+		t.Errorf("created %+v", b)
+	}
+
+	bucket["name"], bucket["overflow_target_id"] = "Fuel", et.Id
+	expect(t, "another currency", do(http.MethodPost, "/api/v1/buckets", bucket), http.StatusBadRequest, "invalid_request")
+	delete(bucket, "overflow_target_id")
+	expect(t, "no target", do(http.MethodPost, "/api/v1/buckets", bucket), http.StatusBadRequest, "invalid_request")
+
+	w = do(http.MethodPatch, "/api/v1/buckets/"+b.Id, map[string]any{"overflow_destination": "savings_distribution"})
+	expect(t, "to the distributor", w, http.StatusOK, "")
+	if got := decode[api.Bucket](t, w); got.OverflowDestination != api.OverflowDestinationSavingsDistribution || !got.OverflowTargetId.IsNull() {
+		t.Errorf("updated %+v", got)
+	}
+	w = do(http.MethodPatch, "/api/v1/buckets/"+b.Id, map[string]any{"overflow_destination": "savings_target", "overflow_target_id": bt.Id})
+	expect(t, "back to the target", w, http.StatusOK, "")
+
+	expect(t, "delete the target", do(http.MethodDelete, "/api/v1/savings/targets/"+bt.Id, nil), http.StatusNoContent, "")
+	w = do(http.MethodGet, "/api/v1/buckets/"+b.Id, nil)
+	expect(t, "get", w, http.StatusOK, "")
+	if got := decode[api.Bucket](t, w); got.OverflowDestination != api.OverflowDestinationSavingsDistribution || !got.OverflowTargetId.IsNull() {
+		t.Errorf("after the target went %+v", got)
 	}
 }

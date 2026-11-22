@@ -22,6 +22,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shopspring/decimal"
 
@@ -87,10 +88,14 @@ type New struct {
 	// RefillMode defaults to the user's default_refill_mode preference, or
 	// auto.
 	RefillMode sqlc.RefillMode
-	// OverflowDestination defaults to unallocated, the only one available
-	// until the savings module (§8).
+	// OverflowDestination defaults to unallocated. A Fully manual bucket
+	// never overflows, so it's always unallocated.
 	OverflowDestination sqlc.OverflowDestination
-	Priority            bool
+	// OverflowTargetID is the savings target overflow goes to, with the
+	// savings_target destination (#233): a live target in the bucket's
+	// currency.
+	OverflowTargetID string
+	Priority         bool
 	// Importance is 1–10 and defaults to DefaultImportance.
 	Importance int
 	// OpeningFunds is recorded as an Opening Funds (OPF) transaction now.
@@ -118,8 +123,11 @@ type Changes struct {
 	NegativeTF          *sqlc.NegativeTf
 	RefillMode          *sqlc.RefillMode
 	OverflowDestination *sqlc.OverflowDestination
-	Priority            *bool
-	Importance          *int
+	// OverflowTargetID is the target for the savings_target destination;
+	// another destination clears it.
+	OverflowTargetID *string
+	Priority         *bool
+	Importance       *int
 }
 
 // CreateHook runs in Create's transaction for a bucket created with opening
@@ -245,7 +253,8 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Bucket, err
 		}
 		q := sqlc.New(tx)
 		// The source must be a live account of the user.
-		if _, err := sourceCurrency(ctx, q, userID, n.SourceAccountID); err != nil {
+		currency, err := sourceCurrency(ctx, q, userID, n.SourceAccountID)
+		if err != nil {
 			return err
 		}
 		if n.RefillMode == "" {
@@ -283,7 +292,7 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Bucket, err
 		}
 		st := settings{
 			RefillAmount: n.RefillAmount, CapMode: n.CapMode, KeepFunds: n.KeepFunds, NegativeTF: n.NegativeTF,
-			RefillMode: n.RefillMode, OverflowDestination: n.OverflowDestination,
+			RefillMode: n.RefillMode, OverflowDestination: n.OverflowDestination, OverflowTargetID: n.OverflowTargetID,
 			Priority: n.Priority, Importance: n.Importance,
 		}
 		switch n.CapMode {
@@ -293,6 +302,9 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Bucket, err
 			st.CapMultiplier = decimal.NewNullDecimal(n.CapMultiplier)
 		}
 		if err := st.check(); err != nil {
+			return err
+		}
+		if err := checkOverflowTarget(ctx, q, userID, "", currency, st.OverflowTargetID); err != nil {
 			return err
 		}
 		if manual {
@@ -309,6 +321,7 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Bucket, err
 				RefillAmount: st.RefillAmount, CapMode: st.CapMode, CapMultiplier: st.CapMultiplier, CapAmount: st.CapAmount,
 				KeepFunds: st.KeepFunds, RefillMode: st.RefillMode, OverflowDestination: st.OverflowDestination,
 				Priority: st.Priority, Importance: st.dbImportance, NegativeTf: st.NegativeTF,
+				OverflowTargetID: pgtype.Text{String: st.OverflowTargetID, Valid: st.OverflowTargetID != ""},
 			})
 			return ids.Inserted(err)
 		})
@@ -466,7 +479,7 @@ func update(ctx context.Context, tx pgx.Tx, userID, id string, c Changes) (row s
 	st := settings{
 		RefillAmount: row.RefillAmount, CapMode: row.CapMode, CapMultiplier: row.CapMultiplier, CapAmount: row.CapAmount,
 		KeepFunds: row.KeepFunds, NegativeTF: row.NegativeTf, RefillMode: row.RefillMode, OverflowDestination: row.OverflowDestination,
-		Priority: row.Priority, Importance: int(row.Importance),
+		OverflowTargetID: row.OverflowTargetID.String, Priority: row.Priority, Importance: int(row.Importance),
 	}
 	if err := st.apply(c); err != nil {
 		return row, err
@@ -474,9 +487,19 @@ func update(ctx context.Context, tx pgx.Tx, userID, id string, c Changes) (row s
 	if err := st.check(); err != nil {
 		return row, err
 	}
+	if st.OverflowTargetID != row.OverflowTargetID.String {
+		currency, err := sourceCurrency(ctx, q, userID, p.SourceAccountID)
+		if err != nil {
+			return row, err
+		}
+		if err := checkOverflowTarget(ctx, q, userID, id, currency, st.OverflowTargetID); err != nil {
+			return row, err
+		}
+	}
 	p.RefillAmount, p.CapMode, p.CapMultiplier, p.CapAmount = st.RefillAmount, st.CapMode, st.CapMultiplier, st.CapAmount
 	p.KeepFunds, p.NegativeTf, p.RefillMode, p.OverflowDestination = st.KeepFunds, st.NegativeTF, st.RefillMode, st.OverflowDestination
 	p.Priority, p.Importance = st.Priority, st.dbImportance
+	p.OverflowTargetID = pgtype.Text{String: st.OverflowTargetID, Valid: st.OverflowTargetID != ""}
 	if err := q.UpdateBucket(ctx, p); err != nil {
 		return row, nameTaken(err)
 	}
@@ -782,6 +805,7 @@ type settings struct {
 	NegativeTF          sqlc.NegativeTf
 	RefillMode          sqlc.RefillMode
 	OverflowDestination sqlc.OverflowDestination
+	OverflowTargetID    string
 	Priority            bool
 	Importance          int
 	// dbImportance is Importance as stored, set by check.
@@ -838,6 +862,13 @@ func (st *settings) apply(c Changes) error {
 	if c.OverflowDestination != nil {
 		st.OverflowDestination = *c.OverflowDestination
 	}
+	if c.OverflowTargetID != nil {
+		st.OverflowTargetID = *c.OverflowTargetID
+	}
+	// Another destination drops the target.
+	if st.OverflowDestination != sqlc.OverflowDestinationSavingsTarget && c.OverflowTargetID == nil {
+		st.OverflowTargetID = ""
+	}
 	if c.Priority != nil {
 		st.Priority = *c.Priority
 	}
@@ -855,6 +886,10 @@ func (st *settings) apply(c Changes) error {
 		}
 		if c.CapMode == nil && st.CapMode == sqlc.BucketCapModeMultiplier {
 			st.CapMode, st.CapMultiplier = sqlc.BucketCapModeNone, decimal.NullDecimal{}
+		}
+		// It never overflows (#233).
+		if c.OverflowDestination == nil {
+			st.OverflowDestination, st.OverflowTargetID = sqlc.OverflowDestinationUnallocated, ""
 		}
 	case !manual && c.CapMode == nil && st.CapMode == sqlc.BucketCapModeNone:
 		st.CapMode, st.CapMultiplier = sqlc.BucketCapModeMultiplier, decimal.NewNullDecimal(decimal.NewFromInt(1))
@@ -909,14 +944,39 @@ func (st *settings) check() error {
 	if !st.OverflowDestination.Valid() {
 		return fmt.Errorf("%w: overflow destination %q", ErrInvalid, st.OverflowDestination)
 	}
-	if st.OverflowDestination != sqlc.OverflowDestinationUnallocated {
-		return fmt.Errorf("%w: the overflow destination %s isn't available yet; use unallocated", ErrInvalid, st.OverflowDestination)
+	if st.RefillMode == sqlc.RefillModeFullyManual && st.OverflowDestination != sqlc.OverflowDestinationUnallocated {
+		return fmt.Errorf("%w: a fully manual bucket never overflows, so its overflow destination is unallocated", ErrInvalid)
+	}
+	if (st.OverflowDestination == sqlc.OverflowDestinationSavingsTarget) != (st.OverflowTargetID != "") {
+		return fmt.Errorf("%w: overflow_target_id is needed with, and only used with, the savings_target destination", ErrInvalid)
 	}
 	imp := st.Importance
 	if imp < 1 || imp > 10 {
 		return fmt.Errorf("%w: the importance must be 1 to 10", ErrInvalid)
 	}
 	st.dbImportance = int16(imp)
+	return nil
+}
+
+// checkOverflowTarget checks that targetID, if set, is a live savings target
+// of the user in currency, and not the bucket bucketID itself (#233).
+func checkOverflowTarget(ctx context.Context, q *sqlc.Queries, userID, bucketID, currency, targetID string) error {
+	if targetID == "" {
+		return nil
+	}
+	t, err := q.SavingsTargetForOverflow(ctx, sqlc.SavingsTargetForOverflowParams{ID: targetID, UserID: userID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("%w: %s isn't one of your savings targets", ErrInvalid, targetID)
+	}
+	if err != nil {
+		return err
+	}
+	if bucketID != "" && t.BucketID.String == bucketID {
+		return fmt.Errorf("%w: a bucket can't send its overflow to itself", ErrInvalid)
+	}
+	if t.Currency != currency {
+		return fmt.Errorf("%w: the savings target is in %s, the bucket in %s", ErrInvalid, t.Currency, currency)
+	}
 	return nil
 }
 

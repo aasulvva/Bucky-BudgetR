@@ -104,6 +104,9 @@ func (s *server) CreateBucket(ctx context.Context, req api.CreateBucketRequestOb
 	if b.OverflowDestination != nil {
 		n.OverflowDestination = sqlc.OverflowDestination(*b.OverflowDestination)
 	}
+	if b.OverflowTargetId != nil {
+		n.OverflowTargetID = *b.OverflowTargetId
+	}
 	if b.Priority != nil {
 		n.Priority = *b.Priority
 	}
@@ -174,6 +177,7 @@ func (s *server) UpdateBucket(ctx context.Context, req api.UpdateBucketRequestOb
 		d := sqlc.OverflowDestination(*b.OverflowDestination)
 		c.OverflowDestination = &d
 	}
+	c.OverflowTargetID = b.OverflowTargetId
 	out, err := svc.Update(ctx, sessionFrom(ctx).User.ID, req.BucketId, c)
 	if err != nil {
 		return nil, bucketError(err)
@@ -356,10 +360,14 @@ func toAPIBucket(b buckets.Bucket) api.Bucket {
 		NegativeTf:            api.NegativeTf(b.NegativeTf),
 		RefillMode:            api.RefillMode(b.RefillMode),
 		OverflowDestination:   api.OverflowDestination(b.OverflowDestination),
+		OverflowTargetId:      nullable.NewNullNullable[api.SavingsHolderId](),
 		Priority:              b.Priority,
 		Importance:            int(b.Importance),
 		Refilled:              b.Refilled,
 		CreatedAt:             b.CreatedAt.UTC(),
+	}
+	if b.OverflowTargetID.Valid {
+		out.OverflowTargetId.Set(b.OverflowTargetID.String)
 	}
 	if b.CapMultiplier.Valid {
 		out.CapMultiplier.Set(b.CapMultiplier.Decimal.StringFixed(2))
