@@ -9,6 +9,8 @@ import type {
   SavingsDistributor,
   SavingsRule,
   SavingsTarget,
+  SweepEntry,
+  SweepWhen,
 } from "@/api/savings";
 import i18n from "@/i18n";
 
@@ -314,13 +316,67 @@ export function overflowingInto(buckets: Bucket[], targetId: string): Bucket[] {
 }
 
 /** Whether a savings budget entry is a sweep of unallocated money (#235). */
-export function isSweep(entry: SavingsBudgetEntry): boolean {
+export function isSweep(entry: SavingsBudgetEntry): entry is SweepEntry {
   return entry.when === "after_refills" || entry.when === "cycle_end";
 }
 
 /** The entries with a fixed amount, not the sweeps. */
 export function fixedEntries(entries: SavingsBudgetEntry[]): FixedBudgetEntry[] {
   return entries.filter((e): e is FixedBudgetEntry => !isSweep(e) && e.amount !== null);
+}
+
+/** The sweeps (the server always sends their keep). */
+export function sweepEntries(entries: SavingsBudgetEntry[]): SweepEntry[] {
+  return entries.filter(isSweep);
+}
+
+/**
+ * The sweep modes the account has a sweep with already, but `exceptId`'s
+ * (an account has one sweep per mode, #235).
+ */
+export function takenSweepModes(
+  entries: SavingsBudgetEntry[],
+  accountId: string | null,
+  exceptId?: string,
+): SweepWhen[] {
+  const modes: SweepWhen[] = ["after_refills", "cycle_end"];
+  return modes.filter((w) =>
+    entries.some((e) => e.account_id === accountId && e.when === w && e.id !== exceptId),
+  );
+}
+
+/**
+ * Whether every bucket funded from the account but the Fully manual ones is
+ * refilled in the active cycle, which an After the refills sweep waits for
+ * (#235). An account without such buckets is.
+ */
+export function accountRefilled(buckets: Bucket[], accountId: string): boolean {
+  return buckets
+    .filter((b) => b.source_account_id === accountId && b.refill_mode !== "fully_manual")
+    .every((b) => b.refilled);
+}
+
+/** What a sweep would take now: the account's unallocated money above keep, at least 0. */
+export function sweepNow(unallocated: string, keep: string): string {
+  const above = subtractAmounts(unallocated, keep);
+  return compareAmounts(above, "0") > 0 ? above : "0.00";
+}
+
+/**
+ * Where a sweep is in this cycle: stopped, swept (some), nothing swept (all
+ * of it was within keep, or it was set up to start next cycle), waiting for
+ * the account's refills, waiting for the cycle's end, or without a running
+ * cycle.
+ */
+export type SweepStatus =
+  "stopped" | "swept" | "nothingSwept" | "waitingRefills" | "atCycleEnd" | "noCycle";
+
+export function sweepStatus(entry: SweepEntry, running: boolean): SweepStatus {
+  if (entry.stopped) return "stopped";
+  const run = entry.this_cycle;
+  if (run) return compareAmounts(run.reserved, "0") > 0 ? "swept" : "nothingSwept";
+  if (!running) return "noCycle";
+  return entry.when === "after_refills" ? "waitingRefills" : "atCycleEnd";
 }
 
 /** Where a savings budget entry saves to (#234): its target's name, or the distributor. */

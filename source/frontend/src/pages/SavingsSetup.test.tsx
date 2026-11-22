@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 
 import { formatAmountInput, formatMoney } from "@/lib/money";
 import { apiMock } from "@/test/api";
-import { account, bucket, budgetEntry, savingsTarget } from "@/test/fixtures";
+import { account, bucket, budgetEntry, savingsTarget, sweepEntry } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
 
@@ -367,8 +367,135 @@ describe("the savings budget (#234)", () => {
     await userEvent.click(form.getByRole("button", { name: "Delete target" }));
     expect(
       await screen.findByText(
-        "1 fixed amount in the savings budget stops until it gets another destination.",
+        "1 entry in the savings budget stops until it gets another destination.",
       ),
     ).toBeInTheDocument();
+  });
+});
+
+describe("sweeps in the savings budget (#235)", () => {
+  const raw = (amount: string) => formatMoney(amount, "NOK");
+  const atEnd = sweepEntry({
+    id: "1234000001",
+    target_id: rainy.id,
+    keep: "2000.00",
+    when: "cycle_end",
+  });
+
+  beforeEach(() => {
+    apiMock.on("GET /api/v1/savings/budget", { body: [atEnd] });
+  });
+
+  it("lists a sweep with what it keeps, and counts it", async () => {
+    renderRoute("/savings/setup");
+    expect(await screen.findByRole("button", { name: /^Savings budget/ })).toHaveTextContent(
+      "1 sweep",
+    );
+    await userEvent.click(screen.getByRole("button", { name: /^Savings budget/ }));
+    const section = within(await screen.findByRole("region", { name: "Main" }));
+    const row = section.getByRole("button", { name: `Sweep above ${raw("2000.00")} to Buffer` });
+    expect(row).toHaveTextContent("At cycle end");
+    expect(row).toHaveTextContent(`Above ${m("2000.00")}`);
+    // No fixed amounts, so no total per cycle.
+    expect(section.queryByText(/per cycle$/)).not.toBeInTheDocument();
+  });
+
+  it("adds one at a moment the account has none at yet", async () => {
+    apiMock.on("POST /api/v1/savings/budget", {
+      status: 201,
+      body: sweepEntry({ id: "1234000002", keep: "300.00" }),
+    });
+    apiMock.on("GET /api/v1/savings/budget", {
+      body: [{ ...atEnd, when: "after_refills" }],
+    });
+    renderRoute("/savings/setup?budget");
+    await userEvent.click(await screen.findByRole("button", { name: "Add a sweep" }));
+    const form = within(await screen.findByRole("form", { name: "New sweep" }));
+    await userEvent.click(form.getByRole("combobox", { name: "From account" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Main" }));
+    // Main has an After the refills sweep, so it's At cycle end.
+    expect(form.getByRole("radio", { name: "After the refills" })).toBeDisabled();
+    expect(form.getByText("Main has a sweep at this moment already.")).toBeInTheDocument();
+    expect(form.getByRole("radio", { name: "At cycle end" })).toBeChecked();
+    expect(form.getByText(/so keep enough for them\.$/)).toBeInTheDocument();
+    const keep = form.getByRole("textbox", { name: "Amount to keep" });
+    await userEvent.clear(keep);
+    await userEvent.type(keep, "300");
+    await userEvent.click(form.getByRole("button", { name: "Add" }));
+    await waitFor(() => {
+      expect(apiMock.calls("POST /api/v1/savings/budget")[0]?.body).toEqual({
+        account_id: main.id,
+        keep: "300.00",
+        when: "cycle_end",
+      });
+    });
+  });
+
+  it("asks to sweep now on an account refilled already", async () => {
+    apiMock.on("GET /api/v1/savings/budget", { body: [] });
+    apiMock.on("GET /api/v1/buckets", { body: [{ ...food, refilled: true }, holiday] });
+    apiMock.on("POST /api/v1/savings/budget", {
+      status: 201,
+      body: sweepEntry({ id: "1234000002" }),
+    });
+    renderRoute("/savings/setup?budget");
+    await userEvent.click(await screen.findByRole("button", { name: "Add a sweep" }));
+    const form = within(await screen.findByRole("form", { name: "New sweep" }));
+    await userEvent.click(form.getByRole("combobox", { name: "From account" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Main" }));
+    expect(form.getByRole("radio", { name: "After the refills" })).toBeChecked();
+    // Holiday is Fully manual, so Food's refill is all it waits for.
+    expect(form.getByRole("radio", { name: "Sweep it now" })).toBeChecked();
+    await userEvent.click(form.getByRole("radio", { name: "Start next cycle" }));
+    await userEvent.click(form.getByRole("button", { name: "Add" }));
+    await waitFor(() => {
+      expect(apiMock.calls("POST /api/v1/savings/budget")[0]?.body).toEqual({
+        account_id: main.id,
+        keep: "0.00",
+        when: "after_refills",
+        this_cycle: false,
+      });
+    });
+  });
+
+  it("changes one, asking nothing while the account waits for a refill", async () => {
+    apiMock.on("PATCH /api/v1/savings/budget/1234000001", {
+      body: { ...atEnd, keep: "500.00", when: "after_refills" },
+    });
+    renderRoute("/savings/setup?budget");
+    await userEvent.click(
+      await screen.findByRole("button", { name: `Sweep above ${raw("2000.00")} to Buffer` }),
+    );
+    const form = within(await screen.findByRole("form", { name: "Sweep" }));
+    // A sweep stays a sweep.
+    expect(form.queryByRole("radio", { name: "Manually" })).not.toBeInTheDocument();
+    await userEvent.click(form.getByRole("radio", { name: "After the refills" }));
+    // Food isn't refilled yet: it sweeps after its refill.
+    expect(form.queryByRole("radio", { name: "Sweep it now" })).not.toBeInTheDocument();
+    const keep = form.getByRole("textbox", { name: "Amount to keep" });
+    await userEvent.clear(keep);
+    await userEvent.type(keep, "500");
+    await userEvent.click(form.getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(apiMock.calls("PATCH /api/v1/savings/budget/1234000001")[0]?.body).toEqual({
+        target_id: rainy.id,
+        keep: "500.00",
+        when: "after_refills",
+      });
+    });
+  });
+
+  it("deletes one", async () => {
+    apiMock.on("DELETE /api/v1/savings/budget/1234000001", { status: 204 });
+    renderRoute("/savings/setup?budget");
+    await userEvent.click(
+      await screen.findByRole("button", { name: `Sweep above ${raw("2000.00")} to Buffer` }),
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    expect(screen.getByText(/^Delete the sweep to Buffer,/)).toHaveTextContent("At cycle end");
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await waitFor(() => {
+      expect(apiMock.calls("DELETE /api/v1/savings/budget/1234000001")).toHaveLength(1);
+    });
   });
 });

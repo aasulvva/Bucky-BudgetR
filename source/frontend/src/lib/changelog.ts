@@ -16,22 +16,51 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.29.00",
+    date: "2026-11-22",
+    title: {
+      en: "Savings sweeps",
+      nb: "Restsparing",
+      nn: "Restsparing",
+    },
+    changes: {
+      en: [
+        "Sweep what's left to savings: in Savings setup, add a sweep from an account to a savings target or the savings distributor. It saves what the account has unallocated above an amount you keep, once a cycle, after the account's buckets are refilled or at cycle end.",
+        "The Savings screen shows what each sweep saved this cycle, or what it waits for.",
+        "Budget setup notes each account's sweeps under its buckets.",
+        "Ending a cycle estimates what the cycle-end sweeps take.",
+      ],
+      nb: [
+        "Spar det som er igjen: i Spareoppsett legger du til restsparing fra en konto til et sparemål eller sparefordeleren. Den sparer det kontoen har ufordelt over et beløp du beholder, én gang per periode, etter at bøttene på kontoen er fylt på eller ved periodeslutt.",
+        "Sparing-siden viser hva hver restsparing har spart denne perioden, eller hva den venter på.",
+        "Budsjettoppsett viser restsparingen på hver konto under bøttene.",
+        "Når du avslutter en periode, ser du omtrent hva restsparingen ved periodeslutt tar.",
+      ],
+      nn: [
+        "Spar det som er att: i Spareoppsett legg du til restsparing frå ein konto til eit sparemål eller sparefordelaren. Ho sparer det kontoen har ufordelt over eit beløp du held att, éin gong per periode, etter at bøttene på kontoen er fylte på eller ved periodeslutt.",
+        "Sparing-sida viser kva kvar restsparing har spart denne perioden, eller kva ho ventar på.",
+        "Budsjettoppsett viser restsparinga på kvar konto under bøttene.",
+        "Når du avsluttar ein periode, ser du omtrent kva restsparinga ved periodeslutt tek.",
+      ],
+    },
+  },
+  {
     version: "v2.28.01",
     date: "2026-11-22",
     title: {
       en: "Savings sweeps, behind the scenes",
-      nb: "Sparefeiing, bak kulissene",
-      nn: "Sparefeiing, bak kulissane",
+      nb: "Restsparing, bak kulissene",
+      nn: "Restsparing, bak kulissane",
     },
     changes: {
       en: [
         "The groundwork for sweeping an account's unallocated money to savings: once its buckets are refilled, or at cycle end, keeping an amount you choose. Its screens come in the next update.",
       ],
       nb: [
-        "Grunnlaget for å feie de ufordelte pengene på en konto til sparing: når bøttene er fylt på, eller ved periodeslutt, med et beløp du velger å beholde. Skjermbildene kommer i neste oppdatering.",
+        "Grunnlaget for restsparing: å spare de ufordelte pengene på en konto når bøttene er fylt på, eller ved periodeslutt, med et beløp du velger å beholde. Skjermbildene kommer i neste oppdatering.",
       ],
       nn: [
-        "Grunnlaget for å feie dei ufordelte pengane på ein konto til sparing: når bøttene er fylte på, eller ved periodeslutt, med eit beløp du vel å halde att. Skjermbileta kjem i neste oppdatering.",
+        "Grunnlaget for restsparing: å spare dei ufordelte pengane på ein konto når bøttene er fylte på, eller ved periodeslutt, med eit beløp du vel å halde att. Skjermbileta kjem i neste oppdatering.",
       ],
     },
   },

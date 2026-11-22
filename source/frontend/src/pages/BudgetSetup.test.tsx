@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { addDays, endAtFor, today } from "@/lib/cycles";
 import { formatMoney } from "@/lib/money";
 import { apiMock, problem, testUser } from "@/test/api";
-import { account, budgetEntry, bucket, cycle, savingsTarget } from "@/test/fixtures";
+import { account, budgetEntry, bucket, cycle, savingsTarget, sweepEntry } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
 
@@ -641,6 +641,23 @@ describe("the savings budget in Budget setup (#234)", () => {
   beforeEach(() => {
     apiMock.on("GET /api/v1/savings/targets", { body: [trip] });
     apiMock.on("GET /api/v1/savings/budget", { body: [toTrip, stopped] });
+  });
+
+  it("notes the sweeps without counting them (#235)", async () => {
+    apiMock.on("GET /api/v1/savings/budget", {
+      body: [
+        toTrip,
+        sweepEntry({ id: "1234000003", target_id: trip.id, keep: "500.00", when: "cycle_end" }),
+      ],
+    });
+    renderRoute("/budget");
+    const mainSection = await section("Main account");
+    expect(await mainSection.findByText(`${m("20000.00")} (62.5%)`)).toBeInTheDocument();
+    expect(
+      mainSection.getByText(
+        `Unallocated money above ${m("500.00")} is swept to Holiday fund at cycle end.`,
+      ),
+    ).toBeInTheDocument();
   });
 
   it("counts the fixed amounts with the buckets, and saves them", async () => {

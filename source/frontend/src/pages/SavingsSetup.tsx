@@ -16,11 +16,11 @@ import { useSearchParams } from "react-router";
 
 import { useAccounts, useBuckets, type Account, type Bucket } from "@/api/accounts";
 import {
-  useFixedBudget,
+  useSavingsBudget,
   useSavingsDistributor,
   useSavingsRules,
   useSavingsTargets,
-  type FixedBudgetEntry,
+  type SavingsBudgetEntry,
   type SavingsDistributor,
   type SavingsTarget,
 } from "@/api/savings";
@@ -30,7 +30,7 @@ import { BudgetForm } from "@/components/savings/BudgetForm";
 import { DistributorForm } from "@/components/savings/DistributorForm";
 import { TargetForm, TargetTitle } from "@/components/savings/TargetForm";
 import { formatMoney } from "@/lib/money";
-import { targetKindText } from "@/lib/savings";
+import { fixedEntries, targetKindText } from "@/lib/savings";
 
 /**
  * What's selected in the URL: a target's ID (`?edit=<id>`), "new" (`?new`),
@@ -53,7 +53,7 @@ export default function SavingsSetup() {
   const targets = useSavingsTargets();
   const distributor = useSavingsDistributor();
   const rules = useSavingsRules();
-  const budget = useFixedBudget();
+  const budget = useSavingsBudget();
   const [params, setParams] = useSearchParams();
   const selection: Selection = params.has("new")
     ? "new"
@@ -121,6 +121,7 @@ export default function SavingsSetup() {
                                   entries={entries}
                                   targets={targetList}
                                   accounts={accountList}
+                                  buckets={bucketList}
                                 />
                               ) : onDistributor ? (
                                 <DistributorForm
@@ -233,7 +234,7 @@ function TargetList({
 }: {
   targets: SavingsTarget[];
   distributor: SavingsDistributor;
-  entries: FixedBudgetEntry[];
+  entries: SavingsBudgetEntry[];
   accounts: Account[];
   buckets: Bucket[];
   selected: string | null;
@@ -241,6 +242,16 @@ function TargetList({
 }) {
   const { t } = useTranslation();
   const onDistributor = selected === "distributor";
+  // "2 fixed amounts per cycle · 1 sweep" (#235).
+  const budgetCount = (list: SavingsBudgetEntry[]) => {
+    const fixed = fixedEntries(list).length;
+    const sweeps = list.length - fixed;
+    const parts = [
+      ...(fixed > 0 ? [t("savingsSetup.budget.count", { count: fixed })] : []),
+      ...(sweeps > 0 ? [t("savingsSetup.budget.sweepCount", { count: sweeps })] : []),
+    ];
+    return parts.length === 0 ? t("savingsSetup.budget.none") : parts.join(" · ");
+  };
   return (
     <Card withBorder padding="xs">
       <NavLink
@@ -259,11 +270,7 @@ function TargetList({
         component="button"
         type="button"
         label={t("savingsSetup.budget.title")}
-        description={
-          entries.length === 0
-            ? t("savingsSetup.budget.none")
-            : t("savingsSetup.budget.count", { count: entries.length })
-        }
+        description={budgetCount(entries)}
         leftSection={<IconCalendarDollar size={18} />}
         active={selected === "budget"}
         aria-current={selected === "budget" ? "true" : undefined}

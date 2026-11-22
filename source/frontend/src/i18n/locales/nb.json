@@ -264,9 +264,13 @@
     "chooseFate": "Velg en konto, eller slett den.",
     "deletesBuckets_one": "Sletter {{count}} bøtte sammen med kontoen: {{names}}. Transaksjonene beholdes.",
     "deletesBuckets_other": "Sletter {{count}} bøtter sammen med kontoen: {{names}}. Transaksjonene beholdes.",
-    "deletesBudget_one": "Sletter {{count}} fast beløp i sparebudsjettet: {{names}}. Det som er reservert, frigjøres med kontoen.",
-    "deletesBudget_other": "Sletter {{count}} faste beløp i sparebudsjettet: {{names}}. Det som er reservert, frigjøres med kontoen.",
-    "budgetEntry": "{{amount}} til {{name}}"
+    "deletesBudget_one": "Sletter {{count}} post i sparebudsjettet: {{names}}. Det som er reservert, frigjøres med kontoen.",
+    "deletesBudget_other": "Sletter {{count}} poster i sparebudsjettet: {{names}}. Det som er reservert, frigjøres med kontoen.",
+    "budgetEntry": "{{amount}} til {{name}}",
+    "budgetSweep": {
+      "after_refills": "restsparingen etter påfyllene til {{name}}",
+      "cycle_end": "restsparingen ved periodeslutt til {{name}}"
+    }
   },
   "dashboard": {
     "settings": "Innstillinger",
@@ -809,7 +813,11 @@
     "enterSaving": "Skriv inn et beløp.",
     "savingBadge": "Sparing",
     "savingAmountFor": "Beløp å spare til {{name}}",
-    "savingsBudget": "Sparebudsjett"
+    "savingsBudget": "Sparebudsjett",
+    "sweep": {
+      "after_refills": "Ufordelte penger over {{keep}} spares til {{name}} etter påfyllene.",
+      "cycle_end": "Ufordelte penger over {{keep}} spares til {{name}} ved periodeslutt."
+    }
   },
   "savings": {
     "empty": "Ingen sparemål ennå",
@@ -914,9 +922,9 @@
       }
     },
     "budget": {
-      "hint": "Faste beløp som spares hver periode.",
+      "hint": "Faste beløp og restsparing hver periode.",
       "setup": "Sett opp sparebudsjettet",
-      "empty": "Ingen faste beløp å spare hver periode. <setup>Legg dem til i Spareoppsett</setup>.",
+      "empty": "Ingenting å spare hver periode. <setup>Legg det til i Spareoppsett</setup>.",
       "line": "{{amount}} til {{name}} fra {{account}} · {{when}}",
       "status": {
         "stopped": "Stoppet: sparemålet finnes ikke lenger.",
@@ -929,7 +937,17 @@
       },
       "saveNow": "Spar nå",
       "saveNowName": "Spar {{amount}} til {{name}} nå",
-      "savedNow": "Reserverte {{amount}} til {{name}}."
+      "savedNow": "Reserverte {{amount}} til {{name}}.",
+      "sweepLine": "Det som er over {{keep}} til {{name}} fra {{account}} · {{when}}",
+      "sweepLineAll": "Alle ufordelte penger til {{name}} fra {{account}} · {{when}}",
+      "sweepStatus": {
+        "stopped": "Stoppet: sparemålet finnes ikke lenger.",
+        "swept": "Sparte {{amount}} av resten denne perioden.",
+        "nothingSwept": "Ingen rest spart denne perioden.",
+        "waitingRefills": "Venter på påfyllene på {{account}}.",
+        "atCycleEnd": "Kjøres ved periodeslutt.",
+        "noCycle": "Kjøres i en aktiv periode."
+      }
     }
   },
   "savingsSetup": {
@@ -1034,11 +1052,11 @@
     "deleteOverflow_other": "{{names}} sender overløpet sitt hit; det går til sparefordeleren i stedet.",
     "budget": {
       "title": "Sparebudsjett",
-      "none": "Ingen faste beløp ennå",
+      "none": "Ingenting satt opp ennå",
       "count_one": "{{count}} fast beløp per periode",
       "count_other": "{{count}} faste beløp per periode",
-      "intro": "Faste beløp å spare hver periode. Hvert reserverer beløpet sitt av de ufordelte pengene på kontoen, én gang per periode, etter bøttene som fylles på samtidig. Har kontoen mindre, reserveres det som er der, og et varsel sier hva som mangler.",
-      "empty": "Ingen faste beløp ennå.",
+      "intro": "Faste beløp å spare hver periode, og restsparing av det som er igjen. Et fast beløp reserveres av de ufordelte pengene på kontoen, én gang per periode, etter bøttene som fylles på samtidig; har kontoen mindre, reserveres det som er der, og et varsel sier hva som mangler. Restsparing sparer det kontoen har ufordelt over et beløp du beholder.",
+      "empty": "Ingenting i sparebudsjettet ennå.",
       "perCycle": "{{amount}} per periode",
       "editName": "{{amount}} til {{name}}",
       "stoppedBadge": "Stoppet",
@@ -1057,12 +1075,16 @@
       "when": {
         "cycle_start": "Ved periodestart",
         "on_income": "Ved inntekt",
-        "manual": "Manuelt"
+        "manual": "Manuelt",
+        "after_refills": "Etter påfyllene",
+        "cycle_end": "Ved periodeslutt"
       },
       "whenHints": {
         "cycle_start": "Når en periode starter, etter de automatiske påfyllene.",
         "on_income": "Når en inntekt på kontoen fyller på «Ved inntekt»-bøttene, etter de påfyllene. Én gang per periode, uansett hvor mange inntekter som kommer.",
-        "manual": "Når du trykker Spar nå på Sparing-siden, én gang per periode."
+        "manual": "Når du trykker Spar nå på Sparing-siden, én gang per periode.",
+        "after_refills": "Når alle bøttene på kontoen er fylt på denne perioden, unntatt de helt manuelle: den venter på de manuelle også. Én gang per periode.",
+        "cycle_end": "Når perioden slutter, etter at bøttene er tømt, så den tar med det de gir tilbake. Den kjøres før påfyllene i neste periode, så behold nok til dem."
       },
       "start": "Denne perioden",
       "startNow": "Reserver nå",
@@ -1075,10 +1097,30 @@
       "delete": "Slett",
       "deleteQuestion": "Slette det faste beløpet på <b>{{amount}}</b> til {{name}}?",
       "deleteKeeps": "Det som er reservert, blir holdt av fortsatt.",
-      "deleted": "Fast beløp slettet."
+      "deleted": "Fast beløp slettet.",
+      "sweepCount_one": "{{count}} restsparing",
+      "sweepCount_other": "{{count}} restsparinger",
+      "addSweep": "Legg til restsparing",
+      "newSweepTitle": "Ny restsparing",
+      "editSweepTitle": "Restsparing",
+      "sweepName": "Restsparing over {{keep}} til {{name}}",
+      "sweepAbove": "Over {{keep}}",
+      "sweepIntro": "Sparer det kontoen har ufordelt over et beløp du beholder, én gang per periode. Et sparemål tar inntil målet; resten går til sparefordeleren.",
+      "keep": "Beløp å beholde",
+      "keepHint": "Blir liggende ufordelt på kontoen; 0 sparer alt.",
+      "keepInvalid": "Skriv inn 0 eller mer.",
+      "sweepTaken": "{{account}} har restsparing på dette tidspunktet allerede.",
+      "sweepsTaken": "Velg et tidspunkt {{account}} ikke har restsparing på ennå.",
+      "sweepNow": "Spar resten nå",
+      "sweepNowHint": "Bøttene på {{account}} er fylt på: det den har ufordelt over beløpet du beholder, {{amount}} nå.",
+      "sweepNextHint": "Ingenting spares før påfyllene i neste periode.",
+      "sweepCreated": "Restsparing lagt til i sparebudsjettet.",
+      "sweepSaved": "Restsparing lagret.",
+      "sweepDeleted": "Restsparing slettet.",
+      "deleteSweepQuestion": "Slette restsparingen til {{name}}, <b>{{when}}</b>?"
     },
-    "deleteBudget_one": "{{count}} fast beløp i sparebudsjettet stopper til det får et annet mål.",
-    "deleteBudget_other": "{{count}} faste beløp i sparebudsjettet stopper til de får et annet mål."
+    "deleteBudget_one": "{{count}} post i sparebudsjettet stopper til den får et annet mål.",
+    "deleteBudget_other": "{{count}} poster i sparebudsjettet stopper til de får et annet mål."
   },
   "newTransaction": {
     "type": "Type",
@@ -1351,7 +1393,10 @@
     "overflowsTo": " ({{amount}} i overløp til {{to}})",
     "savingsBudget": "Så reserverer sparebudsjettet",
     "savingsBudgetLine": "{{name}}, fra {{account}}",
-    "upTo": "inntil {{amount}}"
+    "upTo": "inntil {{amount}}",
+    "swept": "Så sparer sparebudsjettet resten",
+    "about": "omtrent {{amount}}",
+    "sweptNote": "Det som er ufordelt da, med det de tømte bøttene gir tilbake, over beløpet du beholder."
   },
   "stats": {
     "period": {

@@ -17,7 +17,7 @@ import {
   today,
 } from "@/lib/cycles";
 import { apiMock, problem, testUser } from "@/test/api";
-import { account, budgetEntry, bucket, cycle, savingsTarget } from "@/test/fixtures";
+import { account, budgetEntry, bucket, cycle, savingsTarget, sweepEntry } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
 
@@ -409,6 +409,26 @@ describe("ending a cycle", () => {
     expect(await dialog.findByText("Then the savings budget reserves")).toBeInTheDocument();
     expect(dialog.getByText("Rainy day, from Main")).toBeInTheDocument();
     expect(dialog.getByText(`up to ${plain(formatMoney("750.00"))}`)).toBeInTheDocument();
+    expect(dialog.getAllByText(/, from Main$/)).toHaveLength(1);
+  });
+
+  it("estimates what the At cycle end sweeps take (#235)", async () => {
+    given({ active, next: planned });
+    apiMock.on("GET /api/v1/accounts", {
+      body: [account({ id: "1234", name: "Main", unallocated: "2000.00" })],
+    });
+    apiMock.on("GET /api/v1/savings/budget", {
+      body: [
+        sweepEntry({ id: "1234000001", when: "cycle_end", keep: "1000.00" }),
+        // After the refills: not at the end.
+        sweepEntry({ id: "1234000002" }),
+      ],
+    });
+    const dialog = await openEnd();
+    expect(await dialog.findByText("Then the savings budget sweeps")).toBeInTheDocument();
+    expect(dialog.getByText("Savings distributor, from Main")).toBeInTheDocument();
+    // 2 000 unallocated + Groceries' funded 500 − 1 000 to keep.
+    expect(dialog.getByText(`about ${plain(formatMoney("1500.00"))}`)).toBeInTheDocument();
     expect(dialog.getAllByText(/, from Main$/)).toHaveLength(1);
   });
 

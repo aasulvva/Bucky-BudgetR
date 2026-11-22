@@ -1,6 +1,6 @@
 import { bucket } from "@/test/fixtures";
 
-import { endPreview } from "./cycleEnd";
+import { endPreview, sweepEstimate } from "./cycleEnd";
 
 const base = { source_account_id: "1234" };
 
@@ -77,5 +77,41 @@ describe("endPreview", () => {
     const p = endPreview([groceries, saved], false);
     expect(p.backToUnallocated).toEqual([{ currency: "NOK", amount: "500.00" }]);
     expect(p.toSavings).toEqual([{ currency: "NOK", amount: "299.50" }]);
+  });
+});
+
+describe("sweepEstimate (#235)", () => {
+  const food = bucket({
+    id: "1000000001",
+    name: "Food",
+    source_account_id: "1234",
+    target_funds: "800.00",
+    current_available_funds: "500.00",
+  });
+  const saved = bucket({
+    id: "1000000002",
+    name: "Saved",
+    source_account_id: "1234",
+    target_funds: "300.00",
+    current_available_funds: "300.00",
+    overflow_destination: "savings_distribution",
+  });
+  const elsewhere = bucket({
+    id: "1000000003",
+    name: "Elsewhere",
+    source_account_id: "2345",
+    target_funds: "900.00",
+    current_available_funds: "900.00",
+  });
+  const preview = endPreview([food, saved, elsewhere], false);
+  const main = { id: "1234", unallocated: "1000.00" };
+
+  it("adds what the account's emptied buckets give back to unallocated, less keep", () => {
+    // Only Food's funded 500: the saved one's goes to savings, the other's to its account.
+    expect(sweepEstimate(preview, main, "200.00")).toBe("1300.00");
+  });
+
+  it("is never below 0", () => {
+    expect(sweepEstimate(preview, main, "5000.00")).toBe("0.00");
   });
 });

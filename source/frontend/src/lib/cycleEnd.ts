@@ -5,7 +5,7 @@
 import type { Bucket } from "@/api/accounts";
 
 import { refillOf } from "./buckets";
-import { addAmounts, compareAmounts } from "./money";
+import { addAmounts, compareAmounts, subtractAmounts } from "./money";
 
 export interface Emptied {
   bucket: Bucket;
@@ -83,4 +83,25 @@ function perCurrency(emptied: Emptied[]): { currency: string; amount: string }[]
       ...emptied.filter((e) => e.bucket.currency === currency).map((e) => e.funded),
     ),
   }));
+}
+
+/**
+ * About what an At cycle end sweep (#235) takes from the account: what it
+ * has unallocated now, plus what its emptied buckets give back to it, above
+ * keep (at least 0). It runs after the OVFs, before the next cycle's refills.
+ */
+export function sweepEstimate(
+  preview: EndPreview,
+  account: { id: string; unallocated: string },
+  keep: string,
+): string {
+  const back = preview.emptied
+    .filter(
+      (e) =>
+        e.bucket.source_account_id === account.id &&
+        e.bucket.overflow_destination === "unallocated",
+    )
+    .map((e) => e.funded);
+  const above = subtractAmounts(addAmounts(account.unallocated, ...back), keep);
+  return positive(above) ? above : "0.00";
 }

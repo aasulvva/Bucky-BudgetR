@@ -2,7 +2,7 @@
 
 import type { Account, Bucket, BucketFigures } from "@/api/accounts";
 import type { Cycle } from "@/api/cycles";
-import type { FixedBudgetEntry, SavingsTarget } from "@/api/savings";
+import type { FixedBudgetEntry, SavingsTarget, SweepEntry } from "@/api/savings";
 import type { Transaction } from "@/api/transactions";
 import { addDays, endAtFor, startAtFor, today } from "@/lib/cycles";
 
@@ -140,6 +140,22 @@ export function budgetEntry(
     amount: "500.00",
     keep: null,
     when: "cycle_start",
+    stopped: false,
+    this_cycle: null,
+    created_at: "2026-01-01T00:00:00Z",
+    modified_at: "2026-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+/** A sweep (#235): from account 1234 to the distributor after the refills, keeping nothing, not run this cycle. */
+export function sweepEntry(overrides: Partial<SweepEntry> & Pick<SweepEntry, "id">): SweepEntry {
+  return {
+    account_id: "1234",
+    target_id: null,
+    amount: null,
+    keep: "0.00",
+    when: "after_refills",
     stopped: false,
     this_cycle: null,
     created_at: "2026-01-01T00:00:00Z",

@@ -33,7 +33,7 @@ import {
 import { api } from "@/api/client";
 import { useCurrentCycles } from "@/api/cycles";
 import { ApiError, unwrap } from "@/api/errors";
-import { useFixedBudget, useSavingsTargets } from "@/api/savings";
+import { useSavingsBudget, useSavingsTargets } from "@/api/savings";
 import type { components } from "@/api/schema";
 import { AmountInput } from "@/components/AmountInput";
 import { DateTimeInput } from "@/components/DateTimeInput";
@@ -625,8 +625,9 @@ function DeleteAccount({
   const { t } = useTranslation();
   const refresh = useRefreshMoney();
   const buckets = useBuckets();
-  // The savings budget's fixed amounts from it go with it (#234).
-  const entries = (useFixedBudget().data ?? []).filter((e) => e.account_id === account.id);
+  // The savings budget's fixed amounts (#234) and sweeps (#235) from it go
+  // with it.
+  const entries = (useSavingsBudget().data ?? []).filter((e) => e.account_id === account.id);
   const targets = useSavingsTargets().data ?? [];
   const others = accounts
     .filter((a) => a.id !== account.id && a.currency === account.currency)
@@ -823,10 +824,17 @@ function DeleteAccount({
                     count: entries.length,
                     names: entries
                       .map((e) =>
-                        t("accountSetup.budgetEntry", {
-                          amount: formatMoney(e.amount, account.currency),
-                          name: budgetDestination(e, targets),
-                        }),
+                        e.amount === null
+                          ? t(
+                              e.when === "cycle_end"
+                                ? "accountSetup.budgetSweep.cycle_end"
+                                : "accountSetup.budgetSweep.after_refills",
+                              { name: budgetDestination(e, targets) },
+                            )
+                          : t("accountSetup.budgetEntry", {
+                              amount: formatMoney(e.amount, account.currency),
+                              name: budgetDestination(e, targets),
+                            }),
                       )
                       .join(", "),
                   })}

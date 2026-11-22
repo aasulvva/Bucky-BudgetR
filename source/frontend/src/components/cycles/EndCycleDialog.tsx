@@ -8,16 +8,16 @@ import { useAccounts, useBuckets } from "@/api/accounts";
 import { api } from "@/api/client";
 import { useRefreshCycles, type Cycle } from "@/api/cycles";
 import { unwrap } from "@/api/errors";
-import { useFixedBudget, useSavingsTargets } from "@/api/savings";
+import { useSavingsBudget, useSavingsTargets } from "@/api/savings";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { QueryState } from "@/components/QueryState";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
 import { now as clockNow } from "@/lib/clock";
-import { endPreview } from "@/lib/cycleEnd";
+import { endPreview, sweepEstimate } from "@/lib/cycleEnd";
 import { cycleRange, daysLeft, isOverdue, lastDay } from "@/lib/cycles";
 import { formatDate } from "@/lib/dates";
 import { compareAmounts, formatMoney } from "@/lib/money";
-import { budgetDestination, overflowTo } from "@/lib/savings";
+import { budgetDestination, fixedEntries, overflowTo, sweepEntries } from "@/lib/savings";
 
 interface EndCycleDialogProps {
   opened: boolean;
@@ -55,10 +55,11 @@ function EndForm({
   const buckets = useBuckets();
   const targets = useSavingsTargets().data ?? [];
   const accounts = useAccounts().data ?? [];
+  const budget = useSavingsBudget().data ?? [];
   // The savings budget's At cycle start amounts (#234), after the refills.
-  const atStart = (useFixedBudget().data ?? []).filter(
-    (e) => e.when === "cycle_start" && !e.stopped,
-  );
+  const atStart = fixedEntries(budget).filter((e) => e.when === "cycle_start" && !e.stopped);
+  // Its At cycle end sweeps (#235), after the buckets are emptied.
+  const atEnd = sweepEntries(budget).filter((e) => e.when === "cycle_end" && !e.stopped);
   const now = clockNow();
   const early = !isOverdue(active, now);
   // Where the cycle will end: now when early, else its planned end.
@@ -173,6 +174,40 @@ function EndForm({
                   </>
                 )}
               </Stack>
+
+              {atEnd.length > 0 && (
+                <Stack gap={6}>
+                  <Title order={3} size="h5">
+                    {t("cycles.swept")}
+                  </Title>
+                  {atEnd.map((e) => {
+                    const account = accounts.find((a) => a.id === e.account_id);
+                    return (
+                      <Group key={e.id} justify="space-between" gap="sm" wrap="nowrap">
+                        <Text size="sm">
+                          {t("cycles.savingsBudgetLine", {
+                            name: budgetDestination(e, targets),
+                            account: account?.name ?? `#${e.account_id}`,
+                          })}
+                        </Text>
+                        <Text size="sm" ta="right">
+                          {account
+                            ? t("cycles.about", {
+                                amount: formatMoney(
+                                  sweepEstimate(preview, account, e.keep),
+                                  account.currency,
+                                ),
+                              })
+                            : null}
+                        </Text>
+                      </Group>
+                    );
+                  })}
+                  <Text size="xs" c="dimmed">
+                    {t("cycles.sweptNote")}
+                  </Text>
+                </Stack>
+              )}
 
               {refills ? (
                 <Alert

@@ -247,7 +247,7 @@ describe("Account setup", () => {
     await userEvent.click(dialog.getByRole("button", { name: "Delete…" }));
     expect(
       await dialog.findByText(
-        /^Deletes 1 fixed amount in the savings budget: .*500\.00 to Rainy day\. What it reserved/,
+        /^Deletes 1 entry in the savings budget: .*500\.00 to Rainy day\. What it reserved/,
       ),
     ).toBeInTheDocument();
   });
