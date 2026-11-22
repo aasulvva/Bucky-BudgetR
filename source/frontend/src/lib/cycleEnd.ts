@@ -27,6 +27,8 @@ export interface EndPreview {
   emptied: Emptied[];
   /** The funded part of the emptied buckets, per currency. */
   backToUnallocated: { currency: string; amount: string }[];
+  /** The funded part of the emptied buckets whose overflow goes to savings (#233). */
+  toSavings: { currency: string; amount: string }[];
   refilled: Refilled[];
 }
 
@@ -64,14 +66,21 @@ export function endPreview(buckets: Bucket[], refills: boolean): EndPreview {
     }
   }
 
+  const saved = (e: Emptied) => e.bucket.overflow_destination !== "unallocated";
   return {
     emptied,
-    backToUnallocated: [...new Set(emptied.map((e) => e.bucket.currency))].map((currency) => ({
-      currency,
-      amount: addAmounts(
-        ...emptied.filter((e) => e.bucket.currency === currency).map((e) => e.funded),
-      ),
-    })),
+    backToUnallocated: perCurrency(emptied.filter((e) => !saved(e))),
+    toSavings: perCurrency(emptied.filter(saved)),
     refilled,
   };
+}
+
+/** The funded amounts per currency, leaving out currencies with none. */
+function perCurrency(emptied: Emptied[]): { currency: string; amount: string }[] {
+  return [...new Set(emptied.map((e) => e.bucket.currency))].map((currency) => ({
+    currency,
+    amount: addAmounts(
+      ...emptied.filter((e) => e.bucket.currency === currency).map((e) => e.funded),
+    ),
+  }));
 }

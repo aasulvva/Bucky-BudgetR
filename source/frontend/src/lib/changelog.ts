@@ -16,6 +16,32 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.27.00",
+    date: "2026-11-22",
+    title: {
+      en: "Overflow to savings",
+      nb: "Overløp til sparing",
+      nn: "Overløp til sparing",
+    },
+    changes: {
+      en: [
+        "A bucket's overflow can now go to the savings distributor or a savings target, set in Bucket setup. Only the part the account's money covers is saved.",
+        "A target takes overflow up to its goal, unless a distributor rule lets it go past; the rest goes to the distributor. A bucket target on the same account gets it straight into the bucket.",
+        "Ending a cycle shows where each bucket's overflow goes. Deleting a target sends its buckets' overflow to the distributor instead.",
+      ],
+      nb: [
+        "Overløpet fra en bøtte kan nå gå til sparefordeleren eller et sparemål, valgt i Bøtteoppsett. Bare den delen pengene på kontoen dekker, spares.",
+        "Et sparemål tar imot overløp opp til målet sitt, med mindre en regel i sparefordeleren lar det gå forbi; resten går til sparefordeleren. Et bøttesparemål på samme konto får det rett i bøtta.",
+        "Når du avslutter en periode, ser du hvor overløpet fra hver bøtte går. Sletter du et sparemål, går overløpet fra bøttene dets til sparefordeleren i stedet.",
+      ],
+      nn: [
+        "Overløpet frå ei bøtte kan no gå til sparefordelaren eller eit sparemål, valt i Bøtteoppsett. Berre den delen pengane på kontoen dekkjer, blir spart.",
+        "Eit sparemål tek imot overløp opp til målet sitt, med mindre ein regel i sparefordelaren lèt det gå forbi; resten går til sparefordelaren. Eit bøttesparemål på same konto får det rett i bøtta.",
+        "Når du avsluttar ein periode, ser du kvar overløpet frå kvar bøtte går. Slettar du eit sparemål, går overløpet frå bøttene til det til sparefordelaren i staden.",
+      ],
+    },
+  },
+  {
     version: "v2.26.00",
     date: "2026-11-22",
     title: {

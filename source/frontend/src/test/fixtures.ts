@@ -37,6 +37,7 @@ export function bucket(
     negative_tf: "debt",
     refill_mode: "auto",
     overflow_destination: "unallocated",
+    overflow_target_id: null,
     priority: false,
     importance: 5,
     refilled: false,

@@ -43,7 +43,7 @@ const (
 var idColumns = map[string]map[string]kind{
 	"bank_accounts":           {"id": kAccount, "user_id": kUser},
 	"cycles":                  {"id": kCycle, "user_id": kUser},
-	"buckets":                 {"id": kBucket, "user_id": kUser, "source_account_id": kAccount},
+	"buckets":                 {"id": kBucket, "user_id": kUser, "source_account_id": kAccount, "overflow_target_id": kHolder},
 	"tags":                    {"id": kTag, "user_id": kUser},
 	"transaction_headers":     {"id": kTransaction, "user_id": kUser, "parent_id": kTransaction, "replaces_id": kTransaction, "created_by": kUser},
 	"bank_transactions":       {"id": kBankLine, "transaction_id": kTransaction, "account_id": kAccount, "created_by": kUser},

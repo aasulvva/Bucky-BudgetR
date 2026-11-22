@@ -114,4 +114,17 @@ describe("savings transactions", () => {
     await userEvent.click(panel.getByRole("button", { name: "Reverse" }));
     expect(panel.getByText(/The money goes back to the savings distributor\./)).toBeInTheDocument();
   });
+
+  it("names where an overflow went in its row (#233)", async () => {
+    const ovf = transaction({
+      id: "2026102300000004",
+      type: "OVF",
+      bank_lines: [],
+      bucket_lines: [{ bucket_id: holiday.id, cycle_id: "20261101", amount: "-300.00" }],
+      savings_lines: [{ holder_id: rainy.id, account_id: main.id, amount: "300.00" }],
+    });
+    apiMock.on("GET /api/v1/transactions", { body: { items: [ovf], next_cursor: null } });
+    renderRoute("/transactions?system=1");
+    expect(await screen.findByText("Overflow · Holiday · Rainy day")).toBeInTheDocument();
+  });
 });

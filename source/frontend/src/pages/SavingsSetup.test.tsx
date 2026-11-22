@@ -232,4 +232,28 @@ describe("the savings distributor (#232)", () => {
     await userEvent.click(screen.getByRole("button", { name: "Delete target" }));
     expect(await screen.findByText(/Its 2 distributor rules are deleted\./)).toBeInTheDocument();
   });
+
+  it("says which buckets' overflow goes to the distributor instead when a target goes (#233)", async () => {
+    apiMock.on("GET /api/v1/savings/targets", { body: [rainy] });
+    apiMock.on("GET /api/v1/buckets", {
+      body: [
+        food,
+        holiday,
+        bucket({
+          id: "1000000003",
+          name: "Fuel",
+          source_account_id: main.id,
+          overflow_destination: "savings_target",
+          overflow_target_id: rainy.id,
+        }),
+      ],
+    });
+    renderRoute(`/savings/setup?edit=${rainy.id}`);
+    await userEvent.click(await screen.findByRole("button", { name: "Delete target" }));
+    expect(
+      await screen.findByText(
+        "Fuel sends its overflow here; it goes to the savings distributor instead.",
+      ),
+    ).toBeInTheDocument();
+  });
 });

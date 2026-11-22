@@ -1238,7 +1238,9 @@ export interface paths {
          *
          *     Reversing an income undoes the refills it triggered in the active
          *     cycle (their REF and OVF are reversed), so those buckets can be
-         *     refilled again. Refills in a finished cycle stay.
+         *     refilled again. Refills in a finished cycle stay. An OVF's savings
+         *     (#233) are released only as far as they're still held; what was
+         *     distributed or moved on stays where it went.
          */
         post: operations["reverseTransaction"];
         delete?: never;
@@ -2663,7 +2665,7 @@ export interface components {
          */
         NegativeTf: "debt" | "clear";
         /**
-         * @description Where overflow goes. Only `unallocated` is available until the savings module; the others get 400.
+         * @description Where overflow goes (#233, spec §8.5). The part of it the bucket's funds covered can be held for the savings distributor or a savings target (`overflow_target_id`); a Fully manual bucket never overflows and is always `unallocated`.
          * @enum {string}
          */
         OverflowDestination: "unallocated" | "savings_distribution" | "savings_target";
@@ -2692,6 +2694,8 @@ export interface components {
             negative_tf: components["schemas"]["NegativeTf"];
             refill_mode: components["schemas"]["RefillMode"];
             overflow_destination: components["schemas"]["OverflowDestination"];
+            /** @description The savings target overflow goes to, with `savings_target`; otherwise null (#233). */
+            overflow_target_id: (string & components["schemas"]["SavingsHolderId"]) | null;
             priority: boolean;
             importance: number;
             /**
@@ -3204,6 +3208,8 @@ export interface components {
             /** @description Defaults to the user's `default_refill_mode` preference, or `auto`. */
             refill_mode?: components["schemas"]["RefillMode"];
             overflow_destination?: components["schemas"]["OverflowDestination"];
+            /** @description The savings target overflow goes to (#233), needed with `savings_target` and only used with it. A live target in the bucket's currency, not the bucket itself. Another destination clears it. */
+            overflow_target_id?: components["schemas"]["SavingsHolderId"];
             priority?: boolean;
             /** @default 5 */
             importance: number;
@@ -3252,6 +3258,8 @@ export interface components {
             negative_tf?: components["schemas"]["NegativeTf"];
             refill_mode?: components["schemas"]["RefillMode"];
             overflow_destination?: components["schemas"]["OverflowDestination"];
+            /** @description The savings target overflow goes to (#233), needed with `savings_target` and only used with it. A live target in the bucket's currency, not the bucket itself. Another destination clears it. */
+            overflow_target_id?: components["schemas"]["SavingsHolderId"];
             priority?: boolean;
             importance?: number;
         };
@@ -3416,7 +3424,8 @@ export interface components {
          *     `POST /transactions`. SVR (savings reserve), SVC (savings cancel) and
          *     SVB (savings to bucket) come from the savings endpoints (#231), and
          *     SVD (savings distribution) from the distributor (#232); they can be
-         *     reversed, not corrected.
+         *     reversed, not corrected. An OVF can have up to two savings lines,
+         *     holding the overflow for a savings target and the distributor (#233).
          * @enum {string}
          */
         TransactionType: "OPB" | "BLA" | "INC" | "EXP" | "TRF" | "INP" | "OPF" | "REF" | "BUA" | "BAT" | "OVF" | "SVR" | "SVC" | "SVB" | "SVD";

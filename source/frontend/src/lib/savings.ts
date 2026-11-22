@@ -286,3 +286,23 @@ export function addOutcome(
     ? "reachesMinimum"
     : "belowMinimum";
 }
+
+/** Where a bucket's overflow goes (#233): the distributor, a target's name, or null for unallocated. */
+export function overflowTo(bucket: Bucket, targets: SavingsTarget[]): string | null {
+  switch (bucket.overflow_destination) {
+    case "savings_distribution":
+      return i18n.t("savingsSetup.distributor.title");
+    case "savings_target":
+      return (
+        targets.find((x) => x.id === bucket.overflow_target_id)?.name ??
+        i18n.t("transactions.unknownTarget", { id: bucket.overflow_target_id ?? "" })
+      );
+    default:
+      return null;
+  }
+}
+
+/** The buckets that send their overflow to the target, which switch to the distributor if it goes. */
+export function overflowingInto(buckets: Bucket[], targetId: string): Bucket[] {
+  return buckets.filter((b) => b.overflow_target_id === targetId);
+}

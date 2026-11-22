@@ -557,6 +557,13 @@ func (s *Service) retire(ctx context.Context, tx pgx.Tx, userID, holderID string
 	if err := q.DeleteRulesOfTarget(ctx, holderID); err != nil {
 		return err
 	}
+	// Buckets that sent their overflow to it send it to the distributor
+	// (#233).
+	if _, err := q.RedirectOverflowToDistributor(ctx, sqlc.RedirectOverflowToDistributorParams{
+		UserID: userID, OverflowTargetID: pgtype.Text{String: holderID, Valid: true},
+	}); err != nil {
+		return err
+	}
 	return q.DeleteSavingsHolder(ctx, sqlc.DeleteSavingsHolderParams{ID: holderID, UserID: userID})
 }
 

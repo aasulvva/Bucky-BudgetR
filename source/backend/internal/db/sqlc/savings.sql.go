@@ -458,6 +458,39 @@ func (q *Queries) ListSavingsTargets(ctx context.Context, userID string) ([]List
 	return items, nil
 }
 
+const redirectOverflowToDistributor = `-- name: RedirectOverflowToDistributor :many
+UPDATE buckets SET overflow_destination = 'savings_distribution', overflow_target_id = NULL, modified_at = now()
+WHERE user_id = $1 AND overflow_target_id = $2
+RETURNING id
+`
+
+type RedirectOverflowToDistributorParams struct {
+	UserID           string
+	OverflowTargetID pgtype.Text
+}
+
+// The buckets that sent their overflow to a target that goes away send it to
+// the distributor instead (#233).
+func (q *Queries) RedirectOverflowToDistributor(ctx context.Context, arg RedirectOverflowToDistributorParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, redirectOverflowToDistributor, arg.UserID, arg.OverflowTargetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const reservedByAccount = `-- name: ReservedByAccount :many
 SELECT l.account_id, SUM(l.amount)::numeric AS reserved
 FROM savings_transactions l

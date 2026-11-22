@@ -134,3 +134,10 @@ DELETE FROM savings_rules WHERE id = $1 AND user_id = $2;
 
 -- name: DeleteRulesOfTarget :exec
 DELETE FROM savings_rules WHERE target_id = $1;
+
+-- name: RedirectOverflowToDistributor :many
+-- The buckets that sent their overflow to a target that goes away send it to
+-- the distributor instead (#233).
+UPDATE buckets SET overflow_destination = 'savings_distribution', overflow_target_id = NULL, modified_at = now()
+WHERE user_id = $1 AND overflow_target_id = $2
+RETURNING id;

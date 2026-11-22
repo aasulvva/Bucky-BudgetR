@@ -155,13 +155,13 @@ func run(ctx context.Context, args []string, getenv func(string) string, out, lo
 		return err
 	}
 	ledgerSvc := ledger.New(ledger.Options{AfterRecord: allocation.AfterRecord})
-	refills := refill.NewService(pool, ledgerSvc, refill.Options{Now: now})
+	savingsSvc := savings.NewService(pool, ledgerSvc, savings.Options{Now: now})
+	refills := refill.NewService(pool, ledgerSvc, refill.Options{Now: now, Savings: savingsSvc})
 	cyclesSvc := cycles.NewService(pool, cycles.Options{Now: now, OnEnd: refills.OnEnd, OnStart: refills.OnStart, Logger: logger})
 	go cyclesSvc.PlanLoop(ctx, time.Hour, logger)
 	transactionsSvc := transactions.NewService(pool, ledgerSvc, transactions.Options{Now: now, Refills: refills})
 	schedulesSvc := schedules.NewService(pool, schedules.Options{Now: now, Transactions: transactionsSvc})
 	go schedulesSvc.RunLoop(ctx, cfg.ScheduleInterval, logger)
-	savingsSvc := savings.NewService(pool, ledgerSvc, savings.Options{Now: now})
 	bucketsSvc := buckets.NewService(pool, ledgerSvc, buckets.Options{
 		Now: now, OnCreate: refills.OnCreate, ReleaseSavings: savingsSvc.ReleaseBucket,
 	})
