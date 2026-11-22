@@ -1,15 +1,24 @@
+import type { SavingsDistributor, SavingsRule } from "@/api/savings";
 import { account, bucket, savingsTarget } from "@/test/fixtures";
+
+import { formatMoney } from "./money";
 
 import {
   addKind,
+  addOutcome,
   addProblem,
   bucketRoom,
   freeAccounts,
   freeBuckets,
+  gapsOf,
   goalProblem,
   heldProblem,
   pastGoal,
   progress,
+  rangeProblem,
+  rangeText,
+  rulesEnd,
+  rulesOf,
   sourceAccounts,
 } from "./savings";
 
@@ -125,5 +134,75 @@ describe("Done and Clear", () => {
     expect(heldProblem(held, other.id, "300.00", [holiday], true)).toBe("overCapacity");
     expect(heldProblem(held, other.id, "200.00", [holiday], true)).toBeNull();
     expect(heldProblem(held, main.id, "1.00", [holiday], false)).toBe("overHeld");
+  });
+});
+
+describe("the distributor's rules (#232)", () => {
+  const rule = (
+    id: string,
+    from: string,
+    to: string | null,
+    target = "1000001001",
+  ): SavingsRule => ({
+    id,
+    target_id: target,
+    from,
+    to,
+    priority: 3,
+    past_goal: false,
+  });
+  const low = rule("100000100101", "0.00", "30000.00");
+  const high = rule("100000100102", "40000.00", null);
+  const other = rule("100000100201", "0.00", null, "1000001002");
+
+  it("lists a target's rules by where they start", () => {
+    expect(rulesOf([high, other, low], "1000001001")).toEqual([low, high]);
+  });
+
+  it("refuses overlaps but lets ranges touch", () => {
+    expect(rangeProblem({ from: "30000.00", to: "40000.00" }, [low, high])).toBeNull();
+    expect(rangeProblem({ from: "29999.99", to: "35000.00" }, [low, high])).toEqual({
+      problem: "overlap",
+      with: low,
+    });
+    expect(rangeProblem({ from: "35000.00", to: null }, [low, high])).toEqual({
+      problem: "overlap",
+      with: high,
+    });
+    // The rule being edited doesn't overlap itself.
+    expect(rangeProblem({ from: "0.00", to: "35000.00" }, [low, high], low.id)).toBeNull();
+    expect(rangeProblem({ from: "500.00", to: "500.00" }, [])).toEqual({ problem: "toNotAbove" });
+    expect(rangeProblem({ from: null, to: null }, [])).toEqual({ problem: "noFrom" });
+  });
+
+  it("finds the stretches no rule covers", () => {
+    expect(gapsOf([high, low])).toEqual([{ from: "30000.00", to: "40000.00" }]);
+    expect(gapsOf([high])).toEqual([{ from: "0.00", to: "40000.00" }]);
+    expect(gapsOf([low])).toEqual([]);
+    expect(rulesEnd([low])).toBe("30000.00");
+    expect(rulesEnd([low, high])).toBeNull();
+    expect(rulesEnd([])).toBe("0.00");
+  });
+
+  it("writes a range", () => {
+    expect(rangeText(low, "NOK")).toBe(`${formatMoney("0.00")} – ${formatMoney("30000.00")}`);
+    expect(rangeText(high, "NOK")).toBe(`${formatMoney("40000.00")} and up`);
+  });
+
+  it("says what adding does by the hold mode", () => {
+    const dist = (over: Partial<SavingsDistributor>): SavingsDistributor => ({
+      id: "1000009999",
+      hold_mode: "immediate",
+      min_amount: null,
+      held: [{ account_id: main.id, amount: "600.00", covered: "600.00" }],
+      ...over,
+    });
+    expect(addOutcome(dist({}), main.id, "100.00")).toBe("split");
+    expect(addOutcome(dist({ hold_mode: "manual" }), main.id, "100.00")).toBe("waits");
+    const minimum = dist({ hold_mode: "minimum", min_amount: "1000.00" });
+    expect(addOutcome(minimum, main.id, "399.99")).toBe("belowMinimum");
+    expect(addOutcome(minimum, main.id, "400.00")).toBe("reachesMinimum");
+    // Per account: nothing is held on Other.
+    expect(addOutcome(minimum, other.id, "400.00")).toBe("belowMinimum");
   });
 });

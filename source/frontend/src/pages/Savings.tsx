@@ -16,22 +16,30 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
 import { useAccounts, useBuckets, type Account, type Bucket } from "@/api/accounts";
-import { useSavingsTargets, type SavingsTarget } from "@/api/savings";
+import {
+  useSavingsDistributor,
+  useSavingsRules,
+  useSavingsTargets,
+  type SavingsTarget,
+} from "@/api/savings";
 import { QueryState } from "@/components/QueryState";
+import { DistributorCard } from "@/components/savings/DistributorCard";
 import { SavingsDialog, type SavingsAction } from "@/components/savings/SavingsDialog";
 import { compareAmounts, formatMoney, subtractAmounts } from "@/lib/money";
 import { progress, targetKindText } from "@/lib/savings";
 
 /**
- * Savings (spec §9, #231): each savings target's progress towards its goal,
- * the money held for it per source account with Done and Clear, and Add to
- * savings.
+ * Savings (spec §9, #231): the savings distributor (#232), and each savings
+ * target's progress towards its goal, the money held for it per source
+ * account with Done and Clear, and Add to savings.
  */
 export default function Savings() {
   const { t } = useTranslation();
   const accounts = useAccounts();
   const buckets = useBuckets();
   const targets = useSavingsTargets();
+  const distributor = useSavingsDistributor();
+  const rules = useSavingsRules();
   return (
     <Stack gap="lg">
       <Group justify="space-between">
@@ -50,36 +58,52 @@ export default function Savings() {
           <QueryState query={buckets}>
             {(bucketList) => (
               <QueryState query={targets}>
-                {(targetList) =>
-                  targetList.length === 0 ? (
-                    <Card withBorder>
-                      <Stack gap="sm" align="flex-start">
-                        <Text fw={600}>{t("savings.empty")}</Text>
-                        <Text size="sm" c="dimmed">
-                          {t("savings.emptyHint")}
-                        </Text>
-                        <Button
-                          component={Link}
-                          to="/savings/setup?new"
-                          leftSection={<IconPlus size={16} />}
-                        >
-                          {t("savingsSetup.newTarget")}
-                        </Button>
-                      </Stack>
-                    </Card>
-                  ) : (
-                    <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
-                      {targetList.map((x) => (
-                        <TargetCard
-                          key={x.id}
-                          target={x}
-                          accounts={accountList}
-                          buckets={bucketList}
-                        />
-                      ))}
-                    </SimpleGrid>
-                  )
-                }
+                {(targetList) => (
+                  <Stack gap="md">
+                    <QueryState query={distributor}>
+                      {(dist) => (
+                        <QueryState query={rules}>
+                          {(ruleList) => (
+                            <DistributorCard
+                              distributor={dist}
+                              targets={targetList}
+                              rules={ruleList}
+                              accounts={accountList}
+                            />
+                          )}
+                        </QueryState>
+                      )}
+                    </QueryState>
+                    {targetList.length === 0 ? (
+                      <Card withBorder>
+                        <Stack gap="sm" align="flex-start">
+                          <Text fw={600}>{t("savings.empty")}</Text>
+                          <Text size="sm" c="dimmed">
+                            {t("savings.emptyHint")}
+                          </Text>
+                          <Button
+                            component={Link}
+                            to="/savings/setup?new"
+                            leftSection={<IconPlus size={16} />}
+                          >
+                            {t("savingsSetup.newTarget")}
+                          </Button>
+                        </Stack>
+                      </Card>
+                    ) : (
+                      <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
+                        {targetList.map((x) => (
+                          <TargetCard
+                            key={x.id}
+                            target={x}
+                            accounts={accountList}
+                            buckets={bucketList}
+                          />
+                        ))}
+                      </SimpleGrid>
+                    )}
+                  </Stack>
+                )}
               </QueryState>
             )}
           </QueryState>

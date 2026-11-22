@@ -16,6 +16,32 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.26.00",
+    date: "2026-11-22",
+    title: {
+      en: "The savings distributor",
+      nb: "Sparefordeleren",
+      nn: "Sparefordelaren",
+    },
+    changes: {
+      en: [
+        "Savings setup has a savings distributor: give each target ranges of where it stands, each with a priority from 0 to 6, and money added to the distributor is split among them by those priorities, in steps as targets reach the end of a range or their goal. A preview shows how an amount would be split.",
+        "Choose when it splits: immediately, once an account holds a minimum amount, or only when you press Distribute now.",
+        "The Savings screen shows the distributor first, with what it holds per account, and Add to savings, Distribute now and Clear.",
+      ],
+      nb: [
+        "Spareoppsett har en sparefordeler: gi hvert sparemål intervaller av hvor det står, hvert med en prioritet fra 0 til 6, så fordeles penger du legger i sparefordeleren mellom dem etter prioritetene, trinnvis etter hvert som sparemålene når slutten av et intervall eller målet sitt. En forhåndsvisning viser hvordan et beløp ville blitt fordelt.",
+        "Velg når det fordeles: med en gang, når en konto har et minstebeløp, eller bare når du trykker Fordel nå.",
+        "Sparing-skjermen viser sparefordeleren først, med det den har per konto, og Legg til sparing, Fordel nå og Frigjør.",
+      ],
+      nn: [
+        "Spareoppsett har ein sparefordelar: gje kvart sparemål intervall av kvar det står, kvart med ein prioritet frå 0 til 6, så blir pengar du legg i sparefordelaren fordelte mellom dei etter prioritetane, trinnvis etter kvart som sparemåla når slutten av eit intervall eller målet sitt. Ei førehandsvising viser korleis eit beløp ville blitt fordelt.",
+        "Vel når det blir fordelt: med ein gong, når ein konto har eit minstebeløp, eller berre når du trykkjer Fordel no.",
+        "Sparing-skjermen viser sparefordelaren først, med det han har per konto, og Legg til sparing, Fordel no og Frigjer.",
+      ],
+    },
+  },
+  {
     version: "v2.25.01",
     date: "2026-11-22",
     title: {

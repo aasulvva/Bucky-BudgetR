@@ -863,6 +863,44 @@
       "targetHeld": "{{name}} stops being a savings target, and the {{amount}} held for it goes back to unallocated.",
       "target": "{{name}} stops being a savings target.",
       "reserved": "The {{amount}} held on it for savings is released."
+    },
+    "distributor": {
+      "setup": "Savings setup for the distributor",
+      "mode": {
+        "immediate": "Splits money among your targets as it comes in",
+        "minimum": "Splits an account's money once it holds {{amount}}",
+        "manual": "Waits until you press Distribute now"
+      },
+      "noRules": "No rules yet, so the distributor gives nothing to your targets. Set them up in Savings setup.",
+      "noTargets": "Make a savings target first: the distributor splits money among them.",
+      "empty": "It holds nothing now.",
+      "held": "In the distributor",
+      "waiting": "{{amount}} on {{account}}",
+      "add": {
+        "title": "Add to savings: the distributor",
+        "name": "Add to savings for the distributor",
+        "noAccounts": "You have no account in your targets' currency to add from.",
+        "split": "{{amount}} of {{account}}'s unallocated money is split among your targets right away:",
+        "reachesMinimum": "That brings the distributor's money on {{account}} to {{total}}, past the minimum of {{minimum}}, so it's split right away:",
+        "belowMinimum": "{{amount}} waits in the distributor until it holds {{minimum}} on {{account}} (with this, {{total}}).",
+        "waits": "{{amount}} waits in the distributor until you press Distribute now.",
+        "held": "{{amount}} is in the distributor."
+      },
+      "distribute": {
+        "title": "Distribute now",
+        "name": "Distribute now from {{account}}",
+        "submit": "Distribute now",
+        "all": "Distribute all",
+        "hint": "What the distributor holds is split among your targets by their rules. What no target takes stays in it.",
+        "done_one": "Split recorded.",
+        "done_other": "{{count}} splits recorded, one per account.",
+        "nothing": "No target takes anything now, so nothing was split."
+      },
+      "clear": {
+        "title": "Clear: the distributor",
+        "name": "Clear the distributor on {{account}}",
+        "cleared": "{{amount}} released from the distributor."
+      }
     }
   },
   "savingsSetup": {
@@ -902,7 +940,67 @@
     "deleteReleasesOn": "{{amount}} on {{account}}",
     "deleteKeepsBucket": "The bucket, its funds and its transactions stay.",
     "deleteKeepsAccount": "The account, its balance and its transactions stay.",
-    "deleted": "{{name}} is no longer a savings target."
+    "deleted": "{{name}} is no longer a savings target.",
+    "distributor": {
+      "title": "Savings distributor",
+      "intro": "Money added to the distributor is split among your savings targets by their rules. It's held for them in its account, as when you add to a target yourself; a bucket target funded from that account gets its share straight into the bucket.",
+      "holdMode": "When to split",
+      "holdModeHint": "Changing it doesn't move money the distributor already holds.",
+      "modes": {
+        "immediate": "Immediately",
+        "minimum": "At a minimum amount",
+        "manual": "Manual only"
+      },
+      "modeHints": {
+        "immediate": "Money is split as soon as it comes in.",
+        "minimum": "An account's money is split once the distributor holds the amount there.",
+        "manual": "Money waits until you press Distribute now on the Savings screen."
+      },
+      "minimum": "Minimum amount",
+      "minimumHint": "Checked per account.",
+      "enterMinimum": "Enter an amount above 0.",
+      "saveMode": "Save",
+      "modeSaved": "Savings distributor saved.",
+      "rules": "Rules",
+      "rulesHint": "Each rule covers a range of where a target stands (its balance or funds plus what's held for it) with a priority from 0 to 6. In each range, a target gets a share by its priority among the others; 0 gives it nothing.",
+      "noTargets": "No savings targets yet.",
+      "standing": "Now {{position}} · goal {{goal}}",
+      "noRules": "No rules: it gets nothing from the distributor.",
+      "range": "{{from}} – {{to}}",
+      "rangeOpen": "{{from}} and up",
+      "priorityValue": "Priority {{priority}}",
+      "pastGoal": "Past the goal",
+      "pastGoalHint": "Without it, the target stops getting money at its goal of {{goal}}.",
+      "capacityCaps": "The bucket's capacity of {{amount}} still caps it.",
+      "gap": "Between {{from}} and {{to}}, {{name}} gets nothing: no rule covers it.",
+      "addRule": "Add range",
+      "addRuleFor": "Add range for {{name}}",
+      "editRule": "Edit {{range}} for {{name}}",
+      "deleteRule": "Delete {{range}} for {{name}}",
+      "editRuleTitle": "Edit a range for {{name}}",
+      "newRuleTitle": "New range for {{name}}",
+      "from": "From",
+      "to": "Up to",
+      "noEnd": "No end",
+      "priority": "Priority",
+      "priorityNone": "0 (nothing)",
+      "saveRule": "Save range",
+      "enterFrom": "Enter where the range starts, 0 or more.",
+      "toNotAbove": "Up to must be above From, or empty for no end.",
+      "overlap": "The range overlaps {{range}}.",
+      "preview": "Preview",
+      "previewHint": "How an amount would be split now, by the rules and where each target stands. Nothing is recorded.",
+      "previewFrom": "From account",
+      "previewResult": "The split",
+      "intoBucket": "into the bucket",
+      "stays": "Stays in the distributor",
+      "nobodyTakes": "No target would get anything: check the rules.",
+      "ruleCount_one": "{{count}} distributor rule",
+      "ruleCount_other": "{{count}} distributor rules",
+      "editRules": "Edit in the distributor"
+    },
+    "deleteRules_one": "Its distributor rule is deleted.",
+    "deleteRules_other": "Its {{count}} distributor rules are deleted."
   },
   "newTransaction": {
     "type": "Type",

@@ -188,3 +188,156 @@ describe("Savings", () => {
     });
   });
 });
+
+describe("the savings distributor (#232)", () => {
+  const DISTRIBUTOR = "1000009999";
+  const manual = {
+    id: DISTRIBUTOR,
+    hold_mode: "manual" as const,
+    min_amount: null,
+    held: [{ account_id: main.id, amount: "1200.00", covered: "1000.00" }],
+  };
+  const rule = {
+    id: "100000100101",
+    target_id: rainy.id,
+    from: "0.00",
+    to: null,
+    priority: 1,
+    past_goal: false,
+  };
+  const shares = {
+    shares: [
+      { target_id: rainy.id, amount: "700.00", into_bucket: false },
+      { target_id: trip.id, amount: "500.00", into_bucket: true },
+    ],
+    left: "0.00",
+  };
+
+  beforeEach(() => {
+    apiMock.on("GET /api/v1/savings/distributor", { body: manual });
+    apiMock.on("GET /api/v1/savings/rules", { body: [rule] });
+    apiMock.on("GET /api/v1/savings/distributor/preview", { body: shares });
+  });
+
+  it("shows its hold mode and what it holds, before the targets", async () => {
+    renderRoute("/savings");
+    const dist = await card("Savings distributor");
+    expect(dist.getByText("Waits until you press Distribute now")).toBeInTheDocument();
+    expect(dist.getByText(`${m("1200.00")} on Main`)).toBeInTheDocument();
+    expect(
+      dist.getByText(`${m("200.00")} not covered: the account's buckets come first`),
+    ).toBeInTheDocument();
+    expect(dist.getByRole("link", { name: "Savings setup for the distributor" })).toHaveAttribute(
+      "href",
+      "/savings/setup?distributor",
+    );
+    expect(dist.queryByText(/No rules yet/)).not.toBeInTheDocument();
+  });
+
+  it("warns when there are no rules", async () => {
+    apiMock.on("GET /api/v1/savings/rules", { body: [] });
+    renderRoute("/savings");
+    expect(
+      (await card("Savings distributor")).getByText(
+        /^No rules yet, so the distributor gives nothing/,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("adds money that's split right away, showing how first", async () => {
+    apiMock.on("GET /api/v1/savings/distributor", {
+      body: { ...manual, hold_mode: "immediate", held: [] },
+    });
+    apiMock.on("POST /api/v1/savings/distributor/add", {
+      body: { distributor: { ...manual, held: [] }, distributed: ["2026112200000001"] },
+    });
+    renderRoute("/savings");
+    await userEvent.click(
+      (await card("Savings distributor")).getByRole("button", {
+        name: "Add to savings for the distributor",
+      }),
+    );
+    const dialog = within(
+      await screen.findByRole("dialog", { name: "Add to savings: the distributor" }),
+    );
+    expect(dialog.getByRole("combobox", { name: "From" })).toHaveValue(
+      `Main (${raw("4000.00")} unallocated)`,
+    );
+    await userEvent.type(dialog.getByRole("textbox", { name: "Amount" }), "1200");
+    expect(
+      dialog.getByText(
+        `${m("1200.00")} of Main's unallocated money is split among your targets right away:`,
+      ),
+    ).toBeInTheDocument();
+    const split = within(await dialog.findByRole("list", { name: "The split" }));
+    expect(split.getByText(m("700.00"))).toBeInTheDocument();
+    expect(split.getByText(/into the bucket/)).toBeInTheDocument();
+    await userEvent.click(dialog.getByRole("button", { name: "Add to savings" }));
+    await closed();
+    expect(apiMock.calls("POST /api/v1/savings/distributor/add")[0]?.body).toEqual({
+      account_id: main.id,
+      amount: "1200.00",
+    });
+  });
+
+  it("says added money waits in Manual mode", async () => {
+    renderRoute("/savings");
+    await userEvent.click(
+      (await card("Savings distributor")).getByRole("button", {
+        name: "Add to savings for the distributor",
+      }),
+    );
+    const dialog = within(await screen.findByRole("dialog"));
+    await userEvent.type(dialog.getByRole("textbox", { name: "Amount" }), "100");
+    expect(
+      dialog.getByText(`${m("100.00")} waits in the distributor until you press Distribute now.`),
+    ).toBeInTheDocument();
+    expect(dialog.queryByRole("list", { name: "The split" })).not.toBeInTheDocument();
+  });
+
+  it("distributes what's held on an account, after a preview", async () => {
+    apiMock.on("POST /api/v1/savings/distributor/distribute", {
+      body: { distributor: { ...manual, held: [] }, distributed: ["2026112200000001"] },
+    });
+    renderRoute("/savings");
+    await userEvent.click(
+      (await card("Savings distributor")).getByRole("button", {
+        name: "Distribute now from Main",
+      }),
+    );
+    const dialog = within(await screen.findByRole("dialog", { name: "Distribute now" }));
+    const split = within(await dialog.findByRole("list", { name: "The split" }));
+    expect(split.getByText(m("500.00"))).toBeInTheDocument();
+    expect(apiMock.calls("GET /api/v1/savings/distributor/preview")[0]?.query.get("amount")).toBe(
+      "1200.00",
+    );
+    await userEvent.click(dialog.getByRole("button", { name: "Distribute now" }));
+    await closed();
+    expect(apiMock.calls("POST /api/v1/savings/distributor/distribute")[0]?.body).toEqual({
+      account_id: main.id,
+    });
+  });
+
+  it("clears what it holds, not more", async () => {
+    apiMock.on("POST /api/v1/savings/distributor/clear", { body: { ...manual, held: [] } });
+    renderRoute("/savings");
+    await userEvent.click(
+      (await card("Savings distributor")).getByRole("button", {
+        name: "Clear the distributor on Main",
+      }),
+    );
+    const dialog = within(await screen.findByRole("dialog", { name: "Clear: the distributor" }));
+    const amount = dialog.getByRole("textbox", { name: "Amount" });
+    await userEvent.clear(amount);
+    await userEvent.type(amount, "1300");
+    expect(dialog.getByText(`Only ${m("1200.00")} is held on this account.`)).toBeInTheDocument();
+    await userEvent.clear(amount);
+    await userEvent.type(amount, "200");
+    await userEvent.click(dialog.getByRole("button", { name: "Clear" }));
+    await closed();
+    expect(apiMock.calls("POST /api/v1/savings/distributor/clear")[0]?.body).toEqual({
+      account_id: main.id,
+      amount: "200.00",
+    });
+  });
+});

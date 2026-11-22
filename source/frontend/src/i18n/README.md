@@ -29,6 +29,11 @@ The words for the app's concepts, so the same thing is called the same everywher
 | reserved for savings        | satt av til sparing                               | sett av til sparing                     |
 | Add to savings              | Legg til sparing                                  | Legg til sparing                        |
 | Done / Clear (held funds)   | Utført / Frigjør                                  | Utført / Frigjer                        |
+| savings distributor         | sparefordeler                                     | sparefordelar                           |
+| rule / range (distributor)  | regel / intervall                                 | regel (reglar) / intervall              |
+| priority                    | prioritet                                         | prioritet                               |
+| Distribute now              | Fordel nå                                         | Fordel no                               |
+| hold mode (when to split)   | fordelingsmåte (når det fordeles)                 | fordelingsmåte (når det blir fordelt)   |
 | not covered                 | ikke dekket                                       | ikkje dekt                              |
 | Keep funds                  | Behold midler                                     | Behald midlar                           |
 | income / expense / transfer | inntekt / utgift / overføring                     | inntekt / utgift / overføring           |
