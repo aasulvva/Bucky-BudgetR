@@ -57,6 +57,9 @@ func (s *server) CreateAccount(ctx context.Context, req api.CreateAccountRequest
 	if b.OpeningAt != nil {
 		n.OpeningAt = *b.OpeningAt
 	}
+	if n.Card, err = cardFields(b.CreditCard); err != nil {
+		return nil, err
+	}
 	a, err := svc.Create(ctx, sessionFrom(ctx).User.ID, n)
 	if err != nil {
 		return nil, accountError(err)
@@ -95,6 +98,9 @@ func (s *server) UpdateAccount(ctx context.Context, req api.UpdateAccountRequest
 			income.Valid = true
 		}
 		c.ExpectedIncome = &income
+	}
+	if c.Card, err = cardFields(req.Body.CreditCard); err != nil {
+		return nil, err
 	}
 	a, err := svc.Update(ctx, sessionFrom(ctx).User.ID, req.AccountId, c)
 	if err != nil {
@@ -173,6 +179,9 @@ func (s *server) accountService() (*accounts.Service, error) {
 
 // accountError maps errors from the accounts service to problems.
 func accountError(err error) error {
+	if e := cardError(err); e != nil {
+		return e
+	}
 	if errors.Is(err, bsu.ErrLocked) {
 		return bsuError(err)
 	}
@@ -247,6 +256,10 @@ func toAPIAccount(a accounts.Account) api.Account {
 	out.Bsu = nullable.NewNullNullable[api.BSUStatus]()
 	if a.BSU != nil {
 		out.Bsu = nullable.NewNullableWithValue(toAPIBSUStatus(*a.BSU))
+	}
+	out.CreditCard = nullable.NewNullNullable[api.CreditCard]()
+	if a.Card != nil {
+		out.CreditCard = nullable.NewNullableWithValue(toAPICard(*a.Card))
 	}
 	return out
 }

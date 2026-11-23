@@ -128,7 +128,7 @@ func (s *server) CorrectTransaction(ctx context.Context, req api.CorrectTransact
 	b := req.Body
 	c := transactions.Changes{
 		AccountID: b.AccountId, ToAccountID: b.ToAccountId, Counterparty: b.Counterparty, Description: b.Description, Tags: b.Tags,
-		TriggersRefill: b.TriggersRefill, BSUConfirmed: deref(b.BsuConfirmed),
+		TriggersRefill: b.TriggersRefill, BSUConfirmed: deref(b.BsuConfirmed), LimitConfirmed: deref(b.LimitConfirmed),
 	}
 	if b.Amount != nil {
 		d, err := parseAmount(*b.Amount)
@@ -195,6 +195,9 @@ func (s *server) transactionService() (*transactions.Service, error) {
 
 // transactionError maps errors from the transactions service to problems.
 func transactionError(err error) error {
+	if e := cardError(err); e != nil {
+		return e
+	}
 	if errors.Is(err, bsu.ErrOverLimit) || errors.Is(err, bsu.ErrWithdrawal) || errors.Is(err, bsu.ErrLocked) {
 		return bsuError(err)
 	}
@@ -280,7 +283,7 @@ func fromAPITransactionCreate(b api.TransactionCreate) (transactions.New, error)
 	n := transactions.New{
 		Type: sqlc.TransactionType(b.Type), Counterparty: deref(b.Counterparty), Description: deref(b.Description),
 		AccountID: b.AccountId, ToAccountID: deref(b.ToAccountId), TriggersRefill: b.TriggersRefill,
-		BSUConfirmed: deref(b.BsuConfirmed),
+		BSUConfirmed: deref(b.BsuConfirmed), LimitConfirmed: deref(b.LimitConfirmed),
 	}
 	if b.At != nil {
 		n.At = *b.At

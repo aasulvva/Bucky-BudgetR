@@ -310,6 +310,9 @@ func (s *server) bucketService() (*buckets.Service, error) {
 
 // bucketError maps errors from the buckets service to problems.
 func bucketError(err error) error {
+	if e := cardError(err); e != nil {
+		return e
+	}
 	switch {
 	case errors.Is(err, buckets.ErrNotFound):
 		return &Error{Status: http.StatusNotFound, Code: "not_found", Detail: "Bucket not found.", Err: err}

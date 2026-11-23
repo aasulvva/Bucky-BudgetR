@@ -7,6 +7,7 @@ import {
   IconChecklist,
   IconCoinOff,
   IconHomeDown,
+  IconCreditCard,
   IconHomeExclamation,
   IconPigMoney,
   IconTrendingUp,
@@ -34,6 +35,7 @@ const ICONS: Record<NotificationKind, Icon> = {
   savings_short: IconCoinOff,
   bsu_over_limit: IconHomeExclamation,
   bsu_withdrawal: IconHomeDown,
+  credit_limit: IconCreditCard,
 };
 
 const COLORS: Record<Notification["severity"], string> = {

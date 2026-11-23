@@ -166,6 +166,9 @@ func (s *server) savingsService() (*savings.Service, error) {
 
 // savingsError maps errors from the savings service to problems.
 func savingsError(err error) error {
+	if e := cardError(err); e != nil {
+		return e
+	}
 	if errors.Is(err, bsu.ErrLocked) || errors.Is(err, bsu.ErrOverLimit) || errors.Is(err, bsu.ErrWithdrawal) {
 		return bsuError(err)
 	}

@@ -175,7 +175,8 @@
       "savings": "Savings",
       "bsu": "BSU",
       "fund": "Fund/ASK",
-      "investment": "Investment"
+      "investment": "Investment",
+      "credit_card": "Credit card"
     },
     "empty": "No accounts yet. <setup>Create one in Account setup</setup>.",
     "total": "Total",
@@ -2531,7 +2532,9 @@
       "bsu_over_limit": "BSU over its limit",
       "bsu_over_limitHint": "A BSU account whose deposits this year are over the yearly or total limit.",
       "bsu_withdrawal": "BSU withdrawals",
-      "bsu_withdrawalHint": "Money a scheduled transaction took out of a BSU account."
+      "bsu_withdrawalHint": "Money a scheduled transaction took out of a BSU account.",
+      "credit_limit": "Credit limits",
+      "credit_limitHint": "Credit cards with 90% or more of their limit used."
     },
     "savings": {
       "title": "Money held for {{name}}",
@@ -2549,6 +2552,13 @@
       "overBody": "This year's deposits are {{amount}} over the yearly or total BSU limit.",
       "withdrawalTitle": "Money taken out of {{name}}",
       "withdrawalBody": "A scheduled transaction took {{amount}} out of the BSU account {{date}}, which can cost you the tax deduction.",
+      "open": "Open accounts"
+    },
+    "card": {
+      "nearTitle": "{{name}} is near its credit limit",
+      "nearBody": "{{amount}} is owed on the card: 90% of its credit limit or more.",
+      "overTitle": "{{name}} is past its credit limit",
+      "overBody": "{{amount}} is owed on the card, more than its credit limit.",
       "open": "Open accounts"
     }
   },

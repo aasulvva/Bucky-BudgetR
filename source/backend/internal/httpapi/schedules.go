@@ -248,6 +248,9 @@ func (s *server) scheduleService() (*schedules.Service, error) {
 // scheduleError maps errors from the schedules service to problems. The
 // transaction part is checked as for a new transaction.
 func scheduleError(err error) error {
+	if e := cardError(err); e != nil {
+		return e
+	}
 	if errors.Is(err, bsu.ErrLocked) {
 		return bsuError(err)
 	}

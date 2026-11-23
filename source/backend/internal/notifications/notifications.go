@@ -27,8 +27,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shopspring/decimal"
 
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/balance"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/bsu"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/buckets"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/cards"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/savings"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/schedules"
@@ -62,13 +64,16 @@ const (
 	// KindBSUWithdrawal is money a schedule took out of a BSU account this
 	// year (#214).
 	KindBSUWithdrawal Kind = "bsu_withdrawal"
+	// KindCreditLimit is a credit card whose debt is at cards.NearShare
+	// percent of its credit limit or more (#260).
+	KindCreditLimit Kind = "credit_limit"
 )
 
 // keyPrefix is each kind's key prefix.
 var keyPrefix = map[Kind]string{
 	KindQueue: "queue:", KindBill: "bill:", KindBalance: "balance:", KindBucket: "bucket:",
 	KindSavings: "savings:", KindSavingsShort: "savings-short:",
-	KindBSUOverLimit: "bsu-over:", KindBSUWithdrawal: "bsu-withdrawal:",
+	KindBSUOverLimit: "bsu-over:", KindBSUWithdrawal: "bsu-withdrawal:", KindCreditLimit: "card-limit:",
 }
 
 // Severity orders notifications: alerts first.
@@ -103,8 +108,8 @@ type Notification struct {
 	CycleID        string
 	TargetID       string
 	// Amount is the bill's amount, what the bucket is missing, what's held
-	// for the savings target, what a BSU is over its limit by, or what was
-	// taken out of it.
+	// for the savings target, what a BSU is over its limit by, what was
+	// taken out of it, or what's owed on a credit card.
 	Amount   decimal.NullDecimal
 	Currency string
 }
@@ -121,6 +126,7 @@ type Settings struct {
 	SavingsShort      *bool `json:"savings_short"`
 	BSUOverLimit      *bool `json:"bsu_over_limit"`
 	BSUWithdrawal     *bool `json:"bsu_withdrawal"`
+	CreditLimit       *bool `json:"credit_limit"`
 }
 
 // On reports whether a kind shows.
@@ -129,6 +135,7 @@ func (s Settings) On(k Kind) bool {
 		KindQueue: s.ApprovalQueue, KindBill: s.UpcomingBills,
 		KindBalance: s.InvestmentBalance, KindBucket: s.BucketUncovered, KindSavings: s.SavingsTransfer,
 		KindSavingsShort: s.SavingsShort, KindBSUOverLimit: s.BSUOverLimit, KindBSUWithdrawal: s.BSUWithdrawal,
+		KindCreditLimit: s.CreditLimit,
 	}[k]
 	return v == nil || *v
 }
@@ -295,6 +302,7 @@ func (s *Service) work(ctx context.Context, q *sqlc.Queries, userID string, sett
 		{KindQueue, s.queue}, {KindBill, s.bills}, {KindBalance, s.balances}, {KindBucket, s.uncovered},
 		{KindSavings, s.held}, {KindSavingsShort, s.short},
 		{KindBSUOverLimit, s.bsuOver}, {KindBSUWithdrawal, s.bsuWithdrawals},
+		{KindCreditLimit, s.creditLimits},
 	}
 	for _, step := range steps {
 		if !settings.On(step.kind) {
@@ -522,6 +530,43 @@ func (s *Service) bsuOver(ctx context.Context, q *sqlc.Queries, userID string, _
 			Key:  keyPrefix[KindBSUOverLimit] + a.ID + ":" + strconv.Itoa(st.Year),
 			Kind: KindBSUOverLimit, Severity: Warning, At: start, AccountID: a.ID,
 			Amount: decimal.NullDecimal{Decimal: over, Valid: true}, Currency: a.Currency,
+		})
+	}
+	return out, nil
+}
+
+// creditLimits is one notification per credit card whose debt is at
+// cards.NearShare percent of its limit or more (#260): a warning, or an
+// alert once it's past the limit. The key says which, so going past the
+// limit notifies again after the near one was dismissed.
+func (s *Service) creditLimits(ctx context.Context, q *sqlc.Queries, userID string, _ Settings) ([]Notification, error) {
+	accounts, err := q.ListAccounts(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	var bal map[string]decimal.Decimal
+	out := []Notification{}
+	for _, a := range accounts {
+		if a.AccountType != sqlc.AccountTypeCreditCard {
+			continue
+		}
+		if bal == nil {
+			if bal, err = balance.Accounts(ctx, s.pool, userID); err != nil {
+				return nil, err
+			}
+		}
+		st, _ := cards.StatusOf(a, bal[a.ID])
+		if st.UsedPercent().LessThan(decimal.NewFromInt(cards.NearShare)) {
+			continue
+		}
+		level, severity := strconv.Itoa(cards.NearShare), Warning
+		if st.Available.IsNegative() {
+			level, severity = "100", Alert
+		}
+		out = append(out, Notification{
+			Key:  keyPrefix[KindCreditLimit] + a.ID + ":" + level,
+			Kind: KindCreditLimit, Severity: severity, AccountID: a.ID,
+			Amount: decimal.NullDecimal{Decimal: st.Owed, Valid: true}, Currency: a.Currency,
 		})
 	}
 	return out, nil

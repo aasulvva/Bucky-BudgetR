@@ -28,6 +28,7 @@ import (
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/allocation"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/balance"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/cards"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ids"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
@@ -989,6 +990,14 @@ func sourceCurrency(ctx context.Context, q *sqlc.Queries, userID, accountID stri
 	}
 	if len(rows) == 0 {
 		return "", fmt.Errorf("%w: account %s doesn't exist", ErrInvalid, accountID)
+	}
+	// A credit card has no money of its own to fund a bucket (#260).
+	cardIDs, err := q.ListCardIDs(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+	if slices.Contains(cardIDs, accountID) {
+		return "", fmt.Errorf("%w: account %s", cards.ErrSource, accountID)
 	}
 	return rows[0].Currency, nil
 }

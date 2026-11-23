@@ -12,6 +12,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/balance"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/cards"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ids"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
@@ -468,8 +469,14 @@ func (s *Service) reverseHold(ctx context.Context, tx pgx.Tx, userID, id string)
 // ("" is the distributor).
 func (s *Service) checkDestination(ctx context.Context, tx pgx.Tx, userID, accountID, targetID string) error {
 	if targetID == "" {
-		_, err := sqlc.New(tx).GetAccount(ctx, sqlc.GetAccountParams{ID: accountID, UserID: userID})
-		return notFound(err, "account", accountID)
+		a, err := sqlc.New(tx).GetAccount(ctx, sqlc.GetAccountParams{ID: accountID, UserID: userID})
+		if err != nil {
+			return notFound(err, "account", accountID)
+		}
+		if a.AccountType == sqlc.AccountTypeCreditCard {
+			return fmt.Errorf("%w: account %s", cards.ErrSource, accountID)
+		}
+		return nil
 	}
 	t, err := lockTarget(ctx, tx, userID, targetID)
 	if err != nil {

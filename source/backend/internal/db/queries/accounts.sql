@@ -1,7 +1,8 @@
 -- name: CreateAccount :one
 -- Use with ids.Insert: a taken ID returns no row.
-INSERT INTO bank_accounts (id, user_id, name, currency, account_type, bank)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO bank_accounts (id, user_id, name, currency, account_type, bank,
+    card_bill_account_id, card_credit_limit, card_statement_day, card_due_day, card_minimum_payment)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 ON CONFLICT (id) DO NOTHING
 RETURNING *;
 
@@ -18,8 +19,11 @@ SELECT * FROM bank_accounts WHERE id = $1 AND user_id = $2 AND NOT deleted FOR U
 
 -- name: UpdateAccount :one
 -- A type change to or from BSU clears its history setup (#214): a BSU is
--- locked until it's set up again.
+-- locked until it's set up again. A credit card's fields are set on cards
+-- only (#260), which never change type.
 UPDATE bank_accounts SET name = $3, account_type = $4, expected_income = $5, bank = $6, modified_at = now(),
+    card_bill_account_id = $7, card_credit_limit = $8, card_statement_day = $9, card_due_day = $10,
+    card_minimum_payment = $11,
     bsu_set_up_at = CASE WHEN account_type = $4 THEN bsu_set_up_at END,
     bsu_opened_year = CASE WHEN account_type = $4 THEN bsu_opened_year END
 WHERE id = $1 AND user_id = $2 AND NOT deleted
@@ -35,3 +39,19 @@ SELECT id FROM buckets WHERE source_account_id = $1 AND user_id = $2 AND NOT del
 -- name: SetBucketSource :exec
 -- CAF resets: the bucket is funded from the new account from now on.
 UPDATE buckets SET source_account_id = $3, caf = 0, modified_at = now() WHERE id = $1 AND user_id = $2;
+
+-- name: ClearCardBillAccount :many
+-- The cards whose bill account this was are locked until they get another
+-- (#260): the account is deleted, or can't be a bill account any more.
+UPDATE bank_accounts SET card_bill_account_id = NULL, modified_at = now()
+WHERE user_id = $1 AND card_bill_account_id = $2 AND NOT deleted
+RETURNING id;
+
+-- name: ListLockedCards :many
+-- The user's credit cards without a bill account (#260).
+SELECT id FROM bank_accounts
+WHERE user_id = $1 AND NOT deleted AND account_type = 'credit_card' AND card_bill_account_id IS NULL;
+
+-- name: ListCardIDs :many
+-- The user's live credit cards (#260).
+SELECT id FROM bank_accounts WHERE user_id = $1 AND NOT deleted AND account_type = 'credit_card';

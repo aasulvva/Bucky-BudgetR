@@ -126,6 +126,9 @@ func (s *server) SaveSavingsBudgetEntry(ctx context.Context, req api.SaveSavings
 // budgetError maps the savings budget's own errors to problems, nil for
 // others.
 func budgetError(err error) error {
+	if e := cardError(err); e != nil {
+		return e
+	}
 	switch {
 	case errors.Is(err, savings.ErrAlreadySaved):
 		return &Error{Status: http.StatusConflict, Code: "already_saved", Detail: "It has saved in this cycle already."}

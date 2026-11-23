@@ -132,6 +132,20 @@ export function useNotificationText(): (n: Notification) => NotificationText {
           open: t("notifications.bsu.open"),
         };
       }
+      case "credit_limit": {
+        const over = n.severity === "alert";
+        return {
+          ...base,
+          title: t(over ? "notifications.card.overTitle" : "notifications.card.nearTitle", {
+            name: names.accountName(n.account_id ?? ""),
+          }),
+          body: t(over ? "notifications.card.overBody" : "notifications.card.nearBody", {
+            amount: n.amount ? formatMoney(n.amount, n.currency ?? undefined) : "",
+          }),
+          link: "/accounts",
+          open: t("notifications.card.open"),
+        };
+      }
     }
   };
 }

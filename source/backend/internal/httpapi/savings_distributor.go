@@ -198,6 +198,9 @@ func ruleInput(from api.Amount, to nullable.Nullable[api.Amount], priority int, 
 
 // distributorError maps the rule errors, then savingsError's.
 func distributorError(err error) error {
+	if e := cardError(err); e != nil {
+		return e
+	}
 	switch {
 	case errors.Is(err, savings.ErrRuleOverlap):
 		return &Error{Status: http.StatusConflict, Code: "rule_overlap", Detail: capitalize(err.Error()) + "."}
