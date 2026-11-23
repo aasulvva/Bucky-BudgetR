@@ -15,7 +15,8 @@ import (
 )
 
 // Run brings the stored CAF of the buckets funded from these accounts up to
-// date, inside tx. For each account it limits every CAF to
+// date, inside tx. The buckets share the balance less the card debt held on
+// the account (#261). For each account it limits every CAF to
 // 0 ≤ CAF ≤ max(TF, 0), or recalculates the account with Allocate when force
 // is set or Needed says so. Callers hold the user's lock (ledger.LockUser).
 func Run(ctx context.Context, tx pgx.Tx, userID string, accountIDs []string, force bool) error {
@@ -37,6 +38,14 @@ func AfterRecord(ctx context.Context, tx pgx.Tx, t *ledger.Transaction) error {
 		a := at(l.AccountID)
 		a.Banked = true
 		a.Bank = a.Bank.Add(l.Amount)
+	}
+	// Card debt held on an account (#261) takes money from its buckets like
+	// money going out: a card purchase from a bucket on it moves that
+	// bucket's CAF only, as a debit card purchase would.
+	for _, l := range t.CardLines {
+		a := at(l.AccountID)
+		a.Banked = true
+		a.Bank = a.Bank.Sub(l.Amount)
 	}
 	if len(t.BucketLines) > 0 {
 		ids := make([]string, len(t.BucketLines))
@@ -79,6 +88,10 @@ func run(ctx context.Context, tx pgx.Tx, userID string, accountIDs []string, for
 	if err != nil {
 		return err
 	}
+	debt, err := balance.CardDebt(ctx, tx, userID)
+	if err != nil {
+		return err
+	}
 	tf, err := balance.Buckets(ctx, tx, userID)
 	if err != nil {
 		return err
@@ -93,7 +106,7 @@ func run(ctx context.Context, tx pgx.Tx, userID string, accountIDs []string, for
 		stored[r.ID] = r.Caf
 	}
 	for account, buckets := range byAccount {
-		available := balances[account]
+		available := balance.NewMoney(balances[account], debt[account], decimal.Zero, decimal.Zero).ForBuckets()
 		recalc := force
 		if l := lines[account]; l != nil && Follow(available, buckets, *l) {
 			recalc = true

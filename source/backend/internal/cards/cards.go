@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -77,6 +78,39 @@ type Status struct {
 	// Available is the credit left: the limit plus the balance; below 0
 	// past the limit.
 	Available decimal.Decimal
+	// HeldOn is what's set aside for the card per account (#261), largest
+	// first; SetAside is their sum, and NotSetAside what's owed beyond it,
+	// at least 0.
+	HeldOn      []Hold
+	SetAside    decimal.Decimal
+	NotSetAside decimal.Decimal
+}
+
+// Hold is card debt held on an account.
+type Hold struct {
+	AccountID string
+	Amount    decimal.Decimal
+}
+
+// Holds returns what's held for the card on each account (largest first,
+// ties by account ID), their sum, and what the card owes beyond it, at least
+// 0, from every account's Money.
+func Holds(cardID string, m map[string]balance.Money) (heldOn []Hold, setAside, notSetAside decimal.Decimal) {
+	heldOn = []Hold{}
+	for id, a := range m {
+		if h, ok := a.CardHolds[cardID]; ok && !h.IsZero() {
+			heldOn = append(heldOn, Hold{AccountID: id, Amount: h})
+			setAside = setAside.Add(h)
+		}
+	}
+	slices.SortFunc(heldOn, func(a, b Hold) int {
+		if c := b.Amount.Cmp(a.Amount); c != 0 {
+			return c
+		}
+		return strings.Compare(a.AccountID, b.AccountID)
+	})
+	owed := decimal.Max(m[cardID].Balance.Neg(), decimal.Zero)
+	return heldOn, setAside, decimal.Max(owed.Sub(setAside), decimal.Zero)
 }
 
 // UsedPercent is the share of the limit owed, in percent.
@@ -163,16 +197,18 @@ func FieldsOf(a sqlc.BankAccount) (Fields, bool) {
 }
 
 // StatusOf returns a card's status at balance bal, and false for an account
-// that isn't a card.
+// that isn't a card. HeldOn, SetAside and NotSetAside are left for Holds.
 func StatusOf(a sqlc.BankAccount, bal decimal.Decimal) (Status, bool) {
 	f, ok := FieldsOf(a)
 	if !ok {
 		return Status{}, false
 	}
 	return Status{
-		Fields:    f,
-		Owed:      decimal.Max(bal.Neg(), decimal.Zero),
-		Available: f.CreditLimit.Add(bal),
+		Fields:      f,
+		Owed:        decimal.Max(bal.Neg(), decimal.Zero),
+		Available:   f.CreditLimit.Add(bal),
+		HeldOn:      []Hold{},
+		NotSetAside: decimal.Max(bal.Neg(), decimal.Zero),
 	}, true
 }
 

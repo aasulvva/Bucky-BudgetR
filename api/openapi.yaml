@@ -1183,6 +1183,80 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/v1/accounts/{accountId}/card-debt/set-aside:
+    parameters:
+      - $ref: "#/components/parameters/AccountId"
+    post:
+      operationId: setAsideCardDebt
+      tags: [accounts]
+      summary: Set card debt aside
+      description: |
+        Holds part of the credit card's debt that isn't set aside anywhere
+        (`not_set_aside`, more is 400 `invalid_request`) on an account, out
+        of its unallocated money (more is 409 `not_enough_unallocated`), by
+        recording a Card Debt Hold (CDH, #261). The account isn't a card and
+        is in the card's currency (400 `card_source`). `accountId` is the
+        card's; 400 `invalid_request` for another type.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CardDebtChange"
+      responses:
+        "200":
+          description: The card, with what's set aside for it now.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/accounts/{accountId}/card-debt/release:
+    parameters:
+      - $ref: "#/components/parameters/AccountId"
+    post:
+      operationId: releaseCardDebt
+      tags: [accounts]
+      summary: Release card debt
+      description: |
+        Releases part of what's held on an account for the credit card's
+        debt, so it's unallocated again, by recording a Card Debt Release
+        (CDR, #261). More than is held is 409 `not_enough_held`.
+        `accountId` is the card's.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CardDebtChange"
+      responses:
+        "200":
+          description: The card, with what's set aside for it now.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
   /api/v1/accounts/{accountId}/reallocate:
     parameters:
       - $ref: "#/components/parameters/AccountId"
@@ -4640,7 +4714,7 @@ components:
     Account:
       type: object
       additionalProperties: false
-      required: [id, name, type, currency, balance, unallocated, reserved, reserved_uncovered, expected_income, bank, created_at, bsu, credit_card]
+      required: [id, name, type, currency, balance, unallocated, reserved, reserved_uncovered, card_holds, card_debt_uncovered, expected_income, bank, created_at, bsu, credit_card]
       properties:
         id:
           $ref: "#/components/schemas/AccountId"
@@ -4658,9 +4732,11 @@ components:
           allOf:
             - $ref: "#/components/schemas/Amount"
           description: |
-            The part of the balance that neither backs a bucket nor is reserved
-            for savings: balance − Σ CAF of its buckets − the covered part of
-            `reserved` (spec §7, §8). Negative when the account is overdrawn.
+            The part of the balance that's neither held for credit card debt,
+            nor backs a bucket, nor is reserved for savings: balance − the
+            covered part of the card debt in `card_holds` − Σ CAF of its
+            buckets − the covered part of `reserved` (spec §7, §8, #261).
+            Negative when the account is overdrawn.
         reserved:
           allOf:
             - $ref: "#/components/schemas/Amount"
@@ -4668,7 +4744,20 @@ components:
         reserved_uncovered:
           allOf:
             - $ref: "#/components/schemas/Amount"
-          description: The part of `reserved` the balance doesn't cover. The buckets are funded first, so reservations are short first.
+          description: The part of `reserved` the balance doesn't cover. Card debt and the buckets are funded first, so reservations are short first.
+        card_holds:
+          type: array
+          description: |
+            What's held on the account for each credit card's debt (#261),
+            until the bill is paid: sums that aren't 0, by card. Below 0 when
+            a refund took off more than was held. Their sum, at least 0, is
+            covered before the buckets.
+          items:
+            $ref: "#/components/schemas/CardHold"
+        card_debt_uncovered:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: The part of the card debt held on the account that the balance doesn't cover.
         expected_income:
           type: string
           allOf:
@@ -4690,6 +4779,52 @@ components:
             - $ref: "#/components/schemas/CreditCard"
           nullable: true
           description: A credit card's fields and what's owed (#260). Null for other types.
+
+    CardHold:
+      type: object
+      additionalProperties: false
+      required: [card_id, amount]
+      properties:
+        card_id:
+          $ref: "#/components/schemas/AccountId"
+        amount:
+          $ref: "#/components/schemas/Amount"
+
+    CardHeldOn:
+      type: object
+      additionalProperties: false
+      required: [account_id, amount]
+      properties:
+        account_id:
+          $ref: "#/components/schemas/AccountId"
+        amount:
+          $ref: "#/components/schemas/Amount"
+
+    CardDebtChange:
+      type: object
+      additionalProperties: false
+      required: [account_id, amount]
+      properties:
+        account_id:
+          allOf:
+            - $ref: "#/components/schemas/AccountId"
+          description: The account the debt is held on, which isn't a card, in the card's currency (400 `card_source`).
+        amount:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Above 0.
+
+    CardDebtCarry:
+      type: object
+      additionalProperties: false
+      required: [card_id, amount]
+      properties:
+        card_id:
+          $ref: "#/components/schemas/AccountId"
+        amount:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Above 0.
 
     CardDay:
       type: integer
@@ -4733,7 +4868,7 @@ components:
     CreditCard:
       type: object
       additionalProperties: false
-      required: [default_account_id, credit_limit, statement_day, due_day, minimum_payment, owed, available]
+      required: [default_account_id, credit_limit, statement_day, due_day, minimum_payment, owed, available, held_on, set_aside, not_set_aside]
       properties:
         default_account_id:
           type: string
@@ -4759,6 +4894,19 @@ components:
           allOf:
             - $ref: "#/components/schemas/Amount"
           description: The credit left, credit_limit + balance; below 0 when past the limit.
+        held_on:
+          type: array
+          description: What's set aside for the card's debt per account (#261), largest first.
+          items:
+            $ref: "#/components/schemas/CardHeldOn"
+        set_aside:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: The sum of `held_on`.
+        not_set_aside:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: What's owed beyond `set_aside`, at least 0, which `POST /accounts/{id}/card-debt/set-aside` can set aside.
 
     BSUStatus:
       type: object
@@ -6805,7 +6953,7 @@ components:
 
     TransactionType:
       type: string
-      enum: [OPB, BLA, INC, EXP, TRF, INP, OPF, REF, BUA, BAT, OVF, SVR, SVC, SVB, SVD]
+      enum: [OPB, BLA, INC, EXP, TRF, INP, OPF, REF, BUA, BAT, OVF, SVR, SVC, SVB, SVD, CDH, CDR]
       description: |
         See spec §5.4. Only INC, EXP and TRF can be created with
         `POST /transactions`. SVR (savings reserve), SVC (savings cancel) and
@@ -6814,6 +6962,10 @@ components:
         reversed, not corrected. An OVF can have up to two savings lines,
         holding the overflow for a savings target and the distributor (#233),
         and so can a savings budget SVR cut at a target's goal (#234).
+        CDH (card debt hold) and CDR (card debt release) come from the card
+        debt endpoints and deleting an account (#261); they too can be
+        reversed, not corrected. A purchase, refund or transfer can have card
+        lines.
 
     CorrectionType:
       type: string
@@ -6849,6 +7001,24 @@ components:
             - $ref: "#/components/schemas/Amount"
           description: Signed, in the account's currency. Positive holds money, negative releases it or takes it off hold.
 
+    TransactionCardLine:
+      type: object
+      additionalProperties: false
+      required: [card_id, account_id, amount]
+      properties:
+        card_id:
+          allOf:
+            - $ref: "#/components/schemas/AccountId"
+          description: The credit card the debt is on.
+        account_id:
+          allOf:
+            - $ref: "#/components/schemas/AccountId"
+          description: The account the money is held on (#261).
+        amount:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Signed, in the card's currency. Positive holds money for the card's debt, negative releases it.
+
     TransactionBalance:
       type: object
       additionalProperties: false
@@ -6878,7 +7048,7 @@ components:
     Transaction:
       type: object
       additionalProperties: false
-      required: [id, type, at, counterparty, description, tags, triggers_refill, created_at, created_by, corrected, reversed, replaces, replaced_by, schedule_id, bank_lines, bucket_lines, savings_lines, before_reversal, balances_after]
+      required: [id, type, at, counterparty, description, tags, triggers_refill, created_at, created_by, corrected, reversed, replaces, replaced_by, schedule_id, bank_lines, bucket_lines, savings_lines, card_lines, before_reversal, balances_after]
       properties:
         id:
           $ref: "#/components/schemas/TransactionId"
@@ -6942,6 +7112,11 @@ components:
           description: Effective amounts held for savings per holder and source account (#231), as `bank_lines`.
           items:
             $ref: "#/components/schemas/TransactionSavingsLine"
+        card_lines:
+          type: array
+          description: Effective amounts of card debt held per card and account (#261), as `bank_lines`.
+          items:
+            $ref: "#/components/schemas/TransactionCardLine"
         before_reversal:
           description: |
             Set on a reversed transaction: its effective lines just before the
@@ -6970,7 +7145,7 @@ components:
     TransactionVersion:
       type: object
       additionalProperties: false
-      required: [id, correction_type, created_at, created_by, bank_lines, bucket_lines, savings_lines]
+      required: [id, correction_type, created_at, created_by, bank_lines, bucket_lines, savings_lines, card_lines]
       properties:
         id:
           $ref: "#/components/schemas/TransactionId"
@@ -6994,11 +7169,15 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TransactionSavingsLine"
+        card_lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransactionCardLine"
 
     TransactionLines:
       type: object
       additionalProperties: false
-      required: [bank_lines, bucket_lines, savings_lines]
+      required: [bank_lines, bucket_lines, savings_lines, card_lines]
       properties:
         bank_lines:
           type: array
@@ -7012,6 +7191,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TransactionSavingsLine"
+        card_lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransactionCardLine"
 
     TransactionPage:
       type: object
@@ -7112,7 +7295,7 @@ components:
           description: Positive.
         bucket_lines:
           type: array
-          description: For an income or expense, the parts that go to or come from buckets.
+          description: For an income or expense, the parts that go to or come from buckets. On a credit card, buckets may be funded from any account in its currency (#261).
           items:
             type: object
             additionalProperties: false
@@ -7125,6 +7308,37 @@ components:
                   - $ref: "#/components/schemas/Amount"
                 description: Positive.
 
+        set_aside_account_id:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/AccountId"
+          nullable: true
+          description: |
+            Only for a purchase (EXP) or refund (INC) on a credit card (#261):
+            the account its part outside buckets is held on until the bill is
+            paid (a refund releases it there). Null holds it nowhere; left
+            out, it's the card's default account. An account that isn't a
+            card, in the card's currency (400 `card_source`).
+        carry_card_debt:
+          type: array
+          description: |
+            Only for a transfer between accounts that aren't credit cards
+            (#261): card debt held on the sending account that moves to the
+            receiving one, per card. Each at most what's held, together at
+            most the amount.
+          items:
+            $ref: "#/components/schemas/CardDebtCarry"
+        release_card_debt:
+          type: array
+          description: |
+            Only for a payment, a transfer to a credit card (#261). The paying
+            account's hold for the card is cleared first; this is what the
+            rest of the payment releases on other accounts, each at most
+            what's held there, together at most that rest. Left out, it
+            releases what's held beyond what the card still owes, largest
+            holds first.
+          items:
+            $ref: "#/components/schemas/CardDebtChange"
     Tag:
       type: object
       additionalProperties: false
@@ -7224,6 +7438,37 @@ components:
           type: boolean
           description: As when creating (409 `over_credit_limit`).
 
+        set_aside_account_id:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/AccountId"
+          nullable: true
+          description: |
+            Only for a purchase (EXP) or refund (INC) on a credit card (#261):
+            the account its part outside buckets is held on until the bill is
+            paid (a refund releases it there). Null holds it nowhere; left
+            out, it stays where it is. An account that isn't a
+            card, in the card's currency (400 `card_source`).
+        carry_card_debt:
+          type: array
+          description: |
+            Only for a transfer between accounts that aren't credit cards
+            (#261): card debt held on the sending account that moves to the
+            receiving one, per card, replacing what it carries. Left out, it
+            stays as it is.
+          items:
+            $ref: "#/components/schemas/CardDebtCarry"
+        release_card_debt:
+          type: array
+          description: |
+            Only for a payment, a transfer to a credit card (#261). The paying
+            account's hold for the card is cleared first; this is what the
+            rest of the payment releases on other accounts, each at most
+            what's held there, together at most that rest. Left out, it
+            stays as it is while the amount and accounts do, else as when
+            creating.
+          items:
+            $ref: "#/components/schemas/CardDebtChange"
     Problem:
       type: object
       description: RFC 9457 problem details.

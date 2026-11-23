@@ -67,8 +67,22 @@ type New struct {
 	Amount      decimal.Decimal
 	// Buckets are the parts of an income or expense that go to or come from
 	// buckets. Each bucket must be funded from AccountID, and together they
-	// can't exceed Amount; the rest isn't tied to a bucket.
+	// can't exceed Amount; the rest isn't tied to a bucket. On a credit card
+	// (#261), a bucket may be funded from any account in the card's
+	// currency.
 	Buckets []BucketAmount
+	// SetAsideOn is where a credit card purchase's (or refund's) part
+	// outside buckets is held, or released (#261): nil for the card's default
+	// account, "" for nowhere.
+	SetAsideOn *string
+	// Carry moves card debt held on a transfer's AccountID to ToAccountID,
+	// per card (#261).
+	Carry []CardAmount
+	// Release says how much held card debt a payment releases on accounts
+	// other than the paying one, once that one's is cleared (#261). Nil
+	// releases what the payment leaves held beyond what's owed, largest
+	// holds first.
+	Release *[]AccountAmount
 	// TriggersRefill marks an income that refills its account's "On income"
 	// buckets (spec §6). Nil leaves it to the user's income rules; an
 	// explicit value overrides them.
@@ -80,6 +94,18 @@ type New struct {
 	// LimitConfirmed records it even when it takes a credit card's debt past
 	// its credit limit (#260); without it, that's *cards.OverLimitError.
 	LimitConfirmed bool
+}
+
+// CardAmount is a positive amount of a credit card's debt.
+type CardAmount struct {
+	CardID string
+	Amount decimal.Decimal
+}
+
+// AccountAmount is a positive amount on an account.
+type AccountAmount struct {
+	AccountID string
+	Amount    decimal.Decimal
 }
 
 // BucketAmount is a positive amount for one bucket.
@@ -119,6 +145,9 @@ type Transaction struct {
 	// SavingsLines are the effective amounts held (positive) or released per
 	// savings holder and source account (#231).
 	SavingsLines []SavingsLine
+	// CardLines are the effective amounts of card debt held (positive) or
+	// released per credit card and account (#261).
+	CardLines []CardLine
 	// BeforeReversal is set on a reversed transaction: its effective lines
 	// just before the reversal, which are what it amounted to.
 	BeforeReversal *Lines
@@ -137,6 +166,14 @@ type Lines struct {
 	Bank    []BankLine
 	Buckets []BucketLine
 	Savings []SavingsLine
+	Cards   []CardLine
+}
+
+// CardLine is an amount of a credit card's debt held on an account (#261).
+type CardLine struct {
+	CardID    string
+	AccountID string
+	Amount    decimal.Decimal
 }
 
 // SavingsLine is an amount held for a savings holder on a source account.
@@ -175,6 +212,7 @@ type Version struct {
 	BankLines    []BankLine
 	BucketLines  []BucketLine
 	SavingsLines []SavingsLine
+	CardLines    []CardLine
 }
 
 // Filter narrows List. Zero fields match everything.
@@ -255,7 +293,7 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Transaction
 		if err != nil {
 			return err
 		}
-		out = merge([]sqlc.TransactionHeader{t.Header}, t.BankLines, t.BucketLines, t.SavingsLines, t.Tags, false)
+		out = merge([]sqlc.TransactionHeader{t.Header}, t.BankLines, t.BucketLines, t.SavingsLines, t.CardLines, t.Tags, false)
 		return nil
 	})
 	if err != nil {
@@ -303,7 +341,7 @@ func (s *Service) RecordIn(ctx context.Context, tx pgx.Tx, userID string, n New)
 	if err != nil {
 		return Transaction{}, err
 	}
-	return merge([]sqlc.TransactionHeader{t.Header}, t.BankLines, t.BucketLines, t.SavingsLines, t.Tags, false), nil
+	return merge([]sqlc.TransactionHeader{t.Header}, t.BankLines, t.BucketLines, t.SavingsLines, t.CardLines, t.Tags, false), nil
 }
 
 // record checks n and records it inside tx. replaces is the transaction it
@@ -333,6 +371,11 @@ func (s *Service) record(ctx context.Context, tx pgx.Tx, userID string, n New, r
 	if err := checkCard(ctx, tx, userID, n, nil); err != nil {
 		return nil, err
 	}
+	// Card debt is held where it was budgeted (#261).
+	held, err := cardLines(ctx, tx, userID, n, nil)
+	if err != nil {
+		return nil, err
+	}
 	triggers := n.TriggersRefill != nil && *n.TriggersRefill
 	if n.TriggersRefill == nil && n.Type == sqlc.TransactionTypeINC && s.refills != nil {
 		if triggers, err = refill.Triggers(ctx, tx, userID, n.Counterparty, n.Amount); err != nil {
@@ -342,6 +385,7 @@ func (s *Service) record(ctx context.Context, tx pgx.Tx, userID string, n New, r
 	t, err := s.ledger.Record(ctx, tx, ledger.Entry{
 		UserID: userID, CreatedBy: userID, Type: n.Type, At: n.At, ReplacesID: replaces, TriggersRefill: triggers,
 		Counterparty: n.Counterparty, Description: n.Description, Tags: n.Tags, BankLines: bank, BucketLines: buckets,
+		CardLines: held,
 	})
 	if err != nil {
 		return nil, err
@@ -849,6 +893,10 @@ func (s *Service) load(ctx context.Context, q *sqlc.Queries, userID string, orig
 	if err != nil {
 		return nil, err
 	}
+	cardLines, err := q.ListCardDebtLinesFor(ctx, all)
+	if err != nil {
+		return nil, err
+	}
 	tags, err := q.ListTagsFor(ctx, all)
 	if err != nil {
 		return nil, err
@@ -883,6 +931,7 @@ func (s *Service) load(ctx context.Context, q *sqlc.Queries, userID string, orig
 			filter(bank, func(l sqlc.BankTransaction) bool { return inFamily(l.TransactionID) }),
 			filter(buckets, func(l sqlc.BucketTransaction) bool { return inFamily(l.TransactionID) }),
 			filter(savings, func(l sqlc.SavingsTransaction) bool { return inFamily(l.TransactionID) }),
+			filter(cardLines, func(l sqlc.CardDebtLine) bool { return inFamily(l.TransactionID) }),
 			famTags, history)
 		for _, r := range replaced {
 			if r.ReplacesID == id {
@@ -951,12 +1000,33 @@ func sumSavings(fam []sqlc.TransactionHeader, savings []sqlc.SavingsTransaction)
 	return slices.DeleteFunc(out, func(l SavingsLine) bool { return l.Amount.IsZero() })
 }
 
+// sumCards sums the card debt lines of these headers per card and account,
+// in the order they first appear, leaving out sums of 0.
+func sumCards(fam []sqlc.TransactionHeader, lines []sqlc.CardDebtLine) []CardLine {
+	out := []CardLine{}
+	for _, h := range fam {
+		for _, l := range lines {
+			if l.TransactionID != h.ID {
+				continue
+			}
+			if i := slices.IndexFunc(out, func(c CardLine) bool {
+				return c.CardID == l.CardID && c.AccountID == l.AccountID
+			}); i >= 0 {
+				out[i].Amount = out[i].Amount.Add(l.Amount)
+			} else {
+				out = append(out, CardLine{CardID: l.CardID, AccountID: l.AccountID, Amount: l.Amount})
+			}
+		}
+	}
+	return slices.DeleteFunc(out, func(l CardLine) bool { return l.Amount.IsZero() })
+}
+
 // merge builds a Transaction from a family: the original header first, then
 // its corrections, with all their lines. tags are the newest header's, which
 // like its counterparty and description are the effective ones: every
 // correction carries them.
 func merge(fam []sqlc.TransactionHeader, bank []sqlc.BankTransaction, buckets []sqlc.BucketTransaction,
-	savings []sqlc.SavingsTransaction, tags []string, history bool) Transaction {
+	savings []sqlc.SavingsTransaction, cardLines []sqlc.CardDebtLine, tags []string, history bool) Transaction {
 	orig := fam[0]
 	t := Transaction{
 		ID: orig.ID, Type: orig.TransactionType, At: orig.TransactionAt, Counterparty: fam[len(fam)-1].Counterparty,
@@ -977,12 +1047,14 @@ func merge(fam []sqlc.TransactionHeader, bank []sqlc.BankTransaction, buckets []
 
 	t.BankLines, t.BucketLines = sumLines(fam, bank, buckets)
 	t.SavingsLines = sumSavings(fam, savings)
+	t.CardLines = sumCards(fam, cardLines)
 	if i := slices.IndexFunc(fam, func(h sqlc.TransactionHeader) bool {
 		return h.CorrectionType == sqlc.CorrectionTypeReversal
 	}); i > 0 {
 		var before Lines
 		before.Bank, before.Buckets = sumLines(fam[:i], bank, buckets)
 		before.Savings = sumSavings(fam[:i], savings)
+		before.Cards = sumCards(fam[:i], cardLines)
 		t.BeforeReversal = &before
 	}
 
@@ -990,7 +1062,7 @@ func merge(fam []sqlc.TransactionHeader, bank []sqlc.BankTransaction, buckets []
 		t.History = make([]Version, len(fam))
 		for i, h := range fam {
 			v := Version{ID: h.ID, Correction: h.CorrectionType, CreatedAt: h.CreatedAt, CreatedBy: h.CreatedBy.String,
-				BankLines: []BankLine{}, BucketLines: []BucketLine{}, SavingsLines: []SavingsLine{}}
+				BankLines: []BankLine{}, BucketLines: []BucketLine{}, SavingsLines: []SavingsLine{}, CardLines: []CardLine{}}
 			for _, l := range bank {
 				if l.TransactionID == h.ID {
 					v.BankLines = append(v.BankLines, BankLine{AccountID: l.AccountID, Amount: l.Amount})
@@ -1004,6 +1076,11 @@ func merge(fam []sqlc.TransactionHeader, bank []sqlc.BankTransaction, buckets []
 			for _, l := range savings {
 				if l.TransactionID == h.ID {
 					v.SavingsLines = append(v.SavingsLines, SavingsLine{HolderID: l.HolderID, AccountID: l.AccountID, Amount: l.Amount})
+				}
+			}
+			for _, l := range cardLines {
+				if l.TransactionID == h.ID {
+					v.CardLines = append(v.CardLines, CardLine{CardID: l.CardID, AccountID: l.AccountID, Amount: l.Amount})
 				}
 			}
 			t.History[i] = v
@@ -1040,10 +1117,17 @@ func checkAccounts(ctx context.Context, q *sqlc.Queries, userID string, n New) e
 }
 
 // checkBuckets checks that every bucket is a live bucket of the user funded
-// from the transaction's account.
+// from the transaction's account, or on a credit card (#261), from an account
+// in the card's currency.
 func checkBuckets(ctx context.Context, q *sqlc.Queries, userID string, n New) error {
 	if len(n.Buckets) == 0 {
 		return nil
+	}
+	var card *sqlc.GetOwnedAccountsRow
+	if rows, err := q.GetOwnedAccounts(ctx, sqlc.GetOwnedAccountsParams{Ids: []string{n.AccountID}, UserID: userID}); err != nil {
+		return err
+	} else if len(rows) == 1 && rows[0].AccountType == sqlc.AccountTypeCreditCard {
+		card = &rows[0]
 	}
 	want := make([]string, len(n.Buckets))
 	for i, b := range n.Buckets {
@@ -1058,7 +1142,18 @@ func checkBuckets(ctx context.Context, q *sqlc.Queries, userID string, n New) er
 		if i < 0 {
 			return fmt.Errorf("%w: bucket %s doesn't exist", ErrInvalid, id)
 		}
-		if src := rows[i].SourceAccountID; src != n.AccountID {
+		src := rows[i].SourceAccountID
+		if card != nil {
+			acc, err := q.GetOwnedAccounts(ctx, sqlc.GetOwnedAccountsParams{Ids: []string{src}, UserID: userID})
+			if err != nil {
+				return err
+			}
+			if len(acc) != 1 || acc[0].Currency != card.Currency {
+				return fmt.Errorf("%w: bucket %s is funded from an account in another currency than card %s", ErrInvalid, id, n.AccountID)
+			}
+			continue
+		}
+		if src != n.AccountID {
 			return fmt.Errorf("%w: bucket %s is funded from account %s, not %s", ErrInvalid, id, src, n.AccountID)
 		}
 	}

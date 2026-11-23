@@ -483,7 +483,12 @@ WHERE h.user_id = $1 AND h.correction_type = 'none'
   AND ($4::timestamptz IS NULL OR h.transaction_at < $4::timestamptz)
   AND ($5::text[] IS NULL OR EXISTS (
       SELECT 1 FROM bank_transactions b JOIN transaction_headers c ON c.id = b.transaction_id
-      WHERE b.account_id = ANY($5::text[]) AND (c.id = h.id OR c.parent_id = h.id)))
+      WHERE b.account_id = ANY($5::text[]) AND (c.id = h.id OR c.parent_id = h.id)
+      -- Card debt set aside or released (#261) shows on the card and the account.
+      UNION ALL
+      SELECT 1 FROM card_debt_lines d JOIN transaction_headers c ON c.id = d.transaction_id
+      WHERE (d.card_id = ANY($5::text[]) OR d.account_id = ANY($5::text[]))
+        AND (c.id = h.id OR c.parent_id = h.id)))
   AND ($6::text[] IS NULL OR EXISTS (
       SELECT 1 FROM bucket_transactions b JOIN transaction_headers c ON c.id = b.transaction_id
       WHERE b.bucket_id = ANY($6::text[]) AND (c.id = h.id OR c.parent_id = h.id)))

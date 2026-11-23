@@ -151,6 +151,7 @@ describe("rows", () => {
         bank_lines: [{ account_id: "1234", amount: "-80.00" }],
         bucket_lines: [],
         savings_lines: [],
+        card_lines: [],
       },
     });
     expect(rowAmount(reversed, { accountId: null, bucketId: null }).amount).toBe("-80.00");

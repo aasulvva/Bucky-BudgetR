@@ -1260,7 +1260,9 @@
     "SVR": "Reserved for savings",
     "SVC": "Savings released",
     "SVB": "Savings to bucket",
-    "SVD": "Savings distribution"
+    "SVD": "Savings distribution",
+    "CDH": "Card debt set aside",
+    "CDR": "Card debt released"
   },
   "transactions": {
     "new": "New transaction",

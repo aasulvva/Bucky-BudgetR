@@ -2,12 +2,14 @@ package userdata_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/accounts"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/authtest"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/cards"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/transactions"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/userdata"
 )
 
@@ -41,5 +43,41 @@ func TestCreditCardFollows(t *testing.T) {
 		card.Card.DueDay, card.Card.MinimumPayment, card.Card.Owed)
 	if want := fmt.Sprintf("%s 20000 1 15 300 1500", ids["Main"]); got != want || ids["Main"] == main.ID {
 		t.Errorf("the copied card %q, want %q", got, want)
+	}
+}
+
+// Card debt held on an account (#261) follows the card and the account into
+// the copy, its lines taking the copied card's ID as prefix.
+func TestCardDebtFollows(t *testing.T) {
+	e := setup(t)
+	ctx := t.Context()
+	carol := authtest.NewUser(t, e.pool, "carol")
+	main := must[accounts.Account](t)(e.accounts.Create(ctx, carol.ID, accounts.New{Name: "Main", OpeningBalance: dec("1000")}))
+	visa := must[accounts.Account](t)(e.accounts.Create(ctx, carol.ID, accounts.New{
+		Name: "Visa", Type: sqlc.AccountTypeCreditCard,
+		Card: &cards.Fields{DefaultAccountID: main.ID, CreditLimit: dec("20000"), StatementDay: 1, DueDay: 15, MinimumPayment: dec("300")},
+	}))
+	must[transactions.Transaction](t)(e.tx.Create(ctx, carol.ID, transactions.New{
+		Type: sqlc.TransactionTypeEXP, AccountID: visa.ID, Amount: dec("250"), At: clock(),
+	}))
+	f, _ := e.file(t, carol.ID)
+	if n := len(f.Data.Tables["card_debt_lines"]); n != 1 {
+		t.Fatalf("exported %d card debt lines, want 1", n)
+	}
+
+	dave := authtest.NewUser(t, e.pool, "dave")
+	must[userdata.Counts](t)(e.svc.Import(ctx, dave.ID, f))
+	ids := map[string]accounts.Account{}
+	for _, a := range must[[]accounts.Account](t)(e.accounts.List(ctx, dave.ID)) {
+		ids[a.Name] = a
+	}
+	card, held := ids["Visa"], ids["Main"]
+	if card.ID == visa.ID || held.CardHolds[card.ID].StringFixed(2) != "250.00" || card.Card.SetAside.StringFixed(2) != "250.00" {
+		t.Errorf("the copy: Main holds %v, Visa %+v", held.CardHolds, card.Card)
+	}
+	for _, line := range must[userdata.File](t)(e.svc.Export(ctx, dave.ID)).Data.Tables["card_debt_lines"] {
+		if !strings.HasPrefix(line["id"].(string), card.ID) || line["card_id"] != card.ID || line["account_id"] != held.ID {
+			t.Errorf("dave's card debt line %v", line)
+		}
 	}
 }

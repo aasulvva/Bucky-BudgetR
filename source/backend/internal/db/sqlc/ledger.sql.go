@@ -251,7 +251,7 @@ func (q *Queries) GetActiveCycle(ctx context.Context, userID string) (Cycle, err
 }
 
 const getOwnedAccounts = `-- name: GetOwnedAccounts :many
-SELECT id, currency FROM bank_accounts
+SELECT id, currency, account_type FROM bank_accounts
 WHERE id = ANY($1::text[]) AND user_id = $2 AND NOT deleted
 FOR SHARE
 `
@@ -262,8 +262,9 @@ type GetOwnedAccountsParams struct {
 }
 
 type GetOwnedAccountsRow struct {
-	ID       string
-	Currency string
+	ID          string
+	Currency    string
+	AccountType AccountType
 }
 
 // FOR SHARE: waits for a concurrent delete or balance adjustment of the
@@ -277,7 +278,7 @@ func (q *Queries) GetOwnedAccounts(ctx context.Context, arg GetOwnedAccountsPara
 	items := []GetOwnedAccountsRow{}
 	for rows.Next() {
 		var i GetOwnedAccountsRow
-		if err := rows.Scan(&i.ID, &i.Currency); err != nil {
+		if err := rows.Scan(&i.ID, &i.Currency, &i.AccountType); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -12,6 +12,9 @@
 // Savings lines (#231) are a third kind of line: money reserved in a source
 // account for a savings holder (a target or the distributor). They get the
 // cycle their time falls in, if any, but don't need an active one.
+//
+// Card debt lines (#261) are a fourth: money held on an account for a credit
+// card's debt until the bill is paid.
 package ledger
 
 import (
@@ -86,6 +89,9 @@ type Entry struct {
 	BucketLines []BucketLine
 	// SavingsLines reserve money for savings (positive) or release it.
 	SavingsLines []SavingsLine
+	// CardLines hold money for a credit card's debt (positive) or release
+	// it (#261).
+	CardLines []CardLine
 }
 
 // BankLine is an amount on a bank account, in the account's currency.
@@ -117,12 +123,21 @@ type SavingsLine struct {
 	Amount    decimal.Decimal
 }
 
+// CardLine is an amount held for a credit card's debt on an account that
+// isn't a card, in the card's currency.
+type CardLine struct {
+	CardID    string
+	AccountID string
+	Amount    decimal.Decimal
+}
+
 // Transaction is a recorded transaction.
 type Transaction struct {
 	Header       sqlc.TransactionHeader
 	BankLines    []sqlc.BankTransaction
 	BucketLines  []sqlc.BucketTransaction
 	SavingsLines []sqlc.SavingsTransaction
+	CardLines    []sqlc.CardDebtLine
 	// Tags are sorted case-insensitively.
 	Tags []string
 }
@@ -150,15 +165,20 @@ type shape struct {
 	bankOptional           bool
 	minBucket, maxBucket   int // maxBucket < 0: no limit
 	minSavings, maxSavings int // maxSavings < 0: no limit
+	minCard, maxCard       int // maxCard < 0: no limit
 }
 
 var shapes = map[sqlc.TransactionType]shape{
 	sqlc.TransactionTypeOPB: {bank: 1},
 	sqlc.TransactionTypeBLA: {bank: 1},
-	sqlc.TransactionTypeINC: {bank: 1, maxBucket: -1},
-	sqlc.TransactionTypeEXP: {bank: 1, maxBucket: -1},
-	// A transfer that does Done on held funds (#231) has a savings line.
-	sqlc.TransactionTypeTRF: {bank: 2, maxSavings: 1},
+	// A purchase or refund on a credit card holds or releases its debt on
+	// the accounts of its buckets and the one chosen for the rest (#261).
+	sqlc.TransactionTypeINC: {bank: 1, maxBucket: -1, maxCard: -1},
+	sqlc.TransactionTypeEXP: {bank: 1, maxBucket: -1, maxCard: -1},
+	// A transfer that does Done on held funds (#231) has a savings line; one
+	// that pays a card, takes cash from one or carries held card debt along
+	// has card lines (#261).
+	sqlc.TransactionTypeTRF: {bank: 2, maxSavings: 1, maxCard: -1},
 	sqlc.TransactionTypeOPF: {minBucket: 1, maxBucket: 1},
 	sqlc.TransactionTypeREF: {minBucket: 1, maxBucket: 1},
 	sqlc.TransactionTypeBUA: {minBucket: 1, maxBucket: 1},
@@ -175,6 +195,9 @@ var shapes = map[sqlc.TransactionType]shape{
 	// distributor and one per target it gave to, or a bucket line for a
 	// bucket target funded from that account.
 	sqlc.TransactionTypeSVD: {minSavings: 1, maxSavings: -1, maxBucket: -1},
+	// Card debt set aside on an account, or released from accounts (#261).
+	sqlc.TransactionTypeCDH: {minCard: 1, maxCard: 1},
+	sqlc.TransactionTypeCDR: {minCard: 1, maxCard: -1},
 }
 
 // Create records e in a new database transaction.
@@ -322,6 +345,27 @@ func (l *Ledger) Record(ctx context.Context, tx pgx.Tx, e Entry) (*Transaction, 
 		t.SavingsLines = append(t.SavingsLines, row)
 	}
 
+	for _, line := range e.CardLines {
+		var row sqlc.CardDebtLine
+		_, err := ids.Insert(ctx, ids.CardDebtLine, func() string { return ids.NewCardDebtLine(line.CardID) },
+			func(ctx context.Context, id string) (bool, error) {
+				var err error
+				row, err = q.CreateCardDebtLine(ctx, sqlc.CreateCardDebtLineParams{
+					ID:            id,
+					TransactionID: t.Header.ID,
+					CardID:        line.CardID,
+					AccountID:     line.AccountID,
+					Amount:        line.Amount,
+					CreatedBy:     createdBy,
+				})
+				return ids.Inserted(err)
+			})
+		if err != nil {
+			return nil, fmt.Errorf("create card debt line: %w", err)
+		}
+		t.CardLines = append(t.CardLines, row)
+	}
+
 	for _, name := range e.Tags {
 		tag, err := q.UpsertTag(ctx, sqlc.UpsertTagParams{UserID: e.UserID, Name: name})
 		if err != nil {
@@ -376,6 +420,9 @@ func Get(ctx context.Context, db sqlc.DBTX, userID, id string) (*Transaction, er
 		return nil, err
 	}
 	if t.SavingsLines, err = q.ListSavingsLines(ctx, id); err != nil {
+		return nil, err
+	}
+	if t.CardLines, err = q.ListCardDebtLines(ctx, id); err != nil {
 		return nil, err
 	}
 	if t.Tags, err = q.ListTransactionTags(ctx, id); err != nil {
@@ -447,6 +494,12 @@ func normalize(e Entry) (Entry, error) {
 			}
 			return invalid("%s needs %d to %d savings line(s), got %d", e.Type, s.minSavings, s.maxSavings, n)
 		}
+		if n := len(e.CardLines); n < s.minCard || (s.maxCard >= 0 && n > s.maxCard) {
+			if s.maxCard == 0 {
+				return invalid("%s can't have card debt lines", e.Type)
+			}
+			return invalid("%s needs at least %d card debt line(s), got %d", e.Type, s.minCard, n)
+		}
 	case sqlc.CorrectionTypeAdjustment, sqlc.CorrectionTypeReversal:
 		if !ids.Transaction.Valid(e.ParentID) {
 			return invalid("a %s needs a parent transaction", e.Correction)
@@ -457,7 +510,7 @@ func normalize(e Entry) (Entry, error) {
 		// A correction changes some of its parent's lines, so it can have
 		// fewer lines than the type needs, but none of a kind the type lacks.
 		// An adjustment without lines changes only the counterparty or tags.
-		if e.Correction == sqlc.CorrectionTypeReversal && len(e.BankLines)+len(e.BucketLines)+len(e.SavingsLines) == 0 {
+		if e.Correction == sqlc.CorrectionTypeReversal && len(e.BankLines)+len(e.BucketLines)+len(e.SavingsLines)+len(e.CardLines) == 0 {
 			return invalid("a reversal needs at least one line")
 		}
 		if len(e.BankLines) > s.bank {
@@ -468,6 +521,9 @@ func normalize(e Entry) (Entry, error) {
 		}
 		if s.maxSavings >= 0 && len(e.SavingsLines) > s.maxSavings {
 			return invalid("%s has at most %d savings line(s)", e.Type, s.maxSavings)
+		}
+		if s.maxCard >= 0 && len(e.CardLines) > s.maxCard {
+			return invalid("%s has at most %d card debt line(s)", e.Type, s.maxCard)
 		}
 	default:
 		return invalid("unknown correction type %q", e.Correction)
@@ -516,6 +572,26 @@ func normalize(e Entry) (Entry, error) {
 		key := "savings " + line.HolderID + " " + line.AccountID
 		if seen[key] {
 			return invalid("savings holder %s appears twice on account %s", line.HolderID, line.AccountID)
+		}
+		seen[key] = true
+		if err := checkAmount(line.Amount); err != nil {
+			return Entry{}, err
+		}
+	}
+
+	for _, line := range e.CardLines {
+		if !ids.Account.Valid(line.CardID) {
+			return invalid("card ID %q", line.CardID)
+		}
+		if !ids.Account.Valid(line.AccountID) {
+			return invalid("account ID %q", line.AccountID)
+		}
+		if line.CardID == line.AccountID {
+			return invalid("card debt can't be held on the card %s itself", line.CardID)
+		}
+		key := "card " + line.CardID + " " + line.AccountID
+		if seen[key] {
+			return invalid("card %s appears twice on account %s", line.CardID, line.AccountID)
 		}
 		seen[key] = true
 		if err := checkAmount(line.Amount); err != nil {
@@ -613,6 +689,9 @@ func checkOwned(ctx context.Context, q *sqlc.Queries, e Entry) error {
 			return fmt.Errorf("%w: bucket %s", ErrNotFound, missing)
 		}
 	}
+	if err := checkCardLines(ctx, q, e); err != nil {
+		return err
+	}
 	if len(e.SavingsLines) > 0 {
 		var holders []string
 		for _, line := range e.SavingsLines {
@@ -626,6 +705,50 @@ func checkOwned(ctx context.Context, q *sqlc.Queries, e Entry) error {
 		}
 		if missing := firstMissing(holders, rows, func(id string) string { return id }); missing != "" {
 			return fmt.Errorf("%w: savings target %s", ErrNotFound, missing)
+		}
+	}
+	return nil
+}
+
+// ErrCardLine means a card debt line's card isn't a credit card, or its
+// account is a card or in another currency (#261).
+var ErrCardLine = errors.New("card debt is held for a credit card on an account that isn't one, in the card's currency")
+
+// checkCardLines checks that each card debt line's card is a live credit card
+// of the user's and its account a live account of the user's that isn't a
+// card, in the card's currency.
+func checkCardLines(ctx context.Context, q *sqlc.Queries, e Entry) error {
+	if len(e.CardLines) == 0 {
+		return nil
+	}
+	var want []string
+	for _, line := range e.CardLines {
+		for _, id := range []string{line.CardID, line.AccountID} {
+			if !slices.Contains(want, id) {
+				want = append(want, id)
+			}
+		}
+	}
+	rows, err := q.GetOwnedAccounts(ctx, sqlc.GetOwnedAccountsParams{Ids: want, UserID: e.UserID})
+	if err != nil {
+		return err
+	}
+	if missing := firstMissing(want, rows, func(r sqlc.GetOwnedAccountsRow) string { return r.ID }); missing != "" {
+		return fmt.Errorf("%w: account %s", ErrNotFound, missing)
+	}
+	byID := map[string]sqlc.GetOwnedAccountsRow{}
+	for _, r := range rows {
+		byID[r.ID] = r
+	}
+	for _, line := range e.CardLines {
+		card, acc := byID[line.CardID], byID[line.AccountID]
+		switch {
+		case card.AccountType != sqlc.AccountTypeCreditCard:
+			return fmt.Errorf("%w: account %s isn't a credit card", ErrCardLine, line.CardID)
+		case acc.AccountType == sqlc.AccountTypeCreditCard:
+			return fmt.Errorf("%w: account %s is a credit card", ErrCardLine, line.AccountID)
+		case acc.Currency != card.Currency:
+			return fmt.Errorf("%w: account %s is in %s, the card in %s", ErrCardLine, line.AccountID, acc.Currency, card.Currency)
 		}
 	}
 	return nil

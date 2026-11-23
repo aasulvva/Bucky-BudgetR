@@ -147,6 +147,20 @@ func (s *server) CorrectTransaction(ctx context.Context, req api.CorrectTransact
 			c.Buckets = append(c.Buckets, transactions.BucketAmount{BucketID: l.BucketId, Amount: amount})
 		}
 	}
+	if b.SetAsideAccountId.IsSpecified() {
+		on := ""
+		if v, err := b.SetAsideAccountId.Get(); err == nil {
+			on = v
+		}
+		c.SetAsideOn = &on
+	}
+	if c.Carry, c.Release, err = cardChoices(b.CarryCardDebt, b.ReleaseCardDebt); err != nil {
+		return nil, err
+	}
+	// An empty list carries nothing; left out, it keeps what it carries.
+	if b.CarryCardDebt != nil && c.Carry == nil {
+		c.Carry = []transactions.CardAmount{}
+	}
 	t, err := svc.Correct(ctx, sessionFrom(ctx).User.ID, req.TransactionId, c)
 	if err != nil {
 		return nil, transactionError(err)
@@ -217,10 +231,15 @@ func transactionError(err error) error {
 			Detail: "This transfer took held savings off hold, so its amount and accounts can't change. Reverse it to put the money back on hold, then do Done again.", Err: err}
 	case errors.Is(err, transactions.ErrNoLongerHeld):
 		return &Error{Status: http.StatusConflict, Code: "not_enough_held",
-			Detail: "The money is no longer held for savings: it has been moved on or released since.", Err: err}
+			Detail: "The money is no longer held: it has been moved on or released since.", Err: err}
+	case errors.Is(err, transactions.ErrNotEnoughHeld):
+		return &Error{Status: http.StatusConflict, Code: "not_enough_held", Detail: capitalize(err.Error()) + ".", Err: err}
 	case errors.Is(err, transactions.ErrNotEnoughUnallocated):
 		return &Error{Status: http.StatusConflict, Code: "not_enough_unallocated",
-			Detail: "The account doesn't have enough unallocated money to hold it again.", Err: err}
+			Detail: "The account doesn't have enough unallocated money to hold it.", Err: err}
+	case errors.Is(err, ledger.ErrCardLine):
+		return &Error{Status: http.StatusBadRequest, Code: "card_source",
+			Detail: "Card debt is set aside on an account that isn't a credit card, in the card's currency.", Err: err}
 	case errors.Is(err, transactions.ErrNoChange):
 		return &Error{Status: http.StatusBadRequest, Code: "no_change", Detail: "Nothing would change.", Err: err}
 	case errors.Is(err, transactions.ErrCurrencyMismatch):
@@ -304,7 +323,45 @@ func fromAPITransactionCreate(b api.TransactionCreate) (transactions.New, error)
 			n.Buckets = append(n.Buckets, transactions.BucketAmount{BucketID: l.BucketId, Amount: amount})
 		}
 	}
+	if b.SetAsideAccountId.IsSpecified() {
+		on := ""
+		if v, err := b.SetAsideAccountId.Get(); err == nil {
+			on = v
+		}
+		n.SetAsideOn = &on
+	}
+	if n.Carry, n.Release, err = cardChoices(b.CarryCardDebt, b.ReleaseCardDebt); err != nil {
+		return transactions.New{}, err
+	}
 	return n, nil
+}
+
+// cardChoices parses what a transfer carries or a payment releases of held
+// card debt (#261).
+func cardChoices(carry *[]api.CardDebtCarry, release *[]api.CardDebtChange) ([]transactions.CardAmount, *[]transactions.AccountAmount, error) {
+	var c []transactions.CardAmount
+	if carry != nil {
+		for _, l := range *carry {
+			amount, err := parseAmount(l.Amount)
+			if err != nil {
+				return nil, nil, err
+			}
+			c = append(c, transactions.CardAmount{CardID: l.CardId, Amount: amount})
+		}
+	}
+	var r *[]transactions.AccountAmount
+	if release != nil {
+		out := []transactions.AccountAmount{}
+		for _, l := range *release {
+			amount, err := parseAmount(l.Amount)
+			if err != nil {
+				return nil, nil, err
+			}
+			out = append(out, transactions.AccountAmount{AccountID: l.AccountId, Amount: amount})
+		}
+		r = &out
+	}
+	return c, r, nil
 }
 
 func toAPITransaction(t transactions.Transaction) api.Transaction {
@@ -326,6 +383,7 @@ func toAPITransaction(t transactions.Transaction) api.Transaction {
 		BankLines:      toAPIBankLines(t.BankLines),
 		BucketLines:    toAPIBucketLines(t.BucketLines),
 		SavingsLines:   toAPISavingsLines(t.SavingsLines),
+		CardLines:      toAPICardLines(t.CardLines),
 		BeforeReversal: nullable.NewNullNullable[api.TransactionLines](),
 		BalancesAfter:  make([]api.TransactionBalance, len(t.BalancesAfter)),
 	}
@@ -335,6 +393,7 @@ func toAPITransaction(t transactions.Transaction) api.Transaction {
 	if b := t.BeforeReversal; b != nil {
 		out.BeforeReversal = nullable.NewNullableWithValue(api.TransactionLines{
 			BankLines: toAPIBankLines(b.Bank), BucketLines: toAPIBucketLines(b.Buckets), SavingsLines: toAPISavingsLines(b.Savings),
+			CardLines: toAPICardLines(b.Cards),
 		})
 	}
 	if t.History != nil {
@@ -348,6 +407,7 @@ func toAPITransaction(t transactions.Transaction) api.Transaction {
 				BankLines:      toAPIBankLines(v.BankLines),
 				BucketLines:    toAPIBucketLines(v.BucketLines),
 				SavingsLines:   toAPISavingsLines(v.SavingsLines),
+				CardLines:      toAPICardLines(v.CardLines),
 			}
 		}
 		out.History = &h
@@ -375,6 +435,14 @@ func toAPISavingsLines(lines []transactions.SavingsLine) []api.TransactionSaving
 	out := make([]api.TransactionSavingsLine, len(lines))
 	for i, l := range lines {
 		out[i] = api.TransactionSavingsLine{HolderId: l.HolderID, AccountId: l.AccountID, Amount: l.Amount.StringFixed(money.Places)}
+	}
+	return out
+}
+
+func toAPICardLines(lines []transactions.CardLine) []api.TransactionCardLine {
+	out := make([]api.TransactionCardLine, len(lines))
+	for i, l := range lines {
+		out[i] = api.TransactionCardLine{CardId: l.CardID, AccountId: l.AccountID, Amount: l.Amount.StringFixed(money.Places)}
 	}
 	return out
 }

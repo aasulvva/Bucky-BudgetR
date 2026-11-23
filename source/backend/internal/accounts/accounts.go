@@ -102,6 +102,10 @@ type Account struct {
 	// buckets are funded first.
 	Reserved          decimal.Decimal
 	ReservedUncovered decimal.Decimal
+	// CardHolds is what's held on the account per credit card (#261), and
+	// CardDebtUncovered the part of their sum the balance doesn't cover.
+	CardHolds         map[string]decimal.Decimal
+	CardDebtUncovered decimal.Decimal
 	// ExpectedIncome is the income expected per cycle, for Budget setup
 	// (spec §9). Invalid until entered.
 	ExpectedIncome decimal.NullDecimal
@@ -253,7 +257,7 @@ func (s *Service) List(ctx context.Context, userID string) ([]Account, error) {
 	}
 	out := make([]Account, len(rows))
 	for i, r := range rows {
-		out[i] = toAccount(r, money[r.ID], statuses)
+		out[i] = toAccount(r, money, statuses)
 	}
 	return out, nil
 }
@@ -590,9 +594,26 @@ func (s *Service) Delete(ctx context.Context, userID, id string, st Settlement) 
 		if err != nil {
 			return err
 		}
+		// Card debt held on it follows the money (#261): a transfer to an
+		// account that isn't a card carries it, else it's released.
+		debt, err := balance.CardDebt(ctx, tx, userID)
+		if err != nil {
+			return err
+		}
+		holds := debt[id]
+		carried := false
 		if bal := balances[id]; !bal.IsZero() {
-			if err := s.settle(ctx, tx, userID, id, bal, st.Remaining); err != nil {
+			if carried, err = s.settle(ctx, tx, userID, id, bal, st.Remaining, holds); err != nil {
 				return err
+			}
+		}
+		if len(holds) > 0 && !carried {
+			e := ledger.Entry{UserID: userID, CreatedBy: userID, Type: sqlc.TransactionTypeCDR, At: s.now()}
+			for _, card := range slices.Sorted(maps.Keys(holds)) {
+				e.CardLines = append(e.CardLines, ledger.CardLine{CardID: card, AccountID: id, Amount: holds[card].Neg()})
+			}
+			if _, err := s.ledger.Record(ctx, tx, e); err != nil {
+				return fmt.Errorf("release card debt: %w", err)
 			}
 		}
 
@@ -677,10 +698,14 @@ func (s *Service) checkTargets(ctx context.Context, q *sqlc.Queries, userID stri
 }
 
 // settle moves bal out of the account as r says.
-func (s *Service) settle(ctx context.Context, tx pgx.Tx, userID, id string, bal decimal.Decimal, r *Remaining) error {
+// settle settles the money left in account id, and reports whether the card
+// debt it holds (holds, by card) was carried along with a transfer.
+func (s *Service) settle(ctx context.Context, tx pgx.Tx, userID, id string, bal decimal.Decimal, r *Remaining,
+	holds map[string]decimal.Decimal) (bool, error) {
 	if r == nil {
-		return &BalanceNotZeroError{Balance: bal}
+		return false, &BalanceNotZeroError{Balance: bal}
 	}
+	carried := false
 	e := ledger.Entry{UserID: userID, CreatedBy: userID, At: s.now()}
 	switch {
 	case r.Adjust && r.TransferTo == "":
@@ -689,13 +714,25 @@ func (s *Service) settle(ctx context.Context, tx pgx.Tx, userID, id string, bal 
 	case !r.Adjust && r.TransferTo != "":
 		e.Type = sqlc.TransactionTypeTRF
 		e.BankLines = []ledger.BankLine{{AccountID: id, Amount: bal.Neg()}, {AccountID: r.TransferTo, Amount: bal}}
+		to, err := sqlc.New(tx).GetAccount(ctx, sqlc.GetAccountParams{ID: r.TransferTo, UserID: userID})
+		if err != nil {
+			return false, notFound(err, r.TransferTo)
+		}
+		if to.AccountType != sqlc.AccountTypeCreditCard && bal.IsPositive() {
+			for _, card := range slices.Sorted(maps.Keys(holds)) {
+				e.CardLines = append(e.CardLines,
+					ledger.CardLine{CardID: card, AccountID: id, Amount: holds[card].Neg()},
+					ledger.CardLine{CardID: card, AccountID: r.TransferTo, Amount: holds[card]})
+			}
+			carried = len(holds) > 0
+		}
 	default:
-		return fmt.Errorf("%w: choose either a transfer or a balance adjustment for the remaining money", ErrInvalid)
+		return false, fmt.Errorf("%w: choose either a transfer or a balance adjustment for the remaining money", ErrInvalid)
 	}
 	if _, err := s.ledger.Record(ctx, tx, e); err != nil {
-		return fmt.Errorf("settle remaining money: %w", err)
+		return false, fmt.Errorf("settle remaining money: %w", err)
 	}
-	return nil
+	return carried, nil
 }
 
 func (s *Service) get(ctx context.Context, db sqlc.DBTX, userID, id string) (Account, error) {
@@ -711,19 +748,23 @@ func (s *Service) get(ctx context.Context, db sqlc.DBTX, userID, id string) (Acc
 	if err != nil {
 		return Account{}, err
 	}
-	return toAccount(row, money[id], statuses), nil
+	return toAccount(row, money, statuses), nil
 }
 
-func toAccount(r sqlc.BankAccount, m balance.Money, statuses map[string]bsu.Status) Account {
+// toAccount builds an account from its row and every account's Money.
+func toAccount(r sqlc.BankAccount, all map[string]balance.Money, statuses map[string]bsu.Status) Account {
+	m := all[r.ID]
 	a := Account{
 		ID: r.ID, Name: r.Name, Type: r.AccountType, Currency: r.Currency, Bank: r.Bank,
 		Balance: m.Balance, Unallocated: m.Unallocated, Reserved: m.Reserved, ReservedUncovered: m.Uncovered(),
+		CardHolds: m.CardHolds, CardDebtUncovered: m.CardUncovered(),
 		ExpectedIncome: r.ExpectedIncome, CreatedAt: r.CreatedAt,
 	}
 	if st, ok := statuses[r.ID]; ok {
 		a.BSU = &st
 	}
 	if st, ok := cards.StatusOf(r, m.Balance); ok {
+		st.HeldOn, st.SetAside, st.NotSetAside = cards.Holds(r.ID, all)
 		a.Card = &st
 	}
 	return a
