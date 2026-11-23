@@ -38,6 +38,7 @@ import {
   type SetupField,
   type SetupRow,
 } from "@/lib/bsu";
+import { interestCounterparty } from "@/lib/interest";
 import { compareAmounts, formatMoney } from "@/lib/money";
 
 /** The setup in a dialog; closed while account is undefined. */
@@ -143,6 +144,7 @@ function SetupForm({
           withdrawals: r.withdrawals ?? "0",
         })),
         balance,
+        interest_counterparty: interestCounterparty(account),
       },
       {
         onSuccess: () => {

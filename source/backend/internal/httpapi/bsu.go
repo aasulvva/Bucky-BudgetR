@@ -60,6 +60,9 @@ func (s *server) SetUpBsuHistory(ctx context.Context, req api.SetUpBsuHistoryReq
 	}
 	b := req.Body
 	in := bsu.SetUpInput{OpenedYear: b.OpenedYear}
+	if b.InterestCounterparty != nil {
+		in.InterestCounterparty = *b.InterestCounterparty
+	}
 	if in.Balance, err = parseAmount(b.Balance); err != nil {
 		return nil, err
 	}

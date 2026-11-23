@@ -2802,6 +2802,8 @@ export interface components {
             years: components["schemas"]["BSUYear"][];
             /** @description The balance now, at the bank. */
             balance: components["schemas"]["Amount"];
+            /** @description The counterparty of the interest it records, as *Register interest* gives it: the account's bank, else "Interest" in the user's language. Left out or empty, the account's bank. */
+            interest_counterparty?: string;
         };
         CounterpartyRename: {
             account_id: components["schemas"]["AccountId"];

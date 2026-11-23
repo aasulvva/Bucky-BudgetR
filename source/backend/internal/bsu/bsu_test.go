@@ -3,6 +3,7 @@ package bsu_test
 import (
 	"errors"
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -355,7 +356,7 @@ func TestSetUp(t *testing.T) {
 	e.create(t, transactions.New{Type: sqlc.TransactionTypeINC, AccountID: id, Amount: dec("10000"), At: time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)})
 	e.create(t, transactions.New{Type: sqlc.TransactionTypeTRF, AccountID: e.usage, ToAccountID: id, Amount: dec("2000"), At: now.Add(-time.Hour)})
 	e.create(t, transactions.New{Type: sqlc.TransactionTypeINC, AccountID: id, Amount: dec("100"), Tags: []string{"interest"}, At: now.Add(-time.Hour)})
-	if _, err := e.pool.Exec(ctx, "UPDATE bank_accounts SET bsu_set_up_at = NULL WHERE id = $1", id); err != nil {
+	if _, err := e.pool.Exec(ctx, "UPDATE bank_accounts SET bsu_set_up_at = NULL, bank = 'DNB' WHERE id = $1", id); err != nil {
 		t.Fatal(err)
 	}
 
@@ -435,6 +436,16 @@ func TestSetUp(t *testing.T) {
 	}
 	if n != 3 {
 		t.Errorf("%d transactions for 2024, want 3", n)
+	}
+	// The interest is from the bank, as Register interest records it (#70);
+	// the deposits and withdrawals have no counterparty.
+	var counterparties []string
+	if err := e.pool.QueryRow(ctx, `SELECT array_agg(counterparty || ':' || transaction_type ORDER BY (counterparty || ':' || transaction_type::text) COLLATE "C")
+		FROM transaction_headers WHERE user_id = $1 AND description = 'BSU history 2024'`, e.user).Scan(&counterparties); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(counterparties, ",") != ":EXP,:INC,DNB:INC" {
+		t.Errorf("2024 counterparties %v", counterparties)
 	}
 	// The balance adjustment: 54 150 recorded, 54 000 at the bank.
 	if err := e.pool.QueryRow(ctx, `SELECT count(*) FROM transaction_headers h JOIN bank_transactions b ON b.transaction_id = h.id

@@ -314,6 +314,8 @@ describe("Accounts", () => {
         { year: 2026, deposits: "2000.00", interest: "100.00", withdrawals: "0.00" },
       ],
       balance: "50000.00",
+      // As Register interest: the bank, else "Interest" (#70).
+      interest_counterparty: "Interest",
     });
     expect(router.state.location.search).toBe("");
   });

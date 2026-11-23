@@ -4760,6 +4760,13 @@ components:
           allOf:
             - $ref: "#/components/schemas/Amount"
           description: The balance now, at the bank.
+        interest_counterparty:
+          type: string
+          maxLength: 200
+          description: >-
+            The counterparty of the interest it records, as *Register interest*
+            gives it: the account's bank, else "Interest" in the user's
+            language. Left out or empty, the account's bank.
 
     CounterpartyRename:
       type: object
