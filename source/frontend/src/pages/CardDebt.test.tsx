@@ -7,6 +7,7 @@ import userEvent from "@testing-library/user-event";
 
 import { formatMoney } from "@/lib/money";
 import { apiMock } from "@/test/api";
+import { amountOf } from "@/test/breakdown";
 import { account, bucket, creditCard, transaction } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
@@ -80,14 +81,19 @@ function sent(): Record<string, unknown> | undefined {
 describe("Accounts with card debt (#261)", () => {
   it("says what each account holds for a card, and what a card has set aside", async () => {
     renderRoute("/accounts");
-    const mainCard = within(await screen.findByRole("article", { name: "Main account" }));
-    expect(mainCard.getByText(new RegExp(`${m("300")} set aside for Visa`))).toBeInTheDocument();
-    const bufferCard = within(screen.getByRole("article", { name: "Buffer account" }));
-    expect(
-      bufferCard.getByText(new RegExp(`${m("500")} set aside for Visa · ${m("100")} not covered`)),
-    ).toBeInTheDocument();
-    const card = within(screen.getByRole("article", { name: "Visa" }));
-    expect(card.getByText(`${m("800")} set aside · ${m("200")} not set aside`)).toBeInTheDocument();
+    const mainMoney = await screen.findByLabelText("Where the money in Main account is");
+    expect(amountOf(mainMoney, "Set aside for Visa")).toBe(m("300.00"));
+    expect(amountOf(mainMoney, "1 bucket")).toBe(m("3000.00"));
+    expect(amountOf(mainMoney, "Unallocated")).toBe(m("4000.00"));
+    const bufferMoney = screen.getByLabelText("Where the money in Buffer account is");
+    expect(amountOf(bufferMoney, "Set aside for Visa")).toBe(m("500.00"));
+    expect(within(bufferMoney).getByText(`${m("100.00")} not covered`)).toHaveStyle({
+      color: "var(--mantine-color-orange-text)",
+    });
+    const visaDebt = screen.getByLabelText("Where the debt on Visa is set aside");
+    expect(amountOf(visaDebt, "Set aside on Buffer account")).toBe(m("500.00"));
+    expect(amountOf(visaDebt, "Set aside on Main account")).toBe(m("300.00"));
+    expect(amountOf(visaDebt, "Not set aside")).toBe(m("200.00"));
   });
 
   it("sets aside what isn't, on the default account", async () => {

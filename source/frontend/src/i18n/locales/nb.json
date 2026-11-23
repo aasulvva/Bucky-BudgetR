@@ -183,8 +183,6 @@
     "noBuckets": "Ingen bøtter",
     "bucketCount_one": "{{count}} bøtte",
     "bucketCount_other": "{{count}} bøtter",
-    "bucketsShort": "{{buckets}} · mangler {{amount}}",
-    "bucketsUnallocated": "{{buckets}} · {{amount}} ufordelt",
     "setupFor": "Kontooppsett for {{name}}",
     "transactionsOf": "Transaksjoner for {{name}}",
     "moreFor": "Mer for {{name}}",
@@ -208,7 +206,17 @@
     "enterInterest": "Skriv rentene.",
     "interestPositive": "Rentene må være mer enn 0.",
     "reserved": "{{amount}} satt av til sparing",
-    "reservedUncovered": "{{amount}} satt av til sparing ({{uncovered}} ikke dekket)"
+    "breakdown": {
+      "label": "Hvor pengene på {{name}} er",
+      "cardLabel": "Hvor gjelden på {{name}} er satt av",
+      "short": "{{amount}} mangler",
+      "setAsideFor": "Satt av til {{card}}",
+      "notCovered": "{{amount}} ikke dekket",
+      "reserved": "Satt av til sparing",
+      "unallocated": "Ufordelt",
+      "setAsideOn": "Satt av på {{name}}",
+      "notSetAside": "Ikke satt av"
+    }
   },
   "accountSetup": {
     "newAccount": "Ny konto",
@@ -2696,7 +2704,6 @@
     "debt": {
       "heldFor": "{{amount}} satt av til {{card}}",
       "uncovered": "{{amount}} ikke dekket",
-      "line": "{{setAside}} satt av · {{notSetAside}} ikke satt av",
       "title": "Kortgjeld",
       "clears": "Gjør opp {{amount}} satt av på {{name}}.",
       "releasesHint": "Resten av betalingen frigjør penger satt av på andre kontoer, som blir ufordelt der.",

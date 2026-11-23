@@ -183,8 +183,6 @@
     "noBuckets": "No buckets",
     "bucketCount_one": "{{count}} bucket",
     "bucketCount_other": "{{count}} buckets",
-    "bucketsShort": "{{buckets}} · {{amount}} short",
-    "bucketsUnallocated": "{{buckets}} · {{amount}} unallocated",
     "setupFor": "Account setup for {{name}}",
     "transactionsOf": "{{name}} transactions",
     "moreFor": "More for {{name}}",
@@ -208,7 +206,17 @@
     "enterInterest": "Enter the interest.",
     "interestPositive": "Interest must be more than 0.",
     "reserved": "{{amount}} reserved for savings",
-    "reservedUncovered": "{{amount}} reserved for savings ({{uncovered}} not covered)"
+    "breakdown": {
+      "label": "Where the money in {{name}} is",
+      "cardLabel": "Where the debt on {{name}} is set aside",
+      "short": "{{amount}} short",
+      "setAsideFor": "Set aside for {{card}}",
+      "notCovered": "{{amount}} not covered",
+      "reserved": "Reserved for savings",
+      "unallocated": "Unallocated",
+      "setAsideOn": "Set aside on {{name}}",
+      "notSetAside": "Not set aside"
+    }
   },
   "accountSetup": {
     "newAccount": "New account",
@@ -2696,7 +2704,6 @@
     "debt": {
       "heldFor": "{{amount}} set aside for {{card}}",
       "uncovered": "{{amount}} not covered",
-      "line": "{{setAside}} set aside · {{notSetAside}} not set aside",
       "title": "Card debt",
       "clears": "Clears the {{amount}} set aside on {{name}}.",
       "releasesHint": "The rest of the payment releases money set aside on other accounts, which becomes unallocated there.",

@@ -193,20 +193,6 @@ export function cardHeldLine(account: Account, accounts: Account[]): string | nu
   return parts.join(" · ");
 }
 
-/** The card's set-aside line: "kr 500 set aside · kr 100 not set aside". */
-export function cardDebtLine(account: Account): string | null {
-  const c = account.credit_card;
-  if (!c) return null;
-  if (compareAmounts(c.set_aside, "0") === 0 && compareAmounts(c.not_set_aside, "0") === 0) {
-    return null;
-  }
-  const money = (a: string) => formatMoney(a, account.currency);
-  return i18n.t("cards.debt.line", {
-    setAside: money(c.set_aside),
-    notSetAside: money(c.not_set_aside),
-  });
-}
-
 /** The accounts card debt can be held on: in the card's currency, not cards. */
 export function holderChoices(accounts: Account[], card: Account): Account[] {
   return accounts.filter((a) => !isCard(a) && a.currency === card.currency);

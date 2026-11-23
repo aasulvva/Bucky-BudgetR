@@ -1,5 +1,5 @@
-// Card debt held per account (#261, spec §2.2): the card's set-aside line,
-// and Set aside / Release on Accounts.
+// Card debt held per account (#261, spec §2.2): Set aside / Release on
+// Accounts.
 
 import { Button, Group, Select, Stack, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
@@ -13,20 +13,9 @@ import { unwrap } from "@/api/errors";
 import { AmountInput } from "@/components/AmountInput";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { isLockedBsu } from "@/lib/bsu";
-import { cardDebtLine, heldFor, holderChoices, type CardDebtMode } from "@/lib/cards";
+import { heldFor, holderChoices, type CardDebtMode } from "@/lib/cards";
 import { autofocusField } from "@/lib/device";
 import { canonicalAmount, compareAmounts, formatMoney } from "@/lib/money";
-
-/** The card's line of what's set aside for it, and what isn't. */
-export function CardDebtLine({ account }: { account: Account }) {
-  const line = cardDebtLine(account);
-  if (!line) return null;
-  return (
-    <Text size="sm" c="dimmed">
-      {line}
-    </Text>
-  );
-}
 
 /**
  * Set aside: holds part of what the card owes that isn't set aside, on an

@@ -30,29 +30,20 @@ import {
   useBuckets,
   useRefreshMoney,
   type Account,
-  type Bucket,
 } from "@/api/accounts";
 import { api } from "@/api/client";
 import { ApiError, unwrap } from "@/api/errors";
 import { BsuSetupDialog } from "@/components/accounts/BsuSetup";
 import { BsuLine, BsuLocked } from "@/components/accounts/BsuStatus";
-import { CardDebtForm, CardDebtLine } from "@/components/accounts/CardDebt";
+import { AccountBreakdown, CardBreakdown } from "@/components/accounts/AccountBreakdown";
+import { CardDebtForm } from "@/components/accounts/CardDebt";
 import { CardLine } from "@/components/accounts/CardStatus";
 import { AmountInput } from "@/components/AmountInput";
 import { DateTimeInput } from "@/components/DateTimeInput";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { QueryState } from "@/components/QueryState";
-import i18n from "@/i18n";
 import { bsuShort, isLockedBsu } from "@/lib/bsu";
-import {
-  canCardDebt,
-  cardHeldLine,
-  cardNear,
-  cardShort,
-  isCard,
-  negate,
-  type CardDebtMode,
-} from "@/lib/cards";
+import { canCardDebt, cardNear, cardShort, isCard, negate, type CardDebtMode } from "@/lib/cards";
 
 const CARD_DEBT_MODES: CardDebtMode[] = ["setAside", "release"];
 import { autofocusField } from "@/lib/device";
@@ -161,9 +152,13 @@ export default function Accounts() {
                     <AccountCard
                       key={a.id}
                       account={a}
-                      // A card has no buckets (#260): its own line says it all.
-                      summary={
-                        !isCard(a) && buckets.data ? accountLine(a, buckets.data, list) : undefined
+                      // A card has no buckets (#260): it says where its debt is set aside.
+                      breakdown={
+                        isCard(a) ? (
+                          <CardBreakdown card={a} accounts={list} />
+                        ) : buckets.data ? (
+                          <AccountBreakdown account={a} accounts={list} buckets={buckets.data} />
+                        ) : undefined
                       }
                       selected={a.id === selected?.id}
                       {...actions(a)}
@@ -234,58 +229,6 @@ function Totals({ accounts }: { accounts: Account[] }) {
   );
 }
 
-/**
- * The account's line: its buckets, what's set aside for card debt (#261),
- * then what's reserved for savings (#231).
- */
-function accountLine(account: Account, buckets: Bucket[], accounts: Account[]): string {
-  const parts = [bucketSummary(account, buckets)];
-  const held = cardHeldLine(account, accounts);
-  if (held) parts.push(held);
-  if (compareAmounts(account.reserved, "0") > 0) {
-    const reserved = formatMoney(account.reserved, account.currency);
-    parts.push(
-      compareAmounts(account.reserved_uncovered, "0") > 0
-        ? i18n.t("accounts.reservedUncovered", {
-            amount: reserved,
-            uncovered: formatMoney(account.reserved_uncovered, account.currency),
-          })
-        : i18n.t("accounts.reserved", { amount: reserved }),
-    );
-  }
-  return parts.join(" · ");
-}
-
-/**
- * The account's buckets in a line: how many, and what's short (TF the
- * account can't cover) or else unallocated.
- */
-function bucketSummary(account: Account, buckets: Bucket[]): string {
-  const own = buckets.filter((b) => b.source_account_id === account.id);
-  if (own.length === 0) return i18n.t("accounts.noBuckets");
-  const count = i18n.t("accounts.bucketCount", { count: own.length });
-  const short = addAmounts(
-    ...own.map((b) =>
-      compareAmounts(b.target_funds, "0") > 0
-        ? subtractAmounts(b.target_funds, b.current_available_funds)
-        : "0",
-    ),
-  );
-  if (compareAmounts(short, "0") > 0) {
-    return i18n.t("accounts.bucketsShort", {
-      buckets: count,
-      amount: formatMoney(short, account.currency),
-    });
-  }
-  if (compareAmounts(account.unallocated, "0") > 0) {
-    return i18n.t("accounts.bucketsUnallocated", {
-      buckets: count,
-      amount: formatMoney(account.unallocated, account.currency),
-    });
-  }
-  return count;
-}
-
 interface ActionsProps {
   onAdjust: () => void;
   onInterest: () => void;
@@ -312,13 +255,13 @@ function SetupLink({ account, size }: { account: Account; size: number }) {
 
 function AccountCard({
   account,
-  summary,
+  breakdown,
   selected,
   onAdjust,
   onInterest,
   onSetUpBsu,
   onCardDebt,
-}: ActionsProps & { account: Account; summary?: string; selected: boolean }) {
+}: ActionsProps & { account: Account; breakdown?: ReactNode; selected: boolean }) {
   const { t } = useTranslation();
   const locked = isLockedBsu(account);
   return (
@@ -350,15 +293,10 @@ function AccountCard({
         <Text fz={24} fw={600}>
           {formatMoney(account.balance, account.currency)}
         </Text>
-        {summary && (
-          <Text size="sm" c="dimmed">
-            {summary}
-          </Text>
-        )}
         <BsuLine account={account} />
         <BsuLocked account={account} onSetUp={onSetUpBsu} />
         <CardLine account={account} />
-        <CardDebtLine account={account} />
+        {breakdown}
         <Group
           gap="xs"
           pt="xs"
