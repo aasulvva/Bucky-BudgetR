@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/bsu"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ids"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
@@ -196,7 +197,7 @@ func reasonOf(err error) (sqlc.OccurrenceReason, string) {
 		return sqlc.OccurrenceReasonOutsideCycle, ""
 	case errors.Is(err, transactions.ErrInvalid), errors.Is(err, transactions.ErrCurrencyMismatch),
 		errors.Is(err, ledger.ErrInvalid), errors.Is(err, ledger.ErrNotFound), errors.Is(err, ledger.ErrUnsupported),
-		errors.Is(err, refill.ErrUnavailable):
+		errors.Is(err, refill.ErrUnavailable), errors.Is(err, bsu.ErrLocked):
 		return sqlc.OccurrenceReasonInvalid, err.Error()
 	}
 	return "", ""

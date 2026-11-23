@@ -44,6 +44,7 @@ import {
 import { api } from "@/api/client";
 import { ApiError, unwrap } from "@/api/errors";
 import { useSession } from "@/app/session";
+import { AdminBsuRules } from "@/components/admin/AdminBsuRules";
 import { AdminLogs } from "@/components/admin/AdminLogs";
 import { NewCredentialView } from "@/components/admin/NewCredential";
 import { ErrorAlert } from "@/components/ErrorAlert";
@@ -60,16 +61,19 @@ type Dialog =
   | null;
 
 const LOGS_PATH = "/admin/logs";
+const BSU_PATH = "/admin/bsu";
 
 /**
- * Admin (spec §1, §9), in two tabs: Users and Logs (#93, `/admin/logs`).
+ * Admin (spec §1, §9), in tabs: Users, Logs (#93, `/admin/logs`) and BSU
+ * rules (#214, `/admin/bsu`).
  */
 export default function Admin() {
   const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const me = useSession().data;
-  const tab = location.pathname === LOGS_PATH ? "logs" : "users";
+  const tab =
+    location.pathname === LOGS_PATH ? "logs" : location.pathname === BSU_PATH ? "bsu" : "users";
 
   if (me?.admin !== true) {
     return (
@@ -88,15 +92,16 @@ export default function Admin() {
       <Tabs
         value={tab}
         onChange={(v) => {
-          void navigate(v === "logs" ? LOGS_PATH : "/admin");
+          void navigate(v === "logs" ? LOGS_PATH : v === "bsu" ? BSU_PATH : "/admin");
         }}
       >
         <Tabs.List>
           <Tabs.Tab value="users">{t("admin.tabs.users")}</Tabs.Tab>
           <Tabs.Tab value="logs">{t("admin.tabs.logs")}</Tabs.Tab>
+          <Tabs.Tab value="bsu">{t("admin.tabs.bsu")}</Tabs.Tab>
         </Tabs.List>
       </Tabs>
-      {tab === "logs" ? <AdminLogs /> : <Users meId={me.id} />}
+      {tab === "logs" ? <AdminLogs /> : tab === "bsu" ? <AdminBsuRules /> : <Users meId={me.id} />}
     </Stack>
   );
 }

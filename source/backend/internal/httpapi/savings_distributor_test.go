@@ -43,6 +43,10 @@ func TestSavingsDistributorAPI(t *testing.T) {
 		return decode[api.Account](t, w)
 	}
 	main, buffer, home := account("Main", "usage", "1000.00"), account("Buffer", "savings", "0.00"), account("Home", "bsu", "0.00")
+	// The BSU is set up, so it isn't locked (#214).
+	if _, err := pool.Exec(t.Context(), "UPDATE bank_accounts SET bsu_set_up_at = now() WHERE id = $1", home.Id); err != nil {
+		t.Fatal(err)
+	}
 	target := func(a api.Account, goal string) api.SavingsTarget {
 		t.Helper()
 		w := do(http.MethodPost, "/api/v1/savings/targets", map[string]any{"account_id": a.Id, "goal": goal})

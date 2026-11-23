@@ -57,6 +57,12 @@ func TestBSUAPI(t *testing.T) {
 		t.Fatalf("a new BSU's status %+v", st)
 	}
 
+	// Locked until set up.
+	w = authtest.Do(t, h, http.MethodPost, "/api/v1/transactions", map[string]any{"type": "INC", "account_id": acc.Id, "amount": "100"}, alice)
+	expect(t, "an income on a locked BSU", w, http.StatusConflict, "bsu_locked")
+	w = authtest.Do(t, h, http.MethodPost, "/api/v1/accounts/"+acc.Id+"/balance-adjustment", map[string]any{"target_balance": "0"}, alice)
+	expect(t, "adjusting a locked BSU", w, http.StatusConflict, "bsu_locked")
+
 	w = authtest.Do(t, h, http.MethodGet, "/api/v1/accounts/"+main.Id+"/bsu-history", nil, alice)
 	expect(t, "a usage account's history", w, http.StatusBadRequest, "not_bsu")
 	w = authtest.Do(t, h, http.MethodGet, "/api/v1/accounts/"+acc.Id+"/bsu-history", nil, alice)

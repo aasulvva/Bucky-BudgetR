@@ -34,11 +34,14 @@ import {
 } from "@/api/accounts";
 import { api } from "@/api/client";
 import { ApiError, unwrap } from "@/api/errors";
+import { BsuSetupDialog } from "@/components/accounts/BsuSetup";
+import { BsuLine, BsuLocked } from "@/components/accounts/BsuStatus";
 import { AmountInput } from "@/components/AmountInput";
 import { DateTimeInput } from "@/components/DateTimeInput";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { QueryState } from "@/components/QueryState";
 import i18n from "@/i18n";
+import { bsuShort, isLockedBsu } from "@/lib/bsu";
 import { autofocusField } from "@/lib/device";
 import { INTEREST_TAG, interestCounterparty } from "@/lib/interest";
 import {
@@ -54,7 +57,8 @@ type Panel = { kind: "adjust" | "interest"; accountId: string } | null;
 /**
  * Accounts (spec §9, canvas "Accounts"): the balance of each account, its
  * buckets at a glance, and the balance adjustment and interest actions.
- * `?adjust=<accountId>` opens that account's balance adjustment.
+ * `?adjust=<accountId>` opens that account's balance adjustment, and
+ * `?bsu=<accountId>` a locked BSU's history setup (#214).
  */
 export default function Accounts() {
   const { t } = useTranslation();
@@ -67,6 +71,17 @@ export default function Accounts() {
   const [params, setParams] = useSearchParams();
   const adjustId = params.get("adjust");
   const panel: Panel = chosen ?? (adjustId ? { kind: "adjust", accountId: adjustId } : null);
+  const bsuId = params.get("bsu");
+  const openBsu = (id: string | null) => {
+    setParams(
+      (p) => {
+        if (id === null) p.delete("bsu");
+        else p.set("bsu", id);
+        return p;
+      },
+      { replace: id === null },
+    );
+  };
 
   return (
     <QueryState query={accounts}>
@@ -95,7 +110,12 @@ export default function Accounts() {
           onInterest: () => {
             setChosen({ kind: "interest", accountId: a.id });
           },
+          onSetUpBsu: () => {
+            setChosen(null);
+            openBsu(a.id);
+          },
         });
+        const settingUp = bsuId ? list.find((a) => a.id === bsuId && isLockedBsu(a)) : undefined;
 
         return (
           <Stack gap="lg">
@@ -159,6 +179,12 @@ export default function Accounts() {
                 </Drawer>
               </>
             )}
+            <BsuSetupDialog
+              account={settingUp}
+              onClose={() => {
+                openBsu(null);
+              }}
+            />
           </Stack>
         );
       }}
@@ -238,6 +264,7 @@ function bucketSummary(account: Account, buckets: Bucket[]): string {
 interface ActionsProps {
   onAdjust: () => void;
   onInterest: () => void;
+  onSetUpBsu: () => void;
 }
 
 function SetupLink({ account, size }: { account: Account; size: number }) {
@@ -263,8 +290,10 @@ function AccountCard({
   selected,
   onAdjust,
   onInterest,
+  onSetUpBsu,
 }: ActionsProps & { account: Account; summary?: string; selected: boolean }) {
   const { t } = useTranslation();
+  const locked = isLockedBsu(account);
   return (
     <Card
       withBorder
@@ -299,6 +328,8 @@ function AccountCard({
             {summary}
           </Text>
         )}
+        <BsuLine account={account} />
+        <BsuLocked account={account} onSetUp={onSetUpBsu} />
         <Group
           gap="xs"
           pt="xs"
@@ -312,10 +343,10 @@ function AccountCard({
           >
             {t("nav.items.transactions")}
           </Button>
-          <Button size="xs" variant="default" onClick={onAdjust}>
+          <Button size="xs" variant="default" onClick={onAdjust} disabled={locked}>
             {t("accounts.adjust")}
           </Button>
-          <Button size="xs" variant="default" onClick={onInterest}>
+          <Button size="xs" variant="default" onClick={onInterest} disabled={locked}>
             {t("accounts.interest")}
           </Button>
         </Group>
@@ -324,8 +355,15 @@ function AccountCard({
   );
 }
 
-function AccountRow({ account, onAdjust, onInterest }: ActionsProps & { account: Account }) {
+function AccountRow({
+  account,
+  onAdjust,
+  onInterest,
+  onSetUpBsu,
+}: ActionsProps & { account: Account }) {
   const { t } = useTranslation();
+  const locked = isLockedBsu(account);
+  const short = bsuShort(account);
   return (
     <Group
       gap={0}
@@ -351,6 +389,15 @@ function AccountRow({ account, onAdjust, onInterest }: ActionsProps & { account:
             <Text size="sm" c="dimmed" truncate>
               {[accountTypeLabel(account.type), account.bank].filter(Boolean).join(" · ")}
             </Text>
+            {short && (
+              <Text
+                size="xs"
+                c={locked || account.bsu?.over ? "var(--mantine-color-orange-text)" : "dimmed"}
+                truncate
+              >
+                {short}
+              </Text>
+            )}
           </div>
           <Text fw={600} style={{ whiteSpace: "nowrap" }}>
             {formatMoney(account.balance, account.currency)}
@@ -370,8 +417,15 @@ function AccountRow({ account, onAdjust, onInterest }: ActionsProps & { account:
           </ActionIcon>
         </Menu.Target>
         <Menu.Dropdown>
-          <Menu.Item onClick={onAdjust}>{t("accounts.adjust")}</Menu.Item>
-          <Menu.Item onClick={onInterest}>{t("accounts.interest")}</Menu.Item>
+          {locked && account.currency === "NOK" && (
+            <Menu.Item onClick={onSetUpBsu}>{t("bsu.locked.setUp")}</Menu.Item>
+          )}
+          <Menu.Item onClick={onAdjust} disabled={locked}>
+            {t("accounts.adjust")}
+          </Menu.Item>
+          <Menu.Item onClick={onInterest} disabled={locked}>
+            {t("accounts.interest")}
+          </Menu.Item>
         </Menu.Dropdown>
       </Menu>
     </Group>

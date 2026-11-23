@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 
 import type { CounterpartySuggestion } from "@/api/transactions";
 import { apiMock, problem, testUser } from "@/test/api";
-import { account, bucket } from "@/test/fixtures";
+import { account, bsuStatus, bucket } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
 
@@ -175,6 +175,36 @@ describe("Create transaction", () => {
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     const ask = await screen.findByRole("alertdialog", { name: "Money out of a BSU account" });
     expect(within(ask).getByText(/can cost you the tax deduction/)).toBeInTheDocument();
+  });
+
+  it("says what a BSU may still take this year, but not for interest (#214)", async () => {
+    localStorage.setItem("bucky.lastAccount", "1234");
+    const home = account({ id: "4567", name: "Home", type: "bsu", bsu: bsuStatus() });
+    apiMock.on("GET /api/v1/accounts", { body: [buffer, home, main] });
+    renderRoute("/transactions/new");
+    await userEvent.click(await screen.findByRole("radio", { name: "Transfer" }));
+    await pick("To account", /^Home/);
+    const hint = await screen.findByText(/^Home: .* left this year \(BSU\)$/);
+    expect(hint).toHaveTextContent("9,500.00");
+    await userEvent.type(amount(), "10000");
+    expect(hint).toHaveStyle({ color: "var(--mantine-color-orange-text)" });
+  });
+
+  it("leaves locked BSU accounts out of the choices (#214)", async () => {
+    const home = account({
+      id: "4567",
+      name: "Home",
+      type: "bsu",
+      bsu: bsuStatus({ locked: true }),
+    });
+    apiMock.on("GET /api/v1/accounts", { body: [buffer, home, main] });
+    renderRoute("/transactions/new");
+    await userEvent.click(await screen.findByRole("combobox", { name: "Account" }));
+    expect(await screen.findByRole("option", { name: /^Main account/ })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /^Home/ })).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Locked BSU accounts are left out until their history is set up."),
+    ).toBeInTheDocument();
   });
 
   it("pre-checks Triggers refill for waiting On income buckets, and sends an untick", async () => {

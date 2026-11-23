@@ -80,3 +80,10 @@ WHERE o.user_id = sqlc.arg(user_id) AND h.transaction_type IN ('EXP', 'TRF')
 GROUP BY h.id, h.transaction_at, b.account_id
 HAVING SUM(b.amount) < 0
 ORDER BY h.transaction_at, h.id;
+
+-- name: ListLockedBSU :many
+-- The user's BSU accounts that are locked (#214): their history isn't set up,
+-- or they aren't in NOK.
+SELECT id FROM bank_accounts
+WHERE user_id = $1 AND NOT deleted AND account_type = 'bsu' AND (bsu_set_up_at IS NULL OR currency <> 'NOK')
+ORDER BY id;

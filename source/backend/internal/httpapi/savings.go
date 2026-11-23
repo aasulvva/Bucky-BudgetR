@@ -8,6 +8,7 @@ import (
 	"github.com/oapi-codegen/nullable"
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/api"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/bsu"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/money"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/savings"
 )
@@ -165,6 +166,9 @@ func (s *server) savingsService() (*savings.Service, error) {
 
 // savingsError maps errors from the savings service to problems.
 func savingsError(err error) error {
+	if errors.Is(err, bsu.ErrLocked) {
+		return bsuError(err)
+	}
 	if e := distributorError(err); e != nil {
 		return e
 	}

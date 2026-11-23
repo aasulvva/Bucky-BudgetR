@@ -144,6 +144,34 @@ func (q *Queries) ListBSURules(ctx context.Context) ([]BsuRule, error) {
 	return items, nil
 }
 
+const listLockedBSU = `-- name: ListLockedBSU :many
+SELECT id FROM bank_accounts
+WHERE user_id = $1 AND NOT deleted AND account_type = 'bsu' AND (bsu_set_up_at IS NULL OR currency <> 'NOK')
+ORDER BY id
+`
+
+// The user's BSU accounts that are locked (#214): their history isn't set up,
+// or they aren't in NOK.
+func (q *Queries) ListLockedBSU(ctx context.Context, userID string) ([]string, error) {
+	rows, err := q.db.Query(ctx, listLockedBSU, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOpeningBalances = `-- name: ListOpeningBalances :many
 SELECT h.id, h.transaction_at, SUM(b.amount)::numeric AS net
 FROM transaction_headers h

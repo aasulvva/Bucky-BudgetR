@@ -2011,7 +2011,8 @@
     "intro": "Everyone who can log in. Users are never deleted: deactivate them instead, which keeps their data. Admins manage users, but don't see other users' money.",
     "tabs": {
       "users": "Users",
-      "logs": "Logs"
+      "logs": "Logs",
+      "bsu": "BSU rules"
     },
     "adminsOnly": "Admins only",
     "adminsOnlyDetail": "Only admins can manage users.",
@@ -2521,6 +2522,76 @@
       "withdrawalTitle": "Money out of a BSU account",
       "withdrawalBody": "This takes money out of a BSU account, which can cost you the tax deduction.",
       "record": "Record it anyway"
+    },
+    "line": "{{deposited}} of {{limit}} this year · {{left}} left · Total {{total}} of {{totalLimit}}",
+    "lineOver": "{{deposited}} of {{limit}} this year · over the limit · Total {{total}} of {{totalLimit}}",
+    "leftHint": "{{amount}} left this year",
+    "leftHintAccount": "{{name}}: {{amount}} left this year (BSU)",
+    "createHint": "A BSU is in NOK. Right after you create it, you set up its history: what you've deposited each year.",
+    "currencyFixed": "A BSU account is always in NOK.",
+    "onlyNok": "Only an account in NOK can be a BSU.",
+    "becomesBsu": "As a BSU it's locked until you set up its history: what you've deposited each year.",
+    "leavesBsu": "Its BSU history setup goes. If it becomes a BSU again, it must be set up again.",
+    "lockedOut": "Locked BSU accounts are left out until their history is set up.",
+    "locked": {
+      "title": "Locked until set up",
+      "body": "Set up this BSU's history, what you've deposited each year, before recording anything with it. You can still delete it.",
+      "notNok": "This BSU is in {{currency}}, but a BSU must be in NOK. Change its type, or delete it.",
+      "setUp": "Set up BSU",
+      "setUpName": "Set up BSU {{name}}",
+      "toSetup": "Open Account setup"
+    },
+    "setup": {
+      "title": "Set up BSU {{name}}",
+      "intro": "Enter what the bank shows for each year since you opened the account. The app rebuilds the account's transactions from it, once, and unlocks it. Its opening balance in the app isn't used.",
+      "notNok": "This BSU is in {{currency}}, but a BSU must be in NOK. Change its type in Account setup, or delete it.",
+      "already": "This BSU's history is set up already. Change it with ordinary corrections.",
+      "opened": "Year opened",
+      "openedHint": "At the latest {{year}}, the year of its first transaction in the app.",
+      "fields": {
+        "deposits": "Deposits",
+        "interest": "Interest",
+        "withdrawals": "Withdrawals"
+      },
+      "fieldName": "{{field}} {{year}}",
+      "enterAmount": "Enter an amount, 0 for none.",
+      "belowRecorded": "At least {{amount}}, what the app has.",
+      "overYear": "{{amount}} over the yearly limit of {{limit}}. It's saved as given.",
+      "overTotal": "In all, {{amount}} over the total limit. It's saved as given.",
+      "balance": "Balance today, at the bank",
+      "balanceHint": "The app has {{amount}}.",
+      "submit": "Set up",
+      "done": "{{name}} is set up.",
+      "plan": {
+        "title": "What it records",
+        "nothing": "Nothing to add: the app has it all.",
+        "opening": "The opening balance is corrected to 0 ({{amount}})",
+        "year": "{{year}}: {{parts}}",
+        "deposits": "a deposit of {{amount}}",
+        "interest": "interest of {{amount}}",
+        "withdrawals": "a withdrawal of {{amount}}",
+        "adjustment": "A balance adjustment of {{amount}} to match the bank",
+        "once": "It's done once, all at once. Later changes are ordinary corrections."
+      }
+    },
+    "admin": {
+      "intro": "The BSU deposit limits by law. A year uses the rule from the latest year at or before it. Changes are logged, and users aren't told.",
+      "fromYear": "From year",
+      "yearly": "Yearly limit",
+      "total": "Total limit",
+      "modified": "Changed",
+      "add": "Add rule",
+      "new": "New rule",
+      "edit": "Edit rule",
+      "editName": "Edit the rule from {{year}}",
+      "deleteName": "Delete the rule from {{year}}",
+      "lastRule": "The last rule can't be deleted.",
+      "saved": "The BSU rule from {{year}} is saved.",
+      "deleted": "The BSU rule from {{year}} is deleted.",
+      "totalBelow": "The total limit can't be below the yearly limit.",
+      "yearRange": "A year from 2000 to 2100.",
+      "yearTaken": "There's a rule from {{year}} already: saving changes it.",
+      "deleteConfirm": "Delete the rule from {{year}}? Its years use the rule before it."
     }
   }
 }

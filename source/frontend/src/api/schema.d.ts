@@ -640,6 +640,7 @@ export interface paths {
          * @description Sets the balance as of `at` (default now) to `target_balance` by
          *     recording a Balance Adjustment (BLA) for the difference. Transactions
          *     at or before `at` count. 400 `no_change` if there is no difference.
+         *     A BSU account that isn't set up yet is locked: 409 `bsu_locked` (#214).
          */
         post: operations["adjustAccountBalance"];
         delete?: never;
@@ -732,7 +733,9 @@ export interface paths {
          *       `no_active_cycle` or `cycle_overdue`). The money they held is then
          *       part of the account's balance below;
          *     - money left in it is transferred (TRF) or adjusted away (BLA) as
-         *       `remaining_funds` says, otherwise 409 `balance_not_zero`.
+         *       `remaining_funds` says, otherwise 409 `balance_not_zero`. A BSU
+         *       account that isn't set up yet can't take it (409 `bsu_locked`,
+         *       #214), but one can itself be deleted.
          *
          *     If any step is refused, nothing changes. Money and buckets can only move
          *     to another account in the same currency (400 `currency_mismatch`).
@@ -1188,7 +1191,8 @@ export interface paths {
          *     A deposit that takes a BSU account over its yearly or total limit
          *     gets 409 `bsu_over_limit`, and money out of a BSU 409
          *     `bsu_withdrawal` (#214), unless `bsu_confirmed` is true. Interest (an
-         *     income tagged `interest`) isn't a deposit.
+         *     income tagged `interest`) isn't a deposit. A transaction with a BSU
+         *     account whose history isn't set up yet gets 409 `bsu_locked`.
          */
         post: operations["createTransaction"];
         delete?: never;
@@ -1297,7 +1301,9 @@ export interface paths {
          *
          *     A correction or move that adds to a BSU deposit over the limits, or
          *     takes more out of a BSU, gets 409 `bsu_over_limit` or
-         *     `bsu_withdrawal` unless `bsu_confirmed` is true (#214).
+         *     `bsu_withdrawal` unless `bsu_confirmed` is true (#214). One with a
+         *     BSU account that isn't set up yet, before or after, gets 409
+         *     `bsu_locked`.
          */
         post: operations["correctTransaction"];
         delete?: never;
@@ -1324,7 +1330,8 @@ export interface paths {
          *     rules as for corrections apply: bucket lines must be in the active
          *     cycle (409 `bucket_lines_locked`), only INC, EXP, TRF, OPB and BLA,
          *     and the savings types SVR, SVC, SVB and SVD (409 `not_correctable`), and
-         *     only once (409 `already_reversed`).
+         *     only once (409 `already_reversed`). One with a BSU account that isn't
+         *     set up yet gets 409 `bsu_locked` (#214).
          *
          *     Savings lines (#231) are cancelled too: reversing a *Done* transfer
          *     or SVB puts the money back on hold. Reversing what holds money (an
@@ -1611,7 +1618,9 @@ export interface paths {
          *     instead (the user's edits), checked like `POST /transactions`.
          *     If it can't be recorded, nothing changes and the error says why (for
          *     example 409 `no_active_cycle`). One that isn't queued is 409
-         *     `already_resolved`.
+         *     `already_resolved`. A BSU account that isn't set up yet is locked
+         *     (409 `bsu_locked`, #214); the scheduler queues such occurrences as
+         *     `invalid`.
          */
         post: operations["approveScheduledTransaction"];
         delete?: never;
@@ -1773,7 +1782,9 @@ export interface paths {
          *     `amount` off what's held, so less than all of it leaves the rest
          *     held. An SVB needs an active cycle that contains `at` (409
          *     `no_active_cycle` or `cycle_overdue`) and room below a fixed capacity
-         *     (409 `above_capacity`).
+         *     (409 `above_capacity`). A BSU target or source that isn't set up yet
+         *     is locked (409 `bsu_locked`, #214); the distributor and overflow pass
+         *     such a target by.
          *
          *     `at` can't be in the future, and at least `amount` must be held both
          *     now and at `at` (409 `not_enough_held`). Reversing the transaction

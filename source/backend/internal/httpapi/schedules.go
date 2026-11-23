@@ -11,6 +11,7 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/api"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/bsu"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/money"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/schedules"
@@ -247,6 +248,9 @@ func (s *server) scheduleService() (*schedules.Service, error) {
 // scheduleError maps errors from the schedules service to problems. The
 // transaction part is checked as for a new transaction.
 func scheduleError(err error) error {
+	if errors.Is(err, bsu.ErrLocked) {
+		return bsuError(err)
+	}
 	switch {
 	case errors.Is(err, schedules.ErrNotFound):
 		return &Error{Status: http.StatusNotFound, Code: "not_found", Detail: "Schedule not found.", Err: err}

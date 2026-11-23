@@ -2,7 +2,7 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { apiMock, problem } from "@/test/api";
-import { account, budgetEntry, bucket, savingsTarget } from "@/test/fixtures";
+import { account, bsuStatus, budgetEntry, bucket, savingsTarget } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 
 const main = account({ id: "1234", name: "Main account", balance: "100.00" });
@@ -59,6 +59,94 @@ describe("Account setup", () => {
       opening_balance: "18400.00",
     });
     expect(screen.queryByRole("dialog", { name: "New account" })).not.toBeInTheDocument();
+  });
+
+  it("creates a BSU in NOK, then opens its history setup (#214)", async () => {
+    const home = account({
+      id: "4567",
+      name: "Home",
+      type: "bsu",
+      balance: "0.00",
+      bsu: bsuStatus({ locked: true, opened_year: null }),
+    });
+    let created = false;
+    apiMock.on("GET /api/v1/accounts", () => ({
+      body: created ? [buffer, euro, main, home] : [buffer, euro, main],
+    }));
+    apiMock.on("POST /api/v1/accounts", () => {
+      created = true;
+      return { status: 201, body: home };
+    });
+    apiMock.on("GET /api/v1/accounts/4567/bsu-history", {
+      body: {
+        latest_opened_year: 2026,
+        years: [
+          { year: 2026, recorded: { deposits: "0.00", interest: "0.00", withdrawals: "0.00" } },
+        ],
+        opening: "0.00",
+        balance: "0.00",
+        set_up_at: null,
+        rules: [
+          {
+            from_year: 2021,
+            yearly_limit: "27500.00",
+            total_limit: "300000.00",
+            modified_at: "2026-01-01T00:00:00Z",
+          },
+        ],
+      },
+    });
+    const { router } = renderRoute("/accounts/setup");
+    await userEvent.click(await screen.findByRole("button", { name: "New account" }));
+    const dialog = within(await screen.findByRole("dialog", { name: "New account" }));
+    await pick("Currency", "EUR · Euro");
+    await userEvent.type(dialog.getByRole("textbox", { name: /Name/ }), "Home");
+    await pick("Type", "BSU");
+    const currency = dialog.getByRole("combobox", { name: "Currency" });
+    expect(currency).toHaveValue("NOK · Norwegian Krone");
+    expect(currency).toBeDisabled();
+    expect(dialog.getByText("A BSU account is always in NOK.")).toBeInTheDocument();
+    await userEvent.click(dialog.getByRole("button", { name: "Create account" }));
+
+    expect(apiMock.calls("POST /api/v1/accounts")[0]?.body).toMatchObject({
+      type: "bsu",
+      currency: "NOK",
+    });
+    const setup = within(await screen.findByRole("dialog", { name: "Set up BSU Home" }));
+    expect(router.state.location.search).toBe("?bsu=4567");
+    expect(await setup.findByText("Nothing to add: the app has it all.")).toBeInTheDocument();
+  });
+
+  it("only lets a NOK account become a BSU, which then needs its setup (#214)", async () => {
+    renderRoute("/accounts/setup?edit=3456");
+    const dialog = within(await screen.findByRole("dialog", { name: "Edit account" }));
+    expect(dialog.getByText("Only an account in NOK can be a BSU.")).toBeInTheDocument();
+    await userEvent.click(dialog.getByRole("combobox", { name: "Type" }));
+    expect(await dialog.findByRole("option", { name: "BSU" })).toHaveAttribute(
+      "data-combobox-disabled",
+      "true",
+    );
+  });
+
+  it("says changing to BSU needs the setup, and offers it on a locked one (#214)", async () => {
+    const home = account({
+      id: "4567",
+      name: "Home",
+      type: "bsu",
+      bsu: bsuStatus({ locked: true }),
+    });
+    apiMock.on("GET /api/v1/accounts", { body: [buffer, euro, main, home] });
+    const { router } = renderRoute("/accounts/setup?edit=2345");
+    const dialog = within(await screen.findByRole("dialog", { name: "Edit account" }));
+    await pick("Type", "BSU");
+    expect(
+      dialog.getByText(/As a BSU it's locked until you set up its history/),
+    ).toBeInTheDocument();
+
+    await router.navigate("/accounts/setup?edit=4567");
+    const locked = within(await screen.findByRole("dialog", { name: "Edit account" }));
+    await userEvent.click(await locked.findByRole("button", { name: "Set up BSU Home" }));
+    expect(router.state.location.search).toBe("?bsu=4567");
   });
 
   it("says when the name is taken", async () => {

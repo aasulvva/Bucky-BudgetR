@@ -402,6 +402,10 @@ func (s *Service) AdjustBalance(ctx context.Context, userID, id string, a Adjust
 		if _, err := sqlc.New(tx).GetAccountForUpdate(ctx, sqlc.GetAccountForUpdateParams{ID: id, UserID: userID}); err != nil {
 			return notFound(err, id)
 		}
+		// A locked BSU's balance comes from its history setup (#214).
+		if err := bsu.Locked(ctx, tx, userID, id); err != nil {
+			return err
+		}
 		balances, err := balance.AccountsBefore(ctx, tx, userID, at.Add(time.Microsecond))
 		if err != nil {
 			return err
@@ -500,6 +504,13 @@ func (s *Service) Delete(ctx context.Context, userID, id string, st Settlement) 
 		}
 		if err := s.checkTargets(ctx, q, userID, acc, targets); err != nil {
 			return err
+		}
+		// The money can't go to a locked BSU account (#214); the account
+		// itself can be deleted locked.
+		if r := st.Remaining; r != nil && r.TransferTo != "" {
+			if err := bsu.Locked(ctx, tx, userID, r.TransferTo); err != nil {
+				return err
+			}
 		}
 
 		// The deleted buckets go first, so the money they held is part of

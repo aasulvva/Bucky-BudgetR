@@ -46,7 +46,7 @@ import { DateTimeInput } from "@/components/DateTimeInput";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { BsuConfirm } from "@/components/transactions/BsuConfirm";
 import { ModeFields, RepeatFields } from "@/components/schedules/RepeatFields";
-import { bsuAsk } from "@/lib/bsu";
+import { bsuAsk, isLockedBsu } from "@/lib/bsu";
 import { now } from "@/lib/clock";
 import { browserTimeZone } from "@/lib/cycleRule";
 import { cycleRange, isOverdue } from "@/lib/cycles";
@@ -246,6 +246,23 @@ export function TransactionForm({
   const refillShown = type === "INC" && (inCycle || scheduled) && accountId !== null;
   const refillChecked = refill ?? (waiting.length > 0 || ruleMatches(rules, counterparty, amount));
   const money = (value: string) => formatMoney(value, currency);
+  // What a BSU the money goes into may still take this year (#214); interest
+  // isn't a deposit.
+  const into =
+    type === "INC" ? account : transfer ? accounts.find((a) => a.id === toAccountId) : undefined;
+  const interest = tags.some((tag) => tag.trim().toLowerCase() === "interest");
+  const bsuInto = into?.bsu && !into.bsu.locked && !interest ? into : undefined;
+  const bsuHint = bsuInto?.bsu
+    ? t("bsu.leftHintAccount", {
+        name: bsuInto.name,
+        amount: formatMoney(bsuInto.bsu.left_year, bsuInto.currency),
+      })
+    : null;
+  const bsuHintOrange =
+    bsuInto?.bsu !== undefined &&
+    bsuInto.bsu !== null &&
+    amount !== null &&
+    compareAmounts(amount, bsuInto.bsu.left_year) > 0;
   const correction = editing
     ? correctionBody(
         editing,
@@ -274,14 +291,19 @@ export function TransactionForm({
     if (withBuckets && !locked) setLines(followAmount(base, next));
   };
 
-  const accountOptions = (list: Account[]) =>
-    list.map((a) => ({
-      value: a.id,
-      label: t("newTransaction.accountOption", {
-        name: a.name,
-        balance: formatMoney(a.balance, a.currency),
-      }),
-    }));
+  // A locked BSU takes nothing until it's set up (#214); one already chosen
+  // stays, so the form shows it.
+  const lockedOut = accounts.some((a) => isLockedBsu(a));
+  const accountOptions = (list: Account[], keep: string | null) =>
+    list
+      .filter((a) => !isLockedBsu(a) || a.id === keep)
+      .map((a) => ({
+        value: a.id,
+        label: t("newTransaction.accountOption", {
+          name: a.name,
+          balance: formatMoney(a.balance, a.currency),
+        }),
+      }));
 
   const changeAccount = (id: string) => {
     setAccountId(id);
@@ -560,7 +582,7 @@ export function TransactionForm({
       )}
       <Select
         label={t(transfer ? "newTransaction.from" : "newTransaction.account")}
-        data={accountOptions(accounts)}
+        data={accountOptions(accounts, accountId)}
         value={accountId}
         allowDeselect={false}
         onChange={(v) => {
@@ -575,7 +597,7 @@ export function TransactionForm({
       {transfer && (
         <Select
           label={t("newTransaction.to")}
-          data={accountOptions(others)}
+          data={accountOptions(others, toAccountId)}
           value={toAccountId}
           onChange={setToAccountId}
           error={errors.to}
@@ -584,6 +606,16 @@ export function TransactionForm({
           }
           disabled={others.length === 0 || heldTransfer}
         />
+      )}
+      {bsuHint && (
+        <Text size="xs" c={bsuHintOrange ? "var(--mantine-color-orange-text)" : "dimmed"} mt={-8}>
+          {bsuHint}
+        </Text>
+      )}
+      {lockedOut && !balance && (
+        <Text size="xs" c="dimmed" mt={-8}>
+          {t("bsu.lockedOut")}
+        </Text>
       )}
       {withBuckets && (
         <CounterpartyInput

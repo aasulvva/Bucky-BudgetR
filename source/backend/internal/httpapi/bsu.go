@@ -193,6 +193,9 @@ func bsuError(err error) error {
 	case errors.Is(err, bsu.ErrWithdrawal):
 		return &Error{Status: http.StatusConflict, Code: "bsu_withdrawal",
 			Detail: "This takes money out of a BSU account, which can end its tax deduction. Confirm to record it anyway."}
+	case errors.Is(err, bsu.ErrLocked):
+		return &Error{Status: http.StatusConflict, Code: "bsu_locked",
+			Detail: "The BSU account is locked until its history is set up. Set it up on the Accounts screen first."}
 	case errors.Is(err, bsu.ErrNotFound):
 		return &Error{Status: http.StatusNotFound, Code: "not_found", Detail: "Not found.", Err: err}
 	case errors.Is(err, bsu.ErrLastRule):

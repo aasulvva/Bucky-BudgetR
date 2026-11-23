@@ -11,6 +11,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/balance"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/bsu"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/money"
@@ -260,6 +261,16 @@ func (s *Service) lock(ctx context.Context, tx pgx.Tx, userID, id string, revers
 	}
 	if cur.Reversed {
 		return Transaction{}, ErrAlreadyReversed
+	}
+	// Nothing with a locked BSU account changes until it's set up (#214).
+	var accounts []string
+	for _, v := range cur.History {
+		for _, l := range v.BankLines {
+			accounts = append(accounts, l.AccountID)
+		}
+	}
+	if err := bsu.Locked(ctx, tx, userID, accounts...); err != nil {
+		return Transaction{}, err
 	}
 	return cur, nil
 }

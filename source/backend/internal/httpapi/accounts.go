@@ -12,6 +12,7 @@ import (
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/accounts"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/api"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/bsu"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/money"
 )
@@ -172,6 +173,9 @@ func (s *server) accountService() (*accounts.Service, error) {
 
 // accountError maps errors from the accounts service to problems.
 func accountError(err error) error {
+	if errors.Is(err, bsu.ErrLocked) {
+		return bsuError(err)
+	}
 	var notZero *accounts.BalanceNotZeroError
 	var hasBuckets *accounts.HasBucketsError
 	switch {
