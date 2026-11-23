@@ -44,15 +44,32 @@ import { useSession } from "@/app/session";
 import { AmountInput } from "@/components/AmountInput";
 import { DateTimeInput } from "@/components/DateTimeInput";
 import { ErrorAlert } from "@/components/ErrorAlert";
+import {
+  CarryDebt,
+  PaymentReleases,
+  type DebtAmounts,
+} from "@/components/transactions/CardDebtFields";
 import { RecordConfirm, type RecordAsk } from "@/components/transactions/RecordConfirm";
 import { ModeFields, RepeatFields } from "@/components/schedules/RepeatFields";
 import { bsuAsk, isLockedBsu } from "@/lib/bsu";
-import { limitAsk } from "@/lib/cards";
+import {
+  NOWHERE,
+  autoRelease,
+  bucketsFor,
+  carryPrefill,
+  defaultSetAside,
+  heldFor,
+  holderChoices,
+  isCard,
+  limitAsk,
+  positiveHolds,
+  setAsideOf,
+} from "@/lib/cards";
 import { now } from "@/lib/clock";
 import { browserTimeZone } from "@/lib/cycleRule";
 import { cycleRange, isOverdue } from "@/lib/cycles";
 import { formatDateTime } from "@/lib/dates";
-import { compareAmounts, formatMoney, subtractAmounts } from "@/lib/money";
+import { addAmounts, compareAmounts, formatMoney, subtractAmounts } from "@/lib/money";
 import {
   bucketTotals,
   correctionBody,
@@ -113,6 +130,8 @@ interface Errors {
   to?: string;
   at?: string;
   split?: string;
+  /** What a payment releases, or a transfer carries, of card debt (#261). */
+  cardDebt?: string;
   /** Per row key. */
   lines?: Record<number, { bucket?: string; amount?: string }>;
 }
@@ -209,6 +228,14 @@ export function TransactionForm({
   const [base, setBase] = useState({ amount: start?.amount ?? null, lines: start?.lines ?? [] });
   const [refill, setRefill] = useState<boolean | null>(start?.triggersRefill ?? null);
   const [errors, setErrors] = useState<Errors>({});
+  // Card debt (#261): where a card purchase's rest is set aside (null: the
+  // card's default), what a payment releases (null: as the server would)
+  // and what a transfer carries (null: filled in from the amount).
+  const [startSetAside] = useState(() => (editing ? setAsideOf(editing, buckets) : null));
+  const [setAside, setSetAside] = useState<string | null>(startSetAside);
+  const [releases, setReleases] = useState<DebtAmounts | null>(null);
+  const [carryOn, setCarryOn] = useState(false);
+  const [carry, setCarry] = useState<DebtAmounts | null>(null);
   // The schedule: always on a schedule's form, a choice in New transaction.
   const [repeatOn, setRepeatOn] = useState(scheduleMode);
   const [repeat, setRepeat] = useState<RepeatValues>(() => {
@@ -239,7 +266,9 @@ export function TransactionForm({
   const heldTransfer = editing ? isSavingsTransfer(editing) : false;
   const account = accounts.find((a) => a.id === accountId);
   const currency = account?.currency;
-  const own = buckets.filter((b) => b.source_account_id === accountId);
+  const card = isCard(account);
+  // On a card, buckets on any account in its currency (#261).
+  const own = bucketsFor(account, accounts, buckets);
   const others = accounts.filter((a) => a.id !== accountId && a.currency === currency);
   const totals = bucketTotals(amount, lines);
   const inCycle = insideCycle(at, active);
@@ -285,7 +314,34 @@ export function TransactionForm({
     cardFrom.credit_card !== null &&
     amount !== null &&
     compareAmounts(amount, cardFrom.credit_card.available) > 0;
-  const correction = editing
+  // Card debt (#261): set aside on, released by a payment, carried along.
+  const direct = !scheduled && !approving;
+  const setAsideShown = withBuckets && card && account !== undefined && (direct || editing);
+  const setAsideValue = setAside ?? (account && card ? defaultSetAside(account) : NOWHERE);
+  const paying =
+    transfer && !editing && direct && cardTo !== undefined && account !== undefined && !card;
+  const auto = paying ? autoRelease(cardTo, account, accounts, amount ?? "0") : null;
+  const releaseValues: DebtAmounts =
+    releases ?? Object.fromEntries((auto?.releases ?? []).map((r) => [r.account_id, r.amount]));
+  const carrying =
+    transfer &&
+    !editing &&
+    direct &&
+    account !== undefined &&
+    !card &&
+    cardTo === undefined &&
+    positiveHolds(account).length > 0;
+  const carryValues: DebtAmounts =
+    carry ??
+    (account
+      ? Object.fromEntries(carryPrefill(account, amount).map((c) => [c.card_id, c.amount]))
+      : {});
+  const positiveEntries = (values: DebtAmounts) =>
+    Object.entries(values).filter(
+      (e): e is [string, string] => e[1] !== null && compareAmounts(e[1], "0") > 0,
+    );
+  const setAsideChanged = editing !== undefined && setAsideShown && setAside !== startSetAside;
+  const corrected = editing
     ? correctionBody(
         editing,
         {
@@ -301,6 +357,15 @@ export function TransactionForm({
         locked,
       )
     : null;
+  const correction =
+    corrected || setAsideChanged
+      ? {
+          ...corrected,
+          ...(setAsideChanged
+            ? { set_aside_account_id: setAsideValue === NOWHERE ? null : setAsideValue }
+            : {}),
+        }
+      : null;
 
   const changeLines = (next: SplitLine[]) => {
     setLines(next);
@@ -334,13 +399,18 @@ export function TransactionForm({
   const changeAccount = (id: string) => {
     setAccountId(id);
     setAccountTouched(true);
-    changeLines(
-      lines.filter(
-        (l) =>
-          l.bucketId === null ||
-          buckets.some((b) => b.id === l.bucketId && b.source_account_id === id),
-      ),
+    const usable = bucketsFor(
+      accounts.find((a) => a.id === id),
+      accounts,
+      buckets,
     );
+    changeLines(
+      lines.filter((l) => l.bucketId === null || usable.some((b) => b.id === l.bucketId)),
+    );
+    setSetAside(null);
+    setReleases(null);
+    setCarryOn(false);
+    setCarry(null);
     if (toAccountId === id) setToAccountId(null);
   };
 
@@ -480,6 +550,33 @@ export function TransactionForm({
         found.at = t("newTransaction.outsideCycle", { range: cycleRange(active) });
       }
     }
+    const debtMoney = (a: string) => formatMoney(a, currency);
+    if (paying && releases !== null && auto) {
+      const over = accounts.find(
+        (a) => compareAmounts(releaseValues[a.id] ?? "0", heldFor(a, cardTo.id)) > 0,
+      );
+      const rest = subtractAmounts(amount ?? "0", auto.clears);
+      const total = addAmounts(...positiveEntries(releaseValues).map((e) => e[1]));
+      if (over) {
+        found.cardDebt = t("cards.debt.overHeld", {
+          name: over.name,
+          amount: debtMoney(heldFor(over, cardTo.id)),
+        });
+      } else if (compareAmounts(total, rest) > 0) {
+        found.cardDebt = t("cards.debt.overRest", { amount: debtMoney(rest) });
+      }
+    }
+    if (carrying && carryOn) {
+      const over = positiveHolds(account).find(
+        (h) => compareAmounts(carryValues[h.card_id] ?? "0", h.amount) > 0,
+      );
+      const total = addAmounts(...positiveEntries(carryValues).map((e) => e[1]));
+      if (over) {
+        found.cardDebt = t("cards.debt.overCarry", { amount: debtMoney(over.amount) });
+      } else if (amount !== null && compareAmounts(total, amount) > 0) {
+        found.cardDebt = t("cards.debt.overAmount");
+      }
+    }
     return found;
   };
 
@@ -511,7 +608,27 @@ export function TransactionForm({
       ...(cleanDescription(description) ? { description: cleanDescription(description) } : {}),
     };
     const body: TransactionCreate = transfer
-      ? { type: newType, ...common, to_account_id: toAccountId ?? "" }
+      ? {
+          type: newType,
+          ...common,
+          to_account_id: toAccountId ?? "",
+          ...(paying && releases !== null
+            ? {
+                release_card_debt: positiveEntries(releaseValues).map(([id, a]) => ({
+                  account_id: id,
+                  amount: a,
+                })),
+              }
+            : {}),
+          ...(carrying && carryOn
+            ? {
+                carry_card_debt: positiveEntries(carryValues).map(([id, a]) => ({
+                  card_id: id,
+                  amount: a,
+                })),
+              }
+            : {}),
+        }
       : {
           type: newType,
           ...common,
@@ -525,6 +642,9 @@ export function TransactionForm({
               }
             : {}),
           ...(refillShown ? { triggers_refill: refillChecked } : {}),
+          ...(setAsideShown && direct
+            ? { set_aside_account_id: setAsideValue === NOWHERE ? null : setAsideValue }
+            : {}),
         };
     if (scheduled) {
       const transaction: ScheduleTransaction = body;
@@ -626,7 +746,13 @@ export function TransactionForm({
           label={t("newTransaction.to")}
           data={accountOptions(others, toAccountId)}
           value={toAccountId}
-          onChange={setToAccountId}
+          onChange={(v) => {
+            setToAccountId(v);
+            // What a payment releases depends on the card (#261).
+            setReleases(null);
+            setCarryOn(false);
+            setCarry(null);
+          }}
           error={errors.to}
           description={
             accountId && others.length === 0
@@ -645,6 +771,51 @@ export function TransactionForm({
         <Text size="xs" c={cardHintOrange ? "var(--mantine-color-orange-text)" : "dimmed"} mt={-8}>
           {cardHint}
         </Text>
+      )}
+      {setAsideShown && (
+        <Select
+          label={t(type === "INC" ? "cards.debt.releaseFrom" : "cards.debt.setAsideOn")}
+          description={t(type === "INC" ? "cards.debt.refundHint" : "cards.debt.setAsideOnHint", {
+            amount: money(totals.notTied),
+          })}
+          data={[
+            ...holderChoices(accounts, account)
+              .filter((a) => !isLockedBsu(a) || a.id === setAsideValue)
+              .map((a) => ({ value: a.id, label: a.name })),
+            { value: NOWHERE, label: t("cards.debt.nowhere") },
+          ]}
+          value={setAsideValue}
+          allowDeselect={false}
+          onChange={(v) => {
+            if (v) setSetAside(v);
+          }}
+        />
+      )}
+      {paying && auto && (
+        <PaymentReleases
+          card={cardTo}
+          payer={account}
+          accounts={accounts}
+          clears={auto.clears}
+          values={releaseValues}
+          onChange={(id, v) => {
+            setReleases({ ...releaseValues, [id]: v });
+          }}
+          error={errors.cardDebt}
+        />
+      )}
+      {carrying && (
+        <CarryDebt
+          account={account}
+          accounts={accounts}
+          on={carryOn}
+          onToggle={setCarryOn}
+          values={carryValues}
+          onChange={(id, v) => {
+            setCarry({ ...carryValues, [id]: v });
+          }}
+          error={errors.cardDebt}
+        />
       )}
       {withBuckets && (
         <CounterpartyInput
@@ -822,6 +993,7 @@ export function TransactionForm({
             {withBuckets && (
               <BucketSplit
                 account={account}
+                accounts={accounts}
                 own={own}
                 all={buckets}
                 active={active}
@@ -987,6 +1159,7 @@ function TagInput({ value, onChange }: { value: string[]; onChange: (tags: strin
  */
 function BucketSplit({
   account,
+  accounts,
   own,
   all,
   active,
@@ -998,6 +1171,8 @@ function BucketSplit({
   needsCycle,
 }: {
   account: Account | undefined;
+  accounts: Account[];
+  /** The buckets it can use: the account's, or on a card, any in its currency. */
   own: Bucket[];
   all: Bucket[];
   active: Cycle | null;
@@ -1011,6 +1186,7 @@ function BucketSplit({
 }) {
   const { t } = useTranslation();
   const money = (value: string) => formatMoney(value, account?.currency);
+  const card = isCard(account);
   const totals = bucketTotals(amount, lines);
   const free = own.filter((b) => !lines.some((l) => l.bucketId === b.id));
   const summary = (
@@ -1074,7 +1250,9 @@ function BucketSplit({
   } else if (own.length === 0 && lines.length === 0) {
     body = (
       <Text size="sm" c="dimmed">
-        {t("newTransaction.noAccountBuckets")}
+        {card
+          ? t("cards.debt.noBuckets", { currency: account.currency })
+          : t("newTransaction.noAccountBuckets")}
       </Text>
     );
   } else {
@@ -1083,15 +1261,25 @@ function BucketSplit({
         {lines.map((l) => {
           const bucket = own.find((b) => b.id === l.bucketId);
           const lineErrors = errors.lines?.[l.key];
-          const options = own
-            .filter((b) => b.id === l.bucketId || !lines.some((o) => o.bucketId === b.id))
-            .map((b) => ({
-              value: b.id,
-              label: t("newTransaction.bucketOption", {
-                name: b.name,
-                amount: money(b.current_available_funds),
-              }),
-            }));
+          const usable = own.filter(
+            (b) => b.id === l.bucketId || !lines.some((o) => o.bucketId === b.id),
+          );
+          const option = (b: Bucket) => ({
+            value: b.id,
+            label: t("newTransaction.bucketOption", {
+              name: b.name,
+              amount: money(b.current_available_funds),
+            }),
+          });
+          // On a card, grouped by the account they're on (#261).
+          const options = card
+            ? accounts
+                .map((a) => ({
+                  group: a.name,
+                  items: usable.filter((b) => b.source_account_id === a.id).map(option),
+                }))
+                .filter((g) => g.items.length > 0)
+            : usable.map(option);
           const update = (change: Partial<SplitLine>) => {
             onChange(lines.map((o) => (o.key === l.key ? { ...o, ...change } : o)));
           };
@@ -1171,7 +1359,9 @@ function BucketSplit({
         </Title>
         {account && (
           <Text size="sm" c="dimmed">
-            {t("newTransaction.fundedFrom", { name: account.name })}
+            {card
+              ? t("cards.debt.fundedFromAny", { currency: account.currency })
+              : t("newTransaction.fundedFrom", { name: account.name })}
           </Text>
         )}
       </Group>

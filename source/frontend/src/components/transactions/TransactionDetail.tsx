@@ -3,6 +3,7 @@ import { notifications } from "@mantine/notifications";
 import {
   IconBucket,
   IconBuildingBank,
+  IconCreditCard,
   IconPigMoney,
   IconRepeat,
   IconX,
@@ -29,6 +30,7 @@ import { isSchedulable, scheduleTitle } from "@/lib/schedules";
 import {
   bucketLinesLocked,
   isCorrectable,
+  CARD_DEBT_TYPES,
   isReversible,
   isSavingsTransfer,
   linesAmount,
@@ -186,6 +188,23 @@ function Detail({
         </Section>
       )}
 
+      {lines.card_lines.length > 0 && (
+        <Section
+          title={t("transactions.cardLines", { count: lines.card_lines.length })}
+          icon={IconCreditCard}
+        >
+          {lines.card_lines.map((l) => (
+            <Row
+              key={`${l.card_id}:${l.account_id}`}
+              label={names.accountName(l.account_id)}
+              note={t("transactions.cardLineFor", { card: names.accountName(l.card_id) })}
+            >
+              {signedMoney({ amount: l.amount, signed: true }, currency)}
+            </Row>
+          ))}
+        </Section>
+      )}
+
       {tx.history && tx.history.length > 0 && (
         <Section title={t("transactions.history")}>
           {tx.history.map((v) => {
@@ -233,9 +252,11 @@ function Detail({
           {t(
             tx.reversed
               ? "transactions.reversedNote"
-              : isReversible(tx)
-                ? "transactions.savingsNote"
-                : "transactions.systemNote",
+              : CARD_DEBT_TYPES.includes(tx.type) && isReversible(tx)
+                ? "transactions.cardDebtNote"
+                : isReversible(tx)
+                  ? "transactions.savingsNote"
+                  : "transactions.systemNote",
           )}
         </Text>
       )}
@@ -290,6 +311,7 @@ function Actions({ tx, locked, names }: { tx: Transaction; locked: boolean; name
               {t("transactions.reverseConfirm")}
               {tx.triggers_refill ? ` ${t("transactions.reverseRefills")}` : ""}
               {tx.savings_lines.length > 0 ? ` ${t(reverseSavingsKey(tx))}` : ""}
+              {tx.card_lines.length > 0 ? ` ${t(reverseCardKey(tx))}` : ""}
             </Text>
             {reverse.error && <ErrorAlert error={reverse.error} />}
             <Group gap="xs">
@@ -354,6 +376,13 @@ function reverseSavingsKey(tx: Transaction) {
   if (tx.type === "SVC") return "transactions.reverseSavingsRelease" as const;
   if (tx.type === "SVD") return "transactions.reverseSavingsDistribution" as const;
   return "transactions.reverseSavingsDone" as const;
+}
+
+/** What reversing does to card debt (#261): sets it aside again, or releases it. */
+function reverseCardKey(tx: Transaction) {
+  if (tx.type === "CDR") return "transactions.reverseCardRelease" as const;
+  if (tx.type === "CDH") return "transactions.reverseCardHold" as const;
+  return "transactions.reverseCardLines" as const;
 }
 
 /** The schedule that recorded the transaction, linking to it. */

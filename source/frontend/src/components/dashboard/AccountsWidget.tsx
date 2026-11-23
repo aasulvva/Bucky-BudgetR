@@ -5,7 +5,7 @@ import { Link } from "react-router";
 
 import { accountTypeLabel, type Account, type Bucket } from "@/api/accounts";
 import { CardLine } from "@/components/accounts/CardStatus";
-import { cardNear, cardShort } from "@/lib/cards";
+import { cardHeldLine, cardNear, cardShort, positiveHolds } from "@/lib/cards";
 import { shownAccounts, type WidgetInstance } from "@/lib/dashboard";
 import { addAmounts, compareAmounts, formatMoney } from "@/lib/money";
 
@@ -66,11 +66,13 @@ function AllAccounts({ accounts, buckets }: { accounts: Account[]; buckets: Buck
           <Box style={{ minWidth: 0 }}>
             <AccountLink account={a} />
             {(buckets.some((b) => b.source_account_id === a.id) ||
-              compareAmounts(a.reserved, "0") > 0) && (
+              compareAmounts(a.reserved, "0") > 0 ||
+              positiveHolds(a).length > 0) && (
               <Text size="xs" c="dimmed">
                 {t("dashboard.health.unallocated", {
                   amount: formatMoney(a.unallocated, a.currency),
                 })}
+                {positiveHolds(a).length > 0 && ` · ${cardHeldLine(a, accounts) ?? ""}`}
                 {compareAmounts(a.reserved, "0") > 0 &&
                   ` · ${t("accounts.reserved", { amount: formatMoney(a.reserved, a.currency) })}`}
               </Text>

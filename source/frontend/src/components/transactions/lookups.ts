@@ -40,7 +40,7 @@ export function useLookups(): Lookups {
       if (account) return accounts.find((a) => a.id === account)?.currency;
       const bucket = lines.bucket_lines[0]?.bucket_id;
       if (bucket) return buckets.find((b) => b.id === bucket)?.currency;
-      const held = lines.savings_lines[0]?.account_id;
+      const held = lines.savings_lines[0]?.account_id ?? lines.card_lines[0]?.card_id;
       return accounts.find((a) => a.id === held)?.currency;
     },
   };
@@ -88,6 +88,14 @@ export function transactionSubLine(tx: Transaction, names: Lookups): string {
         ...lines.savings_lines.map((l) => names.targetName(l.holder_id)),
         ...buckets,
         ...new Set(lines.savings_lines.map((l) => names.accountName(l.account_id))),
+      ];
+      break;
+    case "CDH":
+    case "CDR":
+      parts = [
+        i18n.t(`transactionTypes.${tx.type}`),
+        ...new Set(lines.card_lines.map((l) => names.accountName(l.card_id))),
+        ...new Set(lines.card_lines.map((l) => names.accountName(l.account_id))),
       ];
       break;
     case "OPB":

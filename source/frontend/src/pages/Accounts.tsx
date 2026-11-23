@@ -36,6 +36,7 @@ import { api } from "@/api/client";
 import { ApiError, unwrap } from "@/api/errors";
 import { BsuSetupDialog } from "@/components/accounts/BsuSetup";
 import { BsuLine, BsuLocked } from "@/components/accounts/BsuStatus";
+import { CardDebtForm, CardDebtLine } from "@/components/accounts/CardDebt";
 import { CardLine } from "@/components/accounts/CardStatus";
 import { AmountInput } from "@/components/AmountInput";
 import { DateTimeInput } from "@/components/DateTimeInput";
@@ -43,7 +44,17 @@ import { ErrorAlert } from "@/components/ErrorAlert";
 import { QueryState } from "@/components/QueryState";
 import i18n from "@/i18n";
 import { bsuShort, isLockedBsu } from "@/lib/bsu";
-import { cardNear, cardShort, isCard, negate } from "@/lib/cards";
+import {
+  canCardDebt,
+  cardHeldLine,
+  cardNear,
+  cardShort,
+  isCard,
+  negate,
+  type CardDebtMode,
+} from "@/lib/cards";
+
+const CARD_DEBT_MODES: CardDebtMode[] = ["setAside", "release"];
 import { autofocusField } from "@/lib/device";
 import { INTEREST_TAG, interestCounterparty } from "@/lib/interest";
 import {
@@ -54,7 +65,8 @@ import {
   subtractAmounts,
 } from "@/lib/money";
 
-type Panel = { kind: "adjust" | "interest"; accountId: string } | null;
+type PanelKind = "adjust" | "interest" | CardDebtMode;
+type Panel = { kind: PanelKind; accountId: string } | null;
 
 /**
  * Accounts (spec §9, canvas "Accounts"): the balance of each account, its
@@ -103,7 +115,7 @@ export default function Accounts() {
         };
         const panelContent =
           panel && selected ? (
-            <PanelContent kind={panel.kind} account={selected} onClose={close} />
+            <PanelContent kind={panel.kind} account={selected} accounts={list} onClose={close} />
           ) : null;
         const actions = (a: Account) => ({
           onAdjust: () => {
@@ -115,6 +127,9 @@ export default function Accounts() {
           onSetUpBsu: () => {
             setChosen(null);
             openBsu(a.id);
+          },
+          onCardDebt: (mode: CardDebtMode) => {
+            setChosen({ kind: mode, accountId: a.id });
           },
         });
         const settingUp = bsuId ? list.find((a) => a.id === bsuId && isLockedBsu(a)) : undefined;
@@ -148,7 +163,7 @@ export default function Accounts() {
                       account={a}
                       // A card has no buckets (#260): its own line says it all.
                       summary={
-                        !isCard(a) && buckets.data ? accountLine(a, buckets.data) : undefined
+                        !isCard(a) && buckets.data ? accountLine(a, buckets.data, list) : undefined
                       }
                       selected={a.id === selected?.id}
                       {...actions(a)}
@@ -219,9 +234,14 @@ function Totals({ accounts }: { accounts: Account[] }) {
   );
 }
 
-/** The account's line: its buckets, then what's reserved for savings (#231). */
-function accountLine(account: Account, buckets: Bucket[]): string {
+/**
+ * The account's line: its buckets, what's set aside for card debt (#261),
+ * then what's reserved for savings (#231).
+ */
+function accountLine(account: Account, buckets: Bucket[], accounts: Account[]): string {
   const parts = [bucketSummary(account, buckets)];
+  const held = cardHeldLine(account, accounts);
+  if (held) parts.push(held);
   if (compareAmounts(account.reserved, "0") > 0) {
     const reserved = formatMoney(account.reserved, account.currency);
     parts.push(
@@ -270,6 +290,7 @@ interface ActionsProps {
   onAdjust: () => void;
   onInterest: () => void;
   onSetUpBsu: () => void;
+  onCardDebt: (mode: CardDebtMode) => void;
 }
 
 function SetupLink({ account, size }: { account: Account; size: number }) {
@@ -296,6 +317,7 @@ function AccountCard({
   onAdjust,
   onInterest,
   onSetUpBsu,
+  onCardDebt,
 }: ActionsProps & { account: Account; summary?: string; selected: boolean }) {
   const { t } = useTranslation();
   const locked = isLockedBsu(account);
@@ -336,6 +358,7 @@ function AccountCard({
         <BsuLine account={account} />
         <BsuLocked account={account} onSetUp={onSetUpBsu} />
         <CardLine account={account} />
+        <CardDebtLine account={account} />
         <Group
           gap="xs"
           pt="xs"
@@ -353,7 +376,21 @@ function AccountCard({
             {t("accounts.adjust")}
           </Button>
           {/* Card interest and fees come with #263. */}
-          {!isCard(account) && (
+          {isCard(account) ? (
+            CARD_DEBT_MODES.map((mode) => (
+              <Button
+                key={mode}
+                size="xs"
+                variant="default"
+                onClick={() => {
+                  onCardDebt(mode);
+                }}
+                disabled={!canCardDebt(account, mode)}
+              >
+                {t(`cards.debt.${mode}`)}
+              </Button>
+            ))
+          ) : (
             <Button size="xs" variant="default" onClick={onInterest} disabled={locked}>
               {t("accounts.interest")}
             </Button>
@@ -369,6 +406,7 @@ function AccountRow({
   onAdjust,
   onInterest,
   onSetUpBsu,
+  onCardDebt,
 }: ActionsProps & { account: Account }) {
   const { t } = useTranslation();
   const locked = isLockedBsu(account);
@@ -429,7 +467,19 @@ function AccountRow({
           <Menu.Item onClick={onAdjust} disabled={locked}>
             {t("accounts.adjust")}
           </Menu.Item>
-          {!isCard(account) && (
+          {isCard(account) ? (
+            CARD_DEBT_MODES.map((mode) => (
+              <Menu.Item
+                key={mode}
+                onClick={() => {
+                  onCardDebt(mode);
+                }}
+                disabled={!canCardDebt(account, mode)}
+              >
+                {t(`cards.debt.${mode}`)}
+              </Menu.Item>
+            ))
+          ) : (
             <Menu.Item onClick={onInterest} disabled={locked}>
               {t("accounts.interest")}
             </Menu.Item>
@@ -443,14 +493,21 @@ function AccountRow({
 function PanelContent({
   kind,
   account,
+  accounts,
   onClose,
 }: {
-  kind: "adjust" | "interest";
+  kind: PanelKind;
   account: Account;
+  accounts: Account[];
   onClose: () => void;
 }) {
   const { t } = useTranslation();
-  const title = kind === "adjust" ? t("accounts.adjust") : t("accounts.interest");
+  const title =
+    kind === "adjust"
+      ? t("accounts.adjust")
+      : kind === "interest"
+        ? t("accounts.interest")
+        : t(`cards.debt.${kind}`);
   return (
     <Stack gap="md" component="section" aria-label={title}>
       <Group justify="space-between">
@@ -465,8 +522,16 @@ function PanelContent({
       {/* Keyed so that switching accounts starts the form afresh. */}
       {kind === "adjust" ? (
         <AdjustForm key={account.id} account={account} onDone={onClose} />
-      ) : (
+      ) : kind === "interest" ? (
         <InterestForm key={account.id} account={account} onDone={onClose} />
+      ) : (
+        <CardDebtForm
+          key={account.id + kind}
+          card={account}
+          accounts={accounts}
+          mode={kind}
+          onDone={onClose}
+        />
       )}
     </Stack>
   );

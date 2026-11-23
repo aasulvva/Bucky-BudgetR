@@ -16,6 +16,35 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.34.00",
+    date: "2026-11-23",
+    title: {
+      en: "Card debt you can see and move",
+      nb: "Kortgjeld du kan se og flytte",
+      nn: "Kortgjeld du kan sjå og flytte",
+    },
+    changes: {
+      en: [
+        "A purchase on a credit card can now use buckets on any account in its currency, and Set aside on chooses where the rest is held until the bill is paid, or Don't set aside.",
+        "Accounts says how much each account has set aside for a card, and each card what's set aside and what isn't, with Set aside and Release.",
+        "Paying a card says what it clears and lets you choose what it releases on other accounts. A transfer can move card debt with the money.",
+        "The transaction details list card debt, and setting aside or releasing it can be reversed.",
+      ],
+      nb: [
+        "Et kjøp med kredittkort kan nå bruke bøtter på hvilken som helst konto i samme valuta, og Sett av på velger hvor resten holdes av til regningen er betalt, eller Ikke sett av.",
+        "Kontoer viser hvor mye hver konto har satt av til et kort, og hvert kort hva som er satt av og ikke, med Sett av og Frigjør.",
+        "Når du betaler et kort, ser du hva betalingen gjør opp, og du kan velge hva den frigjør på andre kontoer. En overføring kan flytte kortgjeld med pengene.",
+        "Transaksjonsdetaljene viser kortgjeld, og å sette av eller frigjøre den kan reverseres.",
+      ],
+      nn: [
+        "Eit kjøp med kredittkort kan no bruke bøtter på kva konto som helst i same valuta, og Set av på vel kvar resten blir halden av til rekninga er betalt, eller Ikkje set av.",
+        "Kontoar viser kor mykje kvar konto har sett av til eit kort, og kvart kort kva som er sett av og ikkje, med Set av og Frigjer.",
+        "Når du betaler eit kort, ser du kva betalinga gjer opp, og du kan velje kva ho frigjer på andre kontoar. Ei overføring kan flytte kortgjeld med pengane.",
+        "Transaksjonsdetaljane viser kortgjeld, og å setje av eller frigjere ho kan reverserast.",
+      ],
+    },
+  },
+  {
     version: "v2.33.01",
     date: "2026-11-23",
     title: {
