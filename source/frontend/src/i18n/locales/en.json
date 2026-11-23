@@ -183,8 +183,6 @@
     "noBuckets": "No buckets",
     "bucketCount_one": "{{count}} bucket",
     "bucketCount_other": "{{count}} buckets",
-    "bucketsShort": "{{buckets}} · {{amount}} short",
-    "bucketsUnallocated": "{{buckets}} · {{amount}} unallocated",
     "setupFor": "Account setup for {{name}}",
     "transactionsOf": "{{name}} transactions",
     "moreFor": "More for {{name}}",
@@ -208,7 +206,17 @@
     "enterInterest": "Enter the interest.",
     "interestPositive": "Interest must be more than 0.",
     "reserved": "{{amount}} reserved for savings",
-    "reservedUncovered": "{{amount}} reserved for savings ({{uncovered}} not covered)"
+    "breakdown": {
+      "label": "Where the money in {{name}} is",
+      "cardLabel": "Where the debt on {{name}} is set aside",
+      "short": "{{amount}} short",
+      "setAsideFor": "Set aside for {{card}}",
+      "notCovered": "{{amount}} not covered",
+      "reserved": "Reserved for savings",
+      "unallocated": "Unallocated",
+      "setAsideOn": "Set aside on {{name}}",
+      "notSetAside": "Not set aside"
+    }
   },
   "accountSetup": {
     "newAccount": "New account",
@@ -1344,7 +1352,14 @@
     "reverseSavingsDone": "The money is held for the target again.",
     "unknownTarget": "Savings target #{{id}}",
     "distributor": "Savings distributor",
-    "reverseSavingsDistribution": "The money goes back to the savings distributor."
+    "reverseSavingsDistribution": "The money goes back to the savings distributor.",
+    "cardLines_one": "Card debt",
+    "cardLines_other": "Card debt",
+    "cardLineFor": "Set aside for {{card}}",
+    "cardDebtNote": "Card debt set aside or released, so it can't be corrected. You can reverse it.",
+    "reverseCardHold": "The money becomes unallocated again.",
+    "reverseCardRelease": "The money is set aside for the card again.",
+    "reverseCardLines": "What it set aside for the card is undone too."
   },
   "cycles": {
     "plan": "Plan a cycle",
@@ -2685,6 +2700,45 @@
     "adjustToZeroHint": "For debt that's gone, e.g. a card the bank has closed and settled.",
     "owedNow": "Owed now",
     "appOwed": "Owed in the app",
-    "enterOwed": "Enter what the bank shows as owed."
+    "enterOwed": "Enter what the bank shows as owed.",
+    "debt": {
+      "heldFor": "{{amount}} set aside for {{card}}",
+      "uncovered": "{{amount}} not covered",
+      "title": "Card debt",
+      "clears": "Clears the {{amount}} set aside on {{name}}.",
+      "releasesHint": "The rest of the payment releases money set aside on other accounts, which becomes unallocated there.",
+      "releaseOn": "Release on {{name}}",
+      "heldOn": "{{amount}} set aside there",
+      "carry": "Move card debt with it",
+      "carryHint": "{{name}} holds {{amounts}}.",
+      "carryFor": "Move for {{card}}",
+      "setAside": "Set aside",
+      "release": "Release",
+      "setAsideDone": "{{amount}} set aside for {{card}}.",
+      "releaseDone": "{{amount}} set aside for {{card}} released.",
+      "nothingToSetAside": "There's nothing to set aside: all that's owed is set aside, or no account can hold it.",
+      "nothingHeld": "Nothing is set aside for this card.",
+      "atMost": "At most {{amount}}.",
+      "setAsideIntro": "Holds part of what {{card}} owes on an account, out of its unallocated money, until the bill is paid.",
+      "releaseIntro": "Gives money set aside for {{card}} back to the account, as unallocated.",
+      "account": "Account",
+      "unallocatedOn": "{{amount}} unallocated",
+      "amount": "Amount",
+      "notSetAside": "{{amount}} not set aside",
+      "overHeld": "{{name}} has only {{amount}} set aside.",
+      "overRest": "At most {{amount}} in all: the part of the payment it doesn't clear.",
+      "overCarry": "At most {{amount}}: what's set aside.",
+      "overAmount": "At most the amount transferred, in all.",
+      "setAsideOn": "Set aside on",
+      "setAsideOnHint": "What's not from buckets ({{amount}}) is held there until the bill is paid.",
+      "releaseFrom": "Release from",
+      "refundHint": "What's not to buckets ({{amount}}) lowers what's set aside there.",
+      "nowhere": "Don't set aside",
+      "noBuckets": "No buckets are funded from accounts in {{currency}}.",
+      "fundedFromAny": "From any account in {{currency}}",
+      "deleteCard": "The {{amount}} set aside for it is cleared by the payment or released.",
+      "deleteCarried": "Its card debt ({{held}}) moves with the money to {{name}}.",
+      "deleteReleased": "Its card debt ({{held}}) is released."
+    }
   }
 }

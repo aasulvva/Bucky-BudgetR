@@ -2,6 +2,7 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { apiMock, problem } from "@/test/api";
+import { amountOf } from "@/test/breakdown";
 import { account, bsuStatus, bucket } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
@@ -64,10 +65,17 @@ describe("Accounts", () => {
     const mainCard = await card("Main account");
     expect(mainCard.getByText(money("12340.50"))).toBeInTheDocument();
     expect(mainCard.getByText("Usage")).toBeInTheDocument();
-    expect(await mainCard.findByText(`2 buckets · ${money("500.00")} short`)).toBeInTheDocument();
-    expect(
-      (await card("Buffer account")).getByText(`1 bucket · ${money("16250.00")} unallocated`),
-    ).toBeInTheDocument();
+    // Where the money is, a row each: the buckets (with what they're short)
+    // and what's unallocated.
+    const mainMoney = await mainCard.findByLabelText("Where the money in Main account is");
+    expect(amountOf(mainMoney, "2 buckets")).toBe(money("700.00"));
+    expect(within(mainMoney).getByText(`${money("500.00")} short`)).toBeInTheDocument();
+    expect(amountOf(mainMoney, "Unallocated")).toBe(money("0.00"));
+    const bufferMoney = (await card("Buffer account")).getByLabelText(
+      "Where the money in Buffer account is",
+    );
+    expect(amountOf(bufferMoney, "1 bucket")).toBe(money("100.00"));
+    expect(amountOf(bufferMoney, "Unallocated")).toBe(money("16250.00"));
     expect((await card("Euro account")).getByText("No buckets")).toBeInTheDocument();
     expect((await card("Euro account")).getByText(money("100.00", "EUR"))).toBeInTheDocument();
 

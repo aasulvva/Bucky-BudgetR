@@ -51,6 +51,7 @@ import {
   DEFAULT_ACCOUNT_TYPES,
   EMPTY_CARD,
   cardChanged,
+  cardHeldLine,
   cardDraft,
   cardFields,
   cardProblems,
@@ -872,6 +873,7 @@ function DeleteAccount({
                 />
               </Text>
               <ReleaseNote account={account} reservedToo />
+              {cardDebtNote(account, accounts, hasMoney && funds === "transfer" ? fundsTo : null)}
               {defaultOf.length > 0 && (
                 <Text size="sm">
                   {t("cards.stopsDefault", { names: defaultOf.map((a) => a.name).join(", ") })}
@@ -1032,4 +1034,30 @@ function DeleteAccount({
       }}
     </QueryState>
   );
+}
+
+/**
+ * Where the card debt held on an account goes when it's deleted (#261): with
+ * the money to an account that isn't a card, or released; a card's is
+ * released (or cleared by the pay-off).
+ */
+function cardDebtNote(account: Account, accounts: Account[], to: string | null) {
+  const money = (a: string) => formatMoney(a, account.currency);
+  let text: string | null = null;
+  if (isCard(account)) {
+    const c = account.credit_card;
+    if (c && compareAmounts(c.set_aside, "0") > 0) {
+      text = i18n.t("cards.debt.deleteCard", { amount: money(c.set_aside) });
+    }
+  } else {
+    const held = cardHeldLine({ ...account, card_debt_uncovered: "0" }, accounts);
+    const dest = accounts.find((a) => a.id === to);
+    if (held) {
+      text =
+        dest && !isCard(dest)
+          ? i18n.t("cards.debt.deleteCarried", { held, name: dest.name })
+          : i18n.t("cards.debt.deleteReleased", { held });
+    }
+  }
+  return text && <Text size="sm">{text}</Text>;
 }

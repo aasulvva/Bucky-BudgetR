@@ -183,8 +183,6 @@
     "noBuckets": "Ingen bøtter",
     "bucketCount_one": "{{count}} bøtte",
     "bucketCount_other": "{{count}} bøtter",
-    "bucketsShort": "{{buckets}} · mangler {{amount}}",
-    "bucketsUnallocated": "{{buckets}} · {{amount}} ufordelt",
     "setupFor": "Kontooppsett for {{name}}",
     "transactionsOf": "Transaksjoner for {{name}}",
     "moreFor": "Mer for {{name}}",
@@ -208,7 +206,17 @@
     "enterInterest": "Skriv rentene.",
     "interestPositive": "Rentene må være mer enn 0.",
     "reserved": "{{amount}} satt av til sparing",
-    "reservedUncovered": "{{amount}} satt av til sparing ({{uncovered}} ikke dekket)"
+    "breakdown": {
+      "label": "Hvor pengene på {{name}} er",
+      "cardLabel": "Hvor gjelden på {{name}} er satt av",
+      "short": "{{amount}} mangler",
+      "setAsideFor": "Satt av til {{card}}",
+      "notCovered": "{{amount}} ikke dekket",
+      "reserved": "Satt av til sparing",
+      "unallocated": "Ufordelt",
+      "setAsideOn": "Satt av på {{name}}",
+      "notSetAside": "Ikke satt av"
+    }
   },
   "accountSetup": {
     "newAccount": "Ny konto",
@@ -1344,7 +1352,14 @@
     "reverseSavingsDone": "Pengene settes av til målet igjen.",
     "unknownTarget": "Sparemål #{{id}}",
     "distributor": "Sparefordeler",
-    "reverseSavingsDistribution": "Pengene går tilbake til sparefordeleren."
+    "reverseSavingsDistribution": "Pengene går tilbake til sparefordeleren.",
+    "cardLines_one": "Kortgjeld",
+    "cardLines_other": "Kortgjeld",
+    "cardLineFor": "Satt av til {{card}}",
+    "cardDebtNote": "Kortgjeld satt av eller frigjort, så den kan ikke korrigeres. Du kan reversere den.",
+    "reverseCardHold": "Pengene blir ufordelte igjen.",
+    "reverseCardRelease": "Pengene settes av til kortet igjen.",
+    "reverseCardLines": "Det den satte av til kortet, angres også."
   },
   "cycles": {
     "plan": "Planlegg en periode",
@@ -2685,6 +2700,45 @@
     "adjustToZeroHint": "For gjeld som er borte, f.eks. et kort banken har avsluttet og gjort opp.",
     "owedNow": "Skyldig nå",
     "appOwed": "Skyldig i appen",
-    "enterOwed": "Skriv inn det banken viser som skyldig."
+    "enterOwed": "Skriv inn det banken viser som skyldig.",
+    "debt": {
+      "heldFor": "{{amount}} satt av til {{card}}",
+      "uncovered": "{{amount}} ikke dekket",
+      "title": "Kortgjeld",
+      "clears": "Gjør opp {{amount}} satt av på {{name}}.",
+      "releasesHint": "Resten av betalingen frigjør penger satt av på andre kontoer, som blir ufordelt der.",
+      "releaseOn": "Frigjør på {{name}}",
+      "heldOn": "{{amount}} satt av der",
+      "carry": "Flytt kortgjelden med",
+      "carryHint": "{{name}} har {{amounts}}.",
+      "carryFor": "Flytt for {{card}}",
+      "setAside": "Sett av",
+      "release": "Frigjør",
+      "setAsideDone": "{{amount}} satt av til {{card}}.",
+      "releaseDone": "{{amount}} satt av til {{card}} er frigjort.",
+      "nothingToSetAside": "Det er ingenting å sette av: alt som skyldes er satt av, eller ingen konto kan holde det.",
+      "nothingHeld": "Ingenting er satt av til dette kortet.",
+      "atMost": "Høyst {{amount}}.",
+      "setAsideIntro": "Holder av en del av det {{card}} skylder på en konto, fra de ufordelte pengene der, til regningen er betalt.",
+      "releaseIntro": "Gir penger satt av til {{card}} tilbake til kontoen, som ufordelt.",
+      "account": "Konto",
+      "unallocatedOn": "{{amount}} ufordelt",
+      "amount": "Beløp",
+      "notSetAside": "{{amount}} ikke satt av",
+      "overHeld": "{{name}} har bare {{amount}} satt av.",
+      "overRest": "Høyst {{amount}} til sammen: den delen av betalingen som ikke gjør opp.",
+      "overCarry": "Høyst {{amount}}: det som er satt av.",
+      "overAmount": "Høyst beløpet som overføres, til sammen.",
+      "setAsideOn": "Sett av på",
+      "setAsideOnHint": "Det som ikke er fra bøtter ({{amount}}), holdes av der til regningen er betalt.",
+      "releaseFrom": "Frigjør fra",
+      "refundHint": "Det som ikke går til bøtter ({{amount}}), senker det som er satt av der.",
+      "nowhere": "Ikke sett av",
+      "noBuckets": "Ingen bøtter finansieres fra kontoer i {{currency}}.",
+      "fundedFromAny": "Fra hvilken som helst konto i {{currency}}",
+      "deleteCard": "De {{amount}} som er satt av til det, gjøres opp av betalingen eller frigjøres.",
+      "deleteCarried": "Kortgjelden ({{held}}) flyttes med pengene til {{name}}.",
+      "deleteReleased": "Kortgjelden ({{held}}) frigjøres."
+    }
   }
 }

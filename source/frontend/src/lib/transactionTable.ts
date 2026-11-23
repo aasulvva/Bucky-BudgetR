@@ -98,7 +98,12 @@ export function tableRows(
         key: `${tx.id}/${String(i)}`,
         tx,
         line,
-        amount: linesAmount({ bank_lines: [], bucket_lines: [line], savings_lines: [] }),
+        amount: linesAmount({
+          bank_lines: [],
+          bucket_lines: [line],
+          savings_lines: [],
+          card_lines: [],
+        }),
         currency,
       }));
     }
