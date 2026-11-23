@@ -220,12 +220,44 @@ describe("Accounts", () => {
     apiMock.on("GET /api/v1/accounts", { body: [home, main] });
     renderRoute("/accounts");
     const c = await card("Home");
+    // A row each, with a bar, what's left and the limit under it (#272).
+    const limits = c.getByLabelText("BSU limits for Home");
+    expect(amountOf(limits, "This year")).toBe(money("18000.00"));
     expect(
-      c.getByText(
-        `${money("18000.00")} of ${money("27500.00")} this year · ${money("9500.00")} left · Total ${money("120000.00")} of ${money("300000.00")}`,
-      ),
+      within(limits).getByRole("progressbar", { name: "65 % of this year's limit" }),
     ).toBeInTheDocument();
+    expect(within(limits).getByText(`${money("9500.00")} left`)).toBeInTheDocument();
+    expect(within(limits).getByText(`of ${money("27500.00")}`)).toBeInTheDocument();
+    expect(amountOf(limits, "In total")).toBe(money("120000.00"));
+    expect(within(limits).getByText(`${money("180000.00")} left`)).toBeInTheDocument();
+    expect(within(limits).getByText(`of ${money("300000.00")}`)).toBeInTheDocument();
     expect(c.getByRole("button", { name: "Adjust balance" })).toBeEnabled();
+  });
+
+  it("shows a BSU over its yearly limit in orange (#272)", async () => {
+    const home = account({
+      id: "4567",
+      name: "Home",
+      type: "bsu",
+      balance: "130000.00",
+      bsu: bsuStatus({
+        deposited_year: "28500.00",
+        left_year: "0.00",
+        deposited_total: "130500.00",
+        left_total: "169500.00",
+        over: true,
+      }),
+    });
+    apiMock.on("GET /api/v1/accounts", { body: [home] });
+    renderRoute("/accounts");
+    const limits = (await card("Home")).getByLabelText("BSU limits for Home");
+    expect(within(limits).getByText("This year")).toHaveStyle({
+      color: "var(--mantine-color-orange-text)",
+    });
+    expect(within(limits).getByText(`Over the limit by ${money("1000.00")}`)).toBeInTheDocument();
+    expect(within(limits).getByText("In total")).not.toHaveStyle({
+      color: "var(--mantine-color-orange-text)",
+    });
   });
 
   it("sets up a locked BSU's history, then it unlocks (#214)", async () => {
