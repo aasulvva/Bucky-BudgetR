@@ -81,3 +81,34 @@ func TestCardDebtFollows(t *testing.T) {
 		}
 	}
 }
+
+// A card's stored statements (#262) and its bill's setup follow it into the
+// copy, their IDs taking the copied card's ID.
+func TestCardStatementsFollow(t *testing.T) {
+	e := setup(t)
+	ctx := t.Context()
+	carol := authtest.NewUser(t, e.pool, "carol")
+	visa := must[accounts.Account](t)(e.accounts.Create(ctx, carol.ID, accounts.New{
+		Name: "Visa", Type: sqlc.AccountTypeCreditCard, OpeningBalance: dec("-1500"),
+		Card:          &cards.Fields{CreditLimit: dec("20000"), StatementDay: 1, DueDay: 15, MinimumPayment: dec("300")},
+		LastStatement: &cards.LastStatement{Amount: dec("1200"), Paid: dec("200")},
+	}))
+	f, _ := e.file(t, carol.ID)
+	if n := len(f.Data.Tables["card_statements"]); n != 1 {
+		t.Fatalf("exported %d card statements, want 1", n)
+	}
+
+	dave := authtest.NewUser(t, e.pool, "dave")
+	must[userdata.Counts](t)(e.svc.Import(ctx, dave.ID, f))
+	var card accounts.Account
+	for _, a := range must[[]accounts.Account](t)(e.accounts.List(ctx, dave.ID)) {
+		if a.Name == "Visa" {
+			card = a
+		}
+	}
+	bill := card.Card.Bill
+	if card.ID == visa.ID || bill == nil || !bill.SetUp || bill.Current == nil || !bill.Current.Fixed ||
+		bill.Current.ID != card.ID+visa.Card.Bill.Current.ID[4:] || bill.Current.Left.StringFixed(2) != "1000.00" {
+		t.Errorf("the copy's bill %+v (card %s)", bill, card.ID)
+	}
+}

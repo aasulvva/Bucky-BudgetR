@@ -16,6 +16,29 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.34.02",
+    date: "2026-11-24",
+    title: {
+      en: "Credit card bills, behind the scenes",
+      nb: "Kredittkortregninger, bak kulissene",
+      nn: "Kredittkortrekningar, bak kulissane",
+    },
+    changes: {
+      en: [
+        "The app now works out each credit card's bill from its statement and due days: what it owed at the statement day, the minimum payment, what's been paid and what's left. It counts purchases entered late until the statement is checked against the bank's or its due date passes.",
+        "New notifications, under Card bills in Settings, say when a card's bill is ready, when it's due soon and when it wasn't paid in full. The screens for the bill come next.",
+      ],
+      nb: [
+        "Appen regner nå ut regningen for hvert kredittkort fra faktura- og forfallsdagene: hva kortet skyldte på fakturadagen, minstebeløpet, hva som er betalt og hva som gjenstår. Kjøp som føres sent telles med til fakturaen er sjekket mot bankens eller forfallsdagen er passert.",
+        "Nye varsler, under Kortregninger i Innstillinger, sier når regningen for et kort er klar, når den snart forfaller og når den ikke ble betalt i sin helhet. Skjermene for regningen kommer neste gang.",
+      ],
+      nn: [
+        "Appen reknar no ut rekninga for kvart kredittkort frå faktura- og forfallsdagane: kva kortet skulda på fakturadagen, minstebeløpet, kva som er betalt og kva som står att. Kjøp som vert førte seint, vert rekna med til fakturaen er sjekka mot banken sin eller forfallsdagen er passert.",
+        "Nye varsel, under Kortrekningar i Innstillingar, seier når rekninga for eit kort er klar, når ho snart forfell og når ho ikkje vart betalt i si heilskap. Skjermane for rekninga kjem neste gong.",
+      ],
+    },
+  },
+  {
     version: "v2.34.01",
     date: "2026-11-24",
     title: {

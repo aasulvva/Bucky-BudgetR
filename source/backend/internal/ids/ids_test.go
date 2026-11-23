@@ -65,6 +65,16 @@ func TestGenerators(t *testing.T) {
 	}
 }
 
+func TestCardStatement(t *testing.T) {
+	id := ids.CardStatementID("9000", 2026, time.December, 1)
+	if id != "900020261201" || !ids.CardStatement.Valid(id) {
+		t.Fatalf("CardStatementID = %q, valid %v", id, ids.CardStatement.Valid(id))
+	}
+	if ids.CardStatement.Valid("900020261301") {
+		t.Error("month 13 should be invalid")
+	}
+}
+
 func TestRanges(t *testing.T) {
 	firstDigits := make(map[byte]bool)
 	for range draws {

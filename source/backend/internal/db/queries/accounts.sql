@@ -1,8 +1,10 @@
 -- name: CreateAccount :one
 -- Use with ids.Insert: a taken ID returns no row.
+-- A new credit card's bill is set up as it's created (#262): card_bill_set_up_at.
 INSERT INTO bank_accounts (id, user_id, name, currency, account_type, bank,
-    card_default_account_id, card_credit_limit, card_statement_day, card_due_day, card_minimum_payment)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    card_default_account_id, card_credit_limit, card_statement_day, card_due_day, card_minimum_payment,
+    card_bill_set_up_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, sqlc.narg(card_bill_set_up_at))
 ON CONFLICT (id) DO NOTHING
 RETURNING *;
 

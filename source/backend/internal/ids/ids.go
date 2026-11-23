@@ -17,6 +17,7 @@
 //	SavingsRule  SavingsHolder + 2 random   12 digits
 //	SavingsBudgetEntry User + 4 random 10 digits
 //	CardDebtLine Account (card) + 20 random  24 digits
+//	CardStatement Account (card) + YYYYMMDD  12 digits (the statement day)
 //
 // The database stores them as text with a CHECK on Kind.Pattern. They are
 // drawn with crypto/rand; see Insert for handling collisions.
@@ -65,16 +66,23 @@ var (
 	SavingsBudgetEntry = newKind("savings budget entry", 10, `^[1-9][0-9]{9}$`)
 	// CardDebtLine is card debt held on an account for a credit card (#261).
 	CardDebtLine = newKind("card debt line", 24, `^[1-9][0-9]{23}$`)
+	// CardStatement is a credit card's statement, one per statement day (#262).
+	CardStatement = newKind("card statement", 12, `^[1-9][0-9]{11}$`)
 )
 
 // Valid reports whether s is a well-formed ID of this kind. For transactions
-// it also checks that the first 8 digits are a real date.
+// it also checks that the first 8 digits are a real date, and for card
+// statements the last 8.
 func (k Kind) Valid(s string) bool {
 	if !k.re.MatchString(s) {
 		return false
 	}
 	if k.Name == Transaction.Name {
 		_, err := time.Parse("20060102", s[:8])
+		return err == nil
+	}
+	if k.Name == CardStatement.Name {
+		_, err := time.Parse("20060102", s[4:])
 		return err == nil
 	}
 	return true
@@ -122,6 +130,12 @@ func NewSavingsRule(targetID string) string { return withPrefix(SavingsHolder, t
 // NewSavingsBudgetEntry returns a random ID for a savings budget entry owned
 // by userID.
 func NewSavingsBudgetEntry(userID string) string { return withPrefix(User, userID, 4) }
+
+// CardStatementID returns the ID of cardID's statement made on the day
+// (year, month, day): not random, so there's one per card and day.
+func CardStatementID(cardID string, year int, month time.Month, day int) string {
+	return cardID + fmt.Sprintf("%04d%02d%02d", year, month, day)
+}
 
 // NewCardDebtLine returns a random ID for a card debt line of the credit
 // card cardID.

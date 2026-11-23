@@ -134,6 +134,9 @@ type New struct {
 	// Card is a credit card's fields, needed exactly when Type is a card
 	// (#260).
 	Card *cards.Fields
+	// LastStatement is a new card's last statement, when it has one (#262):
+	// its bill starts from it.
+	LastStatement *cards.LastStatement
 }
 
 // Changes are the fields to update; nil leaves a field as it is.
@@ -258,6 +261,9 @@ func (s *Service) List(ctx context.Context, userID string) ([]Account, error) {
 	out := make([]Account, len(rows))
 	for i, r := range rows {
 		out[i] = toAccount(r, money, statuses)
+		if err := s.withBill(ctx, q, r, &out[i]); err != nil {
+			return nil, err
+		}
 	}
 	return out, nil
 }
@@ -326,6 +332,7 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Account, er
 				ID: id, UserID: userID, Name: name, Currency: n.Currency, AccountType: n.Type, Bank: bank,
 				CardDefaultAccountID: c.DefaultAccountID, CardCreditLimit: c.CreditLimit, CardStatementDay: c.StatementDay,
 				CardDueDay: c.DueDay, CardMinimumPayment: c.MinimumPayment,
+				CardBillSetUpAt: pgtype.Timestamptz{Time: s.now(), Valid: n.Card != nil},
 			})
 			return ids.Inserted(err)
 		})
@@ -338,6 +345,11 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Account, er
 				BankLines: []ledger.BankLine{{AccountID: row.ID, Amount: n.OpeningBalance}},
 			}); err != nil {
 				return fmt.Errorf("record opening balance: %w", err)
+			}
+		}
+		if n.Card != nil && n.LastStatement != nil {
+			if err := cards.SetUpNew(ctx, tx, userID, row, *n.LastStatement, s.now()); err != nil {
+				return err
 			}
 		}
 		out, err = s.get(ctx, tx, userID, row.ID)
@@ -748,7 +760,21 @@ func (s *Service) get(ctx context.Context, db sqlc.DBTX, userID, id string) (Acc
 	if err != nil {
 		return Account{}, err
 	}
-	return toAccount(row, money, statuses), nil
+	a := toAccount(row, money, statuses)
+	return a, s.withBill(ctx, sqlc.New(db), row, &a)
+}
+
+// withBill adds a card's bill as it stands (#262), worked out without fixing.
+func (s *Service) withBill(ctx context.Context, q *sqlc.Queries, row sqlc.BankAccount, a *Account) error {
+	if a.Card == nil {
+		return nil
+	}
+	bill, err := billOf(ctx, q, row, s.now())
+	if err != nil {
+		return err
+	}
+	a.Card.Bill = &bill
+	return nil
 }
 
 // toAccount builds an account from its row and every account's Money.

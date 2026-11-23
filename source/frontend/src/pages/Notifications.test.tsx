@@ -2,6 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import type { Notification } from "@/api/notifications";
+import { formatDate } from "@/lib/dates";
 import type { Schedule } from "@/lib/schedules";
 import { apiMock, problem, testUser, type MockRequest } from "@/test/api";
 import { account, bucket, savingsTarget } from "@/test/fixtures";
@@ -46,6 +47,7 @@ function notification(n: Partial<Notification> & Pick<Notification, "key" | "kin
     cycle_id: null,
     target_id: null,
     amount: null,
+    minimum: null,
     currency: null,
     ...n,
   };
@@ -256,6 +258,47 @@ describe("Notifications", () => {
     expect(over.getByRole("link", { name: "Open accounts" })).toHaveAttribute("href", "/accounts");
     expect(withdrawal.getByText(`Money taken out of ${main.name}`)).toBeInTheDocument();
     expect(withdrawal.getByText(/took NOK.100\.00 out of the BSU account/)).toBeInTheDocument();
+  });
+
+  it("reminds of a card's bill: ready, due soon and carried over (#262)", async () => {
+    const at = "2026-11-14T23:00:00Z";
+    const bill = (kind: Notification["kind"], minimum: string) =>
+      notification({
+        key: `${kind}:${main.id}20261101`,
+        kind,
+        account_id: main.id,
+        at,
+        amount: "1500.00",
+        minimum,
+        currency: "NOK",
+      });
+    apiMock.on("GET /api/v1/notifications", {
+      body: {
+        items: [
+          bill("card_bill", "300.00"),
+          bill("card_bill_due", "0.00"),
+          bill("card_bill_carried", "300.00"),
+        ],
+      },
+    });
+    renderRoute("/notifications");
+    const [ready, due, carried] = (await rows()).map((r) => within(r));
+    if (!ready || !due || !carried) throw new Error("three rows");
+    const date = formatDate(at);
+    expect(await ready.findByText(`${main.name}'s bill is ready`)).toBeInTheDocument();
+    expect(
+      ready.getByText(new RegExp(`NOK.1,500\\.00 to pay by ${date}, at least NOK.300\\.00`)),
+    ).toBeInTheDocument();
+    expect(ready.getByRole("link", { name: "Open the bill" })).toHaveAttribute(
+      "href",
+      `/accounts?bill=${main.id}`,
+    );
+    expect(due.getByText(`${main.name}'s bill is due ${date}`)).toBeInTheDocument();
+    expect(
+      due.getByText(/NOK.1,500\.00 is left to pay. The minimum payment is paid/),
+    ).toBeInTheDocument();
+    expect(carried.getByText(`${main.name}'s bill wasn't paid in full`)).toBeInTheDocument();
+    expect(carried.getByText(/NOK.300\.00 of it the minimum payment/)).toBeInTheDocument();
   });
 
   it("says when there's nothing to do", async () => {

@@ -46,6 +46,7 @@ var tables = []table{
 	{"bucket_transactions", "bucket_id IN (SELECT id FROM buckets WHERE user_id = $1)", "id"},
 	{"savings_transactions", "holder_id IN (SELECT id FROM savings_holders WHERE user_id = $1)", "id"},
 	{"card_debt_lines", "card_id IN (SELECT id FROM bank_accounts WHERE user_id = $1)", "id"},
+	{"card_statements", "card_id IN (SELECT id FROM bank_accounts WHERE user_id = $1)", "id"},
 	{"transaction_tags", "user_id = $1", "transaction_id, tag_id"},
 	{"refills", "user_id = $1", "bucket_id, cycle_id"},
 	{"savings_budget_runs", "user_id = $1", "entry_id, cycle_id"},

@@ -60,6 +60,15 @@ func (s *server) CreateAccount(ctx context.Context, req api.CreateAccountRequest
 	if n.Card, err = cardFields(b.CreditCard); err != nil {
 		return nil, err
 	}
+	if b.LastStatement != nil {
+		if b.CreditCard == nil {
+			return nil, &Error{Status: http.StatusBadRequest, Code: "invalid_request",
+				Detail: "Only a credit card has a last statement."}
+		}
+		if n.LastStatement, err = lastStatement(*b.LastStatement, nil); err != nil {
+			return nil, err
+		}
+	}
 	a, err := svc.Create(ctx, sessionFrom(ctx).User.ID, n)
 	if err != nil {
 		return nil, accountError(err)

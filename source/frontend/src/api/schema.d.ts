@@ -701,6 +701,88 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/accounts/{accountId}/bill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * A credit card's bill
+         * @description The card's bill (#262, spec §2.2): its current statement, made on the
+         *     latest statement day, and the one before it when that was fixed. A
+         *     statement covers the debt before its cutoff, the statement day's
+         *     start in the user's time zone, and is due on the next due day. The
+         *     current one is worked out from the transactions until it's fixed
+         *     (checked against the bank's statement, or once its due date has
+         *     passed); this first fixes the card's statements whose due date has
+         *     passed. A card created before #262 has `set_up` false until
+         *     `setupCardBill`. `accountId` is the card's (400 `not_a_card`).
+         */
+        get: operations["getCardBill"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/accounts/{accountId}/bill/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set up a credit card's bill
+         * @description Sets up the bill of a card created before #262 (409 `bill_set_up`
+         *     once it is): its last statement's amount and what's been paid on it
+         *     since, stored as the latest statement day's (fixed by `setup`), or
+         *     null when there's no statement yet, so the first is the next one.
+         */
+        post: operations["setupCardBill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/accounts/{accountId}/bill/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check a credit card's bill against the bank's statement
+         * @description Fixes the current statement with the bank's amount. When it differs
+         *     from the app's, a balance adjustment (BLA) dated just before the
+         *     cutoff first makes what the card owed then the bank's amount (a fee
+         *     or purchase the app missed). 409 `no_statement` without a current
+         *     statement, `statement_fixed` when it's fixed, `bill_not_set_up`
+         *     before the setup.
+         */
+        post: operations["confirmCardBill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/accounts/{accountId}/reallocate": {
         parameters: {
             query?: never;
@@ -2193,6 +2275,13 @@ export interface paths {
          *       limit or more (#260), with `account_id`, what's owed as `amount`
          *       and `currency`; an `alert` once it's past the limit, else a
          *       `warning`.
+         *     - `card_bill`, `card_bill_due`, `card_bill_carried` (#262): a credit
+         *       card's current statement with something left to pay, with
+         *       `account_id`, `at` (the due date's start in the user's time zone),
+         *       what's left as `amount`, the minimum left as `minimum` and
+         *       `currency`. `card_bill` (info) until `upcoming_days` before the
+         *       due date, `card_bill_due` (warning) from then, `card_bill_carried`
+         *       (alert) after it, until the next statement.
          */
         get: operations["listNotifications"];
         put?: never;
@@ -2901,6 +2990,63 @@ export interface components {
             set_aside: components["schemas"]["Amount"];
             /** @description What's owed beyond `set_aside`, at least 0, which `POST /accounts/{id}/card-debt/set-aside` can set aside. */
             not_set_aside: components["schemas"]["Amount"];
+            /** @description The card's bill as it stands (#262), as `getCardBill` gives it, but without fixing statements first. */
+            bill: components["schemas"]["CardBill"];
+        };
+        /** @description A credit card's statement (#262). */
+        CardStatement: {
+            /** @description The card's ID and the statement day (YYYYMMDD). */
+            id: string;
+            /** Format: date */
+            statement_date: string;
+            /**
+             * Format: date-time
+             * @description The statement day's start in the user's time zone; it covers the debt before it.
+             */
+            cutoff: string;
+            /** Format: date */
+            due_date: string;
+            /** @description What the card owed at the cutoff; 0 when it was in credit. */
+            amount: components["schemas"]["Amount"];
+            /** @description The card's minimum payment, or `amount` when that's less. */
+            minimum: components["schemas"]["Amount"];
+            /** @description Transfers into the card from the cutoff (to the next statement's, for the previous one), and what the setup said was paid. */
+            paid: components["schemas"]["Amount"];
+            /** @description amount − paid, at least 0. */
+            left: components["schemas"]["Amount"];
+            /** @description minimum − paid, at least 0. */
+            minimum_left: components["schemas"]["Amount"];
+            /** @description False while it's worked out from the transactions (an estimate). */
+            fixed: boolean;
+            /** @enum {string|null} */
+            fixed_by: "bank" | "due" | "setup" | null;
+            /** Format: date-time */
+            fixed_at: string | null;
+        };
+        CardBill: {
+            /** @description False for a card created before the bill came (#262) until `setupCardBill`. */
+            set_up: boolean;
+            /** @description The latest statement day's statement; null before the first. */
+            current: components["schemas"]["CardStatement"] | null;
+            /** @description The statement before it, when it was fixed. */
+            previous: components["schemas"]["CardStatement"] | null;
+            /** Format: date */
+            next_statement_date: string;
+        };
+        /** @description A card's last statement before the app knew it (#262). */
+        CardLastStatement: {
+            /** @description The statement's amount, at least 0. */
+            amount: components["schemas"]["Amount"];
+            /** @description What's been paid on it since, at least 0. */
+            paid: components["schemas"]["Amount"];
+        };
+        CardBillSetup: {
+            /** @description Null when there's no statement yet. */
+            last_statement: components["schemas"]["CardLastStatement"] | null;
+        };
+        CardBillConfirm: {
+            /** @description The bank's statement amount, at least 0. */
+            amount: components["schemas"]["Amount"];
         };
         /**
          * @description A BSU account's deposits (#214, spec §3): incomes and transfers into
@@ -3025,6 +3171,8 @@ export interface components {
             opening_at?: string;
             /** @description Needed exactly when `type` is `credit_card` (400 `invalid_request`). A card's opening balance is usually below 0, what's owed. */
             credit_card?: components["schemas"]["CreditCardFields"];
+            /** @description Only for a credit card (#262), optional. Its last statement and what's been paid on it since; left out when there's none yet, so its first bill is the next statement day's. */
+            last_statement?: components["schemas"]["CardLastStatement"];
         };
         AccountUpdate: {
             name?: components["schemas"]["AccountName"];
@@ -4490,7 +4638,7 @@ export interface components {
             next_cursor: string | null;
         };
         /** @enum {string} */
-        NotificationKind: "approval_queue" | "upcoming_bill" | "investment_balance" | "bucket_uncovered" | "savings_transfer" | "savings_short" | "bsu_over_limit" | "bsu_withdrawal" | "credit_limit";
+        NotificationKind: "approval_queue" | "upcoming_bill" | "investment_balance" | "bucket_uncovered" | "savings_transfer" | "savings_short" | "bsu_over_limit" | "bsu_withdrawal" | "credit_limit" | "card_bill" | "card_bill_due" | "card_bill_carried";
         /**
          * @description A reminder or to-do. The client words it from `kind` and the fields
          *     that kind uses (see `listNotifications`); the others are null.
@@ -4503,10 +4651,11 @@ export interface components {
             key: string;
             kind: components["schemas"]["NotificationKind"];
             /**
-             * @description `alert` for an overdue approval, an uncovered bucket or a credit
-             *     card past its limit, `warning` for an approval that isn't
-             *     overdue, a short savings budget entry, a BSU over its limit or
-             *     withdrawn from, or a card at 90 % of its limit, else `info`.
+             * @description `alert` for an overdue approval, an uncovered bucket, a credit
+             *     card past its limit or a card bill carried over, `warning` for an
+             *     approval that isn't overdue, a short savings budget entry, a BSU
+             *     over its limit or withdrawn from, a card at 90 % of its limit or
+             *     a card bill due soon, else `info`.
              * @enum {string}
              */
             severity: "info" | "warning" | "alert";
@@ -4527,8 +4676,10 @@ export interface components {
             cycle_id: string | null;
             /** @description The savings target. */
             target_id: string | null;
-            /** @description The bill's amount, what the bucket is missing (TF − CAF), what's held for the savings target, what a savings budget entry fell short by, what a BSU is over its limit by, or what a schedule took out of a BSU. */
+            /** @description The bill's amount, what the bucket is missing (TF − CAF), what's held for the savings target, what a savings budget entry fell short by, what a BSU is over its limit by, what a schedule took out of a BSU, or what's left of a card's bill. */
             amount: string | null;
+            /** @description What's left of a card bill's minimum payment (#262). */
+            minimum: string | null;
             currency: string | null;
         };
         NotificationList: {
@@ -4559,6 +4710,8 @@ export interface components {
             bsu_withdrawal?: boolean | null;
             /** @description Credit cards at 90 % of their limit or more (#260). Null means true. */
             credit_limit?: boolean | null;
+            /** @description Credit card bills ready, due soon (`upcoming_days` ahead) or carried over (#262). Null means true. */
+            card_bills?: boolean | null;
         };
     };
     responses: {
@@ -5502,6 +5655,94 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Account"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getCardBill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The bill. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CardBill"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    setupCardBill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CardBillSetup"];
+            };
+        };
+        responses: {
+            /** @description The bill. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CardBill"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    confirmCardBill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CardBillConfirm"];
+            };
+        };
+        responses: {
+            /** @description The bill. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CardBill"];
                 };
             };
             400: components["responses"]["Error"];

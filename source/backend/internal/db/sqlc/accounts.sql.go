@@ -31,10 +31,11 @@ func (q *Queries) ClearCardDefaultAccount(ctx context.Context, arg ClearCardDefa
 
 const createAccount = `-- name: CreateAccount :one
 INSERT INTO bank_accounts (id, user_id, name, currency, account_type, bank,
-    card_default_account_id, card_credit_limit, card_statement_day, card_due_day, card_minimum_payment)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    card_default_account_id, card_credit_limit, card_statement_day, card_due_day, card_minimum_payment,
+    card_bill_set_up_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 ON CONFLICT (id) DO NOTHING
-RETURNING id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income, bank, bsu_set_up_at, bsu_opened_year, card_default_account_id, card_credit_limit, card_statement_day, card_due_day, card_minimum_payment
+RETURNING id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income, bank, bsu_set_up_at, bsu_opened_year, card_default_account_id, card_credit_limit, card_statement_day, card_due_day, card_minimum_payment, card_bill_set_up_at
 `
 
 type CreateAccountParams struct {
@@ -49,9 +50,11 @@ type CreateAccountParams struct {
 	CardStatementDay     pgtype.Int2
 	CardDueDay           pgtype.Int2
 	CardMinimumPayment   decimal.NullDecimal
+	CardBillSetUpAt      pgtype.Timestamptz
 }
 
 // Use with ids.Insert: a taken ID returns no row.
+// A new credit card's bill is set up as it's created (#262): card_bill_set_up_at.
 func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (BankAccount, error) {
 	row := q.db.QueryRow(ctx, createAccount,
 		arg.ID,
@@ -65,6 +68,7 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (B
 		arg.CardStatementDay,
 		arg.CardDueDay,
 		arg.CardMinimumPayment,
+		arg.CardBillSetUpAt,
 	)
 	var i BankAccount
 	err := row.Scan(
@@ -85,6 +89,7 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (B
 		&i.CardStatementDay,
 		&i.CardDueDay,
 		&i.CardMinimumPayment,
+		&i.CardBillSetUpAt,
 	)
 	return i, err
 }
@@ -104,7 +109,7 @@ func (q *Queries) DeleteAccount(ctx context.Context, arg DeleteAccountParams) er
 }
 
 const getAccount = `-- name: GetAccount :one
-SELECT id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income, bank, bsu_set_up_at, bsu_opened_year, card_default_account_id, card_credit_limit, card_statement_day, card_due_day, card_minimum_payment FROM bank_accounts WHERE id = $1 AND user_id = $2 AND NOT deleted
+SELECT id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income, bank, bsu_set_up_at, bsu_opened_year, card_default_account_id, card_credit_limit, card_statement_day, card_due_day, card_minimum_payment, card_bill_set_up_at FROM bank_accounts WHERE id = $1 AND user_id = $2 AND NOT deleted
 `
 
 type GetAccountParams struct {
@@ -133,12 +138,13 @@ func (q *Queries) GetAccount(ctx context.Context, arg GetAccountParams) (BankAcc
 		&i.CardStatementDay,
 		&i.CardDueDay,
 		&i.CardMinimumPayment,
+		&i.CardBillSetUpAt,
 	)
 	return i, err
 }
 
 const getAccountForUpdate = `-- name: GetAccountForUpdate :one
-SELECT id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income, bank, bsu_set_up_at, bsu_opened_year, card_default_account_id, card_credit_limit, card_statement_day, card_due_day, card_minimum_payment FROM bank_accounts WHERE id = $1 AND user_id = $2 AND NOT deleted FOR UPDATE
+SELECT id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income, bank, bsu_set_up_at, bsu_opened_year, card_default_account_id, card_credit_limit, card_statement_day, card_due_day, card_minimum_payment, card_bill_set_up_at FROM bank_accounts WHERE id = $1 AND user_id = $2 AND NOT deleted FOR UPDATE
 `
 
 type GetAccountForUpdateParams struct {
@@ -169,12 +175,13 @@ func (q *Queries) GetAccountForUpdate(ctx context.Context, arg GetAccountForUpda
 		&i.CardStatementDay,
 		&i.CardDueDay,
 		&i.CardMinimumPayment,
+		&i.CardBillSetUpAt,
 	)
 	return i, err
 }
 
 const listAccounts = `-- name: ListAccounts :many
-SELECT id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income, bank, bsu_set_up_at, bsu_opened_year, card_default_account_id, card_credit_limit, card_statement_day, card_due_day, card_minimum_payment FROM bank_accounts WHERE user_id = $1 AND NOT deleted ORDER BY lower(name), id
+SELECT id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income, bank, bsu_set_up_at, bsu_opened_year, card_default_account_id, card_credit_limit, card_statement_day, card_due_day, card_minimum_payment, card_bill_set_up_at FROM bank_accounts WHERE user_id = $1 AND NOT deleted ORDER BY lower(name), id
 `
 
 func (q *Queries) ListAccounts(ctx context.Context, userID string) ([]BankAccount, error) {
@@ -204,6 +211,7 @@ func (q *Queries) ListAccounts(ctx context.Context, userID string) ([]BankAccoun
 			&i.CardStatementDay,
 			&i.CardDueDay,
 			&i.CardMinimumPayment,
+			&i.CardBillSetUpAt,
 		); err != nil {
 			return nil, err
 		}
@@ -293,7 +301,7 @@ UPDATE bank_accounts SET name = $3, account_type = $4, expected_income = $5, ban
     bsu_set_up_at = CASE WHEN account_type = $4 THEN bsu_set_up_at END,
     bsu_opened_year = CASE WHEN account_type = $4 THEN bsu_opened_year END
 WHERE id = $1 AND user_id = $2 AND NOT deleted
-RETURNING id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income, bank, bsu_set_up_at, bsu_opened_year, card_default_account_id, card_credit_limit, card_statement_day, card_due_day, card_minimum_payment
+RETURNING id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income, bank, bsu_set_up_at, bsu_opened_year, card_default_account_id, card_credit_limit, card_statement_day, card_due_day, card_minimum_payment, card_bill_set_up_at
 `
 
 type UpdateAccountParams struct {
@@ -346,6 +354,7 @@ func (q *Queries) UpdateAccount(ctx context.Context, arg UpdateAccountParams) (B
 		&i.CardStatementDay,
 		&i.CardDueDay,
 		&i.CardMinimumPayment,
+		&i.CardBillSetUpAt,
 	)
 	return i, err
 }
