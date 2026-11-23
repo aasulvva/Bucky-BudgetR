@@ -15,7 +15,7 @@ import type { SavingsTarget } from "@/api/savings";
 import { AmountInput } from "@/components/AmountInput";
 import { DateTimeInput } from "@/components/DateTimeInput";
 import { ErrorAlert } from "@/components/ErrorAlert";
-import { BsuConfirm } from "@/components/transactions/BsuConfirm";
+import { RecordConfirm } from "@/components/transactions/RecordConfirm";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
 import i18n from "@/i18n";
 import { isOverdue } from "@/lib/cycles";
@@ -353,7 +353,7 @@ function HeldForm({
       {problem === null && <Text size="sm">{preview}</Text>}
       {blocked && <Alert color="orange">{t("savings.needsCycle")}</Alert>}
       {ask ? (
-        <BsuConfirm
+        <RecordConfirm
           ask={ask}
           pending={apply.isPending}
           onConfirm={() => {

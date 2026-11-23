@@ -44,9 +44,10 @@ import { useSession } from "@/app/session";
 import { AmountInput } from "@/components/AmountInput";
 import { DateTimeInput } from "@/components/DateTimeInput";
 import { ErrorAlert } from "@/components/ErrorAlert";
-import { BsuConfirm } from "@/components/transactions/BsuConfirm";
+import { RecordConfirm, type RecordAsk } from "@/components/transactions/RecordConfirm";
 import { ModeFields, RepeatFields } from "@/components/schedules/RepeatFields";
 import { bsuAsk, isLockedBsu } from "@/lib/bsu";
+import { limitAsk } from "@/lib/cards";
 import { now } from "@/lib/clock";
 import { browserTimeZone } from "@/lib/cycleRule";
 import { cycleRange, isOverdue } from "@/lib/cycles";
@@ -263,6 +264,27 @@ export function TransactionForm({
     bsuInto.bsu !== null &&
     amount !== null &&
     compareAmounts(amount, bsuInto.bsu.left_year) > 0;
+  // A credit card the money comes out of: what's available on it, orange
+  // when the amount is more (#260); one paid to: what's owed on it.
+  const cardFrom = (type === "EXP" || transfer) && account?.credit_card ? account : undefined;
+  const cardTo = transfer ? accounts.find((a) => a.id === toAccountId && a.credit_card) : undefined;
+  const cardHint = cardFrom?.credit_card
+    ? t("cards.hintAccount", {
+        name: cardFrom.name,
+        amount: formatMoney(cardFrom.credit_card.available, cardFrom.currency),
+        limit: formatMoney(cardFrom.credit_card.credit_limit, cardFrom.currency),
+      })
+    : cardTo?.credit_card
+      ? t("cards.hintPayment", {
+          name: cardTo.name,
+          amount: formatMoney(cardTo.credit_card.owed, cardTo.currency),
+        })
+      : null;
+  const cardHintOrange =
+    cardFrom?.credit_card !== undefined &&
+    cardFrom.credit_card !== null &&
+    amount !== null &&
+    compareAmounts(amount, cardFrom.credit_card.available) > 0;
   const correction = editing
     ? correctionBody(
         editing,
@@ -612,6 +634,11 @@ export function TransactionForm({
           {bsuHint}
         </Text>
       )}
+      {cardHint && (
+        <Text size="xs" c={cardHintOrange ? "var(--mantine-color-orange-text)" : "dimmed"} mt={-8}>
+          {cardHint}
+        </Text>
+      )}
       {lockedOut && !balance && (
         <Text size="xs" c="dimmed" mt={-8}>
           {t("bsu.lockedOut")}
@@ -706,14 +733,22 @@ export function TransactionForm({
   );
 
   const error = save.error ?? correct.error ?? saveSchedule.error ?? approveSave.error;
-  // A BSU over its limits, or money out of one, asks first (#214).
-  const ask = bsuAsk(save.error) ?? bsuAsk(correct.error);
-  const confirmBsu = () => {
-    if (bsuAsk(save.error) && save.variables) {
+  // A BSU over its limits, or money out of one (#214), and a credit card
+  // past its limit (#260), ask first. Each answer is kept when the other
+  // asks next.
+  const askOf = (error: unknown): RecordAsk | undefined =>
+    bsuAsk(error) ?? (limitAsk(error) ? "over_credit_limit" : undefined);
+  const ask = askOf(save.error) ?? askOf(correct.error);
+  const confirmed = (a: RecordAsk) =>
+    a === "over_credit_limit" ? { limit_confirmed: true } : { bsu_confirmed: true };
+  const confirmAsk = () => {
+    const a = askOf(save.error);
+    const c = askOf(correct.error);
+    if (a && save.variables) {
       const v = save.variables;
-      save.mutate({ ...v, body: { ...v.body, bsu_confirmed: true } });
-    } else if (bsuAsk(correct.error) && correct.variables) {
-      correct.mutate({ ...correct.variables, bsu_confirmed: true });
+      save.mutate({ ...v, body: { ...v.body, ...confirmed(a) } });
+    } else if (c && correct.variables) {
+      correct.mutate({ ...correct.variables, ...confirmed(c) });
     }
   };
   const saving = (addAnother: boolean) =>
@@ -813,10 +848,10 @@ export function TransactionForm({
             </Box>
           )}
           {ask ? (
-            <BsuConfirm
+            <RecordConfirm
               ask={ask}
               pending={save.isPending || correct.isPending}
-              onConfirm={confirmBsu}
+              onConfirm={confirmAsk}
               onCancel={() => {
                 save.reset();
                 correct.reset();

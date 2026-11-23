@@ -43,6 +43,7 @@ import { isOverdue } from "@/lib/cycles";
 import { compareAmounts, formatMoney, multiplyAmount, subtractAmounts } from "@/lib/money";
 import { autofocusField, isTouch } from "@/lib/device";
 import { checkName } from "@/lib/names";
+import { withoutCards } from "@/lib/cards";
 
 type BucketCreate = components["schemas"]["BucketCreate"];
 type BucketUpdate = components["schemas"]["BucketUpdate"];
@@ -172,7 +173,7 @@ export function BucketForm({
   const [source, setSource] = useState<string | null>(
     from?.source_account_id ??
       presetSource ??
-      (accounts.length === 1 ? (accounts[0]?.id ?? null) : null),
+      (withoutCards(accounts).length === 1 ? (withoutCards(accounts)[0]?.id ?? null) : null),
   );
   const [priority, setPriority] = useState(from?.priority ?? false);
   const [importance, setImportance] = useState(from?.importance ?? 5);
@@ -204,7 +205,8 @@ export function BucketForm({
 
   const sourceAccount = accounts.find((a) => a.id === source);
   const currency = bucket?.currency ?? sourceAccount?.currency;
-  const sources = accounts
+  // A credit card can't fund a bucket (#260).
+  const sources = withoutCards(accounts)
     .filter((a) => !bucket || a.currency === bucket.currency)
     .map((a) => ({ value: a.id, label: a.name }));
 

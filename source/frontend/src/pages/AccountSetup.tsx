@@ -37,6 +37,7 @@ import { useSavingsBudget, useSavingsTargets } from "@/api/savings";
 import type { components } from "@/api/schema";
 import { BsuSetupDialog } from "@/components/accounts/BsuSetup";
 import { BsuLocked } from "@/components/accounts/BsuStatus";
+import { CardFieldsInput } from "@/components/accounts/CardStatus";
 import { AmountInput } from "@/components/AmountInput";
 import { DateTimeInput } from "@/components/DateTimeInput";
 import { ErrorAlert } from "@/components/ErrorAlert";
@@ -46,6 +47,20 @@ import { ResponsiveModal } from "@/components/ResponsiveModal";
 import i18n from "@/i18n";
 import { BSU_CURRENCY, isLockedBsu } from "@/lib/bsu";
 import { canDelete } from "@/lib/buckets";
+import {
+  DEFAULT_ACCOUNT_TYPES,
+  EMPTY_CARD,
+  cardChanged,
+  cardDraft,
+  cardFields,
+  cardProblems,
+  cardsDefaultingTo,
+  defaultAccountChoices,
+  isCard,
+  negate,
+  withoutCards,
+  type CardDraft,
+} from "@/lib/cards";
 import { isOverdue } from "@/lib/cycles";
 import { CURRENCY } from "@/lib/locale";
 import { INTEREST_TAG } from "@/lib/interest";
@@ -295,6 +310,27 @@ function CreateAccount({
   const [opening, setOpening] = useState<string | null>(null);
   const [openingAt, setOpeningAt] = useState<string | null>(null);
   const [errors, setErrors] = useState<{ name?: string }>({});
+  // A credit card's fields (#260); what's owed today is the opening balance,
+  // negated.
+  const card = type === "credit_card";
+  const [cardValue, setCard] = useState<CardDraft>(EMPTY_CARD);
+  const [tried, setTried] = useState(false);
+  // The default account starts as the one usage account in the currency.
+  const preselect = (cur: string): CardDraft => {
+    const usage = defaultAccountChoices(accounts, cur).filter((a) => a.type === "usage");
+    const keep = defaultAccountChoices(accounts, cur).some(
+      (a) => a.id === cardValue.defaultAccount,
+    );
+    return {
+      ...cardValue,
+      defaultAccount: keep
+        ? cardValue.defaultAccount
+        : usage.length === 1
+          ? (usage[0]?.id ?? null)
+          : null,
+    };
+  };
+  const balance = opening !== null && card ? negate(opening) : opening;
 
   const create = useMutation({
     mutationFn: () =>
@@ -305,9 +341,10 @@ function CreateAccount({
             ...(bank.trim() ? { bank: bank.trim() } : {}),
             type,
             currency,
-            ...(opening !== null && compareAmounts(opening, "0") !== 0
+            ...(card ? { credit_card: cardFields(cardValue) } : {}),
+            ...(balance !== null && compareAmounts(balance, "0") !== 0
               ? {
-                  opening_balance: opening,
+                  opening_balance: balance,
                   ...(openingAt ? { opening_at: openingAt } : {}),
                 }
               : {}),
@@ -335,6 +372,8 @@ function CreateAccount({
         e.preventDefault();
         const found = { name: checkName(name) };
         setErrors(found);
+        setTried(true);
+        if (card && Object.keys(cardProblems(cardValue)).length > 0) return;
         if (!found.name) create.mutate();
       }}
     >
@@ -358,10 +397,13 @@ function CreateAccount({
           value={type}
           allowDeselect={false}
           onChange={(v) => {
-            if (v) setType(v);
+            if (!v) return;
+            setType(v);
+            if (v === "credit_card") setCard(preselect(currency));
           }}
         />
         {bsu && <Text size="sm">{t("bsu.createHint")}</Text>}
+        {card && <Text size="sm">{t("cards.createHint")}</Text>}
         <Select
           label={t("accountSetup.currency")}
           description={t(bsu ? "bsu.currencyFixed" : "accountSetup.currencyFixed")}
@@ -371,12 +413,23 @@ function CreateAccount({
           allowDeselect={false}
           disabled={bsu}
           onChange={(v) => {
-            if (v) setCurrency(v);
+            if (!v) return;
+            setCurrency(v);
+            if (card) setCard(preselect(v));
           }}
         />
+        {card && (
+          <CardFieldsInput
+            value={cardValue}
+            onChange={setCard}
+            accounts={accounts}
+            currency={currency}
+            tried={tried}
+          />
+        )}
         <AmountInput
-          label={t("accountSetup.openingBalance")}
-          description={t("accountSetup.openingHint")}
+          label={t(card ? "cards.owedToday" : "accountSetup.openingBalance")}
+          description={t(card ? "cards.owedHint" : "accountSetup.openingHint")}
           currency={currency}
           value={opening}
           onChange={setOpening}
@@ -426,6 +479,13 @@ function EditAccount({
   const [bank, setBank] = useState(account.bank);
   const [type, setType] = useState<AccountType>(account.type);
   const [errors, setErrors] = useState<{ name?: string }>({});
+  // A credit card's fields (#260).
+  const [cardValue, setCard] = useState<CardDraft | null>(
+    account.credit_card ? cardDraft(account.credit_card) : null,
+  );
+  const [tried, setTried] = useState(false);
+  // Cards whose default account this is lose it if it can't be one any more.
+  const defaultOf = cardsDefaultingTo(accounts, account.id);
   const [offer, setOffer] = useState<{ updated: Account; count: number; body: RenameBody } | null>(
     null,
   );
@@ -434,6 +494,9 @@ function EditAccount({
     ...(name.trim() !== account.name ? { name: name.trim() } : {}),
     ...(bank.trim() !== account.bank ? { bank: bank.trim() } : {}),
     ...(type !== account.type ? { type } : {}),
+    ...(cardValue && account.credit_card && cardChanged(cardValue, account.credit_card)
+      ? { credit_card: cardFields(cardValue) }
+      : {}),
   };
   const changed = Object.keys(changes).length > 0;
 
@@ -504,6 +567,8 @@ function EditAccount({
         e.preventDefault();
         const found = { name: checkName(name) };
         setErrors(found);
+        setTried(true);
+        if (cardValue && Object.keys(cardProblems(cardValue)).length > 0) return;
         if (!found.name) update.mutate();
       }}
     >
@@ -522,17 +587,22 @@ function EditAccount({
         <BsuLocked account={account} onSetUp={onSetUpBsu} />
         <Select
           label={t("accountSetup.type")}
-          // Only a NOK account can be a BSU (#214).
+          // Only a NOK account can be a BSU (#214), and no account changes
+          // to or from a credit card (#260).
           data={accountTypeOptions().map((o) =>
-            o.value === "bsu" && account.currency !== BSU_CURRENCY && account.type !== "bsu"
+            (o.value === "bsu" && account.currency !== BSU_CURRENCY && account.type !== "bsu") ||
+            (o.value === "credit_card" && !isCard(account))
               ? { ...o, disabled: true }
               : o,
           )}
           description={
-            account.currency !== BSU_CURRENCY && account.type !== "bsu"
-              ? t("bsu.onlyNok")
-              : undefined
+            isCard(account)
+              ? t("cards.typeFixed")
+              : account.currency !== BSU_CURRENCY && account.type !== "bsu"
+                ? t("bsu.onlyNok")
+                : undefined
           }
+          disabled={isCard(account)}
           value={type}
           allowDeselect={false}
           comboboxProps={{ withinPortal: false }}
@@ -547,6 +617,20 @@ function EditAccount({
         )}
         {type !== account.type && !TARGET_ACCOUNT_TYPES.includes(type) && (
           <ReleaseNote account={account} />
+        )}
+        {type !== account.type && !DEFAULT_ACCOUNT_TYPES.includes(type) && defaultOf.length > 0 && (
+          <Text size="sm" c="var(--mantine-color-orange-text)">
+            {t("cards.stopsDefault", { names: defaultOf.map((a) => a.name).join(", ") })}
+          </Text>
+        )}
+        {cardValue && (
+          <CardFieldsInput
+            value={cardValue}
+            onChange={setCard}
+            accounts={accounts.filter((a) => a.id !== account.id)}
+            currency={account.currency}
+            tried={tried}
+          />
         )}
         <TextInput
           label={t("accountSetup.currency")}
@@ -704,7 +788,15 @@ function DeleteAccount({
   const others = accounts
     .filter((a) => a.id !== account.id && a.currency === account.currency)
     .map((a) => ({ value: a.id, label: a.name }));
+  // Buckets can't move to a credit card (#260).
+  const bucketHomes = withoutCards(accounts)
+    .filter((a) => a.id !== account.id && a.currency === account.currency)
+    .map((a) => ({ value: a.id, label: a.name }));
+  const card = isCard(account);
+  const defaultOf = cardsDefaultingTo(accounts, account.id);
   const hasMoney = compareAmounts(account.balance, "0") !== 0;
+  // A card that owes is paid off from the other account (#260).
+  const owes = isCard(account) && compareAmounts(account.balance, "0") < 0;
   const active = useCurrentCycles().data?.active ?? null;
   // Deleting a bucket with funds left releases them, which needs this (#137).
   const usable = active !== null && !isOverdue(active);
@@ -741,7 +833,7 @@ function DeleteAccount({
         const own: Bucket[] = all.filter((b) => b.source_account_id === account.id);
         const deletable = (b: Bucket) => canDelete(b, usable);
         // A bucket that can neither move nor go yet.
-        const blocked = own.some((b) => others.length === 0 && !deletable(b));
+        const blocked = own.some((b) => bucketHomes.length === 0 && !deletable(b));
         const deleted = own.filter((b) => sources[b.id] === DELETE_BUCKET);
         const submit = () => {
           setValidate(true);
@@ -780,11 +872,22 @@ function DeleteAccount({
                 />
               </Text>
               <ReleaseNote account={account} reservedToo />
+              {defaultOf.length > 0 && (
+                <Text size="sm">
+                  {t("cards.stopsDefault", { names: defaultOf.map((a) => a.name).join(", ") })}
+                </Text>
+              )}
               {hasMoney && (
                 <Radio.Group
-                  label={t("accountSetup.stillHolds", {
-                    amount: formatMoney(account.balance, account.currency),
-                  })}
+                  label={
+                    card && compareAmounts(account.balance, "0") < 0
+                      ? t("cards.owes", {
+                          amount: formatMoney(negate(account.balance), account.currency),
+                        })
+                      : t("accountSetup.stillHolds", {
+                          amount: formatMoney(account.balance, account.currency),
+                        })
+                  }
                   value={funds}
                   onChange={(v) => {
                     setFunds(v);
@@ -793,7 +896,7 @@ function DeleteAccount({
                   <Stack gap="xs" mt="xs">
                     <Radio
                       value="transfer"
-                      label={t("accountSetup.transferIt")}
+                      label={t(owes ? "cards.payOff" : "accountSetup.transferIt")}
                       description={
                         others.length === 0
                           ? t("accountSetup.noOther", { currency: account.currency })
@@ -803,7 +906,7 @@ function DeleteAccount({
                     />
                     {funds === "transfer" && others.length > 0 && (
                       <Select
-                        label={t("accountSetup.transferTo")}
+                        label={t(owes ? "cards.payFrom" : "accountSetup.transferTo")}
                         data={others}
                         value={fundsTo}
                         onChange={setFundsTo}
@@ -814,7 +917,9 @@ function DeleteAccount({
                     <Radio
                       value="adjust"
                       label={t("accountSetup.adjustToZero")}
-                      description={t("accountSetup.adjustToZeroHint")}
+                      description={t(
+                        owes ? "cards.adjustToZeroHint" : "accountSetup.adjustToZeroHint",
+                      )}
                     />
                   </Stack>
                 </Radio.Group>
@@ -846,12 +951,12 @@ function DeleteAccount({
                       >
                         {t("accountSetup.deleteAll")}
                       </Button>
-                      {others.length > 0 && (
+                      {bucketHomes.length > 0 && (
                         <Select
                           size="xs"
                           aria-label={t("accountSetup.moveAllTo")}
                           placeholder={t("accountSetup.moveAllTo")}
-                          data={others}
+                          data={bucketHomes}
                           value={null}
                           onChange={(v) => {
                             if (v) setSources(Object.fromEntries(own.map((b) => [b.id, v])));
@@ -871,7 +976,7 @@ function DeleteAccount({
                           label: t("accountSetup.deleteTheBucket"),
                           disabled: !deletable(b),
                         },
-                        ...others,
+                        ...bucketHomes,
                       ]}
                       value={sources[b.id] ?? null}
                       onChange={(v) => {

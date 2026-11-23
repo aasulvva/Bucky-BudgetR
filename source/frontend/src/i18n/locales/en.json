@@ -2642,5 +2642,47 @@
       "yearTaken": "There's a rule from {{year}} already: saving changes it.",
       "deleteConfirm": "Delete the rule from {{year}}? Its years use the rule before it."
     }
+  },
+  "cards": {
+    "lastDay": "Last day",
+    "owed": "Owed {{amount}}",
+    "inCredit": "{{amount}} in credit",
+    "nothingOwed": "Nothing owed",
+    "available": "{{amount}} of {{limit}} available",
+    "pastLimit": "{{amount}} past the {{limit}} limit",
+    "availableShort": "{{amount}} available",
+    "pastLimitShort": "{{amount}} past the limit",
+    "hintAccount": "{{name}}: {{amount}} of {{limit}} available (credit card)",
+    "hintPayment": "{{name}}: {{amount}} owed (credit card)",
+    "confirm": {
+      "title": "Past the credit limit",
+      "body": "This takes the credit card past its credit limit. The bank may have declined it, so record it only if it went through."
+    },
+    "createHint": "A credit card owes money: its balance is below 0 while something is owed. Purchases are expenses on it, and payments are transfers to it.",
+    "defaultAccount": "Default account",
+    "defaultAccountHint": "Optional. Where purchases that aren't paid from a bucket set the money aside, and what the bill is paid from, unless you choose otherwise. Usually your main usage account.",
+    "noDefault": "None",
+    "noChoices": "No usage or savings account in {{currency}} yet, so it has none for now.",
+    "creditLimit": "Credit limit",
+    "statementDay": "Statement day",
+    "statementDayHint": "The day each month the bill is made. It covers what's owed by the end of the day before.",
+    "dueDay": "Due day",
+    "dueDayHint": "The day each month the bill is due: the first one after the statement day.",
+    "minimumPayment": "Minimum payment",
+    "minimumHint": "A fixed amount. A smaller bill is paid in full.",
+    "aboveZero": "Enter an amount above 0.",
+    "chooseDay": "Choose a day.",
+    "owedToday": "Owed today",
+    "owedHint": "What the card owes, as the bank shows it. A negative amount means it's in credit.",
+    "typeFixed": "A credit card stays a credit card.",
+    "notToCard": "An account can't become a credit card. Create a new account for the card.",
+    "stopsDefault": "It stops being the default account of {{names}}.",
+    "owes": "It owes {{amount}}",
+    "payOff": "Pay it off from another account",
+    "payFrom": "Pay from",
+    "adjustToZeroHint": "For debt that's gone, e.g. a card the bank has closed and settled.",
+    "owedNow": "Owed now",
+    "appOwed": "Owed in the app",
+    "enterOwed": "Enter what the bank shows as owed."
   }
 }
