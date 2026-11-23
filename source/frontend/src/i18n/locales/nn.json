@@ -2011,7 +2011,8 @@
     "intro": "Alle som kan logge inn. Brukarar vert aldri sletta: deaktiver dei i staden, så vert dataa deira tekne vare på. Administratorar styrer brukarane, men ser ikkje pengane til andre.",
     "tabs": {
       "users": "Brukarar",
-      "logs": "Loggar"
+      "logs": "Loggar",
+      "bsu": "BSU-reglar"
     },
     "adminsOnly": "Berre for administratorar",
     "adminsOnlyDetail": "Berre administratorar kan styre brukarar.",
@@ -2521,6 +2522,78 @@
       "withdrawalTitle": "Pengar ut av ein BSU-konto",
       "withdrawalBody": "Dette tek pengar ut av ein BSU-konto, og det kan koste deg skattefrådraget.",
       "record": "Registrer likevel"
+    },
+    "line": "{{deposited}} av {{limit}} i år · {{left}} att · Totalt {{total}} av {{totalLimit}}",
+    "lineOver": "{{deposited}} av {{limit}} i år · over grensa · Totalt {{total}} av {{totalLimit}}",
+    "leftHint": "{{amount}} att i år",
+    "leftHintAccount": "{{name}}: {{amount}} att i år (BSU)",
+    "createHint": "Ein BSU er i NOK. Rett etter at du har oppretta han, set du opp historikken: kva du har sett inn kvart år.",
+    "currencyFixed": "Ein BSU-konto er alltid i NOK.",
+    "onlyNok": "Berre ein konto i NOK kan vere BSU.",
+    "becomesBsu": "Som BSU er han låst til du har sett opp historikken: kva du har sett inn kvart år.",
+    "leavesBsu": "BSU-historikken forsvinn. Blir han BSU igjen, må han setjast opp på nytt.",
+    "lockedOut": "Låste BSU-kontoar er utelatne til historikken er sett opp.",
+    "locked": {
+      "title": "Låst til han er sett opp",
+      "body": "Set opp historikken til denne BSU-en, kva du har sett inn kvart år, før du registrerer noko på han. Du kan framleis slette han.",
+      "notNok": "Denne BSU-en er i {{currency}}, men ein BSU må vere i NOK. Endre typen, eller slett han.",
+      "setUp": "Set opp BSU",
+      "setUpName": "Set opp BSU {{name}}",
+      "toSetup": "Opne Kontooppsett"
+    },
+    "setup": {
+      "title": "Set opp BSU {{name}}",
+      "intro": "Skriv inn det banken viser for kvart år sidan du opna kontoen. Appen byggjer opp transaksjonane på kontoen frå det, éin gong, og låser han opp. Opningssaldoen i appen blir ikkje brukt.",
+      "notNok": "Denne BSU-en er i {{currency}}, men ein BSU må vere i NOK. Endre typen i Kontooppsett, eller slett han.",
+      "already": "Historikken til denne BSU-en er alt sett opp. Endre han med vanlege korrigeringar.",
+      "opened": "Året han vart opna",
+      "openedHint": "Seinast {{year}}, året for den første transaksjonen i appen.",
+      "fields": {
+        "deposits": "Innskot",
+        "interest": "Renter",
+        "withdrawals": "Uttak"
+      },
+      "fieldName": "{{field}} {{year}}",
+      "enterAmount": "Skriv inn eit beløp, 0 for ingenting.",
+      "belowRecorded": "Minst {{amount}}, det appen har.",
+      "overYear": "{{amount}} over årsgrensa på {{limit}}. Det blir lagra som oppgitt.",
+      "overTotal": "Til saman {{amount}} over den samla grensa. Det blir lagra som oppgitt.",
+      "balance": "Saldo i dag, i banken",
+      "balanceHint": "Appen har {{amount}}.",
+      "submit": "Set opp",
+      "done": "{{name}} er sett opp.",
+      "plan": {
+        "title": "Det som blir registrert",
+        "nothing": "Ingenting å leggje til: appen har alt.",
+        "opening": "Opningssaldoen blir korrigert til 0 ({{amount}})",
+        "year": "{{year}}: {{parts}}",
+        "deposits": "eit innskot på {{amount}}",
+        "interest": "renter på {{amount}}",
+        "withdrawals": "eit uttak på {{amount}}",
+        "adjustment": "Ei saldojustering på {{amount}} så det stemmer med banken",
+        "once": "Det blir gjort éin gong, alt på ein gong. Seinare endringar er vanlege korrigeringar."
+      },
+      "recorded_one": "Appen har {{amount}} ({{count}} transaksjon)",
+      "recorded_other": "Appen har {{amount}} ({{count}} transaksjonar)"
+    },
+    "admin": {
+      "intro": "BSU-grensene for innskot etter lova. Eit år brukar regelen frå det siste året til og med det. Endringar blir logga, og brukarane får ikkje beskjed.",
+      "fromYear": "Frå år",
+      "yearly": "Årsgrense",
+      "total": "Samla grense",
+      "modified": "Endra",
+      "add": "Legg til regel",
+      "new": "Ny regel",
+      "edit": "Endre regel",
+      "editName": "Endre regelen frå {{year}}",
+      "deleteName": "Slett regelen frå {{year}}",
+      "lastRule": "Den siste regelen kan ikkje slettast.",
+      "saved": "BSU-regelen frå {{year}} er lagra.",
+      "deleted": "BSU-regelen frå {{year}} er sletta.",
+      "totalBelow": "Den samla grensa kan ikkje vere lågare enn årsgrensa.",
+      "yearRange": "Eit år frå 2000 til 2100.",
+      "yearTaken": "Det finst ein regel frå {{year}} alt: lagring endrar han.",
+      "deleteConfirm": "Slette regelen frå {{year}}? Åra hans brukar regelen før han."
     }
   }
 }

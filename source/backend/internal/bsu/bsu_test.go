@@ -2,6 +2,8 @@ package bsu_test
 
 import (
 	"errors"
+	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +17,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledgertest"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/schedules"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/testdb"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/transactions"
 )
@@ -353,7 +356,7 @@ func TestSetUp(t *testing.T) {
 	e.create(t, transactions.New{Type: sqlc.TransactionTypeINC, AccountID: id, Amount: dec("10000"), At: time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)})
 	e.create(t, transactions.New{Type: sqlc.TransactionTypeTRF, AccountID: e.usage, ToAccountID: id, Amount: dec("2000"), At: now.Add(-time.Hour)})
 	e.create(t, transactions.New{Type: sqlc.TransactionTypeINC, AccountID: id, Amount: dec("100"), Tags: []string{"interest"}, At: now.Add(-time.Hour)})
-	if _, err := e.pool.Exec(ctx, "UPDATE bank_accounts SET bsu_set_up_at = NULL WHERE id = $1", id); err != nil {
+	if _, err := e.pool.Exec(ctx, "UPDATE bank_accounts SET bsu_set_up_at = NULL, bank = 'DNB' WHERE id = $1", id); err != nil {
 		t.Fatal(err)
 	}
 
@@ -363,7 +366,8 @@ func TestSetUp(t *testing.T) {
 	}
 	if h.LatestOpenedYear != 2025 || len(h.Years) != 2 || h.Opening.StringFixed(2) != "5000.00" || h.Balance.StringFixed(2) != "17100.00" ||
 		h.Years[0].Recorded.Deposits.StringFixed(2) != "10000.00" || h.Years[1].Recorded.Deposits.StringFixed(2) != "2000.00" ||
-		h.Years[1].Recorded.Interest.StringFixed(2) != "100.00" || len(h.Rules) != 1 || !h.SetUpAt.IsZero() {
+		h.Years[1].Recorded.Interest.StringFixed(2) != "100.00" || len(h.Rules) != 1 || !h.SetUpAt.IsZero() ||
+		h.Years[0].Count != (bsu.Counts{Deposits: 1}) || h.Years[1].Count != (bsu.Counts{Deposits: 1, Interest: 1}) {
 		t.Fatalf("history %+v", h)
 	}
 
@@ -434,6 +438,16 @@ func TestSetUp(t *testing.T) {
 	if n != 3 {
 		t.Errorf("%d transactions for 2024, want 3", n)
 	}
+	// The interest is from the bank, as Register interest records it (#70);
+	// the deposits and withdrawals have no counterparty.
+	var counterparties []string
+	if err := e.pool.QueryRow(ctx, `SELECT array_agg(counterparty || ':' || transaction_type ORDER BY (counterparty || ':' || transaction_type::text) COLLATE "C")
+		FROM transaction_headers WHERE user_id = $1 AND description = 'BSU history 2024'`, e.user).Scan(&counterparties); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(counterparties, ",") != ":EXP,:INC,DNB:INC" {
+		t.Errorf("2024 counterparties %v", counterparties)
+	}
 	// The balance adjustment: 54 150 recorded, 54 000 at the bank.
 	if err := e.pool.QueryRow(ctx, `SELECT count(*) FROM transaction_headers h JOIN bank_transactions b ON b.transaction_id = h.id
 		WHERE h.user_id = $1 AND h.transaction_type = 'BLA' AND b.amount = -150`, e.user).Scan(&n); err != nil {
@@ -465,5 +479,85 @@ func TestSetUpNew(t *testing.T) {
 	}
 	if n != 0 || e.status(t, id).Locked {
 		t.Errorf("%d lines, locked %v", n, e.status(t, id).Locked)
+	}
+}
+
+// lock locks a BSU account again, as if its history weren't set up.
+func (e env) lock(t *testing.T, id string) {
+	t.Helper()
+	if _, err := e.pool.Exec(t.Context(), "UPDATE bank_accounts SET bsu_set_up_at = NULL WHERE id = $1", id); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestLock: nothing is recorded with a locked BSU account, not even by a
+// schedule, but it can be deleted (#214).
+func TestLock(t *testing.T) {
+	e := setup(t)
+	ctx := t.Context()
+	id := e.account(t, "1000")
+	e.setUp(t, id)
+	inc := e.create(t, transactions.New{Type: sqlc.TransactionTypeINC, AccountID: id, Amount: dec("500"), At: now.Add(-time.Hour)})
+	trf := e.create(t, transactions.New{Type: sqlc.TransactionTypeTRF, AccountID: e.usage, ToAccountID: id, Amount: dec("100"), At: now.Add(-time.Hour)})
+	e.lock(t, id)
+
+	locked := func(what string, err error) {
+		t.Helper()
+		var le *bsu.LockedError
+		if !errors.As(err, &le) || le.AccountID != id {
+			t.Errorf("%s: %v, want it locked", what, err)
+		}
+	}
+	_, err := e.tx.Create(ctx, e.user, transactions.New{Type: sqlc.TransactionTypeINC, AccountID: id, Amount: dec("1"), BSUConfirmed: true})
+	locked("an income", err)
+	_, err = e.tx.Create(ctx, e.user, transactions.New{Type: sqlc.TransactionTypeTRF, AccountID: e.usage, ToAccountID: id, Amount: dec("1")})
+	locked("a transfer in", err)
+	_, err = e.tx.Create(ctx, e.user, transactions.New{Type: sqlc.TransactionTypeINC, AccountID: id, Amount: dec("1"), Tags: []string{"interest"}})
+	locked("interest", err)
+	amount := dec("400")
+	_, err = e.tx.Correct(ctx, e.user, inc.ID, transactions.Changes{Amount: &amount})
+	locked("a correction", err)
+	desc := "Just the description"
+	_, err = e.tx.Correct(ctx, e.user, trf.ID, transactions.Changes{Description: &desc})
+	locked("a description on a transfer in", err)
+	_, err = e.tx.Reverse(ctx, e.user, inc.ID)
+	locked("a reversal", err)
+	other := e.create(t, transactions.New{Type: sqlc.TransactionTypeINC, AccountID: e.usage, Amount: dec("10")})
+	_, err = e.tx.Correct(ctx, e.user, other.ID, transactions.Changes{AccountID: &id})
+	locked("a move onto it", err)
+	_, err = e.accounts.AdjustBalance(ctx, e.user, id, accounts.Adjustment{Target: dec("0")})
+	locked("a balance adjustment", err)
+	err = e.accounts.Delete(ctx, e.user, e.usage, accounts.Settlement{Remaining: &accounts.Remaining{TransferTo: id}})
+	locked("settling another account into it", err)
+
+	// A schedule's occurrence is queued as failed, with why.
+	sch := schedules.NewService(e.pool, schedules.Options{Now: func() time.Time { return now }, Transactions: e.tx})
+	if _, err := sch.Create(ctx, e.user, schedules.Settings{
+		Name: "Savings", Mode: sqlc.ScheduleModeAuto, Start: now.Add(-time.Hour), Minute: 11 * 60, TimeZone: "UTC",
+		Frequency: sqlc.ScheduleFrequencyDay, Every: 1,
+		Transaction: transactions.New{Type: sqlc.TransactionTypeTRF, AccountID: e.usage, ToAccountID: id, Amount: dec("100")},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := sch.RunDue(ctx, slog.New(slog.DiscardHandler)); err != nil {
+		t.Fatal(err)
+	}
+	page, err := sch.Occurrences(ctx, e.user, schedules.Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 1 || page.Items[0].State != sqlc.OccurrenceStateQueued || page.Items[0].Reason != sqlc.OccurrenceReasonInvalid {
+		t.Fatalf("occurrences %+v", page.Items)
+	}
+	if b := e.balance(t, id); b != "1600.00" {
+		t.Errorf("balance %s, want 1600.00 (unchanged)", b)
+	}
+
+	// Set up, it takes transactions again; locked, it can still be deleted.
+	e.setUp(t, id)
+	e.create(t, transactions.New{Type: sqlc.TransactionTypeINC, AccountID: id, Amount: dec("1")})
+	e.lock(t, id)
+	if err := e.accounts.Delete(ctx, e.user, id, accounts.Settlement{Remaining: &accounts.Remaining{TransferTo: e.usage}}); err != nil {
+		t.Fatalf("deleting a locked BSU: %v", err)
 	}
 }

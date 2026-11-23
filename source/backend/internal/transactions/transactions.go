@@ -314,6 +314,11 @@ func (s *Service) record(ctx context.Context, tx pgx.Tx, userID string, n New, r
 	if err := checkBuckets(ctx, q, userID, n); err != nil {
 		return nil, err
 	}
+	// A locked BSU account takes nothing until it's set up (#214), not even
+	// from a schedule.
+	if err := bsu.Locked(ctx, tx, userID, n.AccountID, n.ToAccountID); err != nil {
+		return nil, err
+	}
 	if err := checkBSU(ctx, tx, userID, n, nil, false); err != nil {
 		return nil, err
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/balance"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/bsu"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/buckets"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
@@ -72,6 +73,12 @@ func (s *Service) holdLines(ctx context.Context, tx pgx.Tx, userID, accountID, t
 			toTarget = amount
 			if room != nil && room.LessThan(toTarget) {
 				toTarget = decimal.Max(*room, decimal.Zero)
+			}
+			// A locked BSU target is paused, as if it had no room (#214).
+			if err := bsu.Locked(ctx, tx, userID, t.AccountID); errors.Is(err, bsu.ErrLocked) {
+				toTarget = decimal.Zero
+			} else if err != nil {
+				return nil, err
 			}
 		}
 	}

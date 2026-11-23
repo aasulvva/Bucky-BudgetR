@@ -2,7 +2,7 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { apiMock, problem } from "@/test/api";
-import { account, bucket } from "@/test/fixtures";
+import { account, bsuStatus, bucket } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
 import { formatMoney } from "@/lib/money";
@@ -199,5 +199,157 @@ describe("Accounts", () => {
     const sheet = await screen.findByRole("dialog");
     expect(within(sheet).getByRole("region", { name: "Register interest" })).toBeInTheDocument();
     expect(within(sheet).getByText("Main account · Usage")).toBeInTheDocument();
+  });
+
+  it("shows a BSU's deposits against this year's limits (#214)", async () => {
+    const home = account({
+      id: "4567",
+      name: "Home",
+      type: "bsu",
+      balance: "120000.00",
+      bsu: bsuStatus(),
+    });
+    apiMock.on("GET /api/v1/accounts", { body: [home, main] });
+    renderRoute("/accounts");
+    const c = await card("Home");
+    expect(
+      c.getByText(
+        `${money("18000.00")} of ${money("27500.00")} this year · ${money("9500.00")} left · Total ${money("120000.00")} of ${money("300000.00")}`,
+      ),
+    ).toBeInTheDocument();
+    expect(c.getByRole("button", { name: "Adjust balance" })).toBeEnabled();
+  });
+
+  it("sets up a locked BSU's history, then it unlocks (#214)", async () => {
+    const home = account({
+      id: "4567",
+      name: "Home",
+      type: "bsu",
+      balance: "17100.00",
+      bsu: bsuStatus({ locked: true, opened_year: null }),
+    });
+    apiMock.on("GET /api/v1/accounts", { body: [home, main] });
+    apiMock.on("GET /api/v1/accounts/4567/bsu-history", {
+      body: {
+        latest_opened_year: 2025,
+        years: [
+          {
+            year: 2025,
+            recorded: { deposits: "10000.00", interest: "0.00", withdrawals: "0.00" },
+            recorded_count: { deposits: 4, interest: 0, withdrawals: 0 },
+          },
+          {
+            year: 2026,
+            recorded: { deposits: "2000.00", interest: "100.00", withdrawals: "0.00" },
+            recorded_count: { deposits: 1, interest: 1, withdrawals: 0 },
+          },
+        ],
+        opening: "5000.00",
+        balance: "17100.00",
+        set_up_at: null,
+        rules: [
+          {
+            from_year: 2021,
+            yearly_limit: "27500.00",
+            total_limit: "300000.00",
+            modified_at: "2026-01-01T00:00:00Z",
+          },
+        ],
+      },
+    });
+    apiMock.on("POST /api/v1/accounts/4567/bsu-history", {
+      body: { ...home, bsu: bsuStatus({ opened_year: 2024 }) },
+    });
+    const { router } = renderRoute("/accounts");
+    const c = await card("Home");
+    expect(c.getByText("Locked until set up")).toBeInTheDocument();
+    expect(c.getByRole("button", { name: "Adjust balance" })).toBeDisabled();
+    expect(c.getByRole("button", { name: "Register interest" })).toBeDisabled();
+    await userEvent.click(c.getByRole("button", { name: "Set up BSU Home" }));
+    expect(router.state.location.search).toBe("?bsu=4567");
+
+    const dialog = within(await screen.findByRole("dialog", { name: "Set up BSU Home" }));
+    // Each field says what the app has, which the setup tops up.
+    const y2025 = within(await dialog.findByRole("group", { name: "2025" }));
+    expect(
+      y2025.getByText(`The app has ${money("10000.00")} (4 transactions)`),
+    ).toBeInTheDocument();
+    expect(y2025.queryByText(/The app has .* \(0 transactions\)/)).not.toBeInTheDocument();
+    expect(
+      within(dialog.getByRole("group", { name: "2026" })).getByText(
+        `The app has ${money("100.00")} (1 transaction)`,
+      ),
+    ).toBeInTheDocument();
+    // Opened a year earlier: 2024 is added, empty.
+    await userEvent.click(dialog.getByRole("combobox", { name: "Year opened" }));
+    await userEvent.click(await dialog.findByRole("option", { name: "2024" }));
+    const field = (name: string) => dialog.getByRole("textbox", { name });
+    await userEvent.clear(field("Deposits 2024"));
+    await userEvent.type(field("Deposits 2024"), "28000");
+    expect(
+      dialog.getByText(
+        `${money("500.00")} over the yearly limit of ${money("27500.00")}. It's saved as given.`,
+      ),
+    ).toBeInTheDocument();
+    await userEvent.clear(field("Deposits 2025"));
+    await userEvent.type(field("Deposits 2025"), "9000");
+    await userEvent.click(dialog.getByRole("button", { name: "Set up" }));
+    expect(
+      dialog.getByText(`At least ${money("10000.00")}, what the app has.`),
+    ).toBeInTheDocument();
+    expect(apiMock.calls("POST /api/v1/accounts/4567/bsu-history")).toHaveLength(0);
+
+    await userEvent.clear(field("Deposits 2025"));
+    await userEvent.type(field("Deposits 2025"), "15000");
+    await userEvent.clear(field("Interest 2024"));
+    await userEvent.type(field("Interest 2024"), "200");
+    const balance = dialog.getByRole("textbox", { name: "Balance today, at the bank" });
+    await userEvent.clear(balance);
+    await userEvent.type(balance, "50000");
+    const plan = within(dialog.getByRole("region", { name: "What it records" }));
+    expect(
+      plan.getByText(`The opening balance is corrected to 0 (${money("-5000.00")})`),
+    ).toBeInTheDocument();
+    expect(
+      plan.getByText(`2024: a deposit of ${money("28000.00")}, interest of ${money("200.00")}`),
+    ).toBeInTheDocument();
+    expect(plan.getByText(`2025: a deposit of ${money("5000.00")}`)).toBeInTheDocument();
+    // 17 100 − 5 000 + 28 200 + 5 000 = 45 300.
+    expect(
+      plan.getByText(`A balance adjustment of ${money("4700.00")} to match the bank`),
+    ).toBeInTheDocument();
+
+    await userEvent.click(dialog.getByRole("button", { name: "Set up" }));
+    expect(await screen.findByText("Home is set up.")).toBeInTheDocument();
+    expect(apiMock.calls("POST /api/v1/accounts/4567/bsu-history")[0]?.body).toEqual({
+      opened_year: 2024,
+      years: [
+        { year: 2024, deposits: "28000.00", interest: "200.00", withdrawals: "0.00" },
+        { year: 2025, deposits: "15000.00", interest: "0.00", withdrawals: "0.00" },
+        { year: 2026, deposits: "2000.00", interest: "100.00", withdrawals: "0.00" },
+      ],
+      balance: "50000.00",
+      // As Register interest: the bank, else "Interest" (#70).
+      interest_counterparty: "Interest",
+    });
+    expect(router.state.location.search).toBe("");
+  });
+
+  it("says a BSU in another currency must change type or go (#214)", async () => {
+    const old = account({
+      id: "5678",
+      name: "Old BSU",
+      type: "bsu",
+      currency: "EUR",
+      bsu: bsuStatus({ locked: true }),
+    });
+    apiMock.on("GET /api/v1/accounts", { body: [old, main] });
+    renderRoute("/accounts");
+    const c = await card("Old BSU");
+    expect(c.getByText(/This BSU is in EUR, but a BSU must be in NOK/)).toBeInTheDocument();
+    expect(c.getByRole("link", { name: "Open Account setup" })).toHaveAttribute(
+      "href",
+      "/accounts/setup?edit=5678",
+    );
   });
 });

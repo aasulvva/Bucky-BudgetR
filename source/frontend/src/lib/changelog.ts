@@ -16,6 +16,35 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.30.00",
+    date: "2026-11-23",
+    title: {
+      en: "BSU accounts",
+      nb: "BSU-kontoer",
+      nn: "BSU-kontoar",
+    },
+    changes: {
+      en: [
+        "Accounts shows each BSU's deposits this year and in all against the limits, and what's left. Recording a deposit into one says what it may still take this year.",
+        "Each BSU account is set up once: for each year since you opened it, what the bank shows of deposits, interest and withdrawals, and today's balance. The app adds what it's missing. Until then the account is locked: nothing can be recorded with it, its schedules go to the queue, and as a savings target it's paused. You can still delete it.",
+        "A new BSU is always in NOK, and its setup opens right after you create it.",
+        "Admins set the BSU limits under Admin › BSU rules.",
+      ],
+      nb: [
+        "Kontoer viser innskuddene på hver BSU i år og totalt mot grensene, og hva som er igjen. Når du registrerer et innskudd på en, står det hva den kan ta imot resten av året.",
+        "Hver BSU-konto settes opp én gang: for hvert år siden du åpnet den, det banken viser av innskudd, renter og uttak, og saldoen i dag. Appen legger til det den mangler. Til da er kontoen låst: ingenting kan registreres på den, de planlagte transaksjonene går til køen, og som sparemål står den på pause. Du kan fortsatt slette den.",
+        "En ny BSU er alltid i NOK, og oppsettet åpnes rett etter at du har opprettet den.",
+        "Administratorer setter BSU-grensene under Admin › BSU-regler.",
+      ],
+      nn: [
+        "Kontoar viser innskota på kvar BSU i år og totalt mot grensene, og kva som er att. Når du registrerer eit innskot på ein, står det kva han kan ta imot resten av året.",
+        "Kvar BSU-konto blir sett opp éin gong: for kvart år sidan du opna han, det banken viser av innskot, renter og uttak, og saldoen i dag. Appen legg til det han manglar. Til då er kontoen låst: ingenting kan registrerast på han, dei planlagde transaksjonane går til køen, og som sparemål står han på pause. Du kan framleis slette han.",
+        "Ein ny BSU er alltid i NOK, og oppsettet blir opna rett etter at du har oppretta han.",
+        "Administratorar set BSU-grensene under Admin › BSU-reglar.",
+      ],
+    },
+  },
+  {
     version: "v2.29.01",
     date: "2026-11-23",
     title: {

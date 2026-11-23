@@ -195,7 +195,7 @@ func (s *server) transactionService() (*transactions.Service, error) {
 
 // transactionError maps errors from the transactions service to problems.
 func transactionError(err error) error {
-	if errors.Is(err, bsu.ErrOverLimit) || errors.Is(err, bsu.ErrWithdrawal) {
+	if errors.Is(err, bsu.ErrOverLimit) || errors.Is(err, bsu.ErrWithdrawal) || errors.Is(err, bsu.ErrLocked) {
 		return bsuError(err)
 	}
 	switch {

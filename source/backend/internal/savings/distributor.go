@@ -10,6 +10,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/balance"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/bsu"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/buckets"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ids"
@@ -341,10 +342,15 @@ func (s *Service) plan(ctx context.Context, tx pgx.Tx, userID, accountID string,
 		return Plan{}, err
 	}
 
+	// A locked BSU target is paused until it's set up (#214).
+	locked, err := bsu.LockedAccounts(ctx, tx, userID)
+	if err != nil {
+		return Plan{}, err
+	}
 	var cands []Candidate
 	intoBucket := map[string]bool{}
 	for _, t := range targets {
-		if t.Currency != account.Currency || t.AccountID == accountID {
+		if t.Currency != account.Currency || t.AccountID == accountID || locked[t.AccountID] {
 			continue
 		}
 		c := Candidate{ID: t.ID, Position: decimal.Max(t.Current, decimal.Zero).Add(t.HeldTotal()), Goal: t.Goal}

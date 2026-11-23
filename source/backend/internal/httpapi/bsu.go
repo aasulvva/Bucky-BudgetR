@@ -38,12 +38,15 @@ func (s *server) GetBsuHistory(ctx context.Context, req api.GetBsuHistoryRequest
 	}
 	for _, y := range h.Years {
 		out.Years = append(out.Years, struct {
-			Recorded api.BSUSums `json:"recorded"`
-			Year     int         `json:"year"`
+			Recorded      api.BSUSums   `json:"recorded"`
+			RecordedCount api.BSUCounts `json:"recorded_count"`
+			Year          int           `json:"year"`
 		}{Year: y.Year, Recorded: api.BSUSums{
 			Deposits:    y.Recorded.Deposits.StringFixed(money.Places),
 			Interest:    y.Recorded.Interest.StringFixed(money.Places),
 			Withdrawals: y.Recorded.Withdrawals.StringFixed(money.Places),
+		}, RecordedCount: api.BSUCounts{
+			Deposits: y.Count.Deposits, Interest: y.Count.Interest, Withdrawals: y.Count.Withdrawals,
 		}})
 	}
 	return out, nil
@@ -60,6 +63,9 @@ func (s *server) SetUpBsuHistory(ctx context.Context, req api.SetUpBsuHistoryReq
 	}
 	b := req.Body
 	in := bsu.SetUpInput{OpenedYear: b.OpenedYear}
+	if b.InterestCounterparty != nil {
+		in.InterestCounterparty = *b.InterestCounterparty
+	}
 	if in.Balance, err = parseAmount(b.Balance); err != nil {
 		return nil, err
 	}
@@ -193,6 +199,9 @@ func bsuError(err error) error {
 	case errors.Is(err, bsu.ErrWithdrawal):
 		return &Error{Status: http.StatusConflict, Code: "bsu_withdrawal",
 			Detail: "This takes money out of a BSU account, which can end its tax deduction. Confirm to record it anyway."}
+	case errors.Is(err, bsu.ErrLocked):
+		return &Error{Status: http.StatusConflict, Code: "bsu_locked",
+			Detail: "The BSU account is locked until its history is set up. Set it up on the Accounts screen first."}
 	case errors.Is(err, bsu.ErrNotFound):
 		return &Error{Status: http.StatusNotFound, Code: "not_found", Detail: "Not found.", Err: err}
 	case errors.Is(err, bsu.ErrLastRule):

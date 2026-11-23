@@ -22,6 +22,25 @@ export function account(overrides: Partial<Account> & Pick<Account, "id" | "name
   };
 }
 
+/** A BSU account's status (#214): set up, 18 000 of 27 500 deposited this year. */
+export function bsuStatus(
+  overrides: Partial<NonNullable<Account["bsu"]>> = {},
+): NonNullable<Account["bsu"]> {
+  return {
+    year: 2026,
+    yearly_limit: "27500.00",
+    total_limit: "300000.00",
+    deposited_year: "18000.00",
+    deposited_total: "120000.00",
+    left_year: "9500.00",
+    left_total: "180000.00",
+    over: false,
+    locked: false,
+    opened_year: 2020,
+    ...overrides,
+  };
+}
+
 export function bucket(
   overrides: Partial<Bucket> & Pick<Bucket, "id" | "name" | "source_account_id">,
 ): Bucket {

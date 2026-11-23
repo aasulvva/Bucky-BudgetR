@@ -37,6 +37,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/accounts"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/allocation"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/balance"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/bsu"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/buckets"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ids"
@@ -420,6 +421,14 @@ func (s *Service) Done(ctx context.Context, userID, id string, d Done) (Target, 
 			return err
 		}
 		if err := checkHeld(ctx, tx, id, d.AccountID, d.Amount, now, d.At); err != nil {
+			return err
+		}
+		// Not to or from a locked BSU account (#214).
+		to := ""
+		if t.account != nil {
+			to = t.account.ID
+		}
+		if err := bsu.Locked(ctx, tx, userID, to, d.AccountID); err != nil {
 			return err
 		}
 		e := ledger.Entry{

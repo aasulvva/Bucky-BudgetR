@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shopspring/decimal"
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/accounts"
@@ -29,6 +30,7 @@ func dec(s string) decimal.Decimal { return decimal.RequireFromString(s) }
 func ptr[T any](v T) *T { return &v }
 
 type env struct {
+	pool     *pgxpool.Pool
 	user     string
 	savings  *savings.Service
 	accounts *accounts.Service
@@ -45,6 +47,7 @@ func setup(t *testing.T, cycle bool) env {
 	l := ledger.New(ledger.Options{AfterRecord: allocation.AfterRecord})
 	sv := savings.NewService(pool, l, savings.Options{Now: clock})
 	e := env{
+		pool:     pool,
 		user:     authtest.NewUser(t, pool, "alice").ID,
 		savings:  sv,
 		accounts: accounts.NewService(pool, l, accounts.Options{Now: clock, Savings: sv}),
@@ -65,7 +68,21 @@ func (e env) account(t *testing.T, name string, typ sqlc.AccountType, opening st
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A BSU is set up, so it isn't locked (#214); bsuLocked locks it.
+	if typ == sqlc.AccountTypeBsu {
+		e.bsuLocked(t, a.ID, false)
+	}
 	return a.ID
+}
+
+// bsuLocked locks a BSU account as if its history weren't set up, or
+// unlocks it.
+func (e env) bsuLocked(t *testing.T, id string, locked bool) {
+	t.Helper()
+	if _, err := e.pool.Exec(t.Context(),
+		"UPDATE bank_accounts SET bsu_set_up_at = CASE WHEN $2 THEN NULL ELSE now() END WHERE id = $1", id, locked); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func (e env) bucket(t *testing.T, n buckets.New) string {

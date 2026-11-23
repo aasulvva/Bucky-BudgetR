@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -23,6 +24,8 @@ const MinOpenedYear = 1990
 type YearHistory struct {
 	Year     int
 	Recorded Sums
+	// Count is how many transactions make up each of Recorded.
+	Count Counts
 }
 
 // History is what the app knows of a BSU account, for its history setup:
@@ -59,6 +62,9 @@ type SetUpInput struct {
 	Years []YearInput
 	// Balance is the balance now, at the bank.
 	Balance decimal.Decimal
+	// InterestCounterparty is the counterparty of the interest it records,
+	// as Register interest gives it (#70); empty is the account's bank.
+	InterestCounterparty string
 }
 
 // Description is what each transaction the setup records says.
@@ -82,7 +88,7 @@ func (s *Service) History(ctx context.Context, userID, id string) (History, erro
 
 func (s *Service) history(ctx context.Context, db sqlc.DBTX, userID string, a sqlc.BankAccount) (History, error) {
 	q := sqlc.New(db)
-	sums, err := yearSums(ctx, q, userID, []string{a.ID})
+	sums, err := yearTallies(ctx, q, userID, []string{a.ID})
 	if err != nil {
 		return History{}, err
 	}
@@ -95,7 +101,7 @@ func (s *Service) history(ctx context.Context, db sqlc.DBTX, userID string, a sq
 	out := History{AccountID: a.ID, LatestOpenedYear: first, Opening: decimal.Zero}
 	for y := first; y <= this; y++ {
 		r := sums[a.ID][y]
-		out.Years = append(out.Years, YearHistory{Year: y, Recorded: Sums{
+		out.Years = append(out.Years, YearHistory{Year: y, Count: r.Count, Recorded: Sums{
 			Deposits: zeroed(r.Deposits), Interest: zeroed(r.Interest), Withdrawals: zeroed(r.Withdrawals),
 		}})
 	}
@@ -127,7 +133,8 @@ func zeroed(d decimal.Decimal) decimal.Decimal { return d.Add(decimal.Zero) }
 // database transaction: it brings the opening balance to 0, records what the
 // app is missing of each year (a deposit, an interest income tagged interest
 // and a withdrawal, each described as Description(year) and dated 31 Dec
-// 12:00 Norwegian time, or now this year), and adjusts the balance (BLA) to
+// 12:00 Norwegian time, or now this year; the interest from
+// in.InterestCounterparty, else the account's bank), and adjusts the balance (BLA) to
 // in.Balance. The account is then no longer locked.
 func (s *Service) SetUp(ctx context.Context, userID, id string, in SetUpInput) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
@@ -177,6 +184,10 @@ func (s *Service) SetUp(ctx context.Context, userID, id string, in SetUpInput) e
 		for _, y := range h.Years {
 			recorded[y.Year] = y.Recorded
 		}
+		interestFrom := strings.TrimSpace(in.InterestCounterparty)
+		if interestFrom == "" {
+			interestFrom = a.Bank
+		}
 		for _, y := range in.Years {
 			at := now
 			if y.Year < this {
@@ -184,20 +195,21 @@ func (s *Service) SetUp(ctx context.Context, userID, id string, in SetUpInput) e
 			}
 			r := recorded[y.Year]
 			for _, e := range []struct {
-				typ    sqlc.TransactionType
-				amount decimal.Decimal
-				tags   []string
+				typ          sqlc.TransactionType
+				amount       decimal.Decimal
+				tags         []string
+				counterparty string
 			}{
-				{sqlc.TransactionTypeINC, y.Deposits.Sub(r.Deposits), nil},
-				{sqlc.TransactionTypeINC, y.Interest.Sub(r.Interest), []string{InterestTag}},
-				{sqlc.TransactionTypeEXP, y.Withdrawals.Sub(r.Withdrawals).Neg(), nil},
+				{sqlc.TransactionTypeINC, y.Deposits.Sub(r.Deposits), nil, ""},
+				{sqlc.TransactionTypeINC, y.Interest.Sub(r.Interest), []string{InterestTag}, interestFrom},
+				{sqlc.TransactionTypeEXP, y.Withdrawals.Sub(r.Withdrawals).Neg(), nil, ""},
 			} {
 				if e.amount.IsZero() {
 					continue
 				}
 				if _, err := s.ledger.Record(ctx, tx, ledger.Entry{
 					UserID: userID, CreatedBy: userID, Type: e.typ, At: at,
-					Description: Description(y.Year), Tags: e.tags,
+					Description: Description(y.Year), Tags: e.tags, Counterparty: e.counterparty,
 					BankLines: []ledger.BankLine{{AccountID: id, Amount: e.amount}},
 				}); err != nil {
 					return fmt.Errorf("record %d: %w", y.Year, err)

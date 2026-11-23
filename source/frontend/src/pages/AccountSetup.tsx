@@ -35,6 +35,8 @@ import { useCurrentCycles } from "@/api/cycles";
 import { ApiError, unwrap } from "@/api/errors";
 import { useSavingsBudget, useSavingsTargets } from "@/api/savings";
 import type { components } from "@/api/schema";
+import { BsuSetupDialog } from "@/components/accounts/BsuSetup";
+import { BsuLocked } from "@/components/accounts/BsuStatus";
 import { AmountInput } from "@/components/AmountInput";
 import { DateTimeInput } from "@/components/DateTimeInput";
 import { ErrorAlert } from "@/components/ErrorAlert";
@@ -42,6 +44,7 @@ import { QueryState } from "@/components/QueryState";
 import { ReleaseNote } from "@/components/savings/ReleaseNote";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
 import i18n from "@/i18n";
+import { BSU_CURRENCY, isLockedBsu } from "@/lib/bsu";
 import { canDelete } from "@/lib/buckets";
 import { isOverdue } from "@/lib/cycles";
 import { CURRENCY } from "@/lib/locale";
@@ -65,6 +68,21 @@ export default function AccountSetup() {
   const [params, setParams] = useSearchParams();
   const [creating, setCreating] = useState(false);
   const editId = params.get("edit");
+  // A locked BSU's history setup (#214), right after creating one too.
+  const bsuId = params.get("bsu");
+  const openBsu = (id: string | null) => {
+    setParams(
+      (p) => {
+        if (id === null) p.delete("bsu");
+        else {
+          p.set("bsu", id);
+          p.delete("edit");
+        }
+        return p;
+      },
+      { replace: id === null },
+    );
+  };
 
   const openEdit = (id: string | null) => {
     setParams(
@@ -93,6 +111,7 @@ export default function AccountSetup() {
       <QueryState query={accounts}>
         {(list) => {
           const editing = editId ? list.find((a) => a.id === editId) : undefined;
+          const settingUp = bsuId ? list.find((a) => a.id === bsuId && isLockedBsu(a)) : undefined;
           return (
             <>
               {list.length === 0 ? (
@@ -115,9 +134,18 @@ export default function AccountSetup() {
                     onDone={() => {
                       openEdit(null);
                     }}
+                    onSetUpBsu={() => {
+                      openBsu(editing.id);
+                    }}
                   />
                 )}
               </ResponsiveModal>
+              <BsuSetupDialog
+                account={settingUp}
+                onClose={() => {
+                  openBsu(null);
+                }}
+              />
             </>
           );
         }}
@@ -131,8 +159,9 @@ export default function AccountSetup() {
       >
         <CreateAccount
           accounts={accounts.data ?? []}
-          onDone={() => {
+          onDone={(created) => {
             setCreating(false);
+            if (created?.type === "bsu") openBsu(created.id);
           }}
         />
       </ResponsiveModal>
@@ -170,7 +199,14 @@ function AccountTable({ accounts, onEdit }: { accounts: Account[]; onEdit: (id: 
                   </Text>
                 </Table.Td>
                 <Table.Td c={a.bank ? undefined : "dimmed"}>{a.bank || "—"}</Table.Td>
-                <Table.Td>{accountTypeLabel(a.type)}</Table.Td>
+                <Table.Td>
+                  {accountTypeLabel(a.type)}
+                  {isLockedBsu(a) && (
+                    <Text size="xs" c="var(--mantine-color-orange-text)">
+                      {t("bsu.locked.title")}
+                    </Text>
+                  )}
+                </Table.Td>
                 <Table.Td>{a.currency}</Table.Td>
                 <Table.Td ta="right" style={{ whiteSpace: "nowrap" }}>
                   {formatMoney(a.balance, a.currency)}
@@ -238,14 +274,24 @@ function BankInput({
   );
 }
 
-function CreateAccount({ accounts, onDone }: { accounts: Account[]; onDone: () => void }) {
+function CreateAccount({
+  accounts,
+  onDone,
+}: {
+  accounts: Account[];
+  /** Called with the new account, or nothing when cancelled. */
+  onDone: (created?: Account) => void;
+}) {
   const { t } = useTranslation();
   const refresh = useRefreshMoney();
   const currencies = useMemo(() => currencyOptions(), []);
   const [name, setName] = useState("");
   const [bank, setBank] = useState("");
   const [type, setType] = useState<AccountType>("usage");
-  const [currency, setCurrency] = useState(CURRENCY);
+  const [chosenCurrency, setCurrency] = useState(CURRENCY);
+  // A BSU is always in NOK (#214).
+  const bsu = type === "bsu";
+  const currency = bsu ? BSU_CURRENCY : chosenCurrency;
   const [opening, setOpening] = useState<string | null>(null);
   const [openingAt, setOpeningAt] = useState<string | null>(null);
   const [errors, setErrors] = useState<{ name?: string }>({});
@@ -274,7 +320,7 @@ function CreateAccount({ accounts, onDone }: { accounts: Account[]; onDone: () =
         color: "green",
         message: t("accountSetup.created", { name: account.name }),
       });
-      onDone();
+      onDone(account);
       await refresh();
     },
     onError: (err) => {
@@ -315,13 +361,15 @@ function CreateAccount({ accounts, onDone }: { accounts: Account[]; onDone: () =
             if (v) setType(v);
           }}
         />
+        {bsu && <Text size="sm">{t("bsu.createHint")}</Text>}
         <Select
           label={t("accountSetup.currency")}
-          description={t("accountSetup.currencyFixed")}
+          description={t(bsu ? "bsu.currencyFixed" : "accountSetup.currencyFixed")}
           data={currencies}
           value={currency}
           searchable
           allowDeselect={false}
+          disabled={bsu}
           onChange={(v) => {
             if (v) setCurrency(v);
           }}
@@ -343,7 +391,12 @@ function CreateAccount({ accounts, onDone }: { accounts: Account[]; onDone: () =
         )}
         {create.error && !nameProblem(create.error) && <ErrorAlert error={create.error} />}
         <Group justify="flex-end" gap="xs">
-          <Button variant="default" onClick={onDone}>
+          <Button
+            variant="default"
+            onClick={() => {
+              onDone();
+            }}
+          >
             {t("common.cancel")}
           </Button>
           <Button type="submit" loading={create.isPending}>
@@ -359,10 +412,12 @@ function EditAccount({
   account,
   accounts,
   onDone,
+  onSetUpBsu,
 }: {
   account: Account;
   accounts: Account[];
   onDone: () => void;
+  onSetUpBsu: () => void;
 }) {
   const { t } = useTranslation();
   const refresh = useRefreshMoney();
@@ -464,15 +519,32 @@ function EditAccount({
           required
         />
         <BankInput value={bank} onChange={setBank} accounts={accounts} current={account.bank} />
+        <BsuLocked account={account} onSetUp={onSetUpBsu} />
         <Select
           label={t("accountSetup.type")}
-          data={accountTypeOptions()}
+          // Only a NOK account can be a BSU (#214).
+          data={accountTypeOptions().map((o) =>
+            o.value === "bsu" && account.currency !== BSU_CURRENCY && account.type !== "bsu"
+              ? { ...o, disabled: true }
+              : o,
+          )}
+          description={
+            account.currency !== BSU_CURRENCY && account.type !== "bsu"
+              ? t("bsu.onlyNok")
+              : undefined
+          }
           value={type}
           allowDeselect={false}
+          comboboxProps={{ withinPortal: false }}
           onChange={(v) => {
             if (v) setType(v);
           }}
         />
+        {type !== account.type && (type === "bsu" || account.type === "bsu") && (
+          <Text size="sm" c="var(--mantine-color-orange-text)">
+            {t(type === "bsu" ? "bsu.becomesBsu" : "bsu.leavesBsu")}
+          </Text>
+        )}
         {type !== account.type && !TARGET_ACCOUNT_TYPES.includes(type) && (
           <ReleaseNote account={account} />
         )}

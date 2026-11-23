@@ -6,6 +6,7 @@ import (
 
 	"github.com/shopspring/decimal"
 
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/bsu"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/buckets"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/savings"
@@ -308,5 +309,64 @@ func TestRules(t *testing.T) {
 	}
 	if err := e.savings.DeleteRule(ctx, e.user, bufferRule.ID); !errors.Is(err, savings.ErrNotFound) {
 		t.Errorf("deleting a deleted target's rule: %v", err)
+	}
+}
+
+// TestLockedBSUTarget: a BSU target that is locked until its history is set
+// up (#214) gets nothing from the distributor or the savings budget, and its
+// held funds can't be moved there.
+func TestLockedBSUTarget(t *testing.T) {
+	e := setupDistributor(t, true)
+	ctx := t.Context()
+	if _, _, err := e.savings.AddToDistributor(ctx, e.user, e.main, dec("1200")); err != nil {
+		t.Fatal(err)
+	}
+	home, err := e.savings.Get(ctx, e.user, e.home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.bsuLocked(t, home.AccountID, true)
+
+	if _, err := e.savings.Done(ctx, e.user, e.home, savings.Done{AccountID: e.main, Amount: dec("600")}); !errors.Is(err, bsu.ErrLocked) {
+		t.Errorf("Done to a locked BSU: %v", err)
+	}
+	// Buffer 4 and Holiday 2 share it all.
+	if _, _, err := e.savings.AddToDistributor(ctx, e.user, e.main, dec("1200")); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := e.held(t, e.home, e.main); got != "600.00" {
+		t.Errorf("held for Home %s, want 600.00 from before", got)
+	}
+	if got, _ := e.held(t, e.buffer, e.main); got != "1200.00" {
+		t.Errorf("held for Buffer %s", got)
+	}
+	p, err := e.savings.Preview(ctx, e.user, e.main, dec("600"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range p.Shares {
+		if s.TargetID == e.home {
+			t.Errorf("the preview gives Home %s", s.Amount)
+		}
+	}
+
+	// A savings budget amount for it goes to the distributor instead.
+	entry, err := e.savings.CreateBudget(ctx, e.user, savings.NewBudget{
+		AccountID: e.main, TargetID: e.home, Amount: dec("300"), When: sqlc.SavingsBudgetWhenManual,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.savings.SaveNow(ctx, e.user, entry.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := e.held(t, e.home, e.main); got != "600.00" {
+		t.Errorf("after the budget, held for Home %s", got)
+	}
+
+	// Set up, it takes its share again.
+	e.bsuLocked(t, home.AccountID, false)
+	if _, err := e.savings.Done(ctx, e.user, e.home, savings.Done{AccountID: e.main, Amount: dec("600")}); err != nil {
+		t.Errorf("Done once set up: %v", err)
 	}
 }

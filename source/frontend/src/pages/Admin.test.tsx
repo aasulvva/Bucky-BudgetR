@@ -256,4 +256,69 @@ describe("Admin", () => {
     expect(await screen.findByRole("button", { name: "Ny brukar" })).toBeInTheDocument();
     expect(await screen.findByText("Må byte passord")).toBeInTheDocument();
   });
+
+  describe("BSU rules (#214)", () => {
+    const rule = (from_year: number, yearly_limit: string, total_limit = "300000.00") => ({
+      from_year,
+      yearly_limit,
+      total_limit,
+      modified_at: "2026-01-01T08:00:00Z",
+    });
+
+    it("lists the rules, and the last one can't be deleted", async () => {
+      apiMock.on("GET /api/v1/admin/bsu-rules", { body: [rule(2021, "27500.00")] });
+      renderRoute("/admin/bsu");
+      expect(
+        await screen.findByRole("tab", { name: "BSU rules", selected: true }),
+      ).toBeInTheDocument();
+      expect(await screen.findByRole("cell", { name: "2021" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Delete the rule from 2021" })).toBeDisabled();
+    });
+
+    it("adds a rule, checking the limits", async () => {
+      apiMock.on("GET /api/v1/admin/bsu-rules", { body: [rule(2021, "27500.00")] });
+      apiMock.on("PUT /api/v1/admin/bsu-rules/2027", { body: rule(2027, "30000.00", "350000.00") });
+      renderRoute("/admin/bsu");
+      await userEvent.click(await screen.findByRole("button", { name: "Add rule" }));
+      const dialog = within(await screen.findByRole("dialog", { name: "New rule" }));
+      expect(dialog.getByRole("textbox", { name: "From year" })).toHaveValue("2022");
+      const year = dialog.getByRole("textbox", { name: "From year" });
+      await userEvent.clear(year);
+      await userEvent.type(year, "2027");
+      const yearly = dialog.getByRole("textbox", { name: "Yearly limit" });
+      await userEvent.clear(yearly);
+      await userEvent.type(yearly, "400000");
+      expect(
+        dialog.getByText("The total limit can't be below the yearly limit."),
+      ).toBeInTheDocument();
+      await userEvent.clear(yearly);
+      await userEvent.type(yearly, "30000");
+      const total = dialog.getByRole("textbox", { name: "Total limit" });
+      await userEvent.clear(total);
+      await userEvent.type(total, "350000");
+      await userEvent.click(dialog.getByRole("button", { name: "Save" }));
+      expect(await screen.findByText("The BSU rule from 2027 is saved.")).toBeInTheDocument();
+      expect(apiMock.calls("PUT /api/v1/admin/bsu-rules/2027")[0]?.body).toEqual({
+        yearly_limit: "30000.00",
+        total_limit: "350000.00",
+      });
+    });
+
+    it("deletes a rule", async () => {
+      apiMock.on("GET /api/v1/admin/bsu-rules", {
+        body: [rule(2016, "25000.00"), rule(2021, "27500.00")],
+      });
+      apiMock.on("DELETE /api/v1/admin/bsu-rules/2016", { status: 204 });
+      renderRoute("/admin/bsu");
+      await userEvent.click(
+        await screen.findByRole("button", { name: "Delete the rule from 2016" }),
+      );
+      const dialog = within(
+        await screen.findByRole("dialog", { name: "Delete the rule from 2016" }),
+      );
+      await userEvent.click(dialog.getByRole("button", { name: "Delete" }));
+      expect(await screen.findByText("The BSU rule from 2016 is deleted.")).toBeInTheDocument();
+      expect(apiMock.calls("DELETE /api/v1/admin/bsu-rules/2016")).toHaveLength(1);
+    });
+  });
 });
