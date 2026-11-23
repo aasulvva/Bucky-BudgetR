@@ -39,6 +39,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/balance"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/bsu"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/buckets"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/cards"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ids"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
@@ -662,6 +663,10 @@ func (s *Service) checkSource(ctx context.Context, tx pgx.Tx, userID string, t l
 	}
 	if a.Currency != t.currency {
 		return fmt.Errorf("%w: %s is in %s, the target in %s", ErrCurrencyMismatch, accountID, a.Currency, t.currency)
+	}
+	// A credit card has no money of its own to hold for savings (#260).
+	if a.AccountType == sqlc.AccountTypeCreditCard {
+		return fmt.Errorf("%w: account %s", cards.ErrSource, accountID)
 	}
 	return nil
 }

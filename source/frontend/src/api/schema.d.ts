@@ -735,7 +735,11 @@ export interface paths {
          *     - money left in it is transferred (TRF) or adjusted away (BLA) as
          *       `remaining_funds` says, otherwise 409 `balance_not_zero`. A BSU
          *       account that isn't set up yet can't take it (409 `bsu_locked`,
-         *       #214), but one can itself be deleted.
+         *       #214), but one can itself be deleted. A credit card that owes money
+         *       is paid off by the transfer (#260).
+         *
+         *     Buckets can't move to a credit card (400 `card_source`). Deleting a
+         *     card's default account leaves the card without one (#260).
          *
          *     If any step is refused, nothing changes. Money and buckets can only move
          *     to another account in the same currency (400 `currency_mismatch`).
@@ -957,7 +961,8 @@ export interface paths {
          * Create a bucket
          * @description Creates a bucket funded from `source_account_id`, in that account's
          *     currency. Names must be unique among the user's buckets (409
-         *     `name_taken`).
+         *     `name_taken`). A credit card can't fund a bucket (400 `card_source`,
+         *     #260).
          *
          *     A non-zero `opening_funds` is recorded now as an Opening Funds (OPF)
          *     transaction. Like every bucket transaction, that needs an active
@@ -1033,7 +1038,8 @@ export interface paths {
         /**
          * Change a bucket's settings
          * @description The source account can only change to an account in the same currency
-         *     (400 `currency_mismatch`). Changing it resets CAF to 0 until the
+         *     (400 `currency_mismatch`), and not to a credit card (400
+         *     `card_source`, #260). Changing it resets CAF to 0 until the
          *     allocation routine funds the bucket from the new account.
          *
          *     Switching `cap_mode` without the new mode's value uses multiplier 1,
@@ -1193,6 +1199,9 @@ export interface paths {
          *     `bsu_withdrawal` (#214), unless `bsu_confirmed` is true. Interest (an
          *     income tagged `interest`) isn't a deposit. A transaction with a BSU
          *     account whose history isn't set up yet gets 409 `bsu_locked`.
+         *
+         *     One that takes a credit card's debt past its credit limit gets 409
+         *     `over_credit_limit` unless `limit_confirmed` is true (#260).
          */
         post: operations["createTransaction"];
         delete?: never;
@@ -1303,7 +1312,9 @@ export interface paths {
          *     takes more out of a BSU, gets 409 `bsu_over_limit` or
          *     `bsu_withdrawal` unless `bsu_confirmed` is true (#214). One with a
          *     BSU account that isn't set up yet, before or after, gets 409
-         *     `bsu_locked`.
+         *     `bsu_locked`. One that takes a credit card's debt further past its
+         *     limit gets 409 `over_credit_limit` unless `limit_confirmed` is true
+         *     (#260).
          */
         post: operations["correctTransaction"];
         delete?: never;
@@ -1746,7 +1757,8 @@ export interface paths {
          *     a savings reserve (SVR), held until *Done* or *Clear*. More than is
          *     unallocated is 409 `not_enough_unallocated`, whose detail says how
          *     much is. The account is in the target's currency (400
-         *     `currency_mismatch`) and isn't the target account itself.
+         *     `currency_mismatch`) and isn't the target account itself, or a credit
+         *     card (400 `card_source`, #260).
          *
          *     For a bucket target funded from this account, the money goes into the
          *     bucket at once: a savings to bucket (SVB) with just a bucket line,
@@ -1864,7 +1876,8 @@ export interface paths {
          *     distributor (an SVR). More than is unallocated is 409
          *     `not_enough_unallocated`, whose detail says how much is. By the hold
          *     mode it's then split at once (`immediate`), once the account's
-         *     holdings reach `min_amount` (`minimum`), or not (`manual`).
+         *     holdings reach `min_amount` (`minimum`), or not (`manual`). A credit
+         *     card has no money to add (400 `card_source`, #260).
          */
         post: operations["addToSavingsDistributor"];
         delete?: never;
@@ -2007,7 +2020,8 @@ export interface paths {
          * Add a fixed amount or a sweep to the savings budget
          * @description An entry saves from a source account, for a savings target in its
          *     currency (not the account itself) or, without `target_id`, the
-         *     distributor, once per cycle when `when` says.
+         *     distributor, once per cycle when `when` says. The source can't be a
+         *     credit card (400 `card_source`, #260).
          *
          *     A fixed amount (`amount`) runs at cycle start or on income (after
          *     the refills of the same moment), or by hand
@@ -2123,6 +2137,10 @@ export interface paths {
          *     - `bsu_withdrawal`: money a schedule took out of a BSU account this
          *       year (#214), with `account_id`, `at` and the `amount` and
          *       `currency` taken out.
+         *     - `credit_limit`: a credit card whose debt is at 90 % of its credit
+         *       limit or more (#260), with `account_id`, what's owed as `amount`
+         *       and `currency`; an `alert` once it's past the limit, else a
+         *       `warning`.
          */
         get: operations["listNotifications"];
         put?: never;
@@ -2724,8 +2742,14 @@ export interface components {
          * @example Main account
          */
         AccountName: string;
-        /** @enum {string} */
-        AccountType: "usage" | "savings" | "bsu" | "fund" | "investment";
+        /**
+         * @description A `credit_card` (#260) owes money: its balance is usually below 0. It
+         *     has `credit_card` fields, can't be a bucket's source, a savings
+         *     target or a savings source, and its type never changes (nor does
+         *     another account's become `credit_card`).
+         * @enum {string}
+         */
+        AccountType: "usage" | "savings" | "bsu" | "fund" | "investment" | "credit_card";
         Account: {
             id: components["schemas"]["AccountId"];
             name: string;
@@ -2749,6 +2773,46 @@ export interface components {
             created_at: string;
             /** @description A BSU account's deposits against this year's limits (#214). Null for other types. */
             bsu: components["schemas"]["BSUStatus"] | null;
+            /** @description A credit card's fields and what's owed (#260). Null for other types. */
+            credit_card: components["schemas"]["CreditCard"] | null;
+        };
+        /** @description A day of the month, 1–28, or 31 for the last day of the month (#260). */
+        CardDay: number;
+        /**
+         * @description A credit card's own fields (#260). The bill is made on the statement
+         *     day, covering the debt as of the end of the day before; it's due on
+         *     the next due day after it. The minimum payment is a fixed amount, or
+         *     the whole bill when that's less.
+         */
+        CreditCardFields: {
+            /**
+             * @description Optional: where card debt no bucket budgeted is set aside, and what
+             *     the bill is paid from, unless chosen otherwise. A live usage or
+             *     savings account in the card's currency (400
+             *     `card_default_account`). Left out for none.
+             */
+            default_account_id?: components["schemas"]["AccountId"];
+            /** @description Above 0. */
+            credit_limit: components["schemas"]["Amount"];
+            statement_day: components["schemas"]["CardDay"];
+            due_day: components["schemas"]["CardDay"];
+            /** @description Above 0. */
+            minimum_payment: components["schemas"]["Amount"];
+        };
+        CreditCard: {
+            /**
+             * @description The default account, or null for none. Deleting it, or changing
+             *     its type to one that can't be one, clears it.
+             */
+            default_account_id: (string & components["schemas"]["AccountId"]) | null;
+            credit_limit: components["schemas"]["Amount"];
+            statement_day: components["schemas"]["CardDay"];
+            due_day: components["schemas"]["CardDay"];
+            minimum_payment: components["schemas"]["Amount"];
+            /** @description What's owed, −balance and at least 0. A balance above 0 is money in credit. */
+            owed: components["schemas"]["Amount"];
+            /** @description The credit left, credit_limit + balance; below 0 when past the limit. */
+            available: components["schemas"]["Amount"];
         };
         /**
          * @description A BSU account's deposits (#214, spec §3): incomes and transfers into
@@ -2871,6 +2935,8 @@ export interface components {
              * @description When the opening balance applies. Defaults to now.
              */
             opening_at?: string;
+            /** @description Needed exactly when `type` is `credit_card` (400 `invalid_request`). A card's opening balance is usually below 0, what's owed. */
+            credit_card?: components["schemas"]["CreditCardFields"];
         };
         AccountUpdate: {
             name?: components["schemas"]["AccountName"];
@@ -2878,6 +2944,14 @@ export interface components {
             /** @description The income expected per cycle, at least 0. Null clears it. */
             expected_income?: (string & components["schemas"]["Amount"]) | null;
             bank?: components["schemas"]["AccountBank"];
+            /**
+             * @description A credit card's fields, all of them; only for a card (400
+             *     `invalid_request`); a default account left out clears it.
+             *     Changing `type` to or from `credit_card` is 400 `card_type`. An
+             *     account that changes to a type other than usage or savings stops
+             *     being its cards' default account.
+             */
+            credit_card?: components["schemas"]["CreditCardFields"];
         };
         BalanceAdjustment: {
             target_balance: components["schemas"]["Amount"];
@@ -3987,6 +4061,8 @@ export interface components {
             triggers_refill?: boolean;
             /** @description Records it even when it takes a BSU account over its deposit limits or money out of one (409 `bsu_over_limit`, `bsu_withdrawal`). */
             bsu_confirmed?: boolean;
+            /** @description Records it even when it takes a credit card's debt past its credit limit (409 `over_credit_limit`, */
+            limit_confirmed?: boolean;
             /** @description The account of an income or expense, or the sending account of a transfer. */
             account_id: components["schemas"]["AccountId"];
             /** @description The receiving account of a transfer. */
@@ -4050,6 +4126,8 @@ export interface components {
             triggers_refill?: boolean;
             /** @description As when creating (409 `bsu_over_limit`, `bsu_withdrawal`). */
             bsu_confirmed?: boolean;
+            /** @description As when creating (409 `over_credit_limit`). */
+            limit_confirmed?: boolean;
         };
         /** @description RFC 9457 problem details. */
         Problem: {
@@ -4260,7 +4338,7 @@ export interface components {
             next_cursor: string | null;
         };
         /** @enum {string} */
-        NotificationKind: "approval_queue" | "upcoming_bill" | "investment_balance" | "bucket_uncovered" | "savings_transfer" | "savings_short" | "bsu_over_limit" | "bsu_withdrawal";
+        NotificationKind: "approval_queue" | "upcoming_bill" | "investment_balance" | "bucket_uncovered" | "savings_transfer" | "savings_short" | "bsu_over_limit" | "bsu_withdrawal" | "credit_limit";
         /**
          * @description A reminder or to-do. The client words it from `kind` and the fields
          *     that kind uses (see `listNotifications`); the others are null.
@@ -4273,10 +4351,10 @@ export interface components {
             key: string;
             kind: components["schemas"]["NotificationKind"];
             /**
-             * @description `alert` for an overdue approval or an uncovered bucket,
-             *     `warning` for an approval that isn't overdue, a short savings
-             *     budget entry or a BSU over its limit or withdrawn from, else
-             *     `info`.
+             * @description `alert` for an overdue approval, an uncovered bucket or a credit
+             *     card past its limit, `warning` for an approval that isn't
+             *     overdue, a short savings budget entry, a BSU over its limit or
+             *     withdrawn from, or a card at 90 % of its limit, else `info`.
              * @enum {string}
              */
             severity: "info" | "warning" | "alert";
@@ -4327,6 +4405,8 @@ export interface components {
             bsu_over_limit?: boolean | null;
             /** @description Money a schedule took out of a BSU account this year (#214). Null means true. */
             bsu_withdrawal?: boolean | null;
+            /** @description Credit cards at 90 % of their limit or more (#260). Null means true. */
+            credit_limit?: boolean | null;
         };
     };
     responses: {

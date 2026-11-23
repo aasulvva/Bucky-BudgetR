@@ -175,7 +175,8 @@
       "savings": "Sparekonto",
       "bsu": "BSU",
       "fund": "Fond/ASK",
-      "investment": "Investering"
+      "investment": "Investering",
+      "credit_card": "Kredittkort"
     },
     "empty": "Ingen kontoer ennå. <setup>Opprett en i kontooppsettet</setup>.",
     "total": "Totalt",
@@ -2531,7 +2532,9 @@
       "bsu_over_limit": "BSU over grensen",
       "bsu_over_limitHint": "En BSU-konto der innskuddene i år er over den årlige eller samlede grensen.",
       "bsu_withdrawal": "Uttak fra BSU",
-      "bsu_withdrawalHint": "Penger en planlagt transaksjon tok ut av en BSU-konto."
+      "bsu_withdrawalHint": "Penger en planlagt transaksjon tok ut av en BSU-konto.",
+      "credit_limit": "Kredittgrenser",
+      "credit_limitHint": "Kredittkort der 90 % eller mer av grensen er brukt."
     },
     "savings": {
       "title": "Penger satt av til {{name}}",
@@ -2549,6 +2552,13 @@
       "overBody": "Innskuddene i år er {{amount}} over den årlige eller samlede BSU-grensen.",
       "withdrawalTitle": "Penger tatt ut av {{name}}",
       "withdrawalBody": "En planlagt transaksjon tok {{amount}} ut av BSU-kontoen {{date}}, og det kan koste deg skattefradraget.",
+      "open": "Åpne kontoer"
+    },
+    "card": {
+      "nearTitle": "{{name}} er nær kredittgrensen",
+      "nearBody": "Det skyldes {{amount}} på kortet: 90 % av kredittgrensen eller mer.",
+      "overTitle": "{{name}} er over kredittgrensen",
+      "overBody": "Det skyldes {{amount}} på kortet, mer enn kredittgrensen.",
       "open": "Åpne kontoer"
     }
   },

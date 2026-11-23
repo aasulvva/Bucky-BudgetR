@@ -18,12 +18,14 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shopspring/decimal"
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/allocation"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/balance"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/bsu"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/cards"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ids"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
@@ -107,6 +109,9 @@ type Account struct {
 	// BSU is a BSU account's deposits against this year's limits (#214);
 	// nil for other types.
 	BSU *bsu.Status
+	// Card is a credit card's fields and what's owed (#260); nil for other
+	// types.
+	Card *cards.Status
 }
 
 // New describes an account to create.
@@ -122,6 +127,9 @@ type New struct {
 	// OpeningAt (default now). Zero records nothing.
 	OpeningBalance decimal.Decimal
 	OpeningAt      time.Time
+	// Card is a credit card's fields, needed exactly when Type is a card
+	// (#260).
+	Card *cards.Fields
 }
 
 // Changes are the fields to update; nil leaves a field as it is.
@@ -132,6 +140,8 @@ type Changes struct {
 	ExpectedIncome *decimal.NullDecimal
 	// Bank sets the bank; "" clears it.
 	Bank *string
+	// Card sets all of a credit card's fields; only for a card (#260).
+	Card *cards.Fields
 }
 
 // Adjustment sets the balance to Target as of At (default now) with a
@@ -278,6 +288,14 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Account, er
 	if n.Type == sqlc.AccountTypeBsu && n.Currency != bsu.Currency {
 		return Account{}, ErrBSUCurrency
 	}
+	if (n.Type == sqlc.AccountTypeCreditCard) != (n.Card != nil) {
+		return Account{}, fmt.Errorf("%w: a credit card needs its card fields, and only a card has them", ErrInvalid)
+	}
+	if n.Card != nil {
+		if err := cards.CheckFields(*n.Card); err != nil {
+			return Account{}, err
+		}
+	}
 	if err := money.Valid(n.OpeningBalance); err != nil {
 		return Account{}, fmt.Errorf("%w: opening balance: %w", ErrInvalid, err)
 	}
@@ -291,11 +309,19 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Account, er
 			return err
 		}
 		q := sqlc.New(tx)
+		if n.Card != nil {
+			if err := cards.CheckDefaultAccount(ctx, tx, userID, "", n.Card.DefaultAccountID, n.Currency); err != nil {
+				return err
+			}
+		}
+		c := cards.ToColumns(n.Card)
 		var row sqlc.BankAccount
 		_, err := ids.Insert(ctx, ids.Account, ids.NewAccount, func(ctx context.Context, id string) (bool, error) {
 			var err error
 			row, err = q.CreateAccount(ctx, sqlc.CreateAccountParams{
 				ID: id, UserID: userID, Name: name, Currency: n.Currency, AccountType: n.Type, Bank: bank,
+				CardDefaultAccountID: c.DefaultAccountID, CardCreditLimit: c.CreditLimit, CardStatementDay: c.StatementDay,
+				CardDueDay: c.DueDay, CardMinimumPayment: c.MinimumPayment,
 			})
 			return ids.Inserted(err)
 		})
@@ -333,7 +359,10 @@ func (s *Service) Update(ctx context.Context, userID, id string, c Changes) (Acc
 		}
 		params := sqlc.UpdateAccountParams{
 			ID: id, UserID: userID, Name: row.Name, AccountType: row.AccountType, ExpectedIncome: row.ExpectedIncome, Bank: row.Bank,
+			CardDefaultAccountID: row.CardDefaultAccountID, CardCreditLimit: row.CardCreditLimit, CardStatementDay: row.CardStatementDay,
+			CardDueDay: row.CardDueDay, CardMinimumPayment: row.CardMinimumPayment,
 		}
+		isCard := row.AccountType == sqlc.AccountTypeCreditCard
 		if c.Bank != nil {
 			if params.Bank, err = checkBank(*c.Bank); err != nil {
 				return err
@@ -352,6 +381,24 @@ func (s *Service) Update(ctx context.Context, userID, id string, c Changes) (Acc
 			if params.AccountType == sqlc.AccountTypeBsu && row.Currency != bsu.Currency {
 				return ErrBSUCurrency
 			}
+			// A card stays a card, and nothing becomes one (#260).
+			if (params.AccountType == sqlc.AccountTypeCreditCard) != isCard {
+				return cards.ErrTypeChange
+			}
+		}
+		if c.Card != nil {
+			if !isCard {
+				return fmt.Errorf("%w: only a credit card has card fields", ErrInvalid)
+			}
+			if err := cards.CheckFields(*c.Card); err != nil {
+				return err
+			}
+			if err := cards.CheckDefaultAccount(ctx, tx, userID, id, c.Card.DefaultAccountID, row.Currency); err != nil {
+				return err
+			}
+			cc := cards.ToColumns(c.Card)
+			params.CardDefaultAccountID, params.CardCreditLimit, params.CardStatementDay = cc.DefaultAccountID, cc.CreditLimit, cc.StatementDay
+			params.CardDueDay, params.CardMinimumPayment = cc.DueDay, cc.MinimumPayment
 		}
 		if c.ExpectedIncome != nil {
 			if e := *c.ExpectedIncome; e.Valid {
@@ -362,10 +409,20 @@ func (s *Service) Update(ctx context.Context, userID, id string, c Changes) (Acc
 					return fmt.Errorf("%w: the expected income can't be negative", ErrInvalid)
 				}
 			}
+			if isCard && c.ExpectedIncome.Valid {
+				return fmt.Errorf("%w: a credit card has no expected income", ErrInvalid)
+			}
 			params.ExpectedIncome = *c.ExpectedIncome
 		}
 		if _, err := q.UpdateAccount(ctx, params); err != nil {
 			return nameTaken(err)
+		}
+		// A type that can't be a default account leaves its cards without one
+		// (#260).
+		if params.AccountType != row.AccountType && !slices.Contains(cards.DefaultAccountTypes, params.AccountType) {
+			if err := q.ClearCardDefaultAccount(ctx, sqlc.ClearCardDefaultAccountParams{UserID: userID, CardDefaultAccountID: pgtype.Text{String: id, Valid: true}}); err != nil {
+				return err
+			}
 		}
 		// An account that can't be a savings target any more stops being one.
 		if s.savings != nil && params.AccountType != row.AccountType && !slices.Contains(TargetTypes, params.AccountType) {
@@ -505,6 +562,10 @@ func (s *Service) Delete(ctx context.Context, userID, id string, st Settlement) 
 		if err := s.checkTargets(ctx, q, userID, acc, targets); err != nil {
 			return err
 		}
+		// Buckets can't move to a card (#260).
+		if err := cards.NotSource(ctx, tx, userID, slices.Collect(maps.Values(st.BucketSources))...); err != nil {
+			return err
+		}
 		// The money can't go to a locked BSU account (#214); the account
 		// itself can be deleted locked.
 		if r := st.Remaining; r != nil && r.TransferTo != "" {
@@ -539,6 +600,10 @@ func (s *Service) Delete(ctx context.Context, userID, id string, st Settlement) 
 			if err := q.SetBucketSource(ctx, sqlc.SetBucketSourceParams{ID: b, UserID: userID, SourceAccountID: to}); err != nil {
 				return err
 			}
+		}
+		// The cards it was the default account of have none (#260).
+		if err := q.ClearCardDefaultAccount(ctx, sqlc.ClearCardDefaultAccountParams{UserID: userID, CardDefaultAccountID: pgtype.Text{String: id, Valid: true}}); err != nil {
+			return err
 		}
 		if err := q.DeleteAccount(ctx, sqlc.DeleteAccountParams{ID: id, UserID: userID}); err != nil {
 			return err
@@ -657,6 +722,9 @@ func toAccount(r sqlc.BankAccount, m balance.Money, statuses map[string]bsu.Stat
 	}
 	if st, ok := statuses[r.ID]; ok {
 		a.BSU = &st
+	}
+	if st, ok := cards.StatusOf(r, m.Balance); ok {
+		a.Card = &st
 	}
 	return a
 }

@@ -16,6 +16,29 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.32.01",
+    date: "2026-11-23",
+    title: {
+      en: "Credit cards, behind the scenes",
+      nb: "Kredittkort, bak kulissene",
+      nn: "Kredittkort, bak kulissane",
+    },
+    changes: {
+      en: [
+        "The groundwork for credit card accounts: a credit limit, the bill's days, a minimum payment and an optional default account. Their screens come in the next update.",
+        "A new notification says when a credit card has 90% or more of its limit used. It can be switched off in Settings.",
+      ],
+      nb: [
+        "Grunnlaget for kredittkortkontoer: en kredittgrense, regningens dager, et minstebeløp og en valgfri standardkonto. Skjermbildene kommer i neste oppdatering.",
+        "Et nytt varsel sier fra når 90 % eller mer av kredittgrensen på et kredittkort er brukt. Det kan slås av under Innstillinger.",
+      ],
+      nn: [
+        "Grunnlaget for kredittkortkontoar: ei kredittgrense, dagane for rekninga, eit minstebeløp og ein valfri standardkonto. Skjermbileta kjem i neste oppdatering.",
+        "Eit nytt varsel seier frå når 90 % eller meir av kredittgrensa på eit kredittkort er brukt. Det kan slåast av under Innstillingar.",
+      ],
+    },
+  },
+  {
     version: "v2.32.00",
     date: "2026-11-23",
     title: {

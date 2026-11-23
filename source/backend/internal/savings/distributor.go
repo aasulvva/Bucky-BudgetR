@@ -11,6 +11,7 @@ import (
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/balance"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/bsu"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/cards"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ids"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
@@ -112,8 +113,12 @@ func (s *Service) AddToDistributor(ctx context.Context, userID, accountID string
 		if err := ledger.LockUser(ctx, tx, userID); err != nil {
 			return err
 		}
-		if _, err := sqlc.New(tx).GetAccount(ctx, sqlc.GetAccountParams{ID: accountID, UserID: userID}); err != nil {
+		a, err := sqlc.New(tx).GetAccount(ctx, sqlc.GetAccountParams{ID: accountID, UserID: userID})
+		if err != nil {
 			return notFound(err, "account", accountID)
+		}
+		if a.AccountType == sqlc.AccountTypeCreditCard {
+			return fmt.Errorf("%w: account %s", cards.ErrSource, accountID)
 		}
 		m, err := balance.AccountMoney(ctx, tx, userID)
 		if err != nil {

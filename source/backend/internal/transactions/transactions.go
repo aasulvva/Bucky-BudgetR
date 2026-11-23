@@ -22,6 +22,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/bsu"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/cards"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ids"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
@@ -76,6 +77,9 @@ type New struct {
 	// deposit limits or money out of one (#214); without it, that's
 	// *bsu.OverLimitError or *bsu.WithdrawalError.
 	BSUConfirmed bool
+	// LimitConfirmed records it even when it takes a credit card's debt past
+	// its credit limit (#260); without it, that's *cards.OverLimitError.
+	LimitConfirmed bool
 }
 
 // BucketAmount is a positive amount for one bucket.
@@ -292,6 +296,9 @@ func (s *Service) RecordIn(ctx context.Context, tx pgx.Tx, userID string, n New)
 	// A schedule records without asking; a notification tells of a BSU over
 	// its limits or a withdrawal from one (#214).
 	n.BSUConfirmed = true
+	// Nor does it ask about a card's limit: the credit_limit notification
+	// tells of it (#260).
+	n.LimitConfirmed = true
 	t, err := s.record(ctx, tx, userID, n, "")
 	if err != nil {
 		return Transaction{}, err
@@ -320,6 +327,10 @@ func (s *Service) record(ctx context.Context, tx pgx.Tx, userID string, n New, r
 		return nil, err
 	}
 	if err := checkBSU(ctx, tx, userID, n, nil, false); err != nil {
+		return nil, err
+	}
+	// A purchase past a credit card's limit needs confirming (#260).
+	if err := checkCard(ctx, tx, userID, n, nil); err != nil {
 		return nil, err
 	}
 	triggers := n.TriggersRefill != nil && *n.TriggersRefill
@@ -1138,6 +1149,41 @@ func checkBSU(ctx context.Context, tx pgx.Tx, userID string, n New, before []Ban
 		changes[add(l.AccountID)].After = l.Amount
 	}
 	return bsu.Check(ctx, tx, userID, n.Type, n.Tags, n.At, changes)
+}
+
+// checkCard checks n against the credit limits of the cards it takes more
+// out of, unless it's confirmed (#260). before is the family's effective
+// lines when n corrects it.
+func checkCard(ctx context.Context, tx pgx.Tx, userID string, n New, before []BankLine) error {
+	if n.LimitConfirmed {
+		return nil
+	}
+	// Opening balances and balance adjustments say what the bank has.
+	switch n.Type {
+	case sqlc.TransactionTypeINC, sqlc.TransactionTypeTRF, sqlc.TransactionTypeEXP:
+	default:
+		return nil
+	}
+	after, _, err := signedLines(n)
+	if err != nil {
+		return err
+	}
+	var changes []cards.Change
+	add := func(id string) int {
+		i := slices.IndexFunc(changes, func(c cards.Change) bool { return c.AccountID == id })
+		if i < 0 {
+			changes = append(changes, cards.Change{AccountID: id, Before: decimal.Zero, After: decimal.Zero})
+			i = len(changes) - 1
+		}
+		return i
+	}
+	for _, l := range before {
+		changes[add(l.AccountID)].Before = changes[add(l.AccountID)].Before.Add(l.Amount)
+	}
+	for _, l := range after {
+		changes[add(l.AccountID)].After = changes[add(l.AccountID)].After.Add(l.Amount)
+	}
+	return cards.Check(ctx, tx, userID, changes)
 }
 
 // isInterest reports whether t is an income tagged interest (#70).

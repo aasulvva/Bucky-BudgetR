@@ -73,6 +73,8 @@ type Changes struct {
 	TriggersRefill *bool
 	// BSUConfirmed is as in New (#214).
 	BSUConfirmed bool
+	// LimitConfirmed is as in New (#260).
+	LimitConfirmed bool
 }
 
 // Correct records an adjustment that turns the transaction into what c
@@ -108,6 +110,7 @@ func (s *Service) correct(ctx context.Context, tx pgx.Tx, userID, id string, c C
 		return "", err
 	}
 	want.BSUConfirmed = c.BSUConfirmed
+	want.LimitConfirmed = c.LimitConfirmed
 	// A transfer that did Done on held savings keeps its amount and accounts,
 	// so it and the money it took off hold stay alike.
 	if len(cur.SavingsLines) > 0 {
@@ -158,6 +161,9 @@ func (s *Service) correct(ctx context.Context, tx pgx.Tx, userID, id string, c C
 		return "", err
 	}
 	if err := checkBSU(ctx, tx, userID, want, cur.BankLines, isInterest(cur)); err != nil {
+		return "", err
+	}
+	if err := checkCard(ctx, tx, userID, want, cur.BankLines); err != nil {
 		return "", err
 	}
 	if _, err := s.ledger.Record(ctx, tx, ledger.Entry{

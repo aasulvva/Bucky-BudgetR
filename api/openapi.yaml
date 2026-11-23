@@ -1292,7 +1292,11 @@ paths:
         - money left in it is transferred (TRF) or adjusted away (BLA) as
           `remaining_funds` says, otherwise 409 `balance_not_zero`. A BSU
           account that isn't set up yet can't take it (409 `bsu_locked`,
-          #214), but one can itself be deleted.
+          #214), but one can itself be deleted. A credit card that owes money
+          is paid off by the transfer (#260).
+
+        Buckets can't move to a credit card (400 `card_source`). Deleting a
+        card's default account leaves the card without one (#260).
 
         If any step is refused, nothing changes. Money and buckets can only move
         to another account in the same currency (400 `currency_mismatch`).
@@ -1620,7 +1624,8 @@ paths:
       description: |
         Creates a bucket funded from `source_account_id`, in that account's
         currency. Names must be unique among the user's buckets (409
-        `name_taken`).
+        `name_taken`). A credit card can't fund a bucket (400 `card_source`,
+        #260).
 
         A non-zero `opening_funds` is recorded now as an Opening Funds (OPF)
         transaction. Like every bucket transaction, that needs an active
@@ -1725,7 +1730,8 @@ paths:
       summary: Change a bucket's settings
       description: |
         The source account can only change to an account in the same currency
-        (400 `currency_mismatch`). Changing it resets CAF to 0 until the
+        (400 `currency_mismatch`), and not to a credit card (400
+        `card_source`, #260). Changing it resets CAF to 0 until the
         allocation routine funds the bucket from the new account.
 
         Switching `cap_mode` without the new mode's value uses multiplier 1,
@@ -2070,6 +2076,9 @@ paths:
         `bsu_withdrawal` (#214), unless `bsu_confirmed` is true. Interest (an
         income tagged `interest`) isn't a deposit. A transaction with a BSU
         account whose history isn't set up yet gets 409 `bsu_locked`.
+
+        One that takes a credit card's debt past its credit limit gets 409
+        `over_credit_limit` unless `limit_confirmed` is true (#260).
       requestBody:
         required: true
         content:
@@ -2273,7 +2282,9 @@ paths:
         takes more out of a BSU, gets 409 `bsu_over_limit` or
         `bsu_withdrawal` unless `bsu_confirmed` is true (#214). One with a
         BSU account that isn't set up yet, before or after, gets 409
-        `bsu_locked`.
+        `bsu_locked`. One that takes a credit card's debt further past its
+        limit gets 409 `over_credit_limit` unless `limit_confirmed` is true
+        (#260).
       requestBody:
         required: true
         content:
@@ -2985,7 +2996,8 @@ paths:
         a savings reserve (SVR), held until *Done* or *Clear*. More than is
         unallocated is 409 `not_enough_unallocated`, whose detail says how
         much is. The account is in the target's currency (400
-        `currency_mismatch`) and isn't the target account itself.
+        `currency_mismatch`) and isn't the target account itself, or a credit
+        card (400 `card_source`, #260).
 
         For a bucket target funded from this account, the money goes into the
         bucket at once: a savings to bucket (SVB) with just a bucket line,
@@ -3155,7 +3167,8 @@ paths:
         distributor (an SVR). More than is unallocated is 409
         `not_enough_unallocated`, whose detail says how much is. By the hold
         mode it's then split at once (`immediate`), once the account's
-        holdings reach `min_amount` (`minimum`), or not (`manual`).
+        holdings reach `min_amount` (`minimum`), or not (`manual`). A credit
+        card has no money to add (400 `card_source`, #260).
       requestBody:
         required: true
         content:
@@ -3399,7 +3412,8 @@ paths:
       description: |
         An entry saves from a source account, for a savings target in its
         currency (not the account itself) or, without `target_id`, the
-        distributor, once per cycle when `when` says.
+        distributor, once per cycle when `when` says. The source can't be a
+        credit card (400 `card_source`, #260).
 
         A fixed amount (`amount`) runs at cycle start or on income (after
         the refills of the same moment), or by hand
@@ -3554,6 +3568,10 @@ paths:
         - `bsu_withdrawal`: money a schedule took out of a BSU account this
           year (#214), with `account_id`, `at` and the `amount` and
           `currency` taken out.
+        - `credit_limit`: a credit card whose debt is at 90 % of its credit
+          limit or more (#260), with `account_id`, what's owed as `amount`
+          and `currency`; an `alert` once it's past the limit, else a
+          `warning`.
       responses:
         "200":
           description: The open notifications.
@@ -4612,12 +4630,17 @@ components:
 
     AccountType:
       type: string
-      enum: [usage, savings, bsu, fund, investment]
+      enum: [usage, savings, bsu, fund, investment, credit_card]
+      description: |
+        A `credit_card` (#260) owes money: its balance is usually below 0. It
+        has `credit_card` fields, can't be a bucket's source, a savings
+        target or a savings source, and its type never changes (nor does
+        another account's become `credit_card`).
 
     Account:
       type: object
       additionalProperties: false
-      required: [id, name, type, currency, balance, unallocated, reserved, reserved_uncovered, expected_income, bank, created_at, bsu]
+      required: [id, name, type, currency, balance, unallocated, reserved, reserved_uncovered, expected_income, bank, created_at, bsu, credit_card]
       properties:
         id:
           $ref: "#/components/schemas/AccountId"
@@ -4661,6 +4684,81 @@ components:
             - $ref: "#/components/schemas/BSUStatus"
           nullable: true
           description: A BSU account's deposits against this year's limits (#214). Null for other types.
+        credit_card:
+          type: object
+          allOf:
+            - $ref: "#/components/schemas/CreditCard"
+          nullable: true
+          description: A credit card's fields and what's owed (#260). Null for other types.
+
+    CardDay:
+      type: integer
+      description: A day of the month, 1–28, or 31 for the last day of the month (#260).
+      minimum: 1
+      maximum: 31
+      not:
+        enum: [29, 30]
+
+    CreditCardFields:
+      type: object
+      additionalProperties: false
+      required: [credit_limit, statement_day, due_day, minimum_payment]
+      description: |
+        A credit card's own fields (#260). The bill is made on the statement
+        day, covering the debt as of the end of the day before; it's due on
+        the next due day after it. The minimum payment is a fixed amount, or
+        the whole bill when that's less.
+      properties:
+        default_account_id:
+          allOf:
+            - $ref: "#/components/schemas/AccountId"
+          description: |
+            Optional: where card debt no bucket budgeted is set aside, and what
+            the bill is paid from, unless chosen otherwise. A live usage or
+            savings account in the card's currency (400
+            `card_default_account`). Left out for none.
+        credit_limit:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Above 0.
+        statement_day:
+          $ref: "#/components/schemas/CardDay"
+        due_day:
+          $ref: "#/components/schemas/CardDay"
+        minimum_payment:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Above 0.
+
+    CreditCard:
+      type: object
+      additionalProperties: false
+      required: [default_account_id, credit_limit, statement_day, due_day, minimum_payment, owed, available]
+      properties:
+        default_account_id:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/AccountId"
+          nullable: true
+          description: |
+            The default account, or null for none. Deleting it, or changing
+            its type to one that can't be one, clears it.
+        credit_limit:
+          $ref: "#/components/schemas/Amount"
+        statement_day:
+          $ref: "#/components/schemas/CardDay"
+        due_day:
+          $ref: "#/components/schemas/CardDay"
+        minimum_payment:
+          $ref: "#/components/schemas/Amount"
+        owed:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: What's owed, −balance and at least 0. A balance above 0 is money in credit.
+        available:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: The credit left, credit_limit + balance; below 0 when past the limit.
 
     BSUStatus:
       type: object
@@ -4905,6 +5003,10 @@ components:
           type: string
           format: date-time
           description: When the opening balance applies. Defaults to now.
+        credit_card:
+          allOf:
+            - $ref: "#/components/schemas/CreditCardFields"
+          description: Needed exactly when `type` is `credit_card` (400 `invalid_request`). A card's opening balance is usually below 0, what's owed.
 
     AccountUpdate:
       type: object
@@ -4923,6 +5025,15 @@ components:
           description: The income expected per cycle, at least 0. Null clears it.
         bank:
           $ref: "#/components/schemas/AccountBank"
+        credit_card:
+          allOf:
+            - $ref: "#/components/schemas/CreditCardFields"
+          description: |
+            A credit card's fields, all of them; only for a card (400
+            `invalid_request`); a default account left out clears it.
+            Changing `type` to or from `credit_card` is 400 `card_type`. An
+            account that changes to a type other than usage or savings stops
+            being its cards' default account.
 
     BalanceAdjustment:
       type: object
@@ -6984,6 +7095,9 @@ components:
         bsu_confirmed:
           type: boolean
           description: Records it even when it takes a BSU account over its deposit limits or money out of one (409 `bsu_over_limit`, `bsu_withdrawal`).
+        limit_confirmed:
+          type: boolean
+          description: Records it even when it takes a credit card's debt past its credit limit (409 `over_credit_limit`, #260).
         account_id:
           allOf:
             - $ref: "#/components/schemas/AccountId"
@@ -7106,6 +7220,9 @@ components:
         bsu_confirmed:
           type: boolean
           description: As when creating (409 `bsu_over_limit`, `bsu_withdrawal`).
+        limit_confirmed:
+          type: boolean
+          description: As when creating (409 `over_credit_limit`).
 
     Problem:
       type: object
@@ -7444,7 +7561,7 @@ components:
 
     NotificationKind:
       type: string
-      enum: [approval_queue, upcoming_bill, investment_balance, bucket_uncovered, savings_transfer, savings_short, bsu_over_limit, bsu_withdrawal]
+      enum: [approval_queue, upcoming_bill, investment_balance, bucket_uncovered, savings_transfer, savings_short, bsu_over_limit, bsu_withdrawal, credit_limit]
 
     Notification:
       type: object
@@ -7465,10 +7582,10 @@ components:
           type: string
           enum: [info, warning, alert]
           description: |
-            `alert` for an overdue approval or an uncovered bucket,
-            `warning` for an approval that isn't overdue, a short savings
-            budget entry or a BSU over its limit or withdrawn from, else
-            `info`.
+            `alert` for an overdue approval, an uncovered bucket or a credit
+            card past its limit, `warning` for an approval that isn't
+            overdue, a short savings budget entry, a BSU over its limit or
+            withdrawn from, or a card at 90 % of its limit, else `info`.
         at:
           type: string
           format: date-time
@@ -7572,3 +7689,7 @@ components:
           type: boolean
           nullable: true
           description: Money a schedule took out of a BSU account this year (#214). Null means true.
+        credit_limit:
+          type: boolean
+          nullable: true
+          description: Credit cards at 90 % of their limit or more (#260). Null means true.
