@@ -37,6 +37,7 @@ import { ErrorAlert } from "@/components/ErrorAlert";
 import { isOverdue } from "@/lib/cycles";
 import { isTouch } from "@/lib/device";
 import { compareAmounts, formatMoney } from "@/lib/money";
+import { withoutCards } from "@/lib/cards";
 import {
   accountRefilled,
   budgetDestination,
@@ -244,8 +245,10 @@ function EntryForm({
   const active = useCurrentCycles().data?.active ?? null;
   const running = active !== null && !isOverdue(active);
   const sweep = kind === "sweep";
+  // A credit card has no money to save (#260).
+  const sources = withoutCards(accounts);
   const [accountId, setAccountId] = useState<string | null>(
-    entry?.account_id ?? (accounts.length === 1 ? (accounts[0]?.id ?? null) : null),
+    entry?.account_id ?? (sources.length === 1 ? (sources[0]?.id ?? null) : null),
   );
   // An account has one sweep per mode (#235): the others' are taken.
   const taken = (id: string | null) => (sweep ? takenSweepModes(entries, id, entry?.id) : []);
@@ -378,7 +381,7 @@ function EntryForm({
           <Select
             label={t("savingsSetup.budget.account")}
             description={t("savingsSetup.budget.accountHint")}
-            data={accounts.map((a) => ({ value: a.id, label: a.name }))}
+            data={sources.map((a) => ({ value: a.id, label: a.name }))}
             value={accountId}
             allowDeselect={false}
             onChange={(v) => {

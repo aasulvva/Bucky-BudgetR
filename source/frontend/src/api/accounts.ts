@@ -14,6 +14,8 @@ import type { components } from "./schema";
 export type Account = components["schemas"]["Account"];
 export type AccountFlow = components["schemas"]["AccountFlow"];
 export type AccountType = components["schemas"]["AccountType"];
+export type CreditCard = components["schemas"]["CreditCard"];
+export type CreditCardFields = components["schemas"]["CreditCardFields"];
 export type Bucket = components["schemas"]["Bucket"];
 export type BucketFigures = components["schemas"]["BucketFigures"];
 export type RefillMode = components["schemas"]["RefillMode"];
@@ -21,7 +23,14 @@ export type RefillMode = components["schemas"]["RefillMode"];
 export const ACCOUNTS_KEY = ["accounts"] as const;
 export const BUCKETS_KEY = ["buckets"] as const;
 
-const ACCOUNT_TYPES: AccountType[] = ["usage", "savings", "bsu", "fund", "investment"];
+const ACCOUNT_TYPES: AccountType[] = [
+  "usage",
+  "savings",
+  "bsu",
+  "fund",
+  "investment",
+  "credit_card",
+];
 
 export function accountTypeLabel(type: AccountType): string {
   return i18n.t(`accounts.types.${type}`);

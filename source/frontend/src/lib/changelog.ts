@@ -16,6 +16,35 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.33.00",
+    date: "2026-11-23",
+    title: {
+      en: "Credit cards",
+      nb: "Kredittkort",
+      nn: "Kredittkort",
+    },
+    changes: {
+      en: [
+        "New account type Credit card: create one in Account setup with its credit limit, statement and due days, minimum payment and an optional default account, and what it owes today.",
+        "Accounts shows what a card owes and how much credit is left, in orange from 90% of the limit. Adjust balance asks what's owed.",
+        "Recording a purchase shows the credit available, and one past the limit asks you to confirm it.",
+        "Cards can't fund buckets or savings, so they're left out of those lists. Spending from buckets with a card, and paying its bill, come in later updates.",
+      ],
+      nb: [
+        "Ny kontotype, Kredittkort: opprett et under Kontooppsett med kredittgrense, faktura- og forfallsdag, minstebeløp og en valgfri standardkonto, og det det skylder i dag.",
+        "Kontoer viser hva et kort skylder og hvor mye kreditt som er igjen, i oransje fra 90 % av grensen. Juster saldo spør hva som er skyldig.",
+        "Når du registrerer et kjøp, vises tilgjengelig kreditt, og et kjøp over grensen må bekreftes.",
+        "Kort kan ikke finansiere bøtter eller sparing, så de er utelatt fra de listene. Å bruke bøtter med kort, og å betale regningen, kommer i senere oppdateringer.",
+      ],
+      nn: [
+        "Ny kontotype, Kredittkort: opprett eitt under Kontooppsett med kredittgrense, faktura- og forfallsdag, minstebeløp og ein valfri standardkonto, og det det skuldar i dag.",
+        "Kontoar viser kva eit kort skuldar og kor mykje kreditt som er att, i oransje frå 90 % av grensa. Juster saldo spør kva som er skuldig.",
+        "Når du registrerer eit kjøp, blir tilgjengeleg kreditt vist, og eit kjøp over grensa må stadfestast.",
+        "Kort kan ikkje finansiere bøtter eller sparing, så dei er utelatne frå dei listene. Å bruke bøtter med kort, og å betale rekninga, kjem i seinare oppdateringar.",
+      ],
+    },
+  },
+  {
     version: "v2.32.01",
     date: "2026-11-23",
     title: {

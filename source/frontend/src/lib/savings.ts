@@ -14,6 +14,7 @@ import type {
 } from "@/api/savings";
 import i18n from "@/i18n";
 
+import { withoutCards } from "./cards";
 import { addAmounts, compareAmounts, formatMoney, percentOf, subtractAmounts } from "./money";
 
 /** The account types that can be a savings target. */
@@ -82,7 +83,10 @@ export function progress(target: SavingsTarget): Progress {
 
 /** The accounts money can be added to a target from: its currency, not itself. */
 export function sourceAccounts(target: SavingsTarget, accounts: Account[]): Account[] {
-  return accounts.filter((a) => a.currency === target.currency && a.id !== target.account_id);
+  // A credit card has no money to save (#260).
+  return withoutCards(accounts).filter(
+    (a) => a.currency === target.currency && a.id !== target.account_id,
+  );
 }
 
 /** The target's bucket, if it's a bucket target. */
@@ -278,7 +282,7 @@ export function distributorHeldOn(distributor: SavingsDistributor, accountId: st
 /** The accounts the distributor can take money from: the targets' currencies. */
 export function distributorSources(accounts: Account[], targets: SavingsTarget[]): Account[] {
   const currencies = new Set(targets.map((t) => t.currency));
-  return accounts.filter((a) => currencies.has(a.currency));
+  return withoutCards(accounts).filter((a) => currencies.has(a.currency));
 }
 
 /** What adding to the distributor does now, by its hold mode. */

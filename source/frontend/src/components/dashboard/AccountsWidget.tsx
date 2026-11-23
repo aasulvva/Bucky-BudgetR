@@ -4,6 +4,8 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
 import { accountTypeLabel, type Account, type Bucket } from "@/api/accounts";
+import { CardLine } from "@/components/accounts/CardStatus";
+import { cardNear, cardShort } from "@/lib/cards";
 import { shownAccounts, type WidgetInstance } from "@/lib/dashboard";
 import { addAmounts, compareAmounts, formatMoney } from "@/lib/money";
 
@@ -73,6 +75,11 @@ function AllAccounts({ accounts, buckets }: { accounts: Account[]; buckets: Buck
                   ` · ${t("accounts.reserved", { amount: formatMoney(a.reserved, a.currency) })}`}
               </Text>
             )}
+            {a.credit_card && (
+              <Text size="xs" c={cardNear(a) ? "var(--mantine-color-orange-text)" : "dimmed"}>
+                {cardShort(a)}
+              </Text>
+            )}
           </Box>
           <Text fw={600} style={{ whiteSpace: "nowrap" }}>
             {formatMoney(a.balance, a.currency)}
@@ -128,6 +135,7 @@ function OneAccount({ account, buckets }: { account: Account; buckets: Bucket[] 
           {money(account.balance)}
         </Text>
       </div>
+      <CardLine account={account} />
       {own.length > 0 && <BucketsSummary account={account} buckets={buckets} />}
     </Stack>
   );

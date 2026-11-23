@@ -42,6 +42,25 @@ export function bsuStatus(
   };
 }
 
+/**
+ * A credit card's fields and status (#260): a 20 000 limit with 4 520 owed,
+ * billed on the 1st and due on the 15th, paid from Main account (1234).
+ */
+export function creditCard(
+  overrides: Partial<NonNullable<Account["credit_card"]>> = {},
+): NonNullable<Account["credit_card"]> {
+  return {
+    default_account_id: "1234",
+    credit_limit: "20000.00",
+    statement_day: 1,
+    due_day: 15,
+    minimum_payment: "300.00",
+    owed: "4520.00",
+    available: "15480.00",
+    ...overrides,
+  };
+}
+
 export function bucket(
   overrides: Partial<Bucket> & Pick<Bucket, "id" | "name" | "source_account_id">,
 ): Bucket {

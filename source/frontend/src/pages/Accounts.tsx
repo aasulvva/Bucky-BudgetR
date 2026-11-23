@@ -36,12 +36,14 @@ import { api } from "@/api/client";
 import { ApiError, unwrap } from "@/api/errors";
 import { BsuSetupDialog } from "@/components/accounts/BsuSetup";
 import { BsuLine, BsuLocked } from "@/components/accounts/BsuStatus";
+import { CardLine } from "@/components/accounts/CardStatus";
 import { AmountInput } from "@/components/AmountInput";
 import { DateTimeInput } from "@/components/DateTimeInput";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { QueryState } from "@/components/QueryState";
 import i18n from "@/i18n";
 import { bsuShort, isLockedBsu } from "@/lib/bsu";
+import { cardNear, cardShort, isCard, negate } from "@/lib/cards";
 import { autofocusField } from "@/lib/device";
 import { INTEREST_TAG, interestCounterparty } from "@/lib/interest";
 import {
@@ -144,7 +146,10 @@ export default function Accounts() {
                     <AccountCard
                       key={a.id}
                       account={a}
-                      summary={buckets.data && accountLine(a, buckets.data)}
+                      // A card has no buckets (#260): its own line says it all.
+                      summary={
+                        !isCard(a) && buckets.data ? accountLine(a, buckets.data) : undefined
+                      }
                       selected={a.id === selected?.id}
                       {...actions(a)}
                     />
@@ -330,6 +335,7 @@ function AccountCard({
         )}
         <BsuLine account={account} />
         <BsuLocked account={account} onSetUp={onSetUpBsu} />
+        <CardLine account={account} />
         <Group
           gap="xs"
           pt="xs"
@@ -346,9 +352,12 @@ function AccountCard({
           <Button size="xs" variant="default" onClick={onAdjust} disabled={locked}>
             {t("accounts.adjust")}
           </Button>
-          <Button size="xs" variant="default" onClick={onInterest} disabled={locked}>
-            {t("accounts.interest")}
-          </Button>
+          {/* Card interest and fees come with #263. */}
+          {!isCard(account) && (
+            <Button size="xs" variant="default" onClick={onInterest} disabled={locked}>
+              {t("accounts.interest")}
+            </Button>
+          )}
         </Group>
       </Stack>
     </Card>
@@ -363,7 +372,8 @@ function AccountRow({
 }: ActionsProps & { account: Account }) {
   const { t } = useTranslation();
   const locked = isLockedBsu(account);
-  const short = bsuShort(account);
+  const short = bsuShort(account) ?? cardShort(account);
+  const orange = locked || account.bsu?.over === true || cardNear(account);
   return (
     <Group
       gap={0}
@@ -390,11 +400,7 @@ function AccountRow({
               {[accountTypeLabel(account.type), account.bank].filter(Boolean).join(" · ")}
             </Text>
             {short && (
-              <Text
-                size="xs"
-                c={locked || account.bsu?.over ? "var(--mantine-color-orange-text)" : "dimmed"}
-                truncate
-              >
+              <Text size="xs" c={orange ? "var(--mantine-color-orange-text)" : "dimmed"} truncate>
                 {short}
               </Text>
             )}
@@ -423,9 +429,11 @@ function AccountRow({
           <Menu.Item onClick={onAdjust} disabled={locked}>
             {t("accounts.adjust")}
           </Menu.Item>
-          <Menu.Item onClick={onInterest} disabled={locked}>
-            {t("accounts.interest")}
-          </Menu.Item>
+          {!isCard(account) && (
+            <Menu.Item onClick={onInterest} disabled={locked}>
+              {t("accounts.interest")}
+            </Menu.Item>
+          )}
         </Menu.Dropdown>
       </Menu>
     </Group>
@@ -491,7 +499,11 @@ function AdjustForm({ account, onDone }: { account: Account; onDone: () => void 
   const { t } = useTranslation();
   const refresh = useRefreshMoney();
   const balance = canonicalAmount(account.balance);
-  const [actual, setActual] = useState<string | null>(balance);
+  // A card is adjusted by what's owed (#260): the balance negated.
+  const card = isCard(account);
+  const shown = card ? negate(balance) : balance;
+  const [entered, setActual] = useState<string | null>(shown);
+  const actual = entered !== null && card ? negate(entered) : entered;
   const [at, setAt] = useState<string | null>(null);
   const [error, setError] = useState<string>();
 
@@ -528,21 +540,22 @@ function AdjustForm({ account, onDone }: { account: Account; onDone: () => void 
       onSubmit={(e) => {
         e.preventDefault();
         setError(undefined);
-        if (actual === null) setError(t("accounts.enterBalance"));
+        if (actual === null) setError(t(card ? "cards.enterOwed" : "accounts.enterBalance"));
         else adjust.mutate(actual);
       }}
     >
       <Stack gap="md">
         <Group justify="space-between">
-          <Text size="sm">{t("accounts.appBalance")}</Text>
+          <Text size="sm">{t(card ? "cards.appOwed" : "accounts.appBalance")}</Text>
           <Text size="sm" fw={700}>
-            {formatMoney(balance, account.currency)}
+            {formatMoney(shown, account.currency)}
           </Text>
         </Group>
         <AmountInput
-          label={t("accounts.actualBalance")}
+          label={t(card ? "cards.owedNow" : "accounts.actualBalance")}
+          description={card ? t("cards.owedHint") : undefined}
           currency={account.currency}
-          value={actual}
+          value={entered}
           onChange={setActual}
           error={error}
           {...autofocusField()}

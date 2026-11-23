@@ -82,6 +82,7 @@ import { isOverdue } from "@/lib/cycles";
 import { getLocale } from "@/lib/locale";
 import { compareAmounts, formatMoney, subtractAmounts } from "@/lib/money";
 import { budgetDestination, sweepEntries } from "@/lib/savings";
+import { withoutCards } from "@/lib/cards";
 
 /**
  * Budget setup (spec §9): every bucket by source account, the income
@@ -382,8 +383,10 @@ function Budget({
 
   // Accounts with buckets first, then the rest, so a budget can start there
   // (#112). A new bucket in the draft doesn't move its account.
+  // Credit cards have no buckets or expected income (#260).
   const hasBuckets = (a: Account) => buckets.some((b) => b.source_account_id === a.id);
-  const ordered = [...accounts.filter(hasBuckets), ...accounts.filter((a) => !hasBuckets(a))];
+  const funding = withoutCards(accounts);
+  const ordered = [...funding.filter(hasBuckets), ...funding.filter((a) => !hasBuckets(a))];
 
   return (
     <>

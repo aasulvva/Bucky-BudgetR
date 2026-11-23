@@ -2642,5 +2642,47 @@
       "yearTaken": "Det finst ein regel frå {{year}} alt: lagring endrar han.",
       "deleteConfirm": "Slette regelen frå {{year}}? Åra hans brukar regelen før han."
     }
+  },
+  "cards": {
+    "lastDay": "Siste dag",
+    "owed": "Skuldig {{amount}}",
+    "inCredit": "{{amount}} til gode",
+    "nothingOwed": "Ingenting skuldig",
+    "available": "{{amount}} av {{limit}} tilgjengeleg",
+    "pastLimit": "{{amount}} over grensa på {{limit}}",
+    "availableShort": "{{amount}} tilgjengeleg",
+    "pastLimitShort": "{{amount}} over grensa",
+    "hintAccount": "{{name}}: {{amount}} av {{limit}} tilgjengeleg (kredittkort)",
+    "hintPayment": "{{name}}: {{amount}} skuldig (kredittkort)",
+    "confirm": {
+      "title": "Over kredittgrensa",
+      "body": "Dette tek kredittkortet over kredittgrensa. Banken kan ha avvist det, så registrer det berre om det gjekk gjennom."
+    },
+    "createHint": "Eit kredittkort skuldar pengar: saldoen er under 0 så lenge noko er skuldig. Kjøp er utgifter på det, og innbetalingar er overføringar til det.",
+    "defaultAccount": "Standardkonto",
+    "defaultAccountHint": "Valfri. Der kjøp som ikkje blir betalte frå ei bøtte, set pengane til side, og kontoen rekninga blir betalt frå, om du ikkje vel noko anna. Vanlegvis brukskontoen din.",
+    "noDefault": "Ingen",
+    "noChoices": "Ingen brukskonto eller sparekonto i {{currency}} enno, så det har ingen førebels.",
+    "creditLimit": "Kredittgrense",
+    "statementDay": "Fakturadag",
+    "statementDayHint": "Dagen kvar månad rekninga blir laga. Ho dekkjer det som er skuldig ved slutten av dagen før.",
+    "dueDay": "Forfallsdag",
+    "dueDayHint": "Dagen kvar månad rekninga forfell: den første etter fakturadagen.",
+    "minimumPayment": "Minstebeløp",
+    "minimumHint": "Eit fast beløp. Ei mindre rekning blir betalt i heilskap.",
+    "aboveZero": "Skriv inn eit beløp over 0.",
+    "chooseDay": "Vel ein dag.",
+    "owedToday": "Skuldig i dag",
+    "owedHint": "Det kortet skuldar, slik banken viser det. Eit negativt beløp tyder pengar til gode.",
+    "typeFixed": "Eit kredittkort held fram som kredittkort.",
+    "notToCard": "Ein konto kan ikkje bli eit kredittkort. Opprett ein ny konto for kortet.",
+    "stopsDefault": "Han sluttar å vere standardkonto for {{names}}.",
+    "owes": "Det er {{amount}} skuldig",
+    "payOff": "Betal det ned frå ein annan konto",
+    "payFrom": "Betal frå",
+    "adjustToZeroHint": "For gjeld som er borte, t.d. eit kort banken har avslutta og gjort opp.",
+    "owedNow": "Skuldig no",
+    "appOwed": "Skuldig i appen",
+    "enterOwed": "Skriv inn det banken viser som skuldig."
   }
 }
