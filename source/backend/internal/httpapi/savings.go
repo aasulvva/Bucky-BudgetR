@@ -124,7 +124,7 @@ func (s *server) SavingsTargetDone(ctx context.Context, req api.SavingsTargetDon
 		return nil, err
 	}
 	b := req.Body
-	d := savings.Done{AccountID: b.AccountId}
+	d := savings.Done{AccountID: b.AccountId, BSUConfirmed: b.BsuConfirmed != nil && *b.BsuConfirmed}
 	if d.Amount, err = parseAmount(b.Amount); err != nil {
 		return nil, err
 	}
@@ -166,7 +166,7 @@ func (s *server) savingsService() (*savings.Service, error) {
 
 // savingsError maps errors from the savings service to problems.
 func savingsError(err error) error {
-	if errors.Is(err, bsu.ErrLocked) {
+	if errors.Is(err, bsu.ErrLocked) || errors.Is(err, bsu.ErrOverLimit) || errors.Is(err, bsu.ErrWithdrawal) {
 		return bsuError(err)
 	}
 	if e := distributorError(err); e != nil {
@@ -220,6 +220,10 @@ func toAPISavingsTarget(t savings.Target) api.SavingsTarget {
 		Held:       make([]api.SavingsHeld, len(t.Held)),
 		CreatedAt:  t.CreatedAt.UTC(),
 		ModifiedAt: t.ModifiedAt.UTC(),
+	}
+	out.BsuRoom = nullable.NewNullNullable[string]()
+	if t.BSURoom != nil {
+		out.BsuRoom.Set(t.BSURoom.StringFixed(money.Places))
 	}
 	if t.CustomName != "" {
 		out.CustomName.Set(t.CustomName)

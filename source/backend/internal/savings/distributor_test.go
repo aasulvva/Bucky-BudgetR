@@ -370,3 +370,105 @@ func TestLockedBSUTarget(t *testing.T) {
 		t.Errorf("Done once set up: %v", err)
 	}
 }
+
+// TestBSUCap caps a BSU target at what it may still be given this year
+// (#236): 27 500 a year, less this year's deposits and what's held for it.
+func TestBSUCap(t *testing.T) {
+	e := setupDistributor(t, true)
+	ctx := t.Context()
+	home, err := e.savings.Get(ctx, e.user, e.home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.txs.Create(ctx, e.user, transactions.New{
+		Type: sqlc.TransactionTypeINC, AccountID: home.AccountID, Amount: dec("26900"), At: now.Add(-day),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	room := func(id string) string {
+		t.Helper()
+		tg, err := e.savings.Get(ctx, e.user, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if tg.BSURoom == nil {
+			return "nil"
+		}
+		return tg.BSURoom.StringFixed(2)
+	}
+	if got := room(e.home); got != "600.00" {
+		t.Errorf("Home's room %s, want 600.00", got)
+	}
+	if got := room(e.buffer); got != "nil" {
+		t.Errorf("Buffer's room %s, want none", got)
+	}
+
+	// 6 + 4 + 2 would give Home 1 200 of 2 400; it takes 600, and Buffer and
+	// Holiday share the rest 4 : 2.
+	p, err := e.savings.Preview(ctx, e.user, e.main, dec("2400"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range p.Shares {
+		if s.TargetID == e.home && s.Amount.StringFixed(2) != "600.00" {
+			t.Errorf("the preview gives Home %s", s.Amount)
+		}
+	}
+	if _, _, err := e.savings.AddToDistributor(ctx, e.user, e.main, dec("2400")); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := e.held(t, e.home, e.main); got != "600.00" {
+		t.Errorf("held for Home %s, want 600.00", got)
+	}
+	if got, _ := e.held(t, e.buffer, e.main); got != "1200.00" {
+		t.Errorf("held for Buffer %s, want 1200.00", got)
+	}
+	// What's held uses the room.
+	if got := room(e.home); got != "0.00" {
+		t.Errorf("Home's room once held %s, want 0.00", got)
+	}
+
+	// A savings budget amount for it goes to the distributor.
+	entry, err := e.savings.CreateBudget(ctx, e.user, savings.NewBudget{
+		AccountID: e.main, TargetID: e.home, Amount: dec("300"), When: sqlc.SavingsBudgetWhenManual,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.savings.SaveNow(ctx, e.user, entry.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := e.held(t, e.home, e.main); got != "600.00" {
+		t.Errorf("after the budget, held for Home %s, want 600.00", got)
+	}
+
+	// Done up to the limit is fine; by hand it may hold more, but Done past
+	// the limit asks first.
+	if _, err := e.savings.Done(ctx, e.user, e.home, savings.Done{AccountID: e.main, Amount: dec("600")}); err != nil {
+		t.Fatalf("Done up to the limit: %v", err)
+	}
+	if _, err := e.savings.Add(ctx, e.user, e.home, e.main, dec("100")); err != nil {
+		t.Fatalf("Add past the room: %v", err)
+	}
+	var over *bsu.OverLimitError
+	if _, err := e.savings.Done(ctx, e.user, e.home, savings.Done{AccountID: e.main, Amount: dec("100")}); !errors.As(err, &over) {
+		t.Fatalf("Done past the limit: %v", err)
+	}
+	if _, err := e.savings.Done(ctx, e.user, e.home, savings.Done{AccountID: e.main, Amount: dec("100"), BSUConfirmed: true}); err != nil {
+		t.Fatalf("Done past the limit, confirmed: %v", err)
+	}
+
+	// Money held on the BSU for another target is a withdrawal when it's done.
+	if _, err := e.savings.Add(ctx, e.user, e.buffer, home.AccountID, dec("100")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.savings.Done(ctx, e.user, e.buffer, savings.Done{AccountID: home.AccountID, Amount: dec("100")}); !errors.Is(err, bsu.ErrWithdrawal) {
+		t.Errorf("Done out of a BSU: %v", err)
+	}
+
+	// A locked BSU has no room: it's paused (#214).
+	e.bsuLocked(t, home.AccountID, true)
+	if got := room(e.home); got != "nil" {
+		t.Errorf("a locked BSU's room %s, want none", got)
+	}
+}

@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { formatMoney } from "@/lib/money";
-import { apiMock } from "@/test/api";
+import { apiMock, problem } from "@/test/api";
 import { account, bucket, budgetEntry, savingsTarget, sweepEntry } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
@@ -161,6 +161,85 @@ describe("Savings", () => {
       account_id: main.id,
       amount: "500.00",
       description: "Monthly",
+    });
+  });
+
+  describe("a BSU target (#236)", () => {
+    const homeAccount = account({ id: "4567", name: "Home", type: "bsu", balance: "120000.00" });
+    const home = savingsTarget({
+      id: "1000001003",
+      name: "Home",
+      account_id: homeAccount.id,
+      goal: "300000.00",
+      current: "120000.00",
+      held_total: "2000.00",
+      held: [{ account_id: main.id, amount: "2000.00", covered: "2000.00" }],
+      bsu_room: "7500.00",
+    });
+
+    beforeEach(() => {
+      apiMock.on("GET /api/v1/accounts", { body: [buffer, homeAccount, main, other] });
+    });
+
+    it("says what it may still take this year, or that it's full", async () => {
+      apiMock.on("GET /api/v1/savings/targets", {
+        body: [
+          home,
+          { ...rainy, bsu_room: null },
+          { ...home, id: "1000001004", name: "Old", bsu_room: "0.00" },
+        ],
+      });
+      renderRoute("/savings");
+      expect(
+        (await card("Home")).getByText(`${m("7500.00")} left this year (BSU)`),
+      ).toBeInTheDocument();
+      expect((await card("Old")).getByText("Full for this year (BSU)")).toBeInTheDocument();
+      expect((await card("Rainy day")).queryByText(/left this year/)).not.toBeInTheDocument();
+    });
+
+    it("notes adding more than that by hand", async () => {
+      apiMock.on("GET /api/v1/savings/targets", { body: [{ ...home, bsu_room: "1500.00" }] });
+      renderRoute("/savings");
+      await userEvent.click(
+        (await card("Home")).getByRole("button", { name: "Add to savings for Home" }),
+      );
+      const dialog = within(await screen.findByRole("dialog", { name: "Add to savings: Home" }));
+      const amount = dialog.getByRole("textbox", { name: "Amount" });
+      await userEvent.type(amount, "1500");
+      expect(dialog.queryByText(/More than the/)).not.toBeInTheDocument();
+      await userEvent.clear(amount);
+      await userEvent.type(amount, "1600");
+      expect(
+        dialog.getByText(
+          `More than the ${m("1500.00")} left this year. Done may go over the BSU limit.`,
+        ),
+      ).toBeInTheDocument();
+      expect(dialog.getByRole("button", { name: "Add to savings" })).toBeEnabled();
+    });
+
+    it("asks before Done takes it over its limit, and sends it confirmed", async () => {
+      apiMock.on("GET /api/v1/savings/targets", { body: [home] });
+      apiMock.on("POST /api/v1/savings/targets/1000001003/done", (req) =>
+        (req.body as Record<string, unknown>).bsu_confirmed
+          ? { body: home }
+          : problem(409, "bsu_over_limit", "This takes the BSU account over its deposit limit."),
+      );
+      renderRoute("/savings");
+      await userEvent.click(
+        (await card("Home")).getByRole("button", { name: "Done for Home on Main" }),
+      );
+      const dialog = within(await screen.findByRole("dialog", { name: "Done: Home" }));
+      await userEvent.click(dialog.getByRole("button", { name: "Done" }));
+      const ask = within(await dialog.findByRole("alertdialog", { name: "Over the BSU limit" }));
+      expect(dialog.getByRole("button", { name: "Done" })).toBeDisabled();
+      await userEvent.click(ask.getByRole("button", { name: "Record it anyway" }));
+      await closed();
+      expect(
+        apiMock.calls("POST /api/v1/savings/targets/1000001003/done").map((c) => c.body),
+      ).toEqual([
+        { account_id: main.id, amount: "2000.00" },
+        { account_id: main.id, amount: "2000.00", bsu_confirmed: true },
+      ]);
     });
   });
 

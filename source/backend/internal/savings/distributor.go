@@ -11,7 +11,6 @@ import (
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/balance"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/bsu"
-	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/buckets"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ids"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
@@ -294,7 +293,7 @@ func (s *Service) splitAccount(ctx context.Context, tx pgx.Tx, userID, distribut
 	if !placed.IsPositive() {
 		return "", nil
 	}
-	targets, err := list(ctx, tx, userID)
+	targets, err := s.list(ctx, tx, userID)
 	if err != nil {
 		return "", err
 	}
@@ -325,7 +324,7 @@ func (s *Service) plan(ctx context.Context, tx pgx.Tx, userID, accountID string,
 	if err != nil {
 		return Plan{}, notFound(err, "account", accountID)
 	}
-	targets, err := list(ctx, tx, userID)
+	targets, err := s.list(ctx, tx, userID)
 	if err != nil {
 		return Plan{}, err
 	}
@@ -353,15 +352,11 @@ func (s *Service) plan(ctx context.Context, tx pgx.Tx, userID, accountID string,
 		if t.Currency != account.Currency || t.AccountID == accountID || locked[t.AccountID] {
 			continue
 		}
-		c := Candidate{ID: t.ID, Position: decimal.Max(t.Current, decimal.Zero).Add(t.HeldTotal()), Goal: t.Goal}
+		c, err := candidate(ctx, q, userID, t)
+		if err != nil {
+			return Plan{}, err
+		}
 		if t.BucketID != "" {
-			b, err := q.GetBucket(ctx, sqlc.GetBucketParams{ID: t.BucketID, UserID: userID})
-			if err != nil {
-				return Plan{}, notFound(err, "bucket", t.BucketID)
-			}
-			if bc := buckets.Capacity(b.Bucket); bc.Valid {
-				c.Capacity = &bc.Decimal
-			}
 			intoBucket[t.ID] = cycleOK && t.BucketAccountID == accountID
 		}
 		for _, r := range rules {

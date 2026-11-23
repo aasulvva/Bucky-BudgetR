@@ -16,6 +16,32 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.31.00",
+    date: "2026-11-23",
+    title: {
+      en: "BSU savings targets stay within the limit",
+      nb: "BSU-sparemål holder seg innenfor grensen",
+      nn: "BSU-sparemål held seg innanfor grensa",
+    },
+    changes: {
+      en: [
+        "A BSU savings target says what it may still take this year, after what's held for it, or that it's full.",
+        "The savings distributor, overflow and the savings budget never give a BSU more than that; the rest goes to the distributor.",
+        "Done on a BSU target that takes it over its limit asks you to confirm it, as recording a transfer does. Adding to it by hand beyond what's left says so.",
+      ],
+      nb: [
+        "Et BSU-sparemål viser hva det kan ta imot resten av året, etter det som er holdt av til det, eller at det er fullt.",
+        "Sparefordeleren, overløp og sparebudsjettet gir aldri en BSU mer enn det; resten går til fordeleren.",
+        "Utført på et BSU-mål som tar det over grensen, ber deg bekrefte det, slik en overføring gjør. Legger du til mer for hånd enn det som er igjen, står det.",
+      ],
+      nn: [
+        "Eit BSU-sparemål viser kva det kan ta imot resten av året, etter det som er halde av til det, eller at det er fullt.",
+        "Sparefordelaren, overløp og sparebudsjettet gir aldri ein BSU meir enn det; resten går til fordelaren.",
+        "Utført på eit BSU-mål som tek det over grensa, ber deg stadfeste det, slik ei overføring gjer. Legg du til meir for hand enn det som er att, står det.",
+      ],
+    },
+  },
+  {
     version: "v2.30.00",
     date: "2026-11-23",
     title: {

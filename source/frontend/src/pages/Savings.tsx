@@ -28,7 +28,7 @@ import { BudgetCard } from "@/components/savings/BudgetCard";
 import { DistributorCard } from "@/components/savings/DistributorCard";
 import { SavingsDialog, type SavingsAction } from "@/components/savings/SavingsDialog";
 import { compareAmounts, formatMoney, subtractAmounts } from "@/lib/money";
-import { progress, targetKindText } from "@/lib/savings";
+import { bsuRoom, progress, targetKindText } from "@/lib/savings";
 
 /**
  * Savings (spec §9, #231): the savings distributor (#232), and each savings
@@ -133,6 +133,7 @@ function TargetCard({
   const { t } = useTranslation();
   const [action, setAction] = useState<SavingsAction | null>(null);
   const p = progress(target);
+  const room = bsuRoom(target);
   const money = (a: string) => formatMoney(a, target.currency);
   const name = (id: string) => accounts.find((a) => a.id === id)?.name ?? `#${id}`;
 
@@ -179,6 +180,11 @@ function TargetCard({
             <Progress.Section value={p.currentPct} color={p.reached ? "green" : "blue"} />
             <Progress.Section value={p.heldPct} color={p.reached ? "green" : "blue"} striped />
           </Progress.Root>
+          {room && (
+            <Text size="sm" c={room.full ? "var(--mantine-color-orange-text)" : "dimmed"}>
+              {room.text}
+            </Text>
+          )}
           <Text size="xs" c="dimmed">
             {t(target.bucket_id !== null ? "savings.inBucket" : "savings.inAccount", {
               amount: money(target.current),

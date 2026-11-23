@@ -1784,7 +1784,9 @@ export interface paths {
          *     `no_active_cycle` or `cycle_overdue`) and room below a fixed capacity
          *     (409 `above_capacity`). A BSU target or source that isn't set up yet
          *     is locked (409 `bsu_locked`, #214); the distributor and overflow pass
-         *     such a target by.
+         *     such a target by. A transfer that takes a BSU over its deposit limits
+         *     gets 409 `bsu_over_limit`, and one out of a BSU 409 `bsu_withdrawal`,
+         *     unless `bsu_confirmed` is true (#236).
          *
          *     `at` can't be in the future, and at least `amount` must be held both
          *     now and at `at` (409 `not_enough_held`). Reversing the transaction
@@ -3608,6 +3610,8 @@ export interface components {
             held_total: components["schemas"]["Amount"];
             /** @description What's held for the target, per source account. */
             held: components["schemas"]["SavingsHeld"][];
+            /** @description For a BSU account target, what it may still be given this year beyond what's held: the least of the yearly and total limits left, less `held_total`, at least 0 (#236). The distributor, overflow and the savings budget never give it more. Null for other targets and a locked BSU (#214). */
+            bsu_room: (string & components["schemas"]["Amount"]) | null;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -3656,6 +3660,8 @@ export interface components {
             at?: string;
             /** @description An optional description for the transaction. */
             description?: string;
+            /** @description Records it even when it takes a BSU account over its deposit limits or money out of one (409 `bsu_over_limit`, `bsu_withdrawal`, */
+            bsu_confirmed?: boolean;
         };
         /**
          * @description When the distributor splits what it gets (#232) — as it comes in, once an account's holdings reach `min_amount`, or only when asked.

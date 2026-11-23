@@ -211,6 +211,20 @@ describe("the savings distributor (#232)", () => {
     });
   });
 
+  it("says a BSU target's room this year caps it (#236)", async () => {
+    apiMock.on("GET /api/v1/savings/targets", { body: [{ ...rainy, bsu_room: "2500.00" }, trip] });
+    renderRoute("/savings/setup?distributor");
+    const region = within(await screen.findByRole("region", { name: rainy.name }));
+    expect(
+      region.getByText(
+        `${m("2500.00")} left this year (BSU) · The distributor gives it no more this year`,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("region", { name: "Holiday" })).queryByText(/left this year/),
+    ).not.toBeInTheDocument();
+  });
+
   it("previews a split", async () => {
     renderRoute("/savings/setup?distributor");
     const preview = within(await screen.findByRole("region", { name: "Preview" }));

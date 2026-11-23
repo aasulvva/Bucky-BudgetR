@@ -56,7 +56,7 @@ func (s *Service) holdLines(ctx context.Context, tx pgx.Tx, userID, accountID, t
 	}
 	toTarget := decimal.Zero
 	if targetID != "" {
-		targets, err := list(ctx, tx, userID)
+		targets, err := s.list(ctx, tx, userID)
 		if err != nil {
 			return nil, err
 		}
@@ -102,15 +102,9 @@ func (s *Service) holdLines(ctx context.Context, tx pgx.Tx, userID, accountID, t
 // target's fixed BC; nil for no limit.
 func (s *Service) overflowRoom(ctx context.Context, tx pgx.Tx, userID string, t Target) (*decimal.Decimal, error) {
 	q := sqlc.New(tx)
-	c := Candidate{ID: t.ID, Position: decimal.Max(t.Current, decimal.Zero).Add(t.HeldTotal()), Goal: t.Goal}
-	if t.BucketID != "" {
-		b, err := q.GetBucket(ctx, sqlc.GetBucketParams{ID: t.BucketID, UserID: userID})
-		if err != nil {
-			return nil, notFound(err, "bucket", t.BucketID)
-		}
-		if bc := buckets.Capacity(b.Bucket); bc.Valid {
-			c.Capacity = &bc.Decimal
-		}
+	c, err := candidate(ctx, q, userID, t)
+	if err != nil {
+		return nil, err
 	}
 	rules, err := q.ListSavingsRules(ctx, userID)
 	if err != nil {
@@ -128,6 +122,30 @@ func (s *Service) overflowRoom(ctx context.Context, tx pgx.Tx, userID string, t 
 	}
 	room := ceil.Sub(c.Position)
 	return &room, nil
+}
+
+// candidate is the target as the distributor sees it, without its rules:
+// where it stands (its balance or TF, not below 0, plus what's held), its
+// goal, and a cap no rule passes: a bucket's fixed BC, or a BSU's room this
+// year (#236), from where it stands.
+func candidate(ctx context.Context, q *sqlc.Queries, userID string, t Target) (Candidate, error) {
+	c := Candidate{ID: t.ID, Position: decimal.Max(t.Current, decimal.Zero).Add(t.HeldTotal()), Goal: t.Goal}
+	if t.BucketID != "" {
+		b, err := q.GetBucket(ctx, sqlc.GetBucketParams{ID: t.BucketID, UserID: userID})
+		if err != nil {
+			return Candidate{}, notFound(err, "bucket", t.BucketID)
+		}
+		if bc := buckets.Capacity(b.Bucket); bc.Valid {
+			c.Capacity = &bc.Decimal
+		}
+	}
+	if t.BSURoom != nil {
+		ceil := c.Position.Add(*t.BSURoom)
+		if c.Capacity == nil || ceil.LessThan(*c.Capacity) {
+			c.Capacity = &ceil
+		}
+	}
+	return c, nil
 }
 
 // AfterOverflow moves savings just held by source (an OVF, or a savings
