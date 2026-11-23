@@ -140,8 +140,7 @@ type Changes struct {
 	ExpectedIncome *decimal.NullDecimal
 	// Bank sets the bank; "" clears it.
 	Bank *string
-	// Card sets all of a credit card's fields; only for a card (#260). A
-	// valid bill account unlocks a locked card.
+	// Card sets all of a credit card's fields; only for a card (#260).
 	Card *cards.Fields
 }
 
@@ -311,7 +310,7 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Account, er
 		}
 		q := sqlc.New(tx)
 		if n.Card != nil {
-			if err := cards.CheckBillAccount(ctx, tx, userID, "", n.Card.BillAccountID, n.Currency); err != nil {
+			if err := cards.CheckDefaultAccount(ctx, tx, userID, "", n.Card.DefaultAccountID, n.Currency); err != nil {
 				return err
 			}
 		}
@@ -321,7 +320,7 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Account, er
 			var err error
 			row, err = q.CreateAccount(ctx, sqlc.CreateAccountParams{
 				ID: id, UserID: userID, Name: name, Currency: n.Currency, AccountType: n.Type, Bank: bank,
-				CardBillAccountID: c.BillAccountID, CardCreditLimit: c.CreditLimit, CardStatementDay: c.StatementDay,
+				CardDefaultAccountID: c.DefaultAccountID, CardCreditLimit: c.CreditLimit, CardStatementDay: c.StatementDay,
 				CardDueDay: c.DueDay, CardMinimumPayment: c.MinimumPayment,
 			})
 			return ids.Inserted(err)
@@ -360,7 +359,7 @@ func (s *Service) Update(ctx context.Context, userID, id string, c Changes) (Acc
 		}
 		params := sqlc.UpdateAccountParams{
 			ID: id, UserID: userID, Name: row.Name, AccountType: row.AccountType, ExpectedIncome: row.ExpectedIncome, Bank: row.Bank,
-			CardBillAccountID: row.CardBillAccountID, CardCreditLimit: row.CardCreditLimit, CardStatementDay: row.CardStatementDay,
+			CardDefaultAccountID: row.CardDefaultAccountID, CardCreditLimit: row.CardCreditLimit, CardStatementDay: row.CardStatementDay,
 			CardDueDay: row.CardDueDay, CardMinimumPayment: row.CardMinimumPayment,
 		}
 		isCard := row.AccountType == sqlc.AccountTypeCreditCard
@@ -394,11 +393,11 @@ func (s *Service) Update(ctx context.Context, userID, id string, c Changes) (Acc
 			if err := cards.CheckFields(*c.Card); err != nil {
 				return err
 			}
-			if err := cards.CheckBillAccount(ctx, tx, userID, id, c.Card.BillAccountID, row.Currency); err != nil {
+			if err := cards.CheckDefaultAccount(ctx, tx, userID, id, c.Card.DefaultAccountID, row.Currency); err != nil {
 				return err
 			}
 			cc := cards.ToColumns(c.Card)
-			params.CardBillAccountID, params.CardCreditLimit, params.CardStatementDay = cc.BillAccountID, cc.CreditLimit, cc.StatementDay
+			params.CardDefaultAccountID, params.CardCreditLimit, params.CardStatementDay = cc.DefaultAccountID, cc.CreditLimit, cc.StatementDay
 			params.CardDueDay, params.CardMinimumPayment = cc.DueDay, cc.MinimumPayment
 		}
 		if c.ExpectedIncome != nil {
@@ -418,9 +417,10 @@ func (s *Service) Update(ctx context.Context, userID, id string, c Changes) (Acc
 		if _, err := q.UpdateAccount(ctx, params); err != nil {
 			return nameTaken(err)
 		}
-		// A type that can't be a bill account locks the cards it paid (#260).
-		if params.AccountType != row.AccountType && !slices.Contains(cards.BillAccountTypes, params.AccountType) {
-			if _, err := q.ClearCardBillAccount(ctx, sqlc.ClearCardBillAccountParams{UserID: userID, CardBillAccountID: pgtype.Text{String: id, Valid: true}}); err != nil {
+		// A type that can't be a default account leaves its cards without one
+		// (#260).
+		if params.AccountType != row.AccountType && !slices.Contains(cards.DefaultAccountTypes, params.AccountType) {
+			if err := q.ClearCardDefaultAccount(ctx, sqlc.ClearCardDefaultAccountParams{UserID: userID, CardDefaultAccountID: pgtype.Text{String: id, Valid: true}}); err != nil {
 				return err
 			}
 		}
@@ -461,9 +461,6 @@ func (s *Service) AdjustBalance(ctx context.Context, userID, id string, a Adjust
 		}
 		// A locked BSU's balance comes from its history setup (#214).
 		if err := bsu.Locked(ctx, tx, userID, id); err != nil {
-			return err
-		}
-		if err := cards.Locked(ctx, tx, userID, id); err != nil {
 			return err
 		}
 		balances, err := balance.AccountsBefore(ctx, tx, userID, at.Add(time.Microsecond))
@@ -575,9 +572,6 @@ func (s *Service) Delete(ctx context.Context, userID, id string, st Settlement) 
 			if err := bsu.Locked(ctx, tx, userID, r.TransferTo); err != nil {
 				return err
 			}
-			if err := cards.Locked(ctx, tx, userID, r.TransferTo); err != nil {
-				return err
-			}
 		}
 
 		// The deleted buckets go first, so the money they held is part of
@@ -607,8 +601,8 @@ func (s *Service) Delete(ctx context.Context, userID, id string, st Settlement) 
 				return err
 			}
 		}
-		// The cards it paid are locked until they get another (#260).
-		if _, err := q.ClearCardBillAccount(ctx, sqlc.ClearCardBillAccountParams{UserID: userID, CardBillAccountID: pgtype.Text{String: id, Valid: true}}); err != nil {
+		// The cards it was the default account of have none (#260).
+		if err := q.ClearCardDefaultAccount(ctx, sqlc.ClearCardDefaultAccountParams{UserID: userID, CardDefaultAccountID: pgtype.Text{String: id, Valid: true}}); err != nil {
 			return err
 		}
 		if err := q.DeleteAccount(ctx, sqlc.DeleteAccountParams{ID: id, UserID: userID}); err != nil {

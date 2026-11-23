@@ -13,7 +13,7 @@ import (
 func dec(s string) decimal.Decimal { return decimal.RequireFromString(s) }
 
 func TestCheckFields(t *testing.T) {
-	ok := cards.Fields{BillAccountID: "1234", CreditLimit: dec("20000"), StatementDay: 1, DueDay: 15, MinimumPayment: dec("300")}
+	ok := cards.Fields{DefaultAccountID: "1234", CreditLimit: dec("20000"), StatementDay: 1, DueDay: 15, MinimumPayment: dec("300")}
 	if err := cards.CheckFields(ok); err != nil {
 		t.Errorf("valid fields: %v", err)
 	}
@@ -41,7 +41,7 @@ func TestCheckFields(t *testing.T) {
 
 func TestStatusOf(t *testing.T) {
 	card := sqlc.BankAccount{
-		AccountType: sqlc.AccountTypeCreditCard, CardBillAccountID: pgtype.Text{String: "1234", Valid: true},
+		AccountType: sqlc.AccountTypeCreditCard, CardDefaultAccountID: pgtype.Text{String: "1234", Valid: true},
 		CardCreditLimit:  decimal.NullDecimal{Decimal: dec("20000"), Valid: true},
 		CardStatementDay: pgtype.Int2{Int16: 1, Valid: true}, CardDueDay: pgtype.Int2{Int16: 15, Valid: true},
 		CardMinimumPayment: decimal.NullDecimal{Decimal: dec("300"), Valid: true},
@@ -52,13 +52,13 @@ func TestStatusOf(t *testing.T) {
 		{"500", "0", "20500", "0"}, // in credit
 	} {
 		st, ok := cards.StatusOf(card, dec(c.balance))
-		if !ok || !st.Owed.Equal(dec(c.owed)) || !st.Available.Equal(dec(c.available)) || !st.UsedPercent().Equal(dec(c.used)) || st.Locked {
+		if !ok || !st.Owed.Equal(dec(c.owed)) || !st.Available.Equal(dec(c.available)) || !st.UsedPercent().Equal(dec(c.used)) {
 			t.Errorf("balance %s: %+v, used %s", c.balance, st, st.UsedPercent())
 		}
 	}
-	card.CardBillAccountID = pgtype.Text{}
-	if st, _ := cards.StatusOf(card, decimal.Zero); !st.Locked {
-		t.Error("no bill account, not locked")
+	card.CardDefaultAccountID = pgtype.Text{}
+	if st, _ := cards.StatusOf(card, decimal.Zero); st.DefaultAccountID != "" {
+		t.Errorf("no default account: %+v", st)
 	}
 	if _, ok := cards.StatusOf(sqlc.BankAccount{AccountType: sqlc.AccountTypeUsage}, decimal.Zero); ok {
 		t.Error("a usage account has a card status")

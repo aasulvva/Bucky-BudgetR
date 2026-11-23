@@ -845,23 +845,23 @@ func (e TransactionType) Valid() bool {
 }
 
 type BankAccount struct {
-	ID                 string
-	UserID             string
-	Name               string
-	Currency           string
-	Deleted            bool
-	CreatedAt          time.Time
-	ModifiedAt         time.Time
-	AccountType        AccountType
-	ExpectedIncome     decimal.NullDecimal
-	Bank               string
-	BsuSetUpAt         pgtype.Timestamptz
-	BsuOpenedYear      pgtype.Int2
-	CardBillAccountID  pgtype.Text
-	CardCreditLimit    decimal.NullDecimal
-	CardStatementDay   pgtype.Int2
-	CardDueDay         pgtype.Int2
-	CardMinimumPayment decimal.NullDecimal
+	ID                   string
+	UserID               string
+	Name                 string
+	Currency             string
+	Deleted              bool
+	CreatedAt            time.Time
+	ModifiedAt           time.Time
+	AccountType          AccountType
+	ExpectedIncome       decimal.NullDecimal
+	Bank                 string
+	BsuSetUpAt           pgtype.Timestamptz
+	BsuOpenedYear        pgtype.Int2
+	CardDefaultAccountID pgtype.Text
+	CardCreditLimit      decimal.NullDecimal
+	CardStatementDay     pgtype.Int2
+	CardDueDay           pgtype.Int2
+	CardMinimumPayment   decimal.NullDecimal
 }
 
 type BankTransaction struct {

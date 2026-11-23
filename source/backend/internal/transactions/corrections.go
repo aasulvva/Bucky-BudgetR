@@ -12,7 +12,6 @@ import (
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/balance"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/bsu"
-	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/cards"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/money"
@@ -277,10 +276,6 @@ func (s *Service) lock(ctx context.Context, tx pgx.Tx, userID, id string, revers
 		}
 	}
 	if err := bsu.Locked(ctx, tx, userID, accounts...); err != nil {
-		return Transaction{}, err
-	}
-	// Nor with a locked credit card (#260).
-	if err := cards.Locked(ctx, tx, userID, accounts...); err != nil {
 		return Transaction{}, err
 	}
 	return cur, nil

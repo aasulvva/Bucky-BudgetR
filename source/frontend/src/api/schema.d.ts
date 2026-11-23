@@ -735,13 +735,11 @@ export interface paths {
          *     - money left in it is transferred (TRF) or adjusted away (BLA) as
          *       `remaining_funds` says, otherwise 409 `balance_not_zero`. A BSU
          *       account that isn't set up yet can't take it (409 `bsu_locked`,
-         *       #214), but one can itself be deleted. Nor can a locked credit card
-         *       (409 `card_locked`, #260); a card that owes money is paid off by the
-         *       transfer, and a locked one can be deleted too.
+         *       #214), but one can itself be deleted. A credit card that owes money
+         *       is paid off by the transfer (#260).
          *
          *     Buckets can't move to a credit card (400 `card_source`). Deleting a
-         *     card's bill account, which is allowed, locks the card until it gets
-         *     another (#260).
+         *     card's default account leaves the card without one (#260).
          *
          *     If any step is refused, nothing changes. Money and buckets can only move
          *     to another account in the same currency (400 `currency_mismatch`).
@@ -1203,8 +1201,7 @@ export interface paths {
          *     account whose history isn't set up yet gets 409 `bsu_locked`.
          *
          *     One that takes a credit card's debt past its credit limit gets 409
-         *     `over_credit_limit` unless `limit_confirmed` is true, and one with a
-         *     locked card (no bill account) 409 `card_locked` (#260).
+         *     `over_credit_limit` unless `limit_confirmed` is true (#260).
          */
         post: operations["createTransaction"];
         delete?: never;
@@ -1316,8 +1313,8 @@ export interface paths {
          *     `bsu_withdrawal` unless `bsu_confirmed` is true (#214). One with a
          *     BSU account that isn't set up yet, before or after, gets 409
          *     `bsu_locked`. One that takes a credit card's debt further past its
-         *     limit gets 409 `over_credit_limit` unless `limit_confirmed` is true,
-         *     and one with a locked card 409 `card_locked` (#260).
+         *     limit gets 409 `over_credit_limit` unless `limit_confirmed` is true
+         *     (#260).
          */
         post: operations["correctTransaction"];
         delete?: never;
@@ -2789,11 +2786,12 @@ export interface components {
          */
         CreditCardFields: {
             /**
-             * @description The account the bill is paid from, and where card debt that no
-             *     bucket budgeted is set aside: a live usage or savings account in
-             *     the card's currency (400 `card_bill_account`).
+             * @description Optional: where card debt no bucket budgeted is set aside, and what
+             *     the bill is paid from, unless chosen otherwise. A live usage or
+             *     savings account in the card's currency (400
+             *     `card_default_account`). Left out for none.
              */
-            bill_account_id: components["schemas"]["AccountId"];
+            default_account_id?: components["schemas"]["AccountId"];
             /** @description Above 0. */
             credit_limit: components["schemas"]["Amount"];
             statement_day: components["schemas"]["CardDay"];
@@ -2803,10 +2801,10 @@ export interface components {
         };
         CreditCard: {
             /**
-             * @description The bill account. Null when it was deleted or changed to a type
-             *     that can't be one: the card is then locked until it gets another.
+             * @description The default account, or null for none. Deleting it, or changing
+             *     its type to one that can't be one, clears it.
              */
-            bill_account_id: (string & components["schemas"]["AccountId"]) | null;
+            default_account_id: (string & components["schemas"]["AccountId"]) | null;
             credit_limit: components["schemas"]["Amount"];
             statement_day: components["schemas"]["CardDay"];
             due_day: components["schemas"]["CardDay"];
@@ -2815,11 +2813,6 @@ export interface components {
             owed: components["schemas"]["Amount"];
             /** @description The credit left, credit_limit + balance; below 0 when past the limit. */
             available: components["schemas"]["Amount"];
-            /**
-             * @description Without a bill account, nothing can be recorded with the card
-             *     (409 `card_locked`) until it gets one; it can still be deleted.
-             */
-            locked: boolean;
         };
         /**
          * @description A BSU account's deposits (#214, spec §3): incomes and transfers into
@@ -2953,10 +2946,10 @@ export interface components {
             bank?: components["schemas"]["AccountBank"];
             /**
              * @description A credit card's fields, all of them; only for a card (400
-             *     `invalid_request`). A valid bill account unlocks a locked card.
-             *     Changing `type` to or from `credit_card` is 400 `card_type`. A
-             *     card's bill account that changes to a type other than usage or
-             *     savings locks its cards.
+             *     `invalid_request`); a default account left out clears it.
+             *     Changing `type` to or from `credit_card` is 400 `card_type`. An
+             *     account that changes to a type other than usage or savings stops
+             *     being its cards' default account.
              */
             credit_card?: components["schemas"]["CreditCardFields"];
         };

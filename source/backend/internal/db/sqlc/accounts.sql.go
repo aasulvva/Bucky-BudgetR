@@ -12,59 +12,43 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-const clearCardBillAccount = `-- name: ClearCardBillAccount :many
-UPDATE bank_accounts SET card_bill_account_id = NULL, modified_at = now()
-WHERE user_id = $1 AND card_bill_account_id = $2 AND NOT deleted
-RETURNING id
+const clearCardDefaultAccount = `-- name: ClearCardDefaultAccount :exec
+UPDATE bank_accounts SET card_default_account_id = NULL, modified_at = now()
+WHERE user_id = $1 AND card_default_account_id = $2 AND NOT deleted
 `
 
-type ClearCardBillAccountParams struct {
-	UserID            string
-	CardBillAccountID pgtype.Text
+type ClearCardDefaultAccountParams struct {
+	UserID               string
+	CardDefaultAccountID pgtype.Text
 }
 
-// The cards whose bill account this was are locked until they get another
-// (#260): the account is deleted, or can't be a bill account any more.
-func (q *Queries) ClearCardBillAccount(ctx context.Context, arg ClearCardBillAccountParams) ([]string, error) {
-	rows, err := q.db.Query(ctx, clearCardBillAccount, arg.UserID, arg.CardBillAccountID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []string{}
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		items = append(items, id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+// The cards whose default account this was have none (#260): the account is
+// deleted, or can't be a default account any more.
+func (q *Queries) ClearCardDefaultAccount(ctx context.Context, arg ClearCardDefaultAccountParams) error {
+	_, err := q.db.Exec(ctx, clearCardDefaultAccount, arg.UserID, arg.CardDefaultAccountID)
+	return err
 }
 
 const createAccount = `-- name: CreateAccount :one
 INSERT INTO bank_accounts (id, user_id, name, currency, account_type, bank,
-    card_bill_account_id, card_credit_limit, card_statement_day, card_due_day, card_minimum_payment)
+    card_default_account_id, card_credit_limit, card_statement_day, card_due_day, card_minimum_payment)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 ON CONFLICT (id) DO NOTHING
-RETURNING id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income, bank, bsu_set_up_at, bsu_opened_year, card_bill_account_id, card_credit_limit, card_statement_day, card_due_day, card_minimum_payment
+RETURNING id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income, bank, bsu_set_up_at, bsu_opened_year, card_default_account_id, card_credit_limit, card_statement_day, card_due_day, card_minimum_payment
 `
 
 type CreateAccountParams struct {
-	ID                 string
-	UserID             string
-	Name               string
-	Currency           string
-	AccountType        AccountType
-	Bank               string
-	CardBillAccountID  pgtype.Text
-	CardCreditLimit    decimal.NullDecimal
-	CardStatementDay   pgtype.Int2
-	CardDueDay         pgtype.Int2
-	CardMinimumPayment decimal.NullDecimal
+	ID                   string
+	UserID               string
+	Name                 string
+	Currency             string
+	AccountType          AccountType
+	Bank                 string
+	CardDefaultAccountID pgtype.Text
+	CardCreditLimit      decimal.NullDecimal
+	CardStatementDay     pgtype.Int2
+	CardDueDay           pgtype.Int2
+	CardMinimumPayment   decimal.NullDecimal
 }
 
 // Use with ids.Insert: a taken ID returns no row.
@@ -76,7 +60,7 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (B
 		arg.Currency,
 		arg.AccountType,
 		arg.Bank,
-		arg.CardBillAccountID,
+		arg.CardDefaultAccountID,
 		arg.CardCreditLimit,
 		arg.CardStatementDay,
 		arg.CardDueDay,
@@ -96,7 +80,7 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (B
 		&i.Bank,
 		&i.BsuSetUpAt,
 		&i.BsuOpenedYear,
-		&i.CardBillAccountID,
+		&i.CardDefaultAccountID,
 		&i.CardCreditLimit,
 		&i.CardStatementDay,
 		&i.CardDueDay,
@@ -120,7 +104,7 @@ func (q *Queries) DeleteAccount(ctx context.Context, arg DeleteAccountParams) er
 }
 
 const getAccount = `-- name: GetAccount :one
-SELECT id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income, bank, bsu_set_up_at, bsu_opened_year, card_bill_account_id, card_credit_limit, card_statement_day, card_due_day, card_minimum_payment FROM bank_accounts WHERE id = $1 AND user_id = $2 AND NOT deleted
+SELECT id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income, bank, bsu_set_up_at, bsu_opened_year, card_default_account_id, card_credit_limit, card_statement_day, card_due_day, card_minimum_payment FROM bank_accounts WHERE id = $1 AND user_id = $2 AND NOT deleted
 `
 
 type GetAccountParams struct {
@@ -144,7 +128,7 @@ func (q *Queries) GetAccount(ctx context.Context, arg GetAccountParams) (BankAcc
 		&i.Bank,
 		&i.BsuSetUpAt,
 		&i.BsuOpenedYear,
-		&i.CardBillAccountID,
+		&i.CardDefaultAccountID,
 		&i.CardCreditLimit,
 		&i.CardStatementDay,
 		&i.CardDueDay,
@@ -154,7 +138,7 @@ func (q *Queries) GetAccount(ctx context.Context, arg GetAccountParams) (BankAcc
 }
 
 const getAccountForUpdate = `-- name: GetAccountForUpdate :one
-SELECT id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income, bank, bsu_set_up_at, bsu_opened_year, card_bill_account_id, card_credit_limit, card_statement_day, card_due_day, card_minimum_payment FROM bank_accounts WHERE id = $1 AND user_id = $2 AND NOT deleted FOR UPDATE
+SELECT id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income, bank, bsu_set_up_at, bsu_opened_year, card_default_account_id, card_credit_limit, card_statement_day, card_due_day, card_minimum_payment FROM bank_accounts WHERE id = $1 AND user_id = $2 AND NOT deleted FOR UPDATE
 `
 
 type GetAccountForUpdateParams struct {
@@ -180,7 +164,7 @@ func (q *Queries) GetAccountForUpdate(ctx context.Context, arg GetAccountForUpda
 		&i.Bank,
 		&i.BsuSetUpAt,
 		&i.BsuOpenedYear,
-		&i.CardBillAccountID,
+		&i.CardDefaultAccountID,
 		&i.CardCreditLimit,
 		&i.CardStatementDay,
 		&i.CardDueDay,
@@ -190,7 +174,7 @@ func (q *Queries) GetAccountForUpdate(ctx context.Context, arg GetAccountForUpda
 }
 
 const listAccounts = `-- name: ListAccounts :many
-SELECT id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income, bank, bsu_set_up_at, bsu_opened_year, card_bill_account_id, card_credit_limit, card_statement_day, card_due_day, card_minimum_payment FROM bank_accounts WHERE user_id = $1 AND NOT deleted ORDER BY lower(name), id
+SELECT id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income, bank, bsu_set_up_at, bsu_opened_year, card_default_account_id, card_credit_limit, card_statement_day, card_due_day, card_minimum_payment FROM bank_accounts WHERE user_id = $1 AND NOT deleted ORDER BY lower(name), id
 `
 
 func (q *Queries) ListAccounts(ctx context.Context, userID string) ([]BankAccount, error) {
@@ -215,7 +199,7 @@ func (q *Queries) ListAccounts(ctx context.Context, userID string) ([]BankAccoun
 			&i.Bank,
 			&i.BsuSetUpAt,
 			&i.BsuOpenedYear,
-			&i.CardBillAccountID,
+			&i.CardDefaultAccountID,
 			&i.CardCreditLimit,
 			&i.CardStatementDay,
 			&i.CardDueDay,
@@ -238,32 +222,6 @@ SELECT id FROM bank_accounts WHERE user_id = $1 AND NOT deleted AND account_type
 // The user's live credit cards (#260).
 func (q *Queries) ListCardIDs(ctx context.Context, userID string) ([]string, error) {
 	rows, err := q.db.Query(ctx, listCardIDs, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []string{}
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		items = append(items, id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listLockedCards = `-- name: ListLockedCards :many
-SELECT id FROM bank_accounts
-WHERE user_id = $1 AND NOT deleted AND account_type = 'credit_card' AND card_bill_account_id IS NULL
-`
-
-// The user's credit cards without a bill account (#260).
-func (q *Queries) ListLockedCards(ctx context.Context, userID string) ([]string, error) {
-	rows, err := q.db.Query(ctx, listLockedCards, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -330,26 +288,26 @@ func (q *Queries) SetBucketSource(ctx context.Context, arg SetBucketSourceParams
 
 const updateAccount = `-- name: UpdateAccount :one
 UPDATE bank_accounts SET name = $3, account_type = $4, expected_income = $5, bank = $6, modified_at = now(),
-    card_bill_account_id = $7, card_credit_limit = $8, card_statement_day = $9, card_due_day = $10,
+    card_default_account_id = $7, card_credit_limit = $8, card_statement_day = $9, card_due_day = $10,
     card_minimum_payment = $11,
     bsu_set_up_at = CASE WHEN account_type = $4 THEN bsu_set_up_at END,
     bsu_opened_year = CASE WHEN account_type = $4 THEN bsu_opened_year END
 WHERE id = $1 AND user_id = $2 AND NOT deleted
-RETURNING id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income, bank, bsu_set_up_at, bsu_opened_year, card_bill_account_id, card_credit_limit, card_statement_day, card_due_day, card_minimum_payment
+RETURNING id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income, bank, bsu_set_up_at, bsu_opened_year, card_default_account_id, card_credit_limit, card_statement_day, card_due_day, card_minimum_payment
 `
 
 type UpdateAccountParams struct {
-	ID                 string
-	UserID             string
-	Name               string
-	AccountType        AccountType
-	ExpectedIncome     decimal.NullDecimal
-	Bank               string
-	CardBillAccountID  pgtype.Text
-	CardCreditLimit    decimal.NullDecimal
-	CardStatementDay   pgtype.Int2
-	CardDueDay         pgtype.Int2
-	CardMinimumPayment decimal.NullDecimal
+	ID                   string
+	UserID               string
+	Name                 string
+	AccountType          AccountType
+	ExpectedIncome       decimal.NullDecimal
+	Bank                 string
+	CardDefaultAccountID pgtype.Text
+	CardCreditLimit      decimal.NullDecimal
+	CardStatementDay     pgtype.Int2
+	CardDueDay           pgtype.Int2
+	CardMinimumPayment   decimal.NullDecimal
 }
 
 // A type change to or from BSU clears its history setup (#214): a BSU is
@@ -363,7 +321,7 @@ func (q *Queries) UpdateAccount(ctx context.Context, arg UpdateAccountParams) (B
 		arg.AccountType,
 		arg.ExpectedIncome,
 		arg.Bank,
-		arg.CardBillAccountID,
+		arg.CardDefaultAccountID,
 		arg.CardCreditLimit,
 		arg.CardStatementDay,
 		arg.CardDueDay,
@@ -383,7 +341,7 @@ func (q *Queries) UpdateAccount(ctx context.Context, arg UpdateAccountParams) (B
 		&i.Bank,
 		&i.BsuSetUpAt,
 		&i.BsuOpenedYear,
-		&i.CardBillAccountID,
+		&i.CardDefaultAccountID,
 		&i.CardCreditLimit,
 		&i.CardStatementDay,
 		&i.CardDueDay,

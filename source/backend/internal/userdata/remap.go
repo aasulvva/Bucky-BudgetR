@@ -42,7 +42,7 @@ const (
 // A clone gives each ID a new one. TestIDColumns checks it against the
 // schema's foreign keys.
 var idColumns = map[string]map[string]kind{
-	"bank_accounts":           {"id": kAccount, "user_id": kUser, "card_bill_account_id": kAccount},
+	"bank_accounts":           {"id": kAccount, "user_id": kUser, "card_default_account_id": kAccount},
 	"cycles":                  {"id": kCycle, "user_id": kUser},
 	"buckets":                 {"id": kBucket, "user_id": kUser, "source_account_id": kAccount, "overflow_target_id": kHolder},
 	"tags":                    {"id": kTag, "user_id": kUser},

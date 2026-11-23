@@ -87,16 +87,16 @@ A **credit card** (#260, the first step of #39) is an account that owes money: i
 
 | Field | Notes |
 | ----- | ----- |
-| Bill account | the account the bill is paid from, and where card debt no bucket budgeted will be set aside (#261): a usage or savings account (a holding account) in the card's currency, not the card. Usually the main usage account. Empty only while the card is locked |
+| Default account | optional: where card debt no bucket budgeted is set aside (#261), and what the bill is paid from (#262), unless chosen otherwise. A usage or savings account in the card's currency. Deleting it, or changing its type to one that can't be one, just clears it |
 | Credit limit | > 0 |
 | Statement day | the day of the month the bill is made, 1–28 or the last day (31): it covers the debt as of the end of the day before |
 | Due day | the day of the month the bill is due, 1–28 or the last day (31): the next due day after the statement day |
 | Minimum payment | > 0, a fixed amount; the whole bill when that's less |
 
-- **Created as a card:** a card is created with its fields (400 otherwise; 400 `card_bill_account` for a bill account that can't be one), and an account never changes type to or from credit card (400 `card_type`). Its opening balance is what's owed today, as a negative amount; one above 0 (in credit) is allowed.
+- **Created as a card:** a card is created with its fields (400 otherwise; 400 `card_default_account` for a default account that can't be one), and an account never changes type to or from credit card (400 `card_type`). Its opening balance is what's owed today, as a negative amount; one above 0 (in credit) is allowed.
 - **Owed and available** (`credit_card` on the account): *owed* is −balance, at least 0; *available* is the limit plus the balance, so it's more than the limit while the card is in credit, and below 0 past the limit.
 - **The limit warns, then allows:** creating, correcting or moving a transaction that takes more out of a card than it has available gets 409 `over_credit_limit` (with what's available), unless it says `limit_confirmed`. One that lowers the debt, or adds nothing to it, passes even past the limit. Scheduled transactions record without asking, and reversals, the opening balance and balance adjustments aren't checked. The *Credit limit* notification tells when a card is at 90 % of its limit or more (§9).
-- **Locked without a bill account:** deleting the bill account, or changing its type to one that can't be one, is allowed, and leaves its cards without one. Such a card is locked (409 `card_locked`) until a new bill account is chosen: no transaction can be created, corrected, reversed or moved with it (also as the destination of a deleted account's money), and no balance adjustment; its schedules' occurrences go to the queue as invalid, with the reason. Deleting it still works.
+- **Card debt is held where it was budgeted** (#261, decided 2026-11-23): a purchase's bucket parts on their buckets' accounts, the rest on the account the purchase names (prefilled with the default account) or nowhere. Transfers can carry it between accounts, and a payment clears the paying account's share first, then releases the other accounts' as the user sets. So no single account has to pay the bill.
 - **No money of its own:** a card can't fund a bucket (also not as the new source of a deleted account's buckets) or hold savings: no *Add to savings*, savings budget entry or distributor money from it (400 `card_source`). It's never a savings target.
 - **Deleting a card** that owes money settles it as any account (§2): a transfer from another account pays it off, or a balance adjustment sets it to 0.
 
@@ -256,7 +256,7 @@ Only **INC, EXP, TRF and INP** can be created from the *Create transaction* scre
 - **Bucket lines on INC/EXP:** each bucket must be funded from the transaction's bank account (this may change with cash support, #60). Together they can't exceed the bank amount; the remainder simply isn't tied to a bucket.
 - **TRF** goes between two of the user's accounts in the same currency. Transfers between currencies come with multi-currency (#33).
 - **BSU accounts:** a deposit over the limits, or a withdrawal, needs confirming (§2.1).
-- **Credit cards:** a purchase past the credit limit needs confirming, and nothing is recorded with a locked card (§2.2).
+- **Credit cards:** a purchase past the credit limit needs confirming (§2.2).
 - **No future dates:** a transaction records what has happened, so its time can't be later than now. Planned payments are scheduled transactions (#31).
 - **Reading:** the transaction list shows each transaction merged with its corrections (effective amounts, flagged as corrected or reversed); a reversed one also carries its amounts from just before the reversal (`before_reversal`), so the list can still show what it was. A transaction's history shows the original and each correction.
 - **Suggestions:** `GET /tags` lists the user's tags, most recently used first. `GET /counterparties` lists the counterparties of incomes and expenses, each once (ignoring case), newest first, with the effective account, tags and buckets of its newest transaction that isn't reversed.

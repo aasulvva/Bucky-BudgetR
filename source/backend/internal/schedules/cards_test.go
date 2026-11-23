@@ -12,14 +12,14 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/transactions"
 )
 
-// A schedule records a purchase past a card's limit without asking, and a
-// locked card's occurrences are queued as invalid (#260).
+// A schedule records a purchase past a card's limit without asking, also
+// once the card has no default account (#260).
 func TestRunCreditCard(t *testing.T) {
 	e := setup(t)
 	acc := accounts.NewService(e.pool, ledger.New(ledger.Options{AfterRecord: allocation.AfterRecord}), accounts.Options{Now: func() time.Time { return *e.now }})
 	card, err := acc.Create(t.Context(), e.user, accounts.New{
 		Name: "Visa", Type: sqlc.AccountTypeCreditCard, OpeningBalance: dec("-950"),
-		Card: &cards.Fields{BillAccountID: e.account, CreditLimit: dec("1000"), StatementDay: 1, DueDay: 15, MinimumPayment: dec("300")},
+		Card: &cards.Fields{DefaultAccountID: e.account, CreditLimit: dec("1000"), StatementDay: 1, DueDay: 15, MinimumPayment: dec("300")},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -34,7 +34,7 @@ func TestRunCreditCard(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.run(t, "2026-10-11T12:00:00Z")
-	if got := e.occurrences(t, sch.ID); !equal(got, []string{"10-10 12:00 applied", "10-11 12:00 queued invalid"}) {
+	if got := e.occurrences(t, sch.ID); !equal(got, []string{"10-10 12:00 applied", "10-11 12:00 applied"}) {
 		t.Errorf("occurrences %v", got)
 	}
 }

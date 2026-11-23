@@ -329,11 +329,7 @@ func (s *Service) record(ctx context.Context, tx pgx.Tx, userID string, n New, r
 	if err := checkBSU(ctx, tx, userID, n, nil, false); err != nil {
 		return nil, err
 	}
-	// Nor does a locked credit card (#260), and a purchase past a card's
-	// limit needs confirming.
-	if err := cards.Locked(ctx, tx, userID, n.AccountID, n.ToAccountID); err != nil {
-		return nil, err
-	}
+	// A purchase past a credit card's limit needs confirming (#260).
 	if err := checkCard(ctx, tx, userID, n, nil); err != nil {
 		return nil, err
 	}

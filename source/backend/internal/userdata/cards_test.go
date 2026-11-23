@@ -19,7 +19,7 @@ func TestCreditCardFollows(t *testing.T) {
 	main := must[accounts.Account](t)(e.accounts.Create(ctx, carol.ID, accounts.New{Name: "Main"}))
 	must[accounts.Account](t)(e.accounts.Create(ctx, carol.ID, accounts.New{
 		Name: "Visa", Type: sqlc.AccountTypeCreditCard, OpeningBalance: dec("-1500"),
-		Card: &cards.Fields{BillAccountID: main.ID, CreditLimit: dec("20000"), StatementDay: 1, DueDay: 15, MinimumPayment: dec("300")},
+		Card: &cards.Fields{DefaultAccountID: main.ID, CreditLimit: dec("20000"), StatementDay: 1, DueDay: 15, MinimumPayment: dec("300")},
 	}))
 	f, _ := e.file(t, carol.ID)
 
@@ -37,7 +37,7 @@ func TestCreditCardFollows(t *testing.T) {
 	if card.Card == nil {
 		t.Fatalf("the copy isn't a card: %+v", card)
 	}
-	got := fmt.Sprintf("%s %s %d %d %s %s", card.Card.BillAccountID, card.Card.CreditLimit, card.Card.StatementDay,
+	got := fmt.Sprintf("%s %s %d %d %s %s", card.Card.DefaultAccountID, card.Card.CreditLimit, card.Card.StatementDay,
 		card.Card.DueDay, card.Card.MinimumPayment, card.Card.Owed)
 	if want := fmt.Sprintf("%s 20000 1 15 300 1500", ids["Main"]); got != want || ids["Main"] == main.ID {
 		t.Errorf("the copied card %q, want %q", got, want)

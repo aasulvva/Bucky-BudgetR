@@ -1,7 +1,7 @@
 // Package cards holds what's particular to credit card accounts (#260, spec
-// §2.2): their fields, what's owed and available, the lock while a card has
-// no bill account, and the check that a transaction doesn't take a card's
-// debt past its credit limit unless it's confirmed.
+// §2.2): their fields, what's owed and available, and the check that a
+// transaction doesn't take a card's debt past its credit limit unless it's
+// confirmed.
 package cards
 
 import (
@@ -26,35 +26,24 @@ const LastDay = 31
 // debt gets a notification.
 const NearShare = 90
 
-// BillAccountTypes are the types a card's bill account can have.
-var BillAccountTypes = []sqlc.AccountType{sqlc.AccountTypeUsage, sqlc.AccountTypeSavings}
+// DefaultAccountTypes are the types a card's default account can have.
+var DefaultAccountTypes = []sqlc.AccountType{sqlc.AccountTypeUsage, sqlc.AccountTypeSavings}
 
 // Errors returned by the package.
 var (
-	// ErrLocked means a card has no bill account (it was deleted or changed
-	// type): nothing may be recorded with it until it gets one. Deleting it
-	// still works.
-	ErrLocked = errors.New("the credit card is locked until it gets a bill account")
 	// ErrOverLimit is wrapped by *OverLimitError.
 	ErrOverLimit = errors.New("this takes the credit card past its credit limit")
 	// ErrInvalid means a card's fields break a rule.
 	ErrInvalid = errors.New("invalid credit card")
-	// ErrBillAccount means the bill account isn't a live usage or savings
-	// account of the user's in the card's currency.
-	ErrBillAccount = errors.New("the bill account must be a usage or savings account in the card's currency")
+	// ErrDefaultAccount means the default account isn't a live usage or
+	// savings account of the user's in the card's currency.
+	ErrDefaultAccount = errors.New("the default account must be a usage or savings account in the card's currency")
 	// ErrSource means a card would fund a bucket or hold savings: it has no
 	// money of its own to give.
 	ErrSource = errors.New("a credit card can't be a bucket's source or a savings source")
 	// ErrTypeChange means an account would change to or from a credit card.
 	ErrTypeChange = errors.New("an account can't change to or from a credit card")
 )
-
-// LockedError says which card is locked.
-type LockedError struct{ AccountID string }
-
-func (e *LockedError) Error() string { return fmt.Sprintf("%s: account %s", ErrLocked, e.AccountID) }
-
-func (e *LockedError) Unwrap() error { return ErrLocked }
 
 // OverLimitError says which card would go past its limit, and what's
 // available on it now.
@@ -71,12 +60,13 @@ func (e *OverLimitError) Unwrap() error { return ErrOverLimit }
 
 // Fields are a card's own fields.
 type Fields struct {
-	// BillAccountID is the account the bill is paid from; "" while locked.
-	BillAccountID  string
-	CreditLimit    decimal.Decimal
-	StatementDay   int
-	DueDay         int
-	MinimumPayment decimal.Decimal
+	// DefaultAccountID is where debt no bucket budgeted is set aside, and
+	// what the bill is paid from, unless chosen otherwise; "" for none.
+	DefaultAccountID string
+	CreditLimit      decimal.Decimal
+	StatementDay     int
+	DueDay           int
+	MinimumPayment   decimal.Decimal
 }
 
 // Status is a card's fields and what's owed on it.
@@ -87,7 +77,6 @@ type Status struct {
 	// Available is the credit left: the limit plus the balance; below 0
 	// past the limit.
 	Available decimal.Decimal
-	Locked    bool
 }
 
 // UsedPercent is the share of the limit owed, in percent.
@@ -98,8 +87,8 @@ func (s Status) UsedPercent() decimal.Decimal {
 // ValidDay reports whether d is a statement or due day: 1–28 or LastDay.
 func ValidDay(d int) bool { return (d >= 1 && d <= 28) || d == LastDay }
 
-// CheckFields checks f's own rules; the bill account is checked against the
-// database by CheckBillAccount.
+// CheckFields checks f's own rules; the default account is checked against
+// the database by CheckDefaultAccount.
 func CheckFields(f Fields) error {
 	if err := money.Valid(f.CreditLimit); err != nil || !f.CreditLimit.IsPositive() {
 		return fmt.Errorf("%w: the credit limit must be above 0", ErrInvalid)
@@ -113,21 +102,24 @@ func CheckFields(f Fields) error {
 	return nil
 }
 
-// CheckBillAccount checks that id is a live usage or savings account of the
-// user's in currency, other than the card itself.
-func CheckBillAccount(ctx context.Context, db sqlc.DBTX, userID, cardID, id, currency string) error {
-	if id == "" || id == cardID {
-		return ErrBillAccount
+// CheckDefaultAccount checks that id, unless "" (none), is a live usage or
+// savings account of the user's in currency, other than the card itself.
+func CheckDefaultAccount(ctx context.Context, db sqlc.DBTX, userID, cardID, id, currency string) error {
+	if id == "" {
+		return nil
+	}
+	if id == cardID {
+		return ErrDefaultAccount
 	}
 	a, err := sqlc.New(db).GetAccount(ctx, sqlc.GetAccountParams{ID: id, UserID: userID})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return ErrBillAccount
+		return ErrDefaultAccount
 	}
 	if err != nil {
 		return err
 	}
-	if a.Currency != currency || !slices.Contains(BillAccountTypes, a.AccountType) {
-		return ErrBillAccount
+	if a.Currency != currency || !slices.Contains(DefaultAccountTypes, a.AccountType) {
+		return ErrDefaultAccount
 	}
 	return nil
 }
@@ -135,11 +127,11 @@ func CheckBillAccount(ctx context.Context, db sqlc.DBTX, userID, cardID, id, cur
 // Columns are f as the bank_accounts columns hold it; all invalid for a
 // nil f (an account that isn't a card).
 type Columns struct {
-	BillAccountID  pgtype.Text
-	CreditLimit    decimal.NullDecimal
-	StatementDay   pgtype.Int2
-	DueDay         pgtype.Int2
-	MinimumPayment decimal.NullDecimal
+	DefaultAccountID pgtype.Text
+	CreditLimit      decimal.NullDecimal
+	StatementDay     pgtype.Int2
+	DueDay           pgtype.Int2
+	MinimumPayment   decimal.NullDecimal
 }
 
 // ToColumns returns f's columns.
@@ -148,11 +140,11 @@ func ToColumns(f *Fields) Columns {
 		return Columns{}
 	}
 	return Columns{
-		BillAccountID:  pgtype.Text{String: f.BillAccountID, Valid: f.BillAccountID != ""},
-		CreditLimit:    decimal.NullDecimal{Decimal: f.CreditLimit, Valid: true},
-		StatementDay:   pgtype.Int2{Int16: int16(f.StatementDay), Valid: true}, //nolint:gosec // 1–31
-		DueDay:         pgtype.Int2{Int16: int16(f.DueDay), Valid: true},       //nolint:gosec // 1–31
-		MinimumPayment: decimal.NullDecimal{Decimal: f.MinimumPayment, Valid: true},
+		DefaultAccountID: pgtype.Text{String: f.DefaultAccountID, Valid: f.DefaultAccountID != ""},
+		CreditLimit:      decimal.NullDecimal{Decimal: f.CreditLimit, Valid: true},
+		StatementDay:     pgtype.Int2{Int16: int16(f.StatementDay), Valid: true}, //nolint:gosec // 1–31
+		DueDay:           pgtype.Int2{Int16: int16(f.DueDay), Valid: true},       //nolint:gosec // 1–31
+		MinimumPayment:   decimal.NullDecimal{Decimal: f.MinimumPayment, Valid: true},
 	}
 }
 
@@ -162,11 +154,11 @@ func FieldsOf(a sqlc.BankAccount) (Fields, bool) {
 		return Fields{}, false
 	}
 	return Fields{
-		BillAccountID:  a.CardBillAccountID.String,
-		CreditLimit:    a.CardCreditLimit.Decimal,
-		StatementDay:   int(a.CardStatementDay.Int16),
-		DueDay:         int(a.CardDueDay.Int16),
-		MinimumPayment: a.CardMinimumPayment.Decimal,
+		DefaultAccountID: a.CardDefaultAccountID.String,
+		CreditLimit:      a.CardCreditLimit.Decimal,
+		StatementDay:     int(a.CardStatementDay.Int16),
+		DueDay:           int(a.CardDueDay.Int16),
+		MinimumPayment:   a.CardMinimumPayment.Decimal,
 	}, true
 }
 
@@ -181,26 +173,7 @@ func StatusOf(a sqlc.BankAccount, bal decimal.Decimal) (Status, bool) {
 		Fields:    f,
 		Owed:      decimal.Max(bal.Neg(), decimal.Zero),
 		Available: f.CreditLimit.Add(bal),
-		Locked:    f.BillAccountID == "",
 	}, true
-}
-
-// Locked returns *LockedError for the first of accountIDs (in order) that's
-// a locked card, else nil. Empty IDs are skipped.
-func Locked(ctx context.Context, db sqlc.DBTX, userID string, accountIDs ...string) error {
-	if !slices.ContainsFunc(accountIDs, func(id string) bool { return id != "" }) {
-		return nil
-	}
-	locked, err := sqlc.New(db).ListLockedCards(ctx, userID)
-	if err != nil {
-		return err
-	}
-	for _, id := range accountIDs {
-		if id != "" && slices.Contains(locked, id) {
-			return &LockedError{AccountID: id}
-		}
-	}
-	return nil
 }
 
 // Change is a transaction family's net on an account before and after it's

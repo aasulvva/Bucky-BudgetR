@@ -20,12 +20,9 @@ func cardError(err error) error {
 		return &Error{Status: http.StatusConflict, Code: "over_credit_limit",
 			Detail: "This takes the credit card past its credit limit: " + over.Available.StringFixed(money.Places) +
 				" is available. Confirm to record it anyway."}
-	case errors.Is(err, cards.ErrLocked):
-		return &Error{Status: http.StatusConflict, Code: "card_locked",
-			Detail: "The credit card is locked until it gets a bill account. Choose one in Account setup first."}
-	case errors.Is(err, cards.ErrBillAccount):
-		return &Error{Status: http.StatusBadRequest, Code: "card_bill_account",
-			Detail: "The bill account must be a usage or savings account in the card's currency."}
+	case errors.Is(err, cards.ErrDefaultAccount):
+		return &Error{Status: http.StatusBadRequest, Code: "card_default_account",
+			Detail: "The default account must be a usage or savings account in the card's currency."}
 	case errors.Is(err, cards.ErrTypeChange):
 		return &Error{Status: http.StatusBadRequest, Code: "card_type",
 			Detail: "An account can't change to or from a credit card. Create a new account instead."}
@@ -52,24 +49,23 @@ func cardFields(f *api.CreditCardFields) (*cards.Fields, error) {
 		return nil, err
 	}
 	return &cards.Fields{
-		BillAccountID: f.BillAccountId, CreditLimit: limit, StatementDay: f.StatementDay, DueDay: f.DueDay,
+		DefaultAccountID: deref(f.DefaultAccountId), CreditLimit: limit, StatementDay: f.StatementDay, DueDay: f.DueDay,
 		MinimumPayment: minimum,
 	}, nil
 }
 
 func toAPICard(st cards.Status) api.CreditCard {
 	out := api.CreditCard{
-		BillAccountId:  nullable.NewNullNullable[api.AccountId](),
-		CreditLimit:    st.CreditLimit.StringFixed(money.Places),
-		StatementDay:   st.StatementDay,
-		DueDay:         st.DueDay,
-		MinimumPayment: st.MinimumPayment.StringFixed(money.Places),
-		Owed:           st.Owed.StringFixed(money.Places),
-		Available:      st.Available.StringFixed(money.Places),
-		Locked:         st.Locked,
+		DefaultAccountId: nullable.NewNullNullable[api.AccountId](),
+		CreditLimit:      st.CreditLimit.StringFixed(money.Places),
+		StatementDay:     st.StatementDay,
+		DueDay:           st.DueDay,
+		MinimumPayment:   st.MinimumPayment.StringFixed(money.Places),
+		Owed:             st.Owed.StringFixed(money.Places),
+		Available:        st.Available.StringFixed(money.Places),
 	}
-	if st.BillAccountID != "" {
-		out.BillAccountId = nullable.NewNullableWithValue(st.BillAccountID)
+	if st.DefaultAccountID != "" {
+		out.DefaultAccountId = nullable.NewNullableWithValue(st.DefaultAccountID)
 	}
 	return out
 }
