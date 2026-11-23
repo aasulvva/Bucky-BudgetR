@@ -315,7 +315,11 @@ export function TransactionForm({
 
   // A locked BSU takes nothing until it's set up (#214); one already chosen
   // stays, so the form shows it.
-  const lockedOut = accounts.some((a) => isLockedBsu(a));
+  // It's said on the account list it's about, not under the hints, where it
+  // read as part of the chosen account's.
+  const lockedOut = accounts.some((a) => isLockedBsu(a)) && !balance;
+  const lockedNote = lockedOut ? t("bsu.lockedOut") : undefined;
+  const joined = (...parts: (string | undefined)[]) => parts.filter(Boolean).join(" ") || undefined;
   const accountOptions = (list: Account[], keep: string | null) =>
     list
       .filter((a) => !isLockedBsu(a) || a.id === keep)
@@ -612,9 +616,10 @@ export function TransactionForm({
         }}
         error={errors.account}
         disabled={balance || heldTransfer}
-        description={
-          editing && !balance && !heldTransfer ? t("newTransaction.moveHint") : undefined
-        }
+        description={joined(
+          editing && !balance && !heldTransfer ? t("newTransaction.moveHint") : undefined,
+          transfer ? undefined : lockedNote,
+        )}
       />
       {transfer && (
         <Select
@@ -624,7 +629,9 @@ export function TransactionForm({
           onChange={setToAccountId}
           error={errors.to}
           description={
-            accountId && others.length === 0 ? t("newTransaction.noOther", { currency }) : undefined
+            accountId && others.length === 0
+              ? t("newTransaction.noOther", { currency })
+              : lockedNote
           }
           disabled={others.length === 0 || heldTransfer}
         />
@@ -637,11 +644,6 @@ export function TransactionForm({
       {cardHint && (
         <Text size="xs" c={cardHintOrange ? "var(--mantine-color-orange-text)" : "dimmed"} mt={-8}>
           {cardHint}
-        </Text>
-      )}
-      {lockedOut && !balance && (
-        <Text size="xs" c="dimmed" mt={-8}>
-          {t("bsu.lockedOut")}
         </Text>
       )}
       {withBuckets && (

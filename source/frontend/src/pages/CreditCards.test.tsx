@@ -5,7 +5,7 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { apiMock, problem } from "@/test/api";
-import { account, creditCard } from "@/test/fixtures";
+import { account, bsuStatus, creditCard } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
 import { formatMoney } from "@/lib/money";
@@ -166,6 +166,13 @@ describe("Accounts with credit cards (#260)", () => {
 
 describe("Transactions on a credit card (#260)", () => {
   it("says what's available, and asks before going past the limit", async () => {
+    const home = account({
+      id: "4567",
+      name: "Home",
+      type: "bsu",
+      bsu: bsuStatus({ locked: true }),
+    });
+    apiMock.on("GET /api/v1/accounts", { body: [buffer, home, main, visa] });
     apiMock.on("POST /api/v1/transactions", (req) =>
       (req.body as Record<string, unknown>).limit_confirmed
         ? { status: 201, body: {} }
@@ -178,6 +185,11 @@ describe("Transactions on a credit card (#260)", () => {
       `Visa: ${money("15480")} of ${money("20000")} available (credit card)`,
     );
     expect(hint).toHaveStyle({ color: "var(--mantine-color-orange-text)" });
+    // A locked BSU's note stays on the account list, not under the card's hint.
+    expect(screen.getByRole("combobox", { name: "Account" })).toHaveAccessibleDescription(
+      "Locked BSU accounts are left out until their history is set up.",
+    );
+    expect(hint.nextElementSibling?.textContent ?? "").not.toMatch(/Locked BSU/);
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
 
     const ask = await screen.findByRole("alertdialog", { name: "Past the credit limit" });

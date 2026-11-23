@@ -202,9 +202,10 @@ describe("Create transaction", () => {
     await userEvent.click(await screen.findByRole("combobox", { name: "Account" }));
     expect(await screen.findByRole("option", { name: /^Main account/ })).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: /^Home/ })).not.toBeInTheDocument();
-    expect(
-      screen.getByText("Locked BSU accounts are left out until their history is set up."),
-    ).toBeInTheDocument();
+    // Said on the account list, not as a hint under it.
+    expect(screen.getByRole("combobox", { name: "Account" })).toHaveAccessibleDescription(
+      "Locked BSU accounts are left out until their history is set up.",
+    );
   });
 
   it("pre-checks Triggers refill for waiting On income buckets, and sends an untick", async () => {
