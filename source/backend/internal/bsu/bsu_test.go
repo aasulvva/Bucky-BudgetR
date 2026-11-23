@@ -366,7 +366,8 @@ func TestSetUp(t *testing.T) {
 	}
 	if h.LatestOpenedYear != 2025 || len(h.Years) != 2 || h.Opening.StringFixed(2) != "5000.00" || h.Balance.StringFixed(2) != "17100.00" ||
 		h.Years[0].Recorded.Deposits.StringFixed(2) != "10000.00" || h.Years[1].Recorded.Deposits.StringFixed(2) != "2000.00" ||
-		h.Years[1].Recorded.Interest.StringFixed(2) != "100.00" || len(h.Rules) != 1 || !h.SetUpAt.IsZero() {
+		h.Years[1].Recorded.Interest.StringFixed(2) != "100.00" || len(h.Rules) != 1 || !h.SetUpAt.IsZero() ||
+		h.Years[0].Count != (bsu.Counts{Deposits: 1}) || h.Years[1].Count != (bsu.Counts{Deposits: 1, Interest: 1}) {
 		t.Fatalf("history %+v", h)
 	}
 

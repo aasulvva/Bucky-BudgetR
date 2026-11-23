@@ -55,12 +55,15 @@ export interface SetupRow {
   withdrawals: string | null;
   /** What's recorded: each amount's minimum. */
   min: { deposits: string; interest: string; withdrawals: string };
+  /** How many transactions make up each of min. */
+  count: { deposits: number; interest: number; withdrawals: number };
 }
 
 export type SetupField = "deposits" | "interest" | "withdrawals";
 export const SETUP_FIELDS: SetupField[] = ["deposits", "interest", "withdrawals"];
 
 const ZERO = { deposits: "0.00", interest: "0.00", withdrawals: "0.00" };
+const NONE = { deposits: 0, interest: 0, withdrawals: 0 };
 
 /** This year: the history's last year. */
 export function thisYear(history: BsuHistory): number {
@@ -78,9 +81,10 @@ export function setupRows(
 ): SetupRow[] {
   const rows: SetupRow[] = [];
   for (let year = openedYear; year <= thisYear(history); year++) {
-    const min = history.years.find((y) => y.year === year)?.recorded ?? ZERO;
+    const had = history.years.find((y) => y.year === year);
+    const min = had?.recorded ?? ZERO;
     const old = prev.find((r) => r.year === year);
-    rows.push(old ?? { year, ...min, min });
+    rows.push(old ?? { year, ...min, min, count: had?.recorded_count ?? NONE });
   }
   return rows;
 }

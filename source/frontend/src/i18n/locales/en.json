@@ -2572,7 +2572,9 @@
         "withdrawals": "a withdrawal of {{amount}}",
         "adjustment": "A balance adjustment of {{amount}} to match the bank",
         "once": "It's done once, all at once. Later changes are ordinary corrections."
-      }
+      },
+      "recorded_one": "The app has {{amount}} ({{count}} transaction)",
+      "recorded_other": "The app has {{amount}} ({{count}} transactions)"
     },
     "admin": {
       "intro": "The BSU deposit limits by law. A year uses the rule from the latest year at or before it. Changes are logged, and users aren't told.",

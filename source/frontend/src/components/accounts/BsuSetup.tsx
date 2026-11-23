@@ -214,6 +214,14 @@ function SetupForm({
                           field: t(`bsu.setup.fields.${f}`),
                           year: r.year,
                         })}
+                        description={
+                          r.count[f] > 0
+                            ? t("bsu.setup.recorded", {
+                                amount: money(r.min[f]),
+                                count: r.count[f],
+                              })
+                            : undefined
+                        }
                         currency={account.currency}
                         value={r[f]}
                         onChange={(v) => {

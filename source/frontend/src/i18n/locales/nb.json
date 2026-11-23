@@ -2572,7 +2572,9 @@
         "withdrawals": "et uttak på {{amount}}",
         "adjustment": "En saldojustering på {{amount}} så det stemmer med banken",
         "once": "Det gjøres én gang, alt på en gang. Senere endringer er vanlige korrigeringer."
-      }
+      },
+      "recorded_one": "Appen har {{amount}} ({{count}} transaksjon)",
+      "recorded_other": "Appen har {{amount}} ({{count}} transaksjoner)"
     },
     "admin": {
       "intro": "BSU-grensene for innskudd etter loven. Et år bruker regelen fra det siste året til og med det. Endringer logges, og brukerne får ikke beskjed.",

@@ -24,6 +24,8 @@ const MinOpenedYear = 1990
 type YearHistory struct {
 	Year     int
 	Recorded Sums
+	// Count is how many transactions make up each of Recorded.
+	Count Counts
 }
 
 // History is what the app knows of a BSU account, for its history setup:
@@ -86,7 +88,7 @@ func (s *Service) History(ctx context.Context, userID, id string) (History, erro
 
 func (s *Service) history(ctx context.Context, db sqlc.DBTX, userID string, a sqlc.BankAccount) (History, error) {
 	q := sqlc.New(db)
-	sums, err := yearSums(ctx, q, userID, []string{a.ID})
+	sums, err := yearTallies(ctx, q, userID, []string{a.ID})
 	if err != nil {
 		return History{}, err
 	}
@@ -99,7 +101,7 @@ func (s *Service) history(ctx context.Context, db sqlc.DBTX, userID string, a sq
 	out := History{AccountID: a.ID, LatestOpenedYear: first, Opening: decimal.Zero}
 	for y := first; y <= this; y++ {
 		r := sums[a.ID][y]
-		out.Years = append(out.Years, YearHistory{Year: y, Recorded: Sums{
+		out.Years = append(out.Years, YearHistory{Year: y, Count: r.Count, Recorded: Sums{
 			Deposits: zeroed(r.Deposits), Interest: zeroed(r.Interest), Withdrawals: zeroed(r.Withdrawals),
 		}})
 	}

@@ -81,7 +81,11 @@ describe("Account setup", () => {
       body: {
         latest_opened_year: 2026,
         years: [
-          { year: 2026, recorded: { deposits: "0.00", interest: "0.00", withdrawals: "0.00" } },
+          {
+            year: 2026,
+            recorded: { deposits: "0.00", interest: "0.00", withdrawals: "0.00" },
+            recorded_count: { deposits: 0, interest: 0, withdrawals: 0 },
+          },
         ],
         opening: "0.00",
         balance: "0.00",

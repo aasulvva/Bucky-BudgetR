@@ -2771,6 +2771,12 @@ export interface components {
             /** @description Expenses and transfers out, as a positive amount. */
             withdrawals: components["schemas"]["Amount"];
         };
+        /** @description How many transactions make up each of the sums. */
+        BSUCounts: {
+            deposits: number;
+            interest: number;
+            withdrawals: number;
+        };
         BSUYear: {
             year: number;
             deposits: components["schemas"]["Amount"];
@@ -2785,6 +2791,7 @@ export interface components {
             years: {
                 year: number;
                 recorded: components["schemas"]["BSUSums"];
+                recorded_count: components["schemas"]["BSUCounts"];
             }[];
             /** @description What its opening balances add up to. The setup brings them to 0. */
             opening: components["schemas"]["Amount"];

@@ -4689,6 +4689,19 @@ components:
             - $ref: "#/components/schemas/Amount"
           description: Expenses and transfers out, as a positive amount.
 
+    BSUCounts:
+      type: object
+      additionalProperties: false
+      required: [deposits, interest, withdrawals]
+      description: How many transactions make up each of the sums.
+      properties:
+        deposits:
+          type: integer
+        interest:
+          type: integer
+        withdrawals:
+          type: integer
+
     BSUYear:
       type: object
       additionalProperties: false
@@ -4718,12 +4731,14 @@ components:
           items:
             type: object
             additionalProperties: false
-            required: [year, recorded]
+            required: [year, recorded, recorded_count]
             properties:
               year:
                 type: integer
               recorded:
                 $ref: "#/components/schemas/BSUSums"
+              recorded_count:
+                $ref: "#/components/schemas/BSUCounts"
         opening:
           allOf:
             - $ref: "#/components/schemas/Amount"

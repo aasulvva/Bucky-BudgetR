@@ -240,9 +240,36 @@ type Sums struct {
 	Deposits, Interest, Withdrawals decimal.Decimal
 }
 
+// Counts is how many transactions make up each of a year's Sums.
+type Counts struct {
+	Deposits, Interest, Withdrawals int
+}
+
+// tally is a year's sums and how many transactions make them up.
+type tally struct {
+	Sums
+	Count Counts
+}
+
 // yearSums returns each account's sums per year.
 func yearSums(ctx context.Context, q *sqlc.Queries, userID string, accountIDs []string) (map[string]map[int]Sums, error) {
-	out := map[string]map[int]Sums{}
+	t, err := yearTallies(ctx, q, userID, accountIDs)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]map[int]Sums, len(t))
+	for id, years := range t {
+		out[id] = make(map[int]Sums, len(years))
+		for y, s := range years {
+			out[id][y] = s.Sums
+		}
+	}
+	return out, nil
+}
+
+// yearTallies returns each account's sums per year, with their counts.
+func yearTallies(ctx context.Context, q *sqlc.Queries, userID string, accountIDs []string) (map[string]map[int]tally, error) {
+	out := map[string]map[int]tally{}
 	if len(accountIDs) == 0 {
 		return out, nil
 	}
@@ -252,17 +279,20 @@ func yearSums(ctx context.Context, q *sqlc.Queries, userID string, accountIDs []
 	}
 	for _, r := range rows {
 		if out[r.AccountID] == nil {
-			out[r.AccountID] = map[int]Sums{}
+			out[r.AccountID] = map[int]tally{}
 		}
 		y := Year(r.TransactionAt)
 		s := out[r.AccountID][y]
 		switch {
 		case r.Net.IsPositive() && r.TransactionType == sqlc.TransactionTypeINC && r.Interest:
 			s.Interest = s.Interest.Add(r.Net)
+			s.Count.Interest++
 		case r.Net.IsPositive() && r.TransactionType != sqlc.TransactionTypeEXP:
 			s.Deposits = s.Deposits.Add(r.Net)
+			s.Count.Deposits++
 		case r.Net.IsNegative() && r.TransactionType != sqlc.TransactionTypeINC:
 			s.Withdrawals = s.Withdrawals.Sub(r.Net)
+			s.Count.Withdrawals++
 		}
 		out[r.AccountID][y] = s
 	}

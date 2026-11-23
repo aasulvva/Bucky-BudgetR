@@ -233,10 +233,15 @@ describe("Accounts", () => {
       body: {
         latest_opened_year: 2025,
         years: [
-          { year: 2025, recorded: { deposits: "10000.00", interest: "0.00", withdrawals: "0.00" } },
+          {
+            year: 2025,
+            recorded: { deposits: "10000.00", interest: "0.00", withdrawals: "0.00" },
+            recorded_count: { deposits: 4, interest: 0, withdrawals: 0 },
+          },
           {
             year: 2026,
             recorded: { deposits: "2000.00", interest: "100.00", withdrawals: "0.00" },
+            recorded_count: { deposits: 1, interest: 1, withdrawals: 0 },
           },
         ],
         opening: "5000.00",
@@ -264,7 +269,17 @@ describe("Accounts", () => {
     expect(router.state.location.search).toBe("?bsu=4567");
 
     const dialog = within(await screen.findByRole("dialog", { name: "Set up BSU Home" }));
-    expect(await dialog.findByRole("group", { name: "2025" })).toBeInTheDocument();
+    // Each field says what the app has, which the setup tops up.
+    const y2025 = within(await dialog.findByRole("group", { name: "2025" }));
+    expect(
+      y2025.getByText(`The app has ${money("10000.00")} (4 transactions)`),
+    ).toBeInTheDocument();
+    expect(y2025.queryByText(/The app has .* \(0 transactions\)/)).not.toBeInTheDocument();
+    expect(
+      within(dialog.getByRole("group", { name: "2026" })).getByText(
+        `The app has ${money("100.00")} (1 transaction)`,
+      ),
+    ).toBeInTheDocument();
     // Opened a year earlier: 2024 is added, empty.
     await userEvent.click(dialog.getByRole("combobox", { name: "Year opened" }));
     await userEvent.click(await dialog.findByRole("option", { name: "2024" }));

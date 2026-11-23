@@ -18,14 +18,23 @@ const rules = [
 ];
 
 const zero = { deposits: "0.00", interest: "0.00", withdrawals: "0.00" };
+const none = { deposits: 0, interest: 0, withdrawals: 0 };
 
 // The app has an opening balance of 5 000 and, in 2025 and 2026, a deposit
 // each and some interest: 17 100 now.
 const history: BsuHistory = {
   latest_opened_year: 2025,
   years: [
-    { year: 2025, recorded: { ...zero, deposits: "10000.00" } },
-    { year: 2026, recorded: { deposits: "2000.00", interest: "100.00", withdrawals: "0.00" } },
+    {
+      year: 2025,
+      recorded: { ...zero, deposits: "10000.00" },
+      recorded_count: { ...none, deposits: 1 },
+    },
+    {
+      year: 2026,
+      recorded: { deposits: "2000.00", interest: "100.00", withdrawals: "0.00" },
+      recorded_count: { deposits: 1, interest: 1, withdrawals: 0 },
+    },
   ],
   opening: "5000.00",
   balance: "17100.00",
@@ -47,7 +56,12 @@ describe("setupRows", () => {
     const rows = setupRows(history, 2023);
     expect(rows.map((r) => r.year)).toEqual([2023, 2024, 2025, 2026]);
     expect(rows[0]).toMatchObject({ ...zero, min: zero });
-    expect(rows[2]).toMatchObject({ deposits: "10000.00", min: { deposits: "10000.00" } });
+    expect(rows[2]).toMatchObject({
+      deposits: "10000.00",
+      min: { deposits: "10000.00" },
+      count: { deposits: 1, interest: 0 },
+    });
+    expect(rows[0]?.count).toEqual({ deposits: 0, interest: 0, withdrawals: 0 });
   });
 
   it("keeps what was entered when the year opened changes", () => {
@@ -108,7 +122,7 @@ describe("setupPlan", () => {
     const fresh: BsuHistory = {
       ...history,
       latest_opened_year: 2026,
-      years: [{ year: 2026, recorded: zero }],
+      years: [{ year: 2026, recorded: zero, recorded_count: none }],
       opening: "0.00",
       balance: "0.00",
     };

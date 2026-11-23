@@ -38,12 +38,15 @@ func (s *server) GetBsuHistory(ctx context.Context, req api.GetBsuHistoryRequest
 	}
 	for _, y := range h.Years {
 		out.Years = append(out.Years, struct {
-			Recorded api.BSUSums `json:"recorded"`
-			Year     int         `json:"year"`
+			Recorded      api.BSUSums   `json:"recorded"`
+			RecordedCount api.BSUCounts `json:"recorded_count"`
+			Year          int           `json:"year"`
 		}{Year: y.Year, Recorded: api.BSUSums{
 			Deposits:    y.Recorded.Deposits.StringFixed(money.Places),
 			Interest:    y.Recorded.Interest.StringFixed(money.Places),
 			Withdrawals: y.Recorded.Withdrawals.StringFixed(money.Places),
+		}, RecordedCount: api.BSUCounts{
+			Deposits: y.Count.Deposits, Interest: y.Count.Interest, Withdrawals: y.Count.Withdrawals,
 		}})
 	}
 	return out, nil
