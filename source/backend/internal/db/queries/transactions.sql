@@ -21,7 +21,12 @@ WHERE h.user_id = sqlc.arg(user_id) AND h.correction_type = 'none'
   AND (sqlc.narg(to_at)::timestamptz IS NULL OR h.transaction_at < sqlc.narg(to_at)::timestamptz)
   AND (sqlc.narg(account_ids)::text[] IS NULL OR EXISTS (
       SELECT 1 FROM bank_transactions b JOIN transaction_headers c ON c.id = b.transaction_id
-      WHERE b.account_id = ANY(sqlc.narg(account_ids)::text[]) AND (c.id = h.id OR c.parent_id = h.id)))
+      WHERE b.account_id = ANY(sqlc.narg(account_ids)::text[]) AND (c.id = h.id OR c.parent_id = h.id)
+      -- Card debt set aside or released (#261) shows on the card and the account.
+      UNION ALL
+      SELECT 1 FROM card_debt_lines d JOIN transaction_headers c ON c.id = d.transaction_id
+      WHERE (d.card_id = ANY(sqlc.narg(account_ids)::text[]) OR d.account_id = ANY(sqlc.narg(account_ids)::text[]))
+        AND (c.id = h.id OR c.parent_id = h.id)))
   AND (sqlc.narg(bucket_ids)::text[] IS NULL OR EXISTS (
       SELECT 1 FROM bucket_transactions b JOIN transaction_headers c ON c.id = b.transaction_id
       WHERE b.bucket_id = ANY(sqlc.narg(bucket_ids)::text[]) AND (c.id = h.id OR c.parent_id = h.id)))

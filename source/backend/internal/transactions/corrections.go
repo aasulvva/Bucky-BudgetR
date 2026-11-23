@@ -47,9 +47,12 @@ var correctable = []sqlc.TransactionType{
 }
 
 // reversible are the types the user may reverse: the correctable ones, and
-// the savings module's (#231), which can't be corrected.
+// the savings module's (#231) and card debt's (#261), which can't be
+// corrected.
 var reversible = append(slices.Clone(correctable),
-	sqlc.TransactionTypeSVR, sqlc.TransactionTypeSVC, sqlc.TransactionTypeSVB, sqlc.TransactionTypeSVD)
+	sqlc.TransactionTypeSVR, sqlc.TransactionTypeSVC, sqlc.TransactionTypeSVB, sqlc.TransactionTypeSVD,
+	// Card debt set aside or released by hand (#261).
+	sqlc.TransactionTypeCDH, sqlc.TransactionTypeCDR)
 
 // Changes are a correction's desired values; nil leaves a field as it is.
 // Amounts are positive like in New, except for OPB and BLA, whose signed
@@ -75,6 +78,12 @@ type Changes struct {
 	BSUConfirmed bool
 	// LimitConfirmed is as in New (#260).
 	LimitConfirmed bool
+	// SetAsideOn, Carry and Release are as in New (#261); nil keeps what
+	// the transaction does now. A payment whose amount or accounts change
+	// releases anew, as in New, unless Release says.
+	SetAsideOn *string
+	Carry      []CardAmount
+	Release    *[]AccountAmount
 }
 
 // Correct records an adjustment that turns the transaction into what c
@@ -111,6 +120,10 @@ func (s *Service) correct(ctx context.Context, tx pgx.Tx, userID, id string, c C
 	}
 	want.BSUConfirmed = c.BSUConfirmed
 	want.LimitConfirmed = c.LimitConfirmed
+	q := sqlc.New(tx)
+	if err := keepCardChoices(ctx, q, userID, cur, c, &want); err != nil {
+		return "", err
+	}
 	// A transfer that did Done on held savings keeps its amount and accounts,
 	// so it and the money it took off hold stay alike.
 	if len(cur.SavingsLines) > 0 {
@@ -139,10 +152,20 @@ func (s *Service) correct(ctx context.Context, tx pgx.Tx, userID, id string, c C
 	if err != nil {
 		return "", err
 	}
-	if len(bank) == 0 && len(buckets) == 0 && sameHeader(cur, want) {
+	// Card debt follows the amounts and buckets (#261), or what c chooses.
+	var cardLinesDiff []ledger.CardLine
+	cardChoice := c.SetAsideOn != nil || c.Carry != nil || c.Release != nil
+	if cur.Type != sqlc.TransactionTypeOPB && cur.Type != sqlc.TransactionTypeBLA &&
+		(len(bank) > 0 || len(buckets) > 0 || cardChoice) {
+		wantCards, err := cardLines(ctx, tx, userID, want, &cur)
+		if err != nil {
+			return "", err
+		}
+		cardLinesDiff = cardDiff(cur.CardLines, wantCards)
+	}
+	if len(bank) == 0 && len(buckets) == 0 && len(cardLinesDiff) == 0 && sameHeader(cur, want) {
 		return "", ErrNoChange
 	}
-	q := sqlc.New(tx)
 	if len(bank) > 0 {
 		if err := checkAccounts(ctx, q, userID, want); err != nil {
 			return "", err
@@ -169,7 +192,7 @@ func (s *Service) correct(ctx context.Context, tx pgx.Tx, userID, id string, c C
 	if _, err := s.ledger.Record(ctx, tx, ledger.Entry{
 		UserID: userID, CreatedBy: userID, Type: cur.Type, Correction: sqlc.CorrectionTypeAdjustment,
 		ParentID: cur.ID, At: cur.At, Counterparty: want.Counterparty, Description: want.Description, Tags: want.Tags,
-		TriggersRefill: *want.TriggersRefill, BankLines: bank, BucketLines: buckets,
+		TriggersRefill: *want.TriggersRefill, BankLines: bank, BucketLines: buckets, CardLines: cardLinesDiff,
 	}); err != nil {
 		return "", correctionError(err)
 	}
@@ -204,10 +227,13 @@ func (s *Service) Reverse(ctx context.Context, userID, id string) (Transaction, 
 }
 
 func (s *Service) reverse(ctx context.Context, tx pgx.Tx, userID string, cur Transaction) error {
-	if len(cur.BankLines) == 0 && len(cur.BucketLines) == 0 && len(cur.SavingsLines) == 0 {
+	if len(cur.BankLines) == 0 && len(cur.BucketLines) == 0 && len(cur.SavingsLines) == 0 && len(cur.CardLines) == 0 {
 		return fmt.Errorf("%w: the transaction has no amounts left to reverse", ErrNoChange)
 	}
 	if err := checkSavingsReversal(ctx, tx, userID, cur); err != nil {
+		return err
+	}
+	if err := checkCardReversal(ctx, tx, userID, cur); err != nil {
 		return err
 	}
 	e := ledger.Entry{
@@ -223,6 +249,9 @@ func (s *Service) reverse(ctx context.Context, tx pgx.Tx, userID string, cur Tra
 	}
 	for _, l := range cur.SavingsLines {
 		e.SavingsLines = append(e.SavingsLines, ledger.SavingsLine{HolderID: l.HolderID, AccountID: l.AccountID, Amount: l.Amount.Neg()})
+	}
+	for _, l := range cur.CardLines {
+		e.CardLines = append(e.CardLines, ledger.CardLine{CardID: l.CardID, AccountID: l.AccountID, Amount: l.Amount.Neg()})
 	}
 	if _, err := s.ledger.Record(ctx, tx, e); err != nil {
 		return correctionError(err)
@@ -488,6 +517,39 @@ func checkSavingsReversal(ctx context.Context, tx pgx.Tx, userID string, cur Tra
 			continue
 		}
 		if len(cur.BankLines) > 0 || len(cur.BucketLines) > 0 || cur.Type == sqlc.TransactionTypeSVD {
+			continue
+		}
+		if free == nil {
+			if free, err = balance.AccountMoney(ctx, tx, userID); err != nil {
+				return err
+			}
+		}
+		if free[l.AccountID].Unallocated.LessThan(l.Amount.Neg()) {
+			return ErrNotEnoughUnallocated
+		}
+	}
+	return nil
+}
+
+// checkCardReversal checks what reversing a CDH or CDR does (#261), as
+// checkSavingsReversal does for savings: taking a hold back needs it to be
+// held still, and holding released debt again needs the money to be
+// unallocated still. Reversing a purchase, payment or transfer brings its
+// money back along, so it may leave a hold below 0 or not covered.
+func checkCardReversal(ctx context.Context, tx pgx.Tx, userID string, cur Transaction) error {
+	if cur.Type != sqlc.TransactionTypeCDH && cur.Type != sqlc.TransactionTypeCDR {
+		return nil
+	}
+	held, err := heldWithout(ctx, tx, userID, nil)
+	if err != nil {
+		return err
+	}
+	var free map[string]balance.Money
+	for _, l := range cur.CardLines {
+		if l.Amount.IsPositive() {
+			if held[cardKey{l.CardID, l.AccountID}].LessThan(l.Amount) {
+				return ErrNoLongerHeld
+			}
 			continue
 		}
 		if free == nil {

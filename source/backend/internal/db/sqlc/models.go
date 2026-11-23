@@ -785,6 +785,8 @@ const (
 	TransactionTypeSVC TransactionType = "SVC"
 	TransactionTypeSVB TransactionType = "SVB"
 	TransactionTypeSVD TransactionType = "SVD"
+	TransactionTypeCDH TransactionType = "CDH"
+	TransactionTypeCDR TransactionType = "CDR"
 )
 
 func (e *TransactionType) Scan(src interface{}) error {
@@ -838,7 +840,9 @@ func (e TransactionType) Valid() bool {
 		TransactionTypeSVR,
 		TransactionTypeSVC,
 		TransactionTypeSVB,
-		TransactionTypeSVD:
+		TransactionTypeSVD,
+		TransactionTypeCDH,
+		TransactionTypeCDR:
 		return true
 	}
 	return false
@@ -912,6 +916,16 @@ type BucketTransaction struct {
 	TransactionID string
 	BucketID      string
 	CycleID       string
+	Amount        decimal.Decimal
+	CreatedAt     time.Time
+	CreatedBy     pgtype.Text
+}
+
+type CardDebtLine struct {
+	ID            string
+	TransactionID string
+	CardID        string
+	AccountID     string
 	Amount        decimal.Decimal
 	CreatedAt     time.Time
 	CreatedBy     pgtype.Text

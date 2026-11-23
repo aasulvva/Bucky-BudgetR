@@ -86,6 +86,7 @@ transaction_headers: correction_type, counterparty, created_at, created_by, desc
 bank_transactions: account_id, amount, created_at, created_by, exchange_rate, id, original_amount, original_currency, transaction_id
 bucket_transactions: amount, bucket_id, created_at, created_by, cycle_id, id, transaction_id
 savings_transactions: account_id, amount, created_at, created_by, cycle_id, holder_id, id, transaction_id
+card_debt_lines: account_id, amount, card_id, created_at, created_by, id, transaction_id
 transaction_tags: tag_id, transaction_id, user_id
 refills: bucket_id, created_at, cycle_id, income_id, ovf_id, ref_id, trigger, user_id
 savings_budget_runs: created_at, cycle_id, entry_id, income_id, reserved, svr_id, trigger, user_id, wanted

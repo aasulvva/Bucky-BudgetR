@@ -15,6 +15,8 @@ export function account(overrides: Partial<Account> & Pick<Account, "id" | "name
     unallocated: "0.00",
     reserved: "0.00",
     reserved_uncovered: "0.00",
+    card_holds: [],
+    card_debt_uncovered: "0.00",
     expected_income: null,
     created_at: "2026-01-01T00:00:00Z",
     bsu: null,
@@ -57,6 +59,9 @@ export function creditCard(
     minimum_payment: "300.00",
     owed: "4520.00",
     available: "15480.00",
+    held_on: [],
+    set_aside: "0.00",
+    not_set_aside: "4520.00",
     ...overrides,
   };
 }
@@ -144,6 +149,7 @@ export function transaction(
     bank_lines: [{ account_id: "1234", amount: "-100.00" }],
     bucket_lines: [],
     savings_lines: [],
+    card_lines: [],
     before_reversal: null,
     balances_after: [],
     ...overrides,

@@ -69,7 +69,7 @@ Self-hosted, envelope-style ("bucket") budgeting application.
 - **Snapshots:** to keep this fast, pre-calculate the balance at fixed points (e.g. 1 January each year) and add only the transactions after that point. Bucket TF uses the same mechanism.
 - New accounts get an **Opening Balance (OPB)** transaction.
 - The balance can be corrected from the Accounts screen, which creates a **Balance Adjustment (BLA)** for the difference between the entered balance and the balance at that moment.
-- **Deleting** an account settles it first, all in one step. Money left in it is **transferred (TRF)** to another account or **adjusted to 0 (BLA)**, as the user chooses. Every bucket funded from it gets a **new source account** or is **deleted with it** (#137). A deleted bucket's remaining TF is released first (a BUA to 0, as when deleting a bucket, §4), so that money is part of what's transferred or adjusted; this needs an active cycle unless its TF is already 0. Money and buckets only move to an account in the same currency. Savings held on the account, for any target, are released (SVC), and if the account is a savings target itself, the target goes too and its held funds are released (§8). The account's transactions are kept.
+- **Deleting** an account settles it first, all in one step. Money left in it is **transferred (TRF)** to another account or **adjusted to 0 (BLA)**, as the user chooses. Every bucket funded from it gets a **new source account** or is **deleted with it** (#137). A deleted bucket's remaining TF is released first (a BUA to 0, as when deleting a bucket, §4), so that money is part of what's transferred or adjusted; this needs an active cycle unless its TF is already 0. Money and buckets only move to an account in the same currency. Savings held on the account, for any target, are released (SVC), and if the account is a savings target itself, the target goes too and its held funds are released (§8). Card debt held on it moves with the transfer, or is released (§2.2). The account's transactions are kept.
 - **Changing the type** of an account that is a savings target to one that can't be (usage) deletes the target and releases its held funds (§8).
 
 ### 2.1 BSU accounts
@@ -83,7 +83,7 @@ A **BSU** (Boligsparing for ungdom, #214) is a Norwegian housing-savings account
 - **Locked until set up:** every BSU account starts locked: the ones from before #214, a new one, and one changed to BSU (changing the type to or from BSU clears the setup). A new BSU can say it was opened this year with nothing before. A BSU in another currency from before #214 stays locked; change its type or delete it. While locked (409 `bsu_locked`): no transaction can be created, corrected, reversed or moved with the account (also as the target of a move, the approval of a queued one, and the destination of a deleted account's money), and no balance adjustment; its schedules' occurrences go to the queue as invalid, with the reason; and as a savings target it's paused: the distributor, overflow and the savings budget pass it by (its share stays with the distributor), and *Done* is refused. The setup itself records while locked, and deleting the account still works.
 
 ### 2.2 Credit cards
-A **credit card** (#260, the first step of #39) is an account that owes money: its balance is below 0 while something is owed, and the bank sends a bill for it each month. Purchases on it are expenses (EXP) and payments to it transfers (TRF). Spending from buckets with it and setting the debt aside (#261), the bill and *Pay bill* (#262), and interest and fees (#263) come later.
+A **credit card** (#260, the first step of #39) is an account that owes money: its balance is below 0 while something is owed, and the bank sends a bill for it each month. Purchases on it are expenses (EXP) and payments to it transfers (TRF). Its debt is set aside on the accounts that budgeted it (#261, below). The bill and *Pay bill* (#262), and interest and fees (#263) come later.
 
 | Field | Notes |
 | ----- | ----- |
@@ -96,9 +96,16 @@ A **credit card** (#260, the first step of #39) is an account that owes money: i
 - **Created as a card:** a card is created with its fields (400 otherwise; 400 `card_default_account` for a default account that can't be one), and an account never changes type to or from credit card (400 `card_type`). Its opening balance is what's owed today, as a negative amount; one above 0 (in credit) is allowed.
 - **Owed and available** (`credit_card` on the account): *owed* is −balance, at least 0; *available* is the limit plus the balance, so it's more than the limit while the card is in credit, and below 0 past the limit.
 - **The limit warns, then allows:** creating, correcting or moving a transaction that takes more out of a card than it has available gets 409 `over_credit_limit` (with what's available), unless it says `limit_confirmed`. One that lowers the debt, or adds nothing to it, passes even past the limit. Scheduled transactions record without asking, and reversals, the opening balance and balance adjustments aren't checked. The *Credit limit* notification tells when a card is at 90 % of its limit or more (§9).
-- **Card debt is held where it was budgeted** (#261, decided 2026-11-23): a purchase's bucket parts on their buckets' accounts, the rest on the account the purchase names (prefilled with the default account) or nowhere. Transfers can carry it between accounts, and a payment clears the paying account's share first, then releases the other accounts' as the user sets. So no single account has to pay the bill.
+- **Card debt is held where it was budgeted** (#261): until the bill is paid, the money for a card's debt stays in the accounts that budgeted it, **held** there for the card, as *card debt lines* (card, account, amount; ID: the card's ID + 20 random digits) beside the bank, bucket and savings lines. What's held on an account is covered before its buckets (§7). So no single account has to pay the bill, and the money can't look free.
+  - **A purchase** (EXP on a card) can take its parts from buckets on **any** account in the card's currency that isn't a card; each bucket part is held on its bucket's account, so the bucket's CAF and TF drop while the account's unallocated money stays. The rest is held on *Set aside on* (`set_aside_account_id`): the card's default account unless the purchase names another, or nowhere (null). **A refund** (INC on a card) releases the same way; a hold can go below 0 (credit), which the next purchase uses up.
+  - **A cash advance** (TRF from a card) is held on the account the money went to.
+  - **A payment** (TRF to a card from another account) clears the paying account's hold first. The rest of the payment releases holds on other accounts: as the user sets (`release_card_debt`, each at most what's held there), or, left out, what's held beyond what the card still owes, largest holds first. Released money is unallocated.
+  - **A transfer** between other accounts carries held debt along only when asked (`carry_card_debt`, per card, at most what's held and the amount).
+  - **Set aside / Release** (`POST /accounts/{card}/card-debt/set-aside`, `…/release`): debt that isn't held anywhere (a card's opening debt, debt from before this, purchases set aside nowhere) can be held on an account out of its unallocated money (a **CDH**; at most what isn't set aside, 400, and what's unallocated, 409 `not_enough_unallocated`), and held debt released (a **CDR**; at most what's held, 409 `not_enough_held`). They can be reversed, not corrected; taking a hold back needs it still held, holding again needs the money still unallocated.
+  - **Corrections** keep where the rest is set aside and what a transfer carries unless told; a payment keeps its releases while its amount and accounts stay, else releases anew. Moving a transaction records it again as new. A reversal takes its card debt lines back too.
+  - On the account: `card_holds` (what's held per card) and `card_debt_uncovered`; on the card: `held_on`, `set_aside` and `not_set_aside` (what's owed beyond what's held, at least 0). Holds count only for live cards.
 - **No money of its own:** a card can't fund a bucket (also not as the new source of a deleted account's buckets) or hold savings: no *Add to savings*, savings budget entry or distributor money from it (400 `card_source`). It's never a savings target.
-- **Deleting a card** that owes money settles it as any account (§2): a transfer from another account pays it off, or a balance adjustment sets it to 0.
+- **Deleting a card** that owes money settles it as any account (§2): a transfer from another account pays it off, or a balance adjustment sets it to 0. What was held for it stops counting. **Deleting an account that holds card debt:** the debt follows the money: a transfer to an account that isn't a card carries it there, otherwise it's released (a CDR).
 
 ## 3. Cycles
 
@@ -243,8 +250,10 @@ For foreign-currency transactions, record the amount in the account currency as 
 | SVC | Savings Cancel | – | – | system (Savings) | Releases held funds back to unallocated: 1 savings line (§8) |
 | SVB | Savings to Bucket | 0 or 2 | 1 | system (Savings) | Money into a bucket target, from unallocated or held funds: 0–1 savings lines, and a transfer's bank lines when the bucket is on another account (§8) |
 | SVD | Savings Distribution | – | 0..n | system (Savings) | The distributor splits what it holds on one account among the targets: a savings line off the distributor, and a savings line per target, or a bucket line for a bucket target funded from that account (§8.4) |
+| CDH | Card Debt Hold | – | – | system (Accounts) | Sets a credit card's debt that isn't held aside on an account, out of its unallocated money: 1 card debt line (§2.2) |
+| CDR | Card Debt Release | – | – | system (Accounts, deleting an account) | Releases card debt held on accounts back to unallocated: 1..n card debt lines (§2.2) |
 
-A TRF can also have 1 savings line, when it records *Done* for an account target (§8), and an OVF up to 2 (§8.5). No other type has savings lines.
+A TRF can also have 1 savings line, when it records *Done* for an account target (§8), and an OVF up to 2 (§8.5). No other type has savings lines. An EXP, INC or TRF can have card debt lines (§2.2), and so do CDH and CDR.
 
 Only **INC, EXP, TRF and INP** can be created from the *Create transaction* screen.
 
@@ -253,7 +262,7 @@ Only **INC, EXP, TRF and INP** can be created from the *Create transaction* scre
 - **Corrections and reversals that affect buckets are only allowed inside the active cycle.** Once a cycle is finished, its bucket lines are locked. The bank amount, counterparty and tags can still be corrected, as long as the bucket lines still fit within the amount.
 - An Internal Payment can only be created by the payer. Users cannot "request" money from other users.
 - **Signs:** INC lines are positive and EXP lines negative, on both bank and bucket lines. The user enters positive amounts; the type gives the sign. A TRF's two lines mirror each other.
-- **Bucket lines on INC/EXP:** each bucket must be funded from the transaction's bank account (this may change with cash support, #60). Together they can't exceed the bank amount; the remainder simply isn't tied to a bucket.
+- **Bucket lines on INC/EXP:** each bucket must be funded from the transaction's bank account (this may change with cash support, #60); on a credit card, from any account in its currency (§2.2). Together they can't exceed the bank amount; the remainder simply isn't tied to a bucket.
 - **TRF** goes between two of the user's accounts in the same currency. Transfers between currencies come with multi-currency (#33).
 - **BSU accounts:** a deposit over the limits, or a withdrawal, needs confirming (§2.1).
 - **Credit cards:** a purchase past the credit limit needs confirming (§2.2).
@@ -333,7 +342,7 @@ A refill raises TF without adding money, so on its own it only moves CAF when th
 
 Funds the buckets: works out how much of each source account's money backs each bucket (CAF), based on TF.
 
-- Runs **per source account**, per user.
+- Runs **per source account**, per user. The buckets share the balance less the credit card debt held on the account (§2.2): card debt is covered first.
 - **Enough funds** (account balance ≥ Σ TF of its buckets): CAF = TF for every bucket. The leftover is stored and displayed as *unallocated*. Later, unallocated money can optionally be passed to the savings distribution.
 - **Not enough funds:**
   1. Priority buckets are funded first.
@@ -341,7 +350,7 @@ Funds the buckets: works out how much of each source account's money backs each 
 - Buckets with TF ≤ 0 get CAF = 0. A negative account balance counts as 0 available.
 - **Rounding:** shares are calculated at full precision, rounded down to cents, and the leftover cents go one each to the buckets with the largest remainders, so the CAFs add up to exactly what was split.
 - CAF is **stored**, so funds aren't redistributed on every change. After every transaction, for the accounts it touched (directly or as a bucket's source):
-  - **A bucket line moves its own bucket's CAF** by its amount: an expense of 50 from Groceries takes 50 of Groceries' CAF, and the other buckets keep theirs.
+  - **A bucket line moves its own bucket's CAF** by its amount: an expense of 50 from Groceries takes 50 of Groceries' CAF, and the other buckets keep theirs. Card debt held on an account counts as money going out of it, so a card purchase from a bucket moves that bucket's CAF the same way.
   - **Moving funds between buckets on one account (BAT) takes covered money along:** the sending bucket hands over up to the moved amount of its CAF (a gap it had stays with it), and the receiving bucket takes it up to its TF; what it can't take goes back. Between accounts, each account follows the rules below.
   - Each CAF is then kept to 0 ≤ CAF ≤ TF.
   - The account is **recalculated** only when:
@@ -351,7 +360,7 @@ Funds the buckets: works out how much of each source account's money backs each 
     - CAF no longer fits (Σ CAF above the balance), or the balance covers Σ TF but CAF doesn't match it.
   - Otherwise nothing moves, so an underfunded account can leave a refilled bucket uncovered. **Reallocate** on the Buckets screen (`POST /accounts/{id}/reallocate`) recalculates it by hand.
 - **Bucket changes recalculate at once:** creating or deleting a bucket, moving it to another account, or changing its priority or importance recalculates the accounts involved right away.
-- **Unallocated** is the account balance minus the CAF of its buckets, minus the part of its savings reservations the balance covers (§8): `unallocated = balance − Σ CAF − covered`, where `covered = clamp(balance − Σ CAF, 0, reserved)`. It is derived rather than stored. The routine itself ignores reservations: buckets are funded from the whole balance first, so when an account runs short, its reservations go uncovered before its buckets do.
+- **Unallocated** is the account balance minus the card debt it covers, the CAF of its buckets, and the part of its savings reservations the balance covers (§8): `unallocated = balance − card covered − Σ CAF − covered`, where `card covered = clamp(balance, 0, card debt)` and `covered = clamp(balance − card covered − Σ CAF, 0, reserved)`. It is derived rather than stored. The routine itself ignores savings reservations: buckets are funded first, so when an account runs short, its reservations go uncovered before its buckets do; card debt goes uncovered last (#261).
 
 ## 8. Savings module
 

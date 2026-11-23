@@ -1260,7 +1260,9 @@
     "SVR": "Sett av til sparing",
     "SVC": "Sparing frigjort",
     "SVB": "Sparing til bøtte",
-    "SVD": "Sparefordeling"
+    "SVD": "Sparefordeling",
+    "CDH": "Kortgjeld sett av",
+    "CDR": "Kortgjeld frigjord"
   },
   "transactions": {
     "new": "Ny transaksjon",

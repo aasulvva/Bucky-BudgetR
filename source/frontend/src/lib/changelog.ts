@@ -16,6 +16,29 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.33.01",
+    date: "2026-11-23",
+    title: {
+      en: "Card debt, behind the scenes",
+      nb: "Kortgjeld, bak kulissene",
+      nn: "Kortgjeld, bak kulissane",
+    },
+    changes: {
+      en: [
+        "A purchase on a credit card now sets the money aside on the accounts that pay for it: the parts from buckets where the buckets are, the rest on the card's default account. That money is no longer counted as unallocated until the bill is paid.",
+        "Paying a card releases what was set aside. Choosing buckets on any account for a card purchase, and seeing and moving what's set aside, come in the next update.",
+      ],
+      nb: [
+        "Et kjøp med kredittkort setter nå av pengene på kontoene som betaler for det: delene fra bøtter der bøttene er, resten på kortets standardkonto. De pengene regnes ikke lenger som ufordelte før regningen er betalt.",
+        "Når du betaler kortet, frigjøres det som var satt av. Å velge bøtter på hvilken som helst konto for et kortkjøp, og å se og flytte det som er satt av, kommer i neste oppdatering.",
+      ],
+      nn: [
+        "Eit kjøp med kredittkort set no av pengane på kontoane som betaler for det: delane frå bøtter der bøttene er, resten på standardkontoen til kortet. Dei pengane vert ikkje lenger rekna som ufordelte før rekninga er betalt.",
+        "Når du betaler kortet, vert det som var sett av frigjort. Å velje bøtter på kva konto som helst for eit kortkjøp, og å sjå og flytte det som er sett av, kjem i neste oppdatering.",
+      ],
+    },
+  },
+  {
     version: "v2.33.00",
     date: "2026-11-23",
     title: {

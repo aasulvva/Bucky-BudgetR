@@ -16,6 +16,7 @@
 //	SavingsLine  SavingsHolder + 14 random  24 digits
 //	SavingsRule  SavingsHolder + 2 random   12 digits
 //	SavingsBudgetEntry User + 4 random 10 digits
+//	CardDebtLine Account (card) + 20 random  24 digits
 //
 // The database stores them as text with a CHECK on Kind.Pattern. They are
 // drawn with crypto/rand; see Insert for handling collisions.
@@ -62,6 +63,8 @@ var (
 	SavingsRule = newKind("savings rule", 12, `^[1-9][0-9]{11}$`)
 	// SavingsBudgetEntry is a fixed amount in the savings budget (#234).
 	SavingsBudgetEntry = newKind("savings budget entry", 10, `^[1-9][0-9]{9}$`)
+	// CardDebtLine is card debt held on an account for a credit card (#261).
+	CardDebtLine = newKind("card debt line", 24, `^[1-9][0-9]{23}$`)
 )
 
 // Valid reports whether s is a well-formed ID of this kind. For transactions
@@ -119,6 +122,10 @@ func NewSavingsRule(targetID string) string { return withPrefix(SavingsHolder, t
 // NewSavingsBudgetEntry returns a random ID for a savings budget entry owned
 // by userID.
 func NewSavingsBudgetEntry(userID string) string { return withPrefix(User, userID, 4) }
+
+// NewCardDebtLine returns a random ID for a card debt line of the credit
+// card cardID.
+func NewCardDebtLine(cardID string) string { return withPrefix(Account, cardID, 20) }
 
 // withPrefix appends n random digits to an owner ID. A malformed owner ID is
 // a programming error, so it panics rather than returning an error.

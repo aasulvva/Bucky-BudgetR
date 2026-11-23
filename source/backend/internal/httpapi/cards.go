@@ -1,14 +1,20 @@
 package httpapi
 
 import (
+	"context"
 	"errors"
+	"maps"
 	"net/http"
+	"slices"
 
 	"github.com/oapi-codegen/nullable"
+	"github.com/shopspring/decimal"
 
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/accounts"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/api"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/cards"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/money"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/transactions"
 )
 
 // cardError maps errors from the cards package (#260) to problems, or
@@ -63,9 +69,70 @@ func toAPICard(st cards.Status) api.CreditCard {
 		MinimumPayment:   st.MinimumPayment.StringFixed(money.Places),
 		Owed:             st.Owed.StringFixed(money.Places),
 		Available:        st.Available.StringFixed(money.Places),
+		HeldOn:           make([]api.CardHeldOn, len(st.HeldOn)),
+		SetAside:         st.SetAside.StringFixed(money.Places),
+		NotSetAside:      st.NotSetAside.StringFixed(money.Places),
+	}
+	for i, h := range st.HeldOn {
+		out.HeldOn[i] = api.CardHeldOn{AccountId: h.AccountID, Amount: h.Amount.StringFixed(money.Places)}
 	}
 	if st.DefaultAccountID != "" {
 		out.DefaultAccountId = nullable.NewNullableWithValue(st.DefaultAccountID)
 	}
 	return out
+}
+
+// toAPICardHolds lists what's held on an account per card, by card ID.
+func toAPICardHolds(holds map[string]decimal.Decimal) []api.CardHold {
+	out := make([]api.CardHold, 0, len(holds))
+	for _, card := range slices.Sorted(maps.Keys(holds)) {
+		out = append(out, api.CardHold{CardId: card, Amount: holds[card].StringFixed(money.Places)})
+	}
+	return out
+}
+
+func (s *server) SetAsideCardDebt(ctx context.Context, req api.SetAsideCardDebtRequestObject) (api.SetAsideCardDebtResponseObject, error) {
+	a, err := s.cardDebt(ctx, req.AccountId, *req.Body, true)
+	if err != nil {
+		return nil, err
+	}
+	return api.SetAsideCardDebt200JSONResponse(a), nil
+}
+
+func (s *server) ReleaseCardDebt(ctx context.Context, req api.ReleaseCardDebtRequestObject) (api.ReleaseCardDebtResponseObject, error) {
+	a, err := s.cardDebt(ctx, req.AccountId, *req.Body, false)
+	if err != nil {
+		return nil, err
+	}
+	return api.ReleaseCardDebt200JSONResponse(a), nil
+}
+
+// cardDebt sets card debt aside on an account, or releases it (#261), and
+// returns the card.
+func (s *server) cardDebt(ctx context.Context, cardID string, b api.CardDebtChange, hold bool) (api.Account, error) {
+	svc, err := s.transactionService()
+	if err != nil {
+		return api.Account{}, err
+	}
+	amount, err := parseAmount(b.Amount)
+	if err != nil {
+		return api.Account{}, err
+	}
+	userID := sessionFrom(ctx).User.ID
+	if hold {
+		_, err = svc.SetAsideCardDebt(ctx, userID, cardID, b.AccountId, amount)
+	} else {
+		_, err = svc.ReleaseCardDebt(ctx, userID, cardID, b.AccountId, amount)
+	}
+	if errors.Is(err, transactions.ErrNotFound) {
+		return api.Account{}, accountError(accounts.ErrNotFound)
+	}
+	if err != nil {
+		return api.Account{}, transactionError(err)
+	}
+	a, err := s.accounts.Get(ctx, userID, cardID)
+	if err != nil {
+		return api.Account{}, accountError(err)
+	}
+	return toAPIAccount(a), nil
 }

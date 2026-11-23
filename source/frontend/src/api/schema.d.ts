@@ -649,6 +649,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/accounts/{accountId}/card-debt/set-aside": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set card debt aside
+         * @description Holds part of the credit card's debt that isn't set aside anywhere
+         *     (`not_set_aside`, more is 400 `invalid_request`) on an account, out
+         *     of its unallocated money (more is 409 `not_enough_unallocated`), by
+         *     recording a Card Debt Hold (CDH, #261). The account isn't a card and
+         *     is in the card's currency (400 `card_source`). `accountId` is the
+         *     card's; 400 `invalid_request` for another type.
+         */
+        post: operations["setAsideCardDebt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/accounts/{accountId}/card-debt/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Release card debt
+         * @description Releases part of what's held on an account for the credit card's
+         *     debt, so it's unallocated again, by recording a Card Debt Release
+         *     (CDR, #261). More than is held is 409 `not_enough_held`.
+         *     `accountId` is the card's.
+         */
+        post: operations["releaseCardDebt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/accounts/{accountId}/reallocate": {
         parameters: {
             query?: never;
@@ -2758,15 +2810,26 @@ export interface components {
             bank: components["schemas"]["AccountBank"];
             balance: components["schemas"]["Amount"];
             /**
-             * @description The part of the balance that neither backs a bucket nor is reserved
-             *     for savings: balance − Σ CAF of its buckets − the covered part of
-             *     `reserved` (spec §7, §8). Negative when the account is overdrawn.
+             * @description The part of the balance that's neither held for credit card debt,
+             *     nor backs a bucket, nor is reserved for savings: balance − the
+             *     covered part of the card debt in `card_holds` − Σ CAF of its
+             *     buckets − the covered part of `reserved` (spec §7, §8, #261).
+             *     Negative when the account is overdrawn.
              */
             unallocated: components["schemas"]["Amount"];
             /** @description What's held on the account for savings (#231), whether or not the balance covers it. */
             reserved: components["schemas"]["Amount"];
-            /** @description The part of `reserved` the balance doesn't cover. The buckets are funded first, so reservations are short first. */
+            /** @description The part of `reserved` the balance doesn't cover. Card debt and the buckets are funded first, so reservations are short first. */
             reserved_uncovered: components["schemas"]["Amount"];
+            /**
+             * @description What's held on the account for each credit card's debt (#261),
+             *     until the bill is paid: sums that aren't 0, by card. Below 0 when
+             *     a refund took off more than was held. Their sum, at least 0, is
+             *     covered before the buckets.
+             */
+            card_holds: components["schemas"]["CardHold"][];
+            /** @description The part of the card debt held on the account that the balance doesn't cover. */
+            card_debt_uncovered: components["schemas"]["Amount"];
             /** @description The income expected on the account per cycle, which Budget setup compares the buckets' refill amounts with (spec §9). Null until entered. */
             expected_income: (string & components["schemas"]["Amount"]) | null;
             /** Format: date-time */
@@ -2775,6 +2838,25 @@ export interface components {
             bsu: components["schemas"]["BSUStatus"] | null;
             /** @description A credit card's fields and what's owed (#260). Null for other types. */
             credit_card: components["schemas"]["CreditCard"] | null;
+        };
+        CardHold: {
+            card_id: components["schemas"]["AccountId"];
+            amount: components["schemas"]["Amount"];
+        };
+        CardHeldOn: {
+            account_id: components["schemas"]["AccountId"];
+            amount: components["schemas"]["Amount"];
+        };
+        CardDebtChange: {
+            /** @description The account the debt is held on, which isn't a card, in the card's currency (400 `card_source`). */
+            account_id: components["schemas"]["AccountId"];
+            /** @description Above 0. */
+            amount: components["schemas"]["Amount"];
+        };
+        CardDebtCarry: {
+            card_id: components["schemas"]["AccountId"];
+            /** @description Above 0. */
+            amount: components["schemas"]["Amount"];
         };
         /** @description A day of the month, 1–28, or 31 for the last day of the month (#260). */
         CardDay: number;
@@ -2813,6 +2895,12 @@ export interface components {
             owed: components["schemas"]["Amount"];
             /** @description The credit left, credit_limit + balance; below 0 when past the limit. */
             available: components["schemas"]["Amount"];
+            /** @description What's set aside for the card's debt per account (#261), largest first. */
+            held_on: components["schemas"]["CardHeldOn"][];
+            /** @description The sum of `held_on`. */
+            set_aside: components["schemas"]["Amount"];
+            /** @description What's owed beyond `set_aside`, at least 0, which `POST /accounts/{id}/card-debt/set-aside` can set aside. */
+            not_set_aside: components["schemas"]["Amount"];
         };
         /**
          * @description A BSU account's deposits (#214, spec §3): incomes and transfers into
@@ -3922,9 +4010,13 @@ export interface components {
          *     reversed, not corrected. An OVF can have up to two savings lines,
          *     holding the overflow for a savings target and the distributor (#233),
          *     and so can a savings budget SVR cut at a target's goal (#234).
+         *     CDH (card debt hold) and CDR (card debt release) come from the card
+         *     debt endpoints and deleting an account (#261); they too can be
+         *     reversed, not corrected. A purchase, refund or transfer can have card
+         *     lines.
          * @enum {string}
          */
-        TransactionType: "OPB" | "BLA" | "INC" | "EXP" | "TRF" | "INP" | "OPF" | "REF" | "BUA" | "BAT" | "OVF" | "SVR" | "SVC" | "SVB" | "SVD";
+        TransactionType: "OPB" | "BLA" | "INC" | "EXP" | "TRF" | "INP" | "OPF" | "REF" | "BUA" | "BAT" | "OVF" | "SVR" | "SVC" | "SVB" | "SVD" | "CDH" | "CDR";
         /** @enum {string} */
         CorrectionType: "none" | "adjustment" | "reversal";
         TransactionBankLine: {
@@ -3938,6 +4030,14 @@ export interface components {
             /** @description The source account the money is reserved on. */
             account_id: components["schemas"]["AccountId"];
             /** @description Signed, in the account's currency. Positive holds money, negative releases it or takes it off hold. */
+            amount: components["schemas"]["Amount"];
+        };
+        TransactionCardLine: {
+            /** @description The credit card the debt is on. */
+            card_id: components["schemas"]["AccountId"];
+            /** @description The account the money is held on (#261). */
+            account_id: components["schemas"]["AccountId"];
+            /** @description Signed, in the card's currency. Positive holds money for the card's debt, negative releases it. */
             amount: components["schemas"]["Amount"];
         };
         TransactionBalance: {
@@ -3987,6 +4087,8 @@ export interface components {
             bucket_lines: components["schemas"]["TransactionBucketLine"][];
             /** @description Effective amounts held for savings per holder and source account (#231), as `bank_lines`. */
             savings_lines: components["schemas"]["TransactionSavingsLine"][];
+            /** @description Effective amounts of card debt held per card and account (#261), as `bank_lines`. */
+            card_lines: components["schemas"]["TransactionCardLine"][];
             /**
              * @description Set on a reversed transaction: its effective lines just before the
              *     reversal, so what it amounted to can still be shown. Null otherwise.
@@ -4013,11 +4115,13 @@ export interface components {
             bank_lines: components["schemas"]["TransactionBankLine"][];
             bucket_lines: components["schemas"]["TransactionBucketLine"][];
             savings_lines: components["schemas"]["TransactionSavingsLine"][];
+            card_lines: components["schemas"]["TransactionCardLine"][];
         };
         TransactionLines: {
             bank_lines: components["schemas"]["TransactionBankLine"][];
             bucket_lines: components["schemas"]["TransactionBucketLine"][];
             savings_lines: components["schemas"]["TransactionSavingsLine"][];
+            card_lines: components["schemas"]["TransactionCardLine"][];
         };
         TransactionPage: {
             items: components["schemas"]["Transaction"][];
@@ -4069,12 +4173,36 @@ export interface components {
             to_account_id?: components["schemas"]["AccountId"];
             /** @description Positive. */
             amount: components["schemas"]["Amount"];
-            /** @description For an income or expense, the parts that go to or come from buckets. */
+            /** @description For an income or expense, the parts that go to or come from buckets. On a credit card, buckets may be funded from any account in its currency (#261). */
             bucket_lines?: {
                 bucket_id: components["schemas"]["BucketId"];
                 /** @description Positive. */
                 amount: components["schemas"]["Amount"];
             }[];
+            /**
+             * @description Only for a purchase (EXP) or refund (INC) on a credit card (#261):
+             *     the account its part outside buckets is held on until the bill is
+             *     paid (a refund releases it there). Null holds it nowhere; left
+             *     out, it's the card's default account. An account that isn't a
+             *     card, in the card's currency (400 `card_source`).
+             */
+            set_aside_account_id?: (string & components["schemas"]["AccountId"]) | null;
+            /**
+             * @description Only for a transfer between accounts that aren't credit cards
+             *     (#261): card debt held on the sending account that moves to the
+             *     receiving one, per card. Each at most what's held, together at
+             *     most the amount.
+             */
+            carry_card_debt?: components["schemas"]["CardDebtCarry"][];
+            /**
+             * @description Only for a payment, a transfer to a credit card (#261). The paying
+             *     account's hold for the card is cleared first; this is what the
+             *     rest of the payment releases on other accounts, each at most
+             *     what's held there, together at most that rest. Left out, it
+             *     releases what's held beyond what the card still owes, largest
+             *     holds first.
+             */
+            release_card_debt?: components["schemas"]["CardDebtChange"][];
         };
         Tag: {
             name: string;
@@ -4128,6 +4256,30 @@ export interface components {
             bsu_confirmed?: boolean;
             /** @description As when creating (409 `over_credit_limit`). */
             limit_confirmed?: boolean;
+            /**
+             * @description Only for a purchase (EXP) or refund (INC) on a credit card (#261):
+             *     the account its part outside buckets is held on until the bill is
+             *     paid (a refund releases it there). Null holds it nowhere; left
+             *     out, it stays where it is. An account that isn't a
+             *     card, in the card's currency (400 `card_source`).
+             */
+            set_aside_account_id?: (string & components["schemas"]["AccountId"]) | null;
+            /**
+             * @description Only for a transfer between accounts that aren't credit cards
+             *     (#261): card debt held on the sending account that moves to the
+             *     receiving one, per card, replacing what it carries. Left out, it
+             *     stays as it is.
+             */
+            carry_card_debt?: components["schemas"]["CardDebtCarry"][];
+            /**
+             * @description Only for a payment, a transfer to a credit card (#261). The paying
+             *     account's hold for the card is cleared first; this is what the
+             *     rest of the payment releases on other accounts, each at most
+             *     what's held there, together at most that rest. Left out, it
+             *     stays as it is while the amount and accounts do, else as when
+             *     creating.
+             */
+            release_card_debt?: components["schemas"]["CardDebtChange"][];
         };
         /** @description RFC 9457 problem details. */
         Problem: {
@@ -5294,6 +5446,68 @@ export interface operations {
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    setAsideCardDebt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CardDebtChange"];
+            };
+        };
+        responses: {
+            /** @description The card, with what's set aside for it now. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    releaseCardDebt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CardDebtChange"];
+            };
+        };
+        responses: {
+            /** @description The card, with what's set aside for it now. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };
