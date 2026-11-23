@@ -64,7 +64,7 @@ func TestAccountsAPI(t *testing.T) {
 	w := do(http.MethodPost, "/api/v1/accounts", map[string]any{"name": "Main", "type": "usage", "opening_balance": "1500.50"}, alice)
 	expect(t, "create", w, http.StatusCreated, "")
 	main := decode[api.Account](t, w)
-	if main.Name != "Main" || main.Balance != "1500.50" || main.Currency != "NOK" || main.Type != api.Usage {
+	if main.Name != "Main" || main.Balance != "1500.50" || main.Currency != "NOK" || main.Type != api.AccountTypeUsage {
 		t.Errorf("created %+v", main)
 	}
 	w = do(http.MethodPost, "/api/v1/accounts", map[string]any{"name": "Buffer", "type": "savings"}, alice)

@@ -369,7 +369,9 @@
       "recent_transactions": "Dei siste transaksjonane.",
       "in_out": "Inntekter, utgifter og netto for eit tidsrom.",
       "module": "Ein av dei lagra modulane dine frå Statistikk og rapportar: ein graf, transaksjonar, inn/ut/saldo eller budsjett mot forbruk.",
-      "scheduled": "Planlagde transaksjonar som ventar på godkjenning, og det som kjem."
+      "scheduled": "Planlagde transaksjonar som ventar på godkjenning, og det som kjem.",
+      "savings": "Framdrifta for sparemåla dine, og det sparefordelaren har.",
+      "savings_transfer": "Pengar sette av til sparing, som ventar på at du flyttar dei i banken."
     },
     "inOut": {
       "title": "Inn og ut",
@@ -483,7 +485,38 @@
       "account": "Kontoen denne modulen viste, er sletta.",
       "chooseAccount": "Vel ein annan konto",
       "bucket": "Bøtta denne modulen viste, er sletta.",
-      "chooseBucket": "Vel ei anna bøtte"
+      "chooseBucket": "Vel ei anna bøtte",
+      "target": "Sparemålet denne modulen viste, er sletta.",
+      "chooseTarget": "Vel eit anna sparemål"
+    },
+    "savings": {
+      "title": "Sparing",
+      "all": "Opne Sparing",
+      "show": "Vis",
+      "modes": {
+        "all": "Alle sparemål",
+        "chosen": "Valde sparemål",
+        "target": "Eitt sparemål"
+      },
+      "targets": "Sparemål",
+      "pickTargets": "Vel eitt eller fleire sparemål.",
+      "target": "Sparemål",
+      "pickTarget": "Vel eit sparemål.",
+      "count": "Rader",
+      "showDistributor": "Vis sparefordelaren",
+      "distributor": "I sparefordelaren",
+      "none": "Ingen sparemål enno. <setup>Lag eitt i Spareoppsett</setup>.",
+      "noneChosen": "Ingen av dei valde sparemåla finst lenger.",
+      "more_one": "og {{count}} til",
+      "more_other": "og {{count}} til",
+      "held": "{{amount}} avsett"
+    },
+    "savingsTransfer": {
+      "title": "Sparing å overføre",
+      "nothing": "Ingenting ventar på å bli overført.",
+      "row": "{{amount}} · {{from}} → {{to}}",
+      "more_one": "og {{count}} til",
+      "more_other": "og {{count}} til"
     }
   },
   "buckets": {
@@ -1048,7 +1081,7 @@
       "ruleCount_one": "{{count}} regel i sparefordelaren",
       "ruleCount_other": "{{count}} reglar i sparefordelaren",
       "editRules": "Rediger i sparefordelaren",
-      "bsuCap": "Fordelaren gir han ikkje meir i år"
+      "bsuCap": "Fordelaren gjev han ikkje meir i år"
     },
     "deleteRules_one": "Regelen i sparefordelaren blir sletta.",
     "deleteRules_other": "Dei {{count}} reglane i sparefordelaren blir sletta.",

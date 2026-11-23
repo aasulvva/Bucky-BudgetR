@@ -19,6 +19,8 @@ import { ModuleWidget } from "./ModuleWidget";
 import { HealthWidget } from "./HealthWidget";
 import { InOutWidget } from "./InOutWidget";
 import { RecentWidget } from "./RecentWidget";
+import { SavingsTransferWidget } from "./SavingsTransferWidget";
+import { SavingsWidget } from "./SavingsWidget";
 import { ScheduledWidget } from "./ScheduledWidget";
 import { WidgetFrame, useWidgetTitle } from "./frame";
 import { SettingsButton } from "./Widget";
@@ -77,6 +79,8 @@ export function WidgetView({
       {widget.type === "in_out" && <InOutWidget widget={widget} action={cog} />}
       {widget.type === "module" && <ModuleWidget widget={widget} action={cog} />}
       {widget.type === "scheduled" && <ScheduledWidget widget={widget} action={cog} />}
+      {widget.type === "savings" && <SavingsWidget widget={widget} action={cog} />}
+      {widget.type === "savings_transfer" && <SavingsTransferWidget widget={widget} action={cog} />}
       <WidgetSettingsDialog
         widget={widget}
         opened={settings}

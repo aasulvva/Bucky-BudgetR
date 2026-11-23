@@ -16,6 +16,32 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.32.00",
+    date: "2026-11-23",
+    title: {
+      en: "Savings on the Dashboard",
+      nb: "Sparing på Oversikten",
+      nn: "Sparing på Oversikta",
+    },
+    changes: {
+      en: [
+        "New Dashboard widget Savings: each savings target's progress, with the held part striped, a BSU's room this year, and what the savings distributor holds, with Distribute now.",
+        "New Dashboard widget Savings to transfer: the money held for your targets that's waiting to be moved at the bank, each with Done.",
+        "Both show all your targets, the ones you choose, or one target (titled after it). Add them with Edit dashboard › Add widget.",
+      ],
+      nb: [
+        "Ny modul på Oversikten, Sparing: fremdriften for hvert sparemål, med det avsatte stripete, hva en BSU kan ta imot i år, og det sparefordeleren har, med Fordel nå.",
+        "Ny modul på Oversikten, Sparing å overføre: pengene som er avsatt til sparemålene og venter på å bli flyttet i banken, hver med Utført.",
+        "Begge viser alle sparemålene, dem du velger, eller ett sparemål (med navnet som tittel). Legg dem til med Rediger oversikten › Legg til modul.",
+      ],
+      nn: [
+        "Ny modul på Oversikta, Sparing: framdrifta for kvart sparemål, med det avsette stripete, kva ein BSU kan ta imot i år, og det sparefordelaren har, med Fordel no.",
+        "Ny modul på Oversikta, Sparing å overføre: pengane som er sette av til sparemåla og ventar på å bli flytta i banken, kvar med Utført.",
+        "Begge viser alle sparemåla, dei du vel, eller eitt sparemål (med namnet som tittel). Legg dei til med Rediger oversikta › Legg til modul.",
+      ],
+    },
+  },
+  {
     version: "v2.31.00",
     date: "2026-11-23",
     title: {

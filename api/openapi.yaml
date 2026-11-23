@@ -4167,7 +4167,7 @@ components:
           description: Made by the web app; unique in the layout.
         type:
           type: string
-          enum: [cycle, health, bucket_status, accounts, recent_transactions, in_out, module, scheduled]
+          enum: [cycle, health, bucket_status, accounts, recent_transactions, in_out, module, scheduled, savings, savings_transfer]
         width:
           type: string
           enum: [half, full]
@@ -4180,7 +4180,8 @@ components:
           description: |
             A custom title (not blank). Null or missing means the automatic
             one: the bucket's or account's name for One bucket and One
-            account, otherwise the widget's name.
+            account, the target's for One target (#237), otherwise the
+            widget's name.
         cycle:
           $ref: "#/components/schemas/CycleWidgetSettings"
         accounts:
@@ -4195,6 +4196,10 @@ components:
           $ref: "#/components/schemas/ModuleWidgetSettings"
         scheduled:
           $ref: "#/components/schemas/ScheduledWidgetSettings"
+        savings:
+          $ref: "#/components/schemas/SavingsWidgetSettings"
+        savings_transfer:
+          $ref: "#/components/schemas/SavingsTransferWidgetSettings"
 
     CycleWidgetSettings:
       type: object
@@ -4415,6 +4420,71 @@ components:
           minimum: 1
           maximum: 20
           description: How many of each it shows. 5 by default.
+
+    SavingsWidgetTargets:
+      type: string
+      enum: [all, chosen, target]
+      description: |
+        Which savings targets a savings widget shows (#237): all of them (the
+        default), those in `target_ids`, or the one in `target_id`. Deleted
+        ones drop out.
+
+    SavingsWidgetSettings:
+      type: object
+      additionalProperties: false
+      required: [mode, count]
+      description: The Savings widget (#237) — each target's progress, and what the distributor holds.
+      properties:
+        mode:
+          $ref: "#/components/schemas/SavingsWidgetTargets"
+        target_ids:
+          type: array
+          maxItems: 50
+          uniqueItems: true
+          description: The targets `chosen` shows, in the Savings screen's order.
+          items:
+            $ref: "#/components/schemas/SavingsHolderId"
+        target_id:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/SavingsHolderId"
+          nullable: true
+          description: The target `target` shows.
+        count:
+          type: integer
+          minimum: 1
+          maximum: 20
+          description: How many targets it shows. 5 by default.
+        show_distributor:
+          type: boolean
+          description: Also show what the distributor holds, with Distribute now. True by default.
+
+    SavingsTransferWidgetSettings:
+      type: object
+      additionalProperties: false
+      required: [mode, count]
+      description: The Savings to transfer widget (#237) — money held for targets, waiting to be moved at the bank, each with Done.
+      properties:
+        mode:
+          $ref: "#/components/schemas/SavingsWidgetTargets"
+        target_ids:
+          type: array
+          maxItems: 50
+          uniqueItems: true
+          description: The targets `chosen` shows.
+          items:
+            $ref: "#/components/schemas/SavingsHolderId"
+        target_id:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/SavingsHolderId"
+          nullable: true
+          description: The target `target` shows.
+        count:
+          type: integer
+          minimum: 1
+          maximum: 20
+          description: How many rows (a target's money on one account) it shows. 5 by default.
 
     RecentWidgetSettings:
       type: object

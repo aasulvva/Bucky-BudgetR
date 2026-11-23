@@ -20,6 +20,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useAccounts, useBuckets } from "@/api/accounts";
+import { useSavingsTargets } from "@/api/savings";
 import { useSession } from "@/app/session";
 import {
   moveWidget,
@@ -61,6 +62,7 @@ export function DashboardGrid({
   const accounts = useAccounts().data ?? [];
   const buckets = useBuckets().data ?? [];
   const saved = readSavedModules(useSession().data?.preferences.saved_modules);
+  const targets = useSavingsTargets().data ?? [];
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -79,7 +81,9 @@ export function DashboardGrid({
   }
 
   /** Its title, or "Bucket status 2" for the second widget with the same title. */
-  const titles = new Map(layout.map((w) => [w.id, titleFor(t, w, accounts, buckets, saved)]));
+  const titles = new Map(
+    layout.map((w) => [w.id, titleFor(t, w, accounts, buckets, saved, targets)]),
+  );
   const name = (w: WidgetInstance) => {
     const title = titles.get(w.id) ?? "";
     const same = layout.filter((o) => titles.get(o.id) === title);

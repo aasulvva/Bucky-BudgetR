@@ -2437,7 +2437,7 @@ export interface components {
             /** @description Made by the web app; unique in the layout. */
             id: string;
             /** @enum {string} */
-            type: "cycle" | "health" | "bucket_status" | "accounts" | "recent_transactions" | "in_out" | "module" | "scheduled";
+            type: "cycle" | "health" | "bucket_status" | "accounts" | "recent_transactions" | "in_out" | "module" | "scheduled" | "savings" | "savings_transfer";
             /**
              * @description Half or the full width of the Dashboard on wide screens.
              * @enum {string}
@@ -2446,7 +2446,8 @@ export interface components {
             /**
              * @description A custom title (not blank). Null or missing means the automatic
              *     one: the bucket's or account's name for One bucket and One
-             *     account, otherwise the widget's name.
+             *     account, the target's for One target (#237), otherwise the
+             *     widget's name.
              */
             title?: string | null;
             cycle?: components["schemas"]["CycleWidgetSettings"];
@@ -2456,6 +2457,8 @@ export interface components {
             in_out?: components["schemas"]["InOutWidgetSettings"];
             module?: components["schemas"]["ModuleWidgetSettings"];
             scheduled?: components["schemas"]["ScheduledWidgetSettings"];
+            savings?: components["schemas"]["SavingsWidgetSettings"];
+            savings_transfer?: components["schemas"]["SavingsTransferWidgetSettings"];
         };
         CycleWidgetSettings: {
             /** @description Also show the next planned cycle. True by default. */
@@ -2607,6 +2610,35 @@ export interface components {
              */
             show: "both" | "queue" | "upcoming";
             /** @description How many of each it shows. 5 by default. */
+            count: number;
+        };
+        /**
+         * @description Which savings targets a savings widget shows (#237): all of them (the
+         *     default), those in `target_ids`, or the one in `target_id`. Deleted
+         *     ones drop out.
+         * @enum {string}
+         */
+        SavingsWidgetTargets: "all" | "chosen" | "target";
+        /** @description The Savings widget (#237) — each target's progress, and what the distributor holds. */
+        SavingsWidgetSettings: {
+            mode: components["schemas"]["SavingsWidgetTargets"];
+            /** @description The targets `chosen` shows, in the Savings screen's order. */
+            target_ids?: components["schemas"]["SavingsHolderId"][];
+            /** @description The target `target` shows. */
+            target_id?: (string & components["schemas"]["SavingsHolderId"]) | null;
+            /** @description How many targets it shows. 5 by default. */
+            count: number;
+            /** @description Also show what the distributor holds, with Distribute now. True by default. */
+            show_distributor?: boolean;
+        };
+        /** @description The Savings to transfer widget (#237) — money held for targets, waiting to be moved at the bank, each with Done. */
+        SavingsTransferWidgetSettings: {
+            mode: components["schemas"]["SavingsWidgetTargets"];
+            /** @description The targets `chosen` shows. */
+            target_ids?: components["schemas"]["SavingsHolderId"][];
+            /** @description The target `target` shows. */
+            target_id?: (string & components["schemas"]["SavingsHolderId"]) | null;
+            /** @description How many rows (a target's money on one account) it shows. 5 by default. */
             count: number;
         };
         RecentWidgetSettings: {
