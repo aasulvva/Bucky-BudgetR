@@ -4,6 +4,7 @@ import {
   Checkbox,
   Group,
   Input,
+  MultiSelect,
   NumberInput,
   SegmentedControl,
   Select,
@@ -17,6 +18,7 @@ import { Trans, useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
 import { useAccounts, useBuckets, type Account, type Bucket } from "@/api/accounts";
+import { useSavingsTargets, type SavingsTarget } from "@/api/savings";
 import { useSession } from "@/app/session";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
@@ -32,7 +34,9 @@ import {
   COMPACT_TOPS,
   GRAPH_HEIGHTS,
   MAX_TITLE,
+  MAX_CHOSEN_TARGETS,
   MODULE_VIEWS,
+  SAVINGS_TARGETS_MODES,
   SCHEDULED_SHOWS,
   TRANSACTION_COUNTS,
   customTitle,
@@ -41,6 +45,7 @@ import {
   type BucketStatusSettings,
   type InOutSettings,
   type ModuleWidgetSettings,
+  type SavingsTargetsSettings,
   type WidgetInstance,
   type SaveWidget,
 } from "@/lib/dashboard";
@@ -104,7 +109,8 @@ export function WidgetSettingsForm({
   const [title, setTitle] = useState(widget.title ?? "");
   // What the title is when the field is left empty.
   const saved = readSavedModules(useSession().data?.preferences.saved_modules);
-  const automatic = titleFor(t, { ...draft, title: null }, accounts, buckets, saved);
+  const targets = useSavingsTargets().data ?? [];
+  const automatic = titleFor(t, { ...draft, title: null }, accounts, buckets, saved, targets);
   const save = useMutation({
     mutationFn: async (w: WidgetInstance) => {
       await onSave(w);
@@ -216,6 +222,28 @@ export function WidgetSettingsForm({
           />
         </>
       )}
+      {(draft.type === "savings" || draft.type === "savings_transfer") && (
+        <SavingsTargetsForm
+          value={draft.settings}
+          onChange={(settings) => {
+            setDraft({ ...draft, settings: { ...draft.settings, ...settings } } as WidgetInstance);
+          }}
+          targets={targets}
+          rowsForOne={draft.type === "savings_transfer"}
+        />
+      )}
+      {draft.type === "savings" && (
+        <Checkbox
+          label={t("dashboard.savings.showDistributor")}
+          checked={draft.settings.showDistributor}
+          onChange={(e) => {
+            setDraft({
+              ...draft,
+              settings: { ...draft.settings, showDistributor: e.currentTarget.checked },
+            });
+          }}
+        />
+      )}
       {draft.type === "in_out" && (
         <InOutForm
           value={draft.settings}
@@ -249,7 +277,7 @@ export function WidgetSettingsForm({
         </Button>
         <Button
           loading={save.isPending}
-          disabled={!settingsComplete(draft, accounts, buckets, saved)}
+          disabled={!settingsComplete(draft, accounts, buckets, saved, targets)}
           onClick={() => {
             save.mutate({ ...draft, title: customTitle(title) });
           }}
@@ -258,6 +286,80 @@ export function WidgetSettingsForm({
         </Button>
       </Group>
     </Stack>
+  );
+}
+
+/** Which targets a savings widget shows (#237), and how many rows. */
+function SavingsTargetsForm({
+  value,
+  onChange,
+  targets,
+  rowsForOne,
+}: {
+  value: SavingsTargetsSettings;
+  onChange: (value: SavingsTargetsSettings) => void;
+  targets: SavingsTarget[];
+  /** One target still has rows: its money on each account. */
+  rowsForOne: boolean;
+}) {
+  const { t } = useTranslation();
+  const options = targets.map((g) => ({ value: g.id, label: g.name }));
+  return (
+    <>
+      <Select
+        label={t("dashboard.savings.show")}
+        data={SAVINGS_TARGETS_MODES.map((m) => ({
+          value: m,
+          label: t(`dashboard.savings.modes.${m}`),
+        }))}
+        value={value.mode}
+        allowDeselect={false}
+        comboboxProps={{ withinPortal: false }}
+        onChange={(v) => {
+          const mode = SAVINGS_TARGETS_MODES.find((m) => m === v);
+          if (mode) onChange({ ...value, mode });
+        }}
+      />
+      {value.mode === "chosen" && (
+        <MultiSelect
+          label={t("dashboard.savings.targets")}
+          placeholder={t("dashboard.savings.pickTargets")}
+          data={options}
+          value={value.targetIds.filter((id) => targets.some((g) => g.id === id))}
+          maxValues={MAX_CHOSEN_TARGETS}
+          searchable
+          comboboxProps={{ withinPortal: false }}
+          onChange={(targetIds) => {
+            onChange({ ...value, targetIds });
+          }}
+        />
+      )}
+      {value.mode === "target" && (
+        <Select
+          label={t("dashboard.savings.target")}
+          placeholder={t("dashboard.savings.pickTarget")}
+          data={options}
+          value={targets.some((g) => g.id === value.targetId) ? value.targetId : null}
+          searchable
+          comboboxProps={{ withinPortal: false }}
+          onChange={(targetId) => {
+            onChange({ ...value, targetId });
+          }}
+        />
+      )}
+      {(value.mode !== "target" || rowsForOne) && (
+        <Select
+          label={t("dashboard.savings.count")}
+          data={TRANSACTION_COUNTS.map((n) => ({ value: String(n), label: String(n) }))}
+          value={String(value.count)}
+          allowDeselect={false}
+          comboboxProps={{ withinPortal: false }}
+          onChange={(v) => {
+            if (v) onChange({ ...value, count: Number(v) });
+          }}
+        />
+      )}
+    </>
   );
 }
 

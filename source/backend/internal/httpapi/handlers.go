@@ -251,6 +251,8 @@ func checkWidgets(widgets []api.DashboardWidget) error {
 			api.DashboardWidgetTypeInOut:              w.InOut != nil,
 			api.DashboardWidgetTypeModule:             w.Module != nil,
 			api.DashboardWidgetTypeScheduled:          w.Scheduled != nil,
+			api.DashboardWidgetTypeSavings:            w.Savings != nil,
+			api.DashboardWidgetTypeSavingsTransfer:    w.SavingsTransfer != nil,
 		}
 		for t, given := range settings {
 			if given && t != w.Type {

@@ -25,6 +25,8 @@ export type WidgetWidth = ApiWidget["width"];
 export type BucketStatusMode = Schemas["BucketStatusWidgetSettings"]["mode"];
 export type AccountsMode = Schemas["AccountsWidgetSettings"]["mode"];
 export type ScheduledShow = Schemas["ScheduledWidgetSettings"]["show"];
+/** Which savings targets a savings widget shows (#237). */
+export type SavingsTargetsMode = Schemas["SavingsWidgetTargets"];
 
 export const WIDGET_TYPES: WidgetType[] = [
   "cycle",
@@ -35,6 +37,8 @@ export const WIDGET_TYPES: WidgetType[] = [
   "in_out",
   "module",
   "scheduled",
+  "savings",
+  "savings_transfer",
 ];
 export const ACCOUNTS_MODES: AccountsMode[] = ["all", "account"];
 export const BUCKET_STATUS_MODES: BucketStatusMode[] = [
@@ -46,6 +50,9 @@ export const BUCKET_STATUS_MODES: BucketStatusMode[] = [
 ];
 export const TRANSACTION_COUNTS = [3, 5, 10, 15, 20];
 export const SCHEDULED_SHOWS: ScheduledShow[] = ["both", "queue", "upcoming"];
+export const SAVINGS_TARGETS_MODES: SavingsTargetsMode[] = ["all", "chosen", "target"];
+/** The most targets Chosen targets holds (the API's limit). */
+export const MAX_CHOSEN_TARGETS = 50;
 /** How a module widget shows its module (#203). */
 export type ModuleWidgetView = Schemas["ModuleWidgetView"];
 export const MODULE_VIEWS: ModuleWidgetView[] = ["compact", "full"];
@@ -119,6 +126,23 @@ export interface ScheduledSettings {
   count: number;
 }
 
+/** Which targets a savings widget shows (#237). */
+export interface SavingsTargetsSettings {
+  mode: SavingsTargetsMode;
+  /** For Chosen targets. */
+  targetIds: string[];
+  /** For One target. */
+  targetId: string | null;
+  /** The most rows. */
+  count: number;
+}
+
+/** The Savings widget (#237): the targets' progress, and the distributor. */
+export interface SavingsWidgetSettings extends SavingsTargetsSettings {
+  /** Also what the distributor holds, with Distribute now. */
+  showDistributor: boolean;
+}
+
 export interface ModuleWidgetSettings {
   /** The saved module it shows; null until one is picked. */
   savedModuleId: string | null;
@@ -148,6 +172,8 @@ interface SettingsOf {
   in_out: InOutSettings;
   module: ModuleWidgetSettings;
   scheduled: ScheduledSettings;
+  savings: SavingsWidgetSettings;
+  savings_transfer: SavingsTargetsSettings;
 }
 
 /** One widget on the Dashboard, with its own settings. */
@@ -216,7 +242,30 @@ const fromApi = {
     show: s?.show ?? "both",
     count: s?.count ?? 5,
   }),
+  savingsTransfer: (s?: Schemas["SavingsTransferWidgetSettings"]): SavingsTargetsSettings => ({
+    mode: s?.mode ?? "all",
+    targetIds: s?.target_ids ?? [],
+    targetId: s?.target_id ?? null,
+    count: s?.count ?? 5,
+  }),
+  savings: (s?: Schemas["SavingsWidgetSettings"]): SavingsWidgetSettings => ({
+    mode: s?.mode ?? "all",
+    targetIds: s?.target_ids ?? [],
+    targetId: s?.target_id ?? null,
+    count: s?.count ?? 5,
+    showDistributor: s?.show_distributor ?? true,
+  }),
 };
+
+/** Which targets as stored: only the mode's own field. */
+function targetsToApi(s: SavingsTargetsSettings): Schemas["SavingsTransferWidgetSettings"] {
+  return {
+    mode: s.mode,
+    count: s.count,
+    ...(s.mode === "chosen" ? { target_ids: s.targetIds } : {}),
+    ...(s.mode === "target" ? { target_id: s.targetId } : {}),
+  };
+}
 
 /** A widget type's default settings. */
 export function defaultSettings<T extends WidgetType>(type: T): SettingsOf[T];
@@ -238,6 +287,10 @@ export function defaultSettings(type: WidgetType): SettingsOf[WidgetType] {
       return fromApi.module();
     case "scheduled":
       return fromApi.scheduled();
+    case "savings":
+      return fromApi.savings();
+    case "savings_transfer":
+      return fromApi.savingsTransfer();
   }
 }
 
@@ -350,6 +403,10 @@ function widgetFromApi(w: ApiWidget): WidgetInstance | null {
       return { ...base, type: w.type, settings: fromApi.module(w.module) };
     case "scheduled":
       return { ...base, type: w.type, settings: fromApi.scheduled(w.scheduled) };
+    case "savings":
+      return { ...base, type: w.type, settings: fromApi.savings(w.savings) };
+    case "savings_transfer":
+      return { ...base, type: w.type, settings: fromApi.savingsTransfer(w.savings_transfer) };
     default:
       // A type this app doesn't know (or no longer has) isn't shown.
       return null;
@@ -455,6 +512,16 @@ function widgetToApi(w: WidgetInstance): ApiWidget {
     }
     case "scheduled":
       return { ...base, scheduled: { show: w.settings.show, count: w.settings.count } };
+    case "savings":
+      return {
+        ...base,
+        savings: {
+          ...targetsToApi(w.settings),
+          ...(w.settings.showDistributor ? {} : { show_distributor: false }),
+        },
+      };
+    case "savings_transfer":
+      return { ...base, savings_transfer: targetsToApi(w.settings) };
   }
 }
 
@@ -574,8 +641,16 @@ export function autoTitle(
   accounts: Account[],
   buckets: Bucket[],
   saved: SavedName[] = [],
+  targets: SavedName[] = [],
 ): string | null {
   if (widget.title !== null) return widget.title;
+  if (
+    (widget.type === "savings" || widget.type === "savings_transfer") &&
+    widget.settings.mode === "target"
+  ) {
+    const { targetId } = widget.settings;
+    return targets.find((g) => g.id === targetId)?.name ?? null;
+  }
   if (widget.type === "module") {
     return saved.find((g) => g.id === widget.settings.savedModuleId)?.name ?? null;
   }
@@ -602,7 +677,14 @@ export function settingsComplete(
   accounts: Account[],
   buckets: Bucket[],
   saved: SavedName[] = [],
+  targets: SavedName[] = [],
 ): boolean {
+  if (widget.type === "savings" || widget.type === "savings_transfer") {
+    const { mode, targetId, targetIds } = widget.settings;
+    if (mode === "target") return targets.some((g) => g.id === targetId);
+    if (mode === "chosen") return targetIds.some((id) => targets.some((g) => g.id === id));
+    return true;
+  }
   if (widget.type === "module") {
     return (
       saved.some((g) => g.id === widget.settings.savedModuleId) &&
@@ -750,4 +832,24 @@ export function mostUsed(
     })
     .sort((a, b) => b.pct - a.pct || a.bucket.name.localeCompare(b.bucket.name))
     .slice(0, n);
+}
+
+/**
+ * The targets a savings widget shows (#237), in the Savings screen's order,
+ * without deleted ones; `gone` is a One target whose target was deleted.
+ */
+export function pickTargets<T extends { id: string }>(
+  settings: SavingsTargetsSettings,
+  targets: T[],
+): { shown: T[]; gone: boolean } {
+  switch (settings.mode) {
+    case "all":
+      return { shown: targets, gone: false };
+    case "chosen":
+      return { shown: targets.filter((t) => settings.targetIds.includes(t.id)), gone: false };
+    case "target": {
+      const shown = targets.filter((t) => t.id === settings.targetId);
+      return { shown, gone: shown.length === 0 };
+    }
+  }
 }

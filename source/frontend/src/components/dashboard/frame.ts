@@ -3,6 +3,7 @@ import { createContext, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useAccounts, useBuckets, type Account, type Bucket } from "@/api/accounts";
+import { useSavingsTargets } from "@/api/savings";
 import { useSession } from "@/app/session";
 import { autoTitle, type WidgetInstance, type WidgetType } from "@/lib/dashboard";
 import { readSavedModules, type SavedModule } from "@/lib/savedModules";
@@ -16,6 +17,8 @@ const TITLE_KEYS = {
   in_out: "dashboard.inOut.title",
   module: "dashboard.module.title",
   scheduled: "dashboard.scheduled.title",
+  savings: "dashboard.savings.title",
+  savings_transfer: "dashboard.savingsTransfer.title",
 } as const satisfies Record<WidgetType, string>;
 
 /** A widget type's name, and its title when it has no other. */
@@ -23,15 +26,16 @@ export function widgetTitle(t: TFunction, type: WidgetType): string {
   return t(TITLE_KEYS[type]);
 }
 
-/** A widget's title: custom, the bucket's or account's name, or its type's name. */
+/** A widget's title: custom, the bucket's, account's or target's name, or its type's name. */
 export function titleFor(
   t: TFunction,
   widget: WidgetInstance,
   accounts: Account[],
   buckets: Bucket[],
   saved: SavedModule[] = [],
+  targets: { id: string; name: string }[] = [],
 ): string {
-  return autoTitle(widget, accounts, buckets, saved) ?? widgetTitle(t, widget.type);
+  return autoTitle(widget, accounts, buckets, saved, targets) ?? widgetTitle(t, widget.type);
 }
 
 export function useWidgetTitle(widget: WidgetInstance): string {
@@ -39,7 +43,8 @@ export function useWidgetTitle(widget: WidgetInstance): string {
   const accounts = useAccounts().data ?? [];
   const buckets = useBuckets().data ?? [];
   const saved = readSavedModules(useSession().data?.preferences.saved_modules);
-  return titleFor(t, widget, accounts, buckets, saved);
+  const targets = useSavingsTargets().data ?? [];
+  return titleFor(t, widget, accounts, buckets, saved, targets);
 }
 
 /**

@@ -18,6 +18,7 @@ import {
   moduleWidgetsFor,
   needsAttention,
   newWidget,
+  pickTargets,
   removeWidget,
   replaceWidget,
   settingsComplete,
@@ -688,5 +689,133 @@ describe("the Scheduled widget (#155)", () => {
       { id: "sw", type: "scheduled", width: "half", scheduled: { show: "queue", count: 10 } },
     ]);
     expect(dashboardLayout({ dashboard: prefs })).toEqual([widget]);
+  });
+});
+
+describe("the savings widgets (#237)", () => {
+  const targets = [
+    { id: "1000001001", name: "Rainy day" },
+    { id: "1000001002", name: "Trip" },
+    { id: "1000001003", name: "Home" },
+  ];
+
+  it("start with all targets and 5 rows, half width, the distributor shown", () => {
+    expect(newWidget("savings")).toMatchObject({
+      width: "half",
+      settings: { mode: "all", targetIds: [], targetId: null, count: 5, showDistributor: true },
+    });
+    expect(newWidget("savings_transfer")).toMatchObject({
+      width: "half",
+      settings: { mode: "all", targetIds: [], targetId: null, count: 5 },
+    });
+    // Not in the default layouts: added by hand.
+    for (const kind of ["desktop", "mobile"] as const) {
+      expect(
+        defaultLayout(kind).some((w) => w.type === "savings" || w.type === "savings_transfer"),
+      ).toBe(false);
+    }
+  });
+
+  it("save only the mode's own fields, and read them back", () => {
+    const savings: WidgetInstance<"savings"> = {
+      id: "s",
+      type: "savings",
+      width: "half",
+      title: null,
+      settings: {
+        mode: "chosen",
+        targetIds: ["1000001002", "1000001001"],
+        targetId: "1000001003",
+        count: 10,
+        showDistributor: false,
+      },
+    };
+    const transfer: WidgetInstance<"savings_transfer"> = {
+      id: "t",
+      type: "savings_transfer",
+      width: "full",
+      title: "Move it",
+      settings: { mode: "target", targetIds: ["1000001001"], targetId: "1000001003", count: 3 },
+    };
+    const prefs = layoutToPreferences([savings, transfer]);
+    expect(prefs.widgets).toEqual([
+      {
+        id: "s",
+        type: "savings",
+        width: "half",
+        savings: {
+          mode: "chosen",
+          count: 10,
+          target_ids: ["1000001002", "1000001001"],
+          show_distributor: false,
+        },
+      },
+      {
+        id: "t",
+        type: "savings_transfer",
+        width: "full",
+        title: "Move it",
+        savings_transfer: { mode: "target", count: 3, target_id: "1000001003" },
+      },
+    ]);
+    expect(dashboardLayout({ dashboard: prefs })).toEqual([
+      { ...savings, settings: { ...savings.settings, targetId: null } },
+      { ...transfer, settings: { ...transfer.settings, targetIds: [] } },
+    ]);
+  });
+
+  it("title One target after its target", () => {
+    const w = newWidget("savings_transfer") as WidgetInstance<"savings_transfer">;
+    const one = {
+      ...w,
+      settings: { ...w.settings, mode: "target" as const, targetId: "1000001002" },
+    };
+    expect(autoTitle(one, [], [], [], targets)).toBe("Trip");
+    expect(autoTitle({ ...one, title: "Mine" }, [], [], [], targets)).toBe("Mine");
+    // A deleted target, or All targets: the widget's own name.
+    expect(autoTitle(one, [], [], [], [])).toBeNull();
+    expect(autoTitle(w, [], [], [], targets)).toBeNull();
+  });
+
+  it("need a target for One target, and one that's left for Chosen targets", () => {
+    const w = newWidget("savings") as WidgetInstance<"savings">;
+    const with_ = (settings: Partial<WidgetInstance<"savings">["settings"]>) => ({
+      ...w,
+      settings: { ...w.settings, ...settings },
+    });
+    expect(settingsComplete(w, [], [], [], [])).toBe(true);
+    expect(settingsComplete(with_({ mode: "target" }), [], [], [], targets)).toBe(false);
+    expect(
+      settingsComplete(with_({ mode: "target", targetId: "1000001001" }), [], [], [], targets),
+    ).toBe(true);
+    expect(settingsComplete(with_({ mode: "chosen" }), [], [], [], targets)).toBe(false);
+    expect(settingsComplete(with_({ mode: "chosen", targetIds: ["9"] }), [], [], [], targets)).toBe(
+      false,
+    );
+    expect(
+      settingsComplete(
+        with_({ mode: "chosen", targetIds: ["9", "1000001003"] }),
+        [],
+        [],
+        [],
+        targets,
+      ),
+    ).toBe(true);
+  });
+
+  it("pick the targets in the Savings screen's order, without deleted ones", () => {
+    const s = defaultSettings("savings_transfer");
+    expect(pickTargets(s, targets)).toEqual({ shown: targets, gone: false });
+    expect(
+      pickTargets({ ...s, mode: "chosen", targetIds: ["1000001003", "9", "1000001001"] }, targets),
+    ).toEqual({ shown: [targets[0], targets[2]], gone: false });
+    expect(pickTargets({ ...s, mode: "target", targetId: "1000001002" }, targets)).toEqual({
+      shown: [targets[1]],
+      gone: false,
+    });
+    expect(pickTargets({ ...s, mode: "target", targetId: "9" }, targets)).toEqual({
+      shown: [],
+      gone: true,
+    });
   });
 });

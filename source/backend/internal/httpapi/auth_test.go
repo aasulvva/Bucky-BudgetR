@@ -405,6 +405,13 @@ func TestPreferences(t *testing.T) {
 	if w := patch(scheduled); w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != scheduled {
 		t.Errorf("scheduled widget: %d %s", w.Code, w.Body)
 	}
+	// The savings widgets (#237).
+	savingsWidgets := `{"dashboard":{"widgets":[` +
+		`{"id":"v-1","savings":{"count":5,"mode":"chosen","show_distributor":false,"target_ids":["4313349468","4313344785"]},"type":"savings","width":"half"},` +
+		`{"id":"v-2","savings_transfer":{"count":10,"mode":"target","target_id":"4313349468"},"type":"savings_transfer","width":"full"}]}}`
+	if w := patch(savingsWidgets); w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != savingsWidgets {
+		t.Errorf("savings widgets: %d %s", w.Code, w.Body)
+	}
 	if w := patch(`{"dashboard":{"widgets":[]}}`); strings.TrimSpace(w.Body.String()) != `{"dashboard":{"widgets":[]}}` {
 		t.Errorf("empty layout: %d %s", w.Code, w.Body)
 	}
@@ -454,6 +461,11 @@ func TestPreferences(t *testing.T) {
 		`{"dashboard":{"widgets":[{"id":"a","type":"cycle","width":"half","scheduled":{"show":"both","count":5}}]}}`,
 		`{"dashboard":{"widgets":[{"id":"a","type":"scheduled","width":"half","scheduled":{"show":"all","count":5}}]}}`,
 		`{"dashboard":{"widgets":[{"id":"a","type":"scheduled","width":"half","scheduled":{"show":"both","count":21}}]}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"savings","width":"half","savings":{"mode":"some","count":5}}]}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"savings","width":"half","savings":{"mode":"all","count":0}}]}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"savings","width":"half","savings":{"mode":"target","target_id":"12","count":5}}]}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"savings","width":"half","savings_transfer":{"mode":"all","count":5}}]}}`,
+		`{"dashboard":{"widgets":[{"id":"a","type":"savings_transfer","width":"half","savings_transfer":{"mode":"all","count":5,"show_distributor":true}}]}}`,
 		`{"dashboard":{"widgets":[{"id":"a","type":"cycle","width":"half","module":{"saved_module_id":"g-1"}}]}}`,
 		`{"dashboard":{"widgets":[{"id":"a","type":"module","width":"half","module":{"saved_module_id":""}}]}}`,
 		`{"dashboard":{"widgets":[{"id":"a","type":"module","width":"half","module":{}}]}}`,

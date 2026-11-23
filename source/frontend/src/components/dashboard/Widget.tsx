@@ -125,17 +125,24 @@ export function BucketsSummary({ account, buckets }: { account: Account; buckets
  * A widget pinned to an account or bucket that has been deleted (#89, #135):
  * says so and offers to choose another in its settings.
  */
-export function Gone({ what }: { what: "account" | "bucket" }) {
+const GONE_KEYS = {
+  account: ["dashboard.gone.account", "dashboard.gone.chooseAccount"],
+  bucket: ["dashboard.gone.bucket", "dashboard.gone.chooseBucket"],
+  target: ["dashboard.gone.target", "dashboard.gone.chooseTarget"],
+} as const;
+
+export function Gone({ what }: { what: keyof typeof GONE_KEYS }) {
   const { t } = useTranslation();
   const { openSettings, editing } = useContext(WidgetFrame);
+  const [text, choose] = GONE_KEYS[what];
   return (
     <Stack gap="xs" align="flex-start">
       <Text size="sm" c="dimmed">
-        {t(what === "account" ? "dashboard.gone.account" : "dashboard.gone.bucket")}
+        {t(text)}
       </Text>
       {openSettings && !editing && (
         <Button variant="light" size="xs" onClick={openSettings}>
-          {t(what === "account" ? "dashboard.gone.chooseAccount" : "dashboard.gone.chooseBucket")}
+          {t(choose)}
         </Button>
       )}
     </Stack>

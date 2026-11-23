@@ -369,7 +369,9 @@
       "recent_transactions": "De siste transaksjonene.",
       "in_out": "Inntekter, utgifter og netto for et tidsrom.",
       "module": "En av de lagrede modulene dine fra Statistikk og rapporter: en graf, transaksjoner, inn/ut/saldo eller budsjett mot forbruk.",
-      "scheduled": "Planlagte transaksjoner som venter på godkjenning, og det som kommer."
+      "scheduled": "Planlagte transaksjoner som venter på godkjenning, og det som kommer.",
+      "savings": "Fremdriften for sparemålene dine, og det sparefordeleren har.",
+      "savings_transfer": "Penger satt av til sparing, som venter på at du flytter dem i banken."
     },
     "inOut": {
       "title": "Inn og ut",
@@ -483,7 +485,38 @@
       "account": "Kontoen denne modulen viste, er slettet.",
       "chooseAccount": "Velg en annen konto",
       "bucket": "Bøtta denne modulen viste, er slettet.",
-      "chooseBucket": "Velg en annen bøtte"
+      "chooseBucket": "Velg en annen bøtte",
+      "target": "Sparemålet denne modulen viste, er slettet.",
+      "chooseTarget": "Velg et annet sparemål"
+    },
+    "savings": {
+      "title": "Sparing",
+      "all": "Åpne Sparing",
+      "show": "Vis",
+      "modes": {
+        "all": "Alle sparemål",
+        "chosen": "Valgte sparemål",
+        "target": "Ett sparemål"
+      },
+      "targets": "Sparemål",
+      "pickTargets": "Velg ett eller flere sparemål.",
+      "target": "Sparemål",
+      "pickTarget": "Velg et sparemål.",
+      "count": "Rader",
+      "showDistributor": "Vis sparefordeleren",
+      "distributor": "I sparefordeleren",
+      "none": "Ingen sparemål ennå. <setup>Lag et i Spareoppsett</setup>.",
+      "noneChosen": "Ingen av de valgte sparemålene finnes lenger.",
+      "more_one": "og {{count}} til",
+      "more_other": "og {{count}} til",
+      "held": "{{amount}} avsatt"
+    },
+    "savingsTransfer": {
+      "title": "Sparing å overføre",
+      "nothing": "Ingenting venter på å bli overført.",
+      "row": "{{amount}} · {{from}} → {{to}}",
+      "more_one": "og {{count}} til",
+      "more_other": "og {{count}} til"
     }
   },
   "buckets": {

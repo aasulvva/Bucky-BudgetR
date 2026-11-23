@@ -272,11 +272,25 @@ func remapPreferences(raw json.RawMessage, m map[kind]map[string]string) (json.R
 			{"bucket_status", "account_id", kAccount},
 			{"bucket_status", "bucket_id", kBucket},
 			{"in_out", "account_id", kAccount},
+			{"savings", "target_id", kHolder}, // #237
+			{"savings_transfer", "target_id", kHolder},
 		} {
 			w, _ := h[p.widget].(map[string]any)
 			if old, ok := w[p.field].(string); ok {
 				if id, ok := m[p.kind][old]; ok {
 					w[p.field] = id
+				}
+			}
+		}
+		// The savings widgets' chosen targets (#237).
+		for _, widget := range []string{"savings", "savings_transfer"} {
+			w, _ := h[widget].(map[string]any)
+			ids, _ := w["target_ids"].([]any)
+			for i, old := range ids {
+				if old, ok := old.(string); ok {
+					if id, ok := m[kHolder][old]; ok {
+						ids[i] = id
+					}
 				}
 			}
 		}

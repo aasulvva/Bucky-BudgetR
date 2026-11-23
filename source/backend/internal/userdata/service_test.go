@@ -20,6 +20,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/refill"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/savings"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/testdb"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/transactions"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/userdata"
@@ -327,4 +328,49 @@ func TestExportImport(t *testing.T) {
 			t.Error("an update went through")
 		}
 	})
+}
+
+// TestSavingsWidgetsFollow: copied to another user, the savings widgets
+// (#237) name the copies of their targets.
+func TestSavingsWidgetsFollow(t *testing.T) {
+	e := setup(t)
+	ctx := t.Context()
+	carol := authtest.NewUser(t, e.pool, "carol")
+	buffer := must[accounts.Account](t)(e.accounts.Create(ctx, carol.ID, accounts.New{Name: "Buffer", Type: sqlc.AccountTypeSavings}))
+	sv := savings.NewService(e.pool, ledger.New(ledger.Options{AfterRecord: allocation.AfterRecord}), savings.Options{Now: clock})
+	target := must[savings.Target](t)(sv.Create(ctx, carol.ID, savings.New{AccountID: buffer.ID, Goal: dec("5000")}))
+	prefs := fmt.Sprintf(`{"dashboard":{"widgets":[`+
+		`{"id":"w1","type":"savings","width":"half","savings":{"mode":"chosen","count":5,"target_ids":[%[1]q]}},`+
+		`{"id":"w2","type":"savings_transfer","width":"half","savings_transfer":{"mode":"target","count":5,"target_id":%[1]q}}]}}`, target.ID)
+	if _, err := e.pool.Exec(ctx, `UPDATE users SET preferences = $2 WHERE id = $1`, carol.ID, prefs); err != nil {
+		t.Fatal(err)
+	}
+	f, _ := e.file(t, carol.ID)
+
+	dave := authtest.NewUser(t, e.pool, "dave")
+	must[userdata.Counts](t)(e.svc.Import(ctx, dave.ID, f))
+	got, _ := e.file(t, dave.ID)
+	copied := fmt.Sprint(got.Data.Tables["savings_holders"][0]["id"])
+	if copied == target.ID {
+		t.Fatalf("the target kept its id %s", copied)
+	}
+	var p struct {
+		Dashboard struct {
+			Widgets []struct {
+				Savings struct {
+					TargetIDs []string `json:"target_ids"`
+				} `json:"savings"`
+				SavingsTransfer struct {
+					TargetID string `json:"target_id"`
+				} `json:"savings_transfer"`
+			} `json:"widgets"`
+		} `json:"dashboard"`
+	}
+	if err := json.Unmarshal(got.Data.Preferences, &p); err != nil {
+		t.Fatal(err)
+	}
+	w := p.Dashboard.Widgets
+	if len(w) != 2 || len(w[0].Savings.TargetIDs) != 1 || w[0].Savings.TargetIDs[0] != copied || w[1].SavingsTransfer.TargetID != copied {
+		t.Errorf("dave's widgets %s, want target %s", got.Data.Preferences, copied)
+	}
 }

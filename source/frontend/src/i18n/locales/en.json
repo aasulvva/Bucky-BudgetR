@@ -369,7 +369,9 @@
       "recent_transactions": "The latest transactions.",
       "in_out": "Income, expenses and their balance for a period.",
       "module": "One of your saved modules from Stats & reports: a graph, transactions, in/out/balance or budget vs spending.",
-      "scheduled": "Scheduled transactions waiting for approval, and what's coming up."
+      "scheduled": "Scheduled transactions waiting for approval, and what's coming up.",
+      "savings": "Your savings targets' progress, and what the savings distributor holds.",
+      "savings_transfer": "Money set aside for savings, waiting for you to move it at the bank."
     },
     "inOut": {
       "title": "Money in and out",
@@ -483,7 +485,38 @@
       "account": "The account this widget showed has been deleted.",
       "chooseAccount": "Choose another account",
       "bucket": "The bucket this widget showed has been deleted.",
-      "chooseBucket": "Choose another bucket"
+      "chooseBucket": "Choose another bucket",
+      "target": "The savings target this widget showed has been deleted.",
+      "chooseTarget": "Choose another target"
+    },
+    "savings": {
+      "title": "Savings",
+      "all": "Open Savings",
+      "show": "Show",
+      "modes": {
+        "all": "All targets",
+        "chosen": "Chosen targets",
+        "target": "One target"
+      },
+      "targets": "Targets",
+      "pickTargets": "Choose one or more targets.",
+      "target": "Target",
+      "pickTarget": "Choose a target.",
+      "count": "Rows",
+      "showDistributor": "Show the savings distributor",
+      "distributor": "In the savings distributor",
+      "none": "No savings targets yet. <setup>Create one in Savings setup</setup>.",
+      "noneChosen": "None of the chosen targets are left.",
+      "more_one": "and {{count}} more",
+      "more_other": "and {{count}} more",
+      "held": "{{amount}} held"
+    },
+    "savingsTransfer": {
+      "title": "Savings to transfer",
+      "nothing": "Nothing is waiting for a transfer.",
+      "row": "{{amount}} · {{from}} → {{to}}",
+      "more_one": "and {{count}} more",
+      "more_other": "and {{count}} more"
     }
   },
   "buckets": {
