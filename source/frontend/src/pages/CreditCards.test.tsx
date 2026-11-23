@@ -5,6 +5,7 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { apiMock, problem } from "@/test/api";
+import { amountOf } from "@/test/breakdown";
 import { account, bsuStatus, creditCard } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
@@ -131,9 +132,14 @@ describe("Accounts with credit cards (#260)", () => {
     apiMock.on("POST /api/v1/accounts/9000/balance-adjustment", { body: visa });
     renderRoute("/accounts");
     const card = within(await screen.findByRole("article", { name: "Visa" }));
+    // A row each: what's owed with a bar of the limit used, and what's available (#272).
+    const credit = card.getByLabelText("Credit on Visa");
+    expect(amountOf(credit, "Owed")).toBe(money("4520"));
     expect(
-      card.getByText(`Owed ${money("4520")} · ${money("15480")} of ${money("20000")} available`),
+      within(credit).getByRole("progressbar", { name: "22 % of the limit used" }),
     ).toBeInTheDocument();
+    expect(within(credit).getByText(`Limit ${money("20000")}`)).toBeInTheDocument();
+    expect(amountOf(credit, "Available")).toBe(money("15480"));
     // Interest and fees on a card come later (#263).
     expect(card.queryByRole("button", { name: "Register interest" })).not.toBeInTheDocument();
     expect(card.queryByText(/bucket/i)).not.toBeInTheDocument();
@@ -160,7 +166,25 @@ describe("Accounts with credit cards (#260)", () => {
     apiMock.on("GET /api/v1/accounts", { body: [main, near] });
     renderRoute("/accounts");
     const card = within(await screen.findByRole("article", { name: "Visa" }));
-    expect(card.getByText(/^Owed/)).toHaveStyle({ color: "var(--mantine-color-orange-text)" });
+    const bar = card.getByRole("progressbar", { name: "92 % of the limit used" });
+    expect(bar.getAttribute("style") ?? "").toMatch(/orange/);
+  });
+
+  it("says how far past the limit it is (#272)", async () => {
+    const past = account({
+      ...visa,
+      balance: "-20500.00",
+      credit_card: creditCard({ owed: "20500.00", available: "-500.00" }),
+    });
+    apiMock.on("GET /api/v1/accounts", { body: [main, past] });
+    renderRoute("/accounts");
+    const credit = within(await screen.findByRole("article", { name: "Visa" })).getByLabelText(
+      "Credit on Visa",
+    );
+    expect(amountOf(credit, "Past the limit")).toBe(money("500"));
+    expect(within(credit).getByText("Past the limit")).toHaveStyle({
+      color: "var(--mantine-color-orange-text)",
+    });
   });
 });
 

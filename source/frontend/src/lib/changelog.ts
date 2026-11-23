@@ -16,6 +16,29 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.34.01",
+    date: "2026-11-24",
+    title: {
+      en: "BSU and credit card figures as rows",
+      nb: "BSU- og kredittkorttall i rader",
+      nn: "BSU- og kredittkorttal i rader",
+    },
+    changes: {
+      en: [
+        "On Accounts, a BSU shows this year and in total a row each, with a bar of the limit, what's left and the limit under it, in orange when over.",
+        "A credit card shows what's owed with a bar of the limit used, and what's available, a row each, above where its debt is set aside.",
+      ],
+      nb: [
+        "På Kontoer viser en BSU i år og totalt på hver sin rad, med en stolpe for grensen, hva som er igjen og grensen under, oransje når den er over.",
+        "Et kredittkort viser hva som skyldes med en stolpe for hvor mye av grensen som er brukt, og hva som er tilgjengelig, på hver sin rad, over hvor gjelden er satt av.",
+      ],
+      nn: [
+        "På Kontoar viser ein BSU i år og totalt på kvar si rad, med ein stolpe for grensa, kva som er att og grensa under, oransje når han er over.",
+        "Eit kredittkort viser kva som er skuldig med ein stolpe for kor mykje av grensa som er brukt, og kva som er tilgjengeleg, på kvar si rad, over kvar gjelda er sett av.",
+      ],
+    },
+  },
+  {
     version: "v2.34.00",
     date: "2026-11-23",
     title: {

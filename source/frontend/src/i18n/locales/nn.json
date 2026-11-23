@@ -216,6 +216,9 @@
       "unallocated": "Ufordelt",
       "setAsideOn": "Sett av på {{name}}",
       "notSetAside": "Ikkje sett av"
+    },
+    "figures": {
+      "of": "av {{limit}}"
     }
   },
   "accountSetup": {
@@ -2587,8 +2590,6 @@
       "withdrawalBody": "Dette tek pengar ut av ein BSU-konto, og det kan koste deg skattefrådraget.",
       "record": "Registrer likevel"
     },
-    "line": "{{deposited}} av {{limit}} i år · {{left}} att · Totalt {{total}} av {{totalLimit}}",
-    "lineOver": "{{deposited}} av {{limit}} i år · over grensa · Totalt {{total}} av {{totalLimit}}",
     "leftHint": "{{amount}} att i år",
     "leftHintAccount": "{{name}}: {{amount}} att i år (BSU)",
     "createHint": "Ein BSU er i NOK. Rett etter at du har oppretta han, set du opp historikken: kva du har sett inn kvart år.",
@@ -2658,6 +2659,15 @@
       "yearRange": "Eit år frå 2000 til 2100.",
       "yearTaken": "Det finst ein regel frå {{year}} alt: lagring endrar han.",
       "deleteConfirm": "Slette regelen frå {{year}}? Åra hans brukar regelen før han."
+    },
+    "figures": {
+      "label": "BSU-grenser for {{name}}",
+      "year": "I år",
+      "total": "Totalt",
+      "left": "{{amount}} att",
+      "over": "Over grensa med {{amount}}",
+      "barYear": "{{pct}} % av grensa i år",
+      "barTotal": "{{pct}} % av totalgrensa"
     }
   },
   "cards": {
@@ -2739,6 +2749,15 @@
       "deleteCard": "Dei {{amount}} som er sette av til det, blir gjorde opp av betalinga eller frigjorde.",
       "deleteCarried": "Kortgjelda ({{held}}) blir flytta med pengane til {{name}}.",
       "deleteReleased": "Kortgjelda ({{held}}) blir frigjord."
+    },
+    "figures": {
+      "label": "Kreditt på {{name}}",
+      "owed": "Skuldig",
+      "inCredit": "Til gode",
+      "available": "Tilgjengeleg",
+      "pastLimit": "Over grensa",
+      "limit": "Grense {{amount}}",
+      "bar": "{{pct}} % av grensa brukt"
     }
   }
 }

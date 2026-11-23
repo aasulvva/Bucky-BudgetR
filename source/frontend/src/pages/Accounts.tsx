@@ -34,10 +34,14 @@ import {
 import { api } from "@/api/client";
 import { ApiError, unwrap } from "@/api/errors";
 import { BsuSetupDialog } from "@/components/accounts/BsuSetup";
-import { BsuLine, BsuLocked } from "@/components/accounts/BsuStatus";
-import { AccountBreakdown, CardBreakdown } from "@/components/accounts/AccountBreakdown";
+import { BsuLocked } from "@/components/accounts/BsuStatus";
+import {
+  AccountBreakdown,
+  BsuFigures,
+  CardBreakdown,
+  CardFigures,
+} from "@/components/accounts/AccountBreakdown";
 import { CardDebtForm } from "@/components/accounts/CardDebt";
-import { CardLine } from "@/components/accounts/CardStatus";
 import { AmountInput } from "@/components/AmountInput";
 import { DateTimeInput } from "@/components/DateTimeInput";
 import { ErrorAlert } from "@/components/ErrorAlert";
@@ -293,9 +297,9 @@ function AccountCard({
         <Text fz={24} fw={600}>
           {formatMoney(account.balance, account.currency)}
         </Text>
-        <BsuLine account={account} />
+        <BsuFigures account={account} />
         <BsuLocked account={account} onSetUp={onSetUpBsu} />
-        <CardLine account={account} />
+        <CardFigures card={account} />
         {breakdown}
         <Group
           gap="xs"

@@ -216,6 +216,9 @@
       "unallocated": "Unallocated",
       "setAsideOn": "Set aside on {{name}}",
       "notSetAside": "Not set aside"
+    },
+    "figures": {
+      "of": "of {{limit}}"
     }
   },
   "accountSetup": {
@@ -2587,8 +2590,6 @@
       "withdrawalBody": "This takes money out of a BSU account, which can cost you the tax deduction.",
       "record": "Record it anyway"
     },
-    "line": "{{deposited}} of {{limit}} this year · {{left}} left · Total {{total}} of {{totalLimit}}",
-    "lineOver": "{{deposited}} of {{limit}} this year · over the limit · Total {{total}} of {{totalLimit}}",
     "leftHint": "{{amount}} left this year",
     "leftHintAccount": "{{name}}: {{amount}} left this year (BSU)",
     "createHint": "A BSU is in NOK. Right after you create it, you set up its history: what you've deposited each year.",
@@ -2658,6 +2659,15 @@
       "yearRange": "A year from 2000 to 2100.",
       "yearTaken": "There's a rule from {{year}} already: saving changes it.",
       "deleteConfirm": "Delete the rule from {{year}}? Its years use the rule before it."
+    },
+    "figures": {
+      "label": "BSU limits for {{name}}",
+      "year": "This year",
+      "total": "In total",
+      "left": "{{amount}} left",
+      "over": "Over the limit by {{amount}}",
+      "barYear": "{{pct}} % of this year's limit",
+      "barTotal": "{{pct}} % of the total limit"
     }
   },
   "cards": {
@@ -2739,6 +2749,15 @@
       "deleteCard": "The {{amount}} set aside for it is cleared by the payment or released.",
       "deleteCarried": "Its card debt ({{held}}) moves with the money to {{name}}.",
       "deleteReleased": "Its card debt ({{held}}) is released."
+    },
+    "figures": {
+      "label": "Credit on {{name}}",
+      "owed": "Owed",
+      "inCredit": "In credit",
+      "available": "Available",
+      "pastLimit": "Past the limit",
+      "limit": "Limit {{amount}}",
+      "bar": "{{pct}} % of the limit used"
     }
   }
 }
