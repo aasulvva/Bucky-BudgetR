@@ -369,6 +369,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/bsu-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The BSU deposit limits
+         * @description Every rule, oldest first (#214).
+         */
+        get: operations["listBsuRules"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/bsu-rules/{year}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The year the rule applies from. */
+                year: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set the BSU limits from a year
+         * @description Creates or changes the rule. Users aren't notified. The change is
+         *     recorded as an audit entry (`bsu.rule_changed`).
+         */
+        put: operations["setBsuRule"];
+        post?: never;
+        /**
+         * Delete the BSU limits from a year
+         * @description The years it covered use the rule before it. The last rule can't be
+         *     deleted (409 `last_rule`). Recorded as an audit entry
+         *     (`bsu.rule_deleted`).
+         */
+        delete: operations["deleteBsuRule"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reports/pdf": {
         parameters: {
             query?: never;
@@ -539,6 +589,8 @@ export interface paths {
          * @description Creates an account. A non-zero `opening_balance` is recorded as an
          *     Opening Balance (OPB) transaction at `opening_at` (default now).
          *     Names must be unique among the user's accounts (409 `name_taken`).
+         *     A BSU account must be in NOK (400 `bsu_currency`), and is locked
+         *     until its history is set up (`setUpBsuHistory`).
          */
         post: operations["createAccount"];
         delete?: never;
@@ -565,7 +617,9 @@ export interface paths {
         head?: never;
         /**
          * Rename an account or change its type
-         * @description The currency can't be changed.
+         * @description The currency can't be changed. Only a NOK account can become a BSU
+         *     (400 `bsu_currency`); a type change to or from BSU clears its history
+         *     setup, so a BSU is locked until it's set up again (#214).
          */
         patch: operations["updateAccount"];
         trace?: never;
@@ -613,6 +667,41 @@ export interface paths {
          *     reshares an underfunded account by hand, for example after a refill.
          */
         post: operations["reallocateAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/accounts/{accountId}/bsu-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * What a BSU account's history setup starts from
+         * @description What the app has recorded on the BSU account per year (#214). 400 `not_bsu` for another type.
+         */
+        get: operations["getBsuHistory"];
+        put?: never;
+        /**
+         * Set up a BSU account's history
+         * @description Rebuilds the BSU account from its real history (#214), once, all or
+         *     nothing: its opening balances become 0, each year gets what the app
+         *     is missing (a deposit income, an income tagged `interest` and a
+         *     withdrawal expense, described *BSU history <year>* and dated 31 Dec
+         *     12:00 Norwegian time, or now this year), and a balance adjustment
+         *     (BLA) makes the balance `balance`. The account is no longer locked.
+         *
+         *     400 `not_bsu` for another type or currency, 400 `invalid_request`
+         *     for missing years or amounts below what's recorded, and 409
+         *     `bsu_set_up` when it's set up already.
+         */
+        post: operations["setUpBsuHistory"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1095,6 +1184,11 @@ export interface paths {
          *
          *     An income can trigger the refill of its account's *on income*
          *     buckets: see `triggers_refill`.
+         *
+         *     A deposit that takes a BSU account over its yearly or total limit
+         *     gets 409 `bsu_over_limit`, and money out of a BSU 409
+         *     `bsu_withdrawal` (#214), unless `bsu_confirmed` is true. Interest (an
+         *     income tagged `interest`) isn't a deposit.
          */
         post: operations["createTransaction"];
         delete?: never;
@@ -1200,6 +1294,10 @@ export interface paths {
          *     and BLA can be corrected (409 `not_correctable`), and not after a
          *     reversal (409 `already_reversed`). A correction that changes nothing
          *     gets 400 `no_change`.
+         *
+         *     A correction or move that adds to a BSU deposit over the limits, or
+         *     takes more out of a BSU, gets 409 `bsu_over_limit` or
+         *     `bsu_withdrawal` unless `bsu_confirmed` is true (#214).
          */
         post: operations["correctTransaction"];
         delete?: never;
@@ -2006,6 +2104,12 @@ export interface paths {
          *       amount this cycle (#234), with `account_id`, `cycle_id`,
          *       `target_id` (null for the distributor), `at`, and the missing
          *       `amount` and `currency`.
+         *     - `bsu_over_limit`: a BSU account whose deposits this year are over
+         *       the yearly or total limit (#214), with `account_id`, `at` (the
+         *       year's start) and how much over as `amount` and `currency`.
+         *     - `bsu_withdrawal`: money a schedule took out of a BSU account this
+         *       year (#214), with `account_id`, `at` and the `amount` and
+         *       `currency` taken out.
          */
         get: operations["listNotifications"];
         put?: never;
@@ -2598,6 +2702,95 @@ export interface components {
             expected_income: (string & components["schemas"]["Amount"]) | null;
             /** Format: date-time */
             created_at: string;
+            /** @description A BSU account's deposits against this year's limits (#214). Null for other types. */
+            bsu: components["schemas"]["BSUStatus"] | null;
+        };
+        /**
+         * @description A BSU account's deposits (#214, spec §3): incomes and transfers into
+         *     it, not interest (an income tagged `interest`), the opening balance
+         *     or balance adjustments. Years are calendar years in Norwegian time.
+         */
+        BSUStatus: {
+            /** @description The year now, in Norwegian time. */
+            year: number;
+            yearly_limit: components["schemas"]["Amount"];
+            total_limit: components["schemas"]["Amount"];
+            /** @description What's deposited this year. */
+            deposited_year: components["schemas"]["Amount"];
+            /** @description What's deposited in all years. */
+            deposited_total: components["schemas"]["Amount"];
+            /** @description What may still be deposited this year, at least 0. */
+            left_year: components["schemas"]["Amount"];
+            /** @description What may still be deposited in total, at least 0. */
+            left_total: components["schemas"]["Amount"];
+            /** @description The deposits are over the yearly or the total limit. */
+            over: boolean;
+            /**
+             * @description The history isn't set up yet (`setUpBsuHistory`). An account in
+             *     another currency than NOK stays locked: change its type or
+             *     delete it.
+             */
+            locked: boolean;
+            /** @description The year it was opened, from the history setup. Null before it. */
+            opened_year: number | null;
+        };
+        /**
+         * @description The deposit limits from a year on. A year uses the rule with the
+         *     latest `from_year` at or before it, or the first rule for years
+         *     before them all.
+         */
+        BSURule: {
+            from_year: number;
+            /** @description The most that may be deposited in a calendar year. Above 0. */
+            yearly_limit: components["schemas"]["Amount"];
+            /** @description The most that may be deposited in all. At least `yearly_limit`. */
+            total_limit: components["schemas"]["Amount"];
+            /** Format: date-time */
+            modified_at: string;
+        };
+        BSURuleUpdate: {
+            yearly_limit: components["schemas"]["Amount"];
+            total_limit: components["schemas"]["Amount"];
+        };
+        BSUSums: {
+            /** @description Incomes and transfers into the account, not interest. */
+            deposits: components["schemas"]["Amount"];
+            /** @description Incomes tagged `interest`. */
+            interest: components["schemas"]["Amount"];
+            /** @description Expenses and transfers out, as a positive amount. */
+            withdrawals: components["schemas"]["Amount"];
+        };
+        BSUYear: {
+            year: number;
+            deposits: components["schemas"]["Amount"];
+            interest: components["schemas"]["Amount"];
+            withdrawals: components["schemas"]["Amount"];
+        };
+        /** @description What the app has recorded on a BSU account, for its history setup. */
+        BSUHistory: {
+            /** @description The latest year it can have been opened in, the year of its first deposit, interest or withdrawal in the app, or this year. */
+            latest_opened_year: number;
+            /** @description Each year from `latest_opened_year` to this year, with what's recorded. */
+            years: {
+                year: number;
+                recorded: components["schemas"]["BSUSums"];
+            }[];
+            /** @description What its opening balances add up to. The setup brings them to 0. */
+            opening: components["schemas"]["Amount"];
+            /** @description The balance now. */
+            balance: components["schemas"]["Amount"];
+            /** Format: date-time */
+            set_up_at: string | null;
+            /** @description The deposit limits, oldest first. */
+            rules: components["schemas"]["BSURule"][];
+        };
+        BSUSetUp: {
+            /** @description The year it was opened, at most `latest_opened_year`. */
+            opened_year: number;
+            /** @description Every year from `opened_year` to this year, in order, as the bank shows them. Each amount is at least what's recorded. */
+            years: components["schemas"]["BSUYear"][];
+            /** @description The balance now, at the bank. */
+            balance: components["schemas"]["Amount"];
         };
         CounterpartyRename: {
             account_id: components["schemas"]["AccountId"];
@@ -3734,6 +3927,8 @@ export interface components {
              *     cycle (409 `refill_unavailable`).
              */
             triggers_refill?: boolean;
+            /** @description Records it even when it takes a BSU account over its deposit limits or money out of one (409 `bsu_over_limit`, `bsu_withdrawal`). */
+            bsu_confirmed?: boolean;
             /** @description The account of an income or expense, or the sending account of a transfer. */
             account_id: components["schemas"]["AccountId"];
             /** @description The receiving account of a transfer. */
@@ -3795,6 +3990,8 @@ export interface components {
              *     triggered in the active cycle.
              */
             triggers_refill?: boolean;
+            /** @description As when creating (409 `bsu_over_limit`, `bsu_withdrawal`). */
+            bsu_confirmed?: boolean;
         };
         /** @description RFC 9457 problem details. */
         Problem: {
@@ -4005,7 +4202,7 @@ export interface components {
             next_cursor: string | null;
         };
         /** @enum {string} */
-        NotificationKind: "approval_queue" | "upcoming_bill" | "investment_balance" | "bucket_uncovered" | "savings_transfer" | "savings_short";
+        NotificationKind: "approval_queue" | "upcoming_bill" | "investment_balance" | "bucket_uncovered" | "savings_transfer" | "savings_short" | "bsu_over_limit" | "bsu_withdrawal";
         /**
          * @description A reminder or to-do. The client words it from `kind` and the fields
          *     that kind uses (see `listNotifications`); the others are null.
@@ -4019,8 +4216,9 @@ export interface components {
             kind: components["schemas"]["NotificationKind"];
             /**
              * @description `alert` for an overdue approval or an uncovered bucket,
-             *     `warning` for an approval that isn't overdue or a short savings
-             *     budget entry, else `info`.
+             *     `warning` for an approval that isn't overdue, a short savings
+             *     budget entry or a BSU over its limit or withdrawn from, else
+             *     `info`.
              * @enum {string}
              */
             severity: "info" | "warning" | "alert";
@@ -4041,7 +4239,7 @@ export interface components {
             cycle_id: string | null;
             /** @description The savings target. */
             target_id: string | null;
-            /** @description The bill's amount, what the bucket is missing (TF − CAF), what's held for the savings target, or what a savings budget entry fell short by. */
+            /** @description The bill's amount, what the bucket is missing (TF − CAF), what's held for the savings target, what a savings budget entry fell short by, what a BSU is over its limit by, or what a schedule took out of a BSU. */
             amount: string | null;
             currency: string | null;
         };
@@ -4067,6 +4265,10 @@ export interface components {
             savings_transfer?: boolean | null;
             /** @description Savings budget amounts the unallocated money fell short of. Null means true. */
             savings_short?: boolean | null;
+            /** @description BSU accounts over their deposit limits this year (#214). Null means true. */
+            bsu_over_limit?: boolean | null;
+            /** @description Money a schedule took out of a BSU account this year (#214). Null means true. */
+            bsu_withdrawal?: boolean | null;
         };
     };
     responses: {
@@ -4600,6 +4802,86 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    listBsuRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rules. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BSURule"][];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    setBsuRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The year the rule applies from. */
+                year: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BSURuleUpdate"];
+            };
+        };
+        responses: {
+            /** @description The rule. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BSURule"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteBsuRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The year the rule applies from. */
+                year: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
     exportReportPdf: {
         parameters: {
             query?: never;
@@ -4899,6 +5181,63 @@ export interface operations {
             };
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getBsuHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The recorded history. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BSUHistory"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    setUpBsuHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BSUSetUp"];
+            };
+        };
+        responses: {
+            /** @description The account, set up. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };

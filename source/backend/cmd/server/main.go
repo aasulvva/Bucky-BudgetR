@@ -36,6 +36,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/accounts"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/allocation"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/auth"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/bsu"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/buckets"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/config"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/cycles"
@@ -178,6 +179,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, out, lo
 		Cycles:         cyclesSvc,
 		Buckets:        bucketsSvc,
 		Savings:        savingsSvc,
+		BSU:            bsu.NewService(pool, ledgerSvc, bsu.Options{Now: now}),
 		Transactions:   transactionsSvc,
 		Refills:        refills,
 		Schedules:      schedulesSvc,

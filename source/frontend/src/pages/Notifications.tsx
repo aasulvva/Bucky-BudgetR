@@ -6,6 +6,8 @@ import {
   IconCheck,
   IconChecklist,
   IconCoinOff,
+  IconHomeDown,
+  IconHomeExclamation,
   IconPigMoney,
   IconTrendingUp,
   IconX,
@@ -30,6 +32,8 @@ const ICONS: Record<NotificationKind, Icon> = {
   bucket_uncovered: IconAlertTriangle,
   savings_transfer: IconPigMoney,
   savings_short: IconCoinOff,
+  bsu_over_limit: IconHomeExclamation,
+  bsu_withdrawal: IconHomeDown,
 };
 
 const COLORS: Record<Notification["severity"], string> = {

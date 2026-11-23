@@ -223,6 +223,41 @@ describe("Notifications", () => {
     ).toBeInTheDocument();
   });
 
+  it("says when a BSU is over its limit or a schedule took money out (#214)", async () => {
+    apiMock.on("GET /api/v1/notifications", {
+      body: {
+        items: [
+          notification({
+            key: `bsu-over:${main.id}:2026`,
+            kind: "bsu_over_limit",
+            severity: "warning",
+            account_id: main.id,
+            at: "2025-12-31T23:00:00Z",
+            amount: "2500.00",
+            currency: "NOK",
+          }),
+          notification({
+            key: "bsu-withdrawal:100000100100000000000002",
+            kind: "bsu_withdrawal",
+            severity: "warning",
+            account_id: main.id,
+            at: "2026-10-11T12:00:00Z",
+            amount: "100.00",
+            currency: "NOK",
+          }),
+        ],
+      },
+    });
+    renderRoute("/notifications");
+    const [over, withdrawal] = (await rows()).map((r) => within(r));
+    if (!over || !withdrawal) throw new Error("two rows");
+    expect(await over.findByText(`${main.name} is over its BSU limit`)).toBeInTheDocument();
+    expect(over.getByText(/This year's deposits are NOK.2,500\.00 over/)).toBeInTheDocument();
+    expect(over.getByRole("link", { name: "Open accounts" })).toHaveAttribute("href", "/accounts");
+    expect(withdrawal.getByText(`Money taken out of ${main.name}`)).toBeInTheDocument();
+    expect(withdrawal.getByText(/took NOK.100\.00 out of the BSU account/)).toBeInTheDocument();
+  });
+
   it("says when there's nothing to do", async () => {
     apiMock.on("GET /api/v1/notifications", { body: { items: [] } });
     renderRoute("/notifications");

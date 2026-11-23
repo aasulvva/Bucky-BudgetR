@@ -75,7 +75,7 @@ func TestColumns(t *testing.T) {
 	}
 }
 
-const exportedColumns = `bank_accounts: account_type, bank, created_at, currency, deleted, expected_income, id, modified_at, name, user_id
+const exportedColumns = `bank_accounts: account_type, bank, bsu_opened_year, bsu_set_up_at, created_at, currency, deleted, expected_income, id, modified_at, name, user_id
 cycles: created_at, end_at, generated, id, modified_at, start_at, state, user_id
 buckets: caf, cap_amount, cap_mode, cap_multiplier, created_at, deleted, id, importance, keep_funds, modified_at, name, negative_tf, overflow_destination, overflow_target_id, priority, refill_amount, refill_mode, source_account_id, user_id
 savings_holders: account_id, bucket_id, created_at, deleted, goal, hold_mode, id, kind, min_amount, modified_at, name, note, user_id

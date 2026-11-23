@@ -27,6 +27,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shopspring/decimal"
 
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/bsu"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/buckets"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/savings"
@@ -55,12 +56,19 @@ const (
 	// KindSavingsShort is a savings budget entry that reserved less than its
 	// amount in the active cycle, for want of unallocated money (#234).
 	KindSavingsShort Kind = "savings_short"
+	// KindBSUOverLimit is a BSU account whose deposits this year are over
+	// the yearly or total limit (#214).
+	KindBSUOverLimit Kind = "bsu_over_limit"
+	// KindBSUWithdrawal is money a schedule took out of a BSU account this
+	// year (#214).
+	KindBSUWithdrawal Kind = "bsu_withdrawal"
 )
 
 // keyPrefix is each kind's key prefix.
 var keyPrefix = map[Kind]string{
 	KindQueue: "queue:", KindBill: "bill:", KindBalance: "balance:", KindBucket: "bucket:",
 	KindSavings: "savings:", KindSavingsShort: "savings-short:",
+	KindBSUOverLimit: "bsu-over:", KindBSUWithdrawal: "bsu-withdrawal:",
 }
 
 // Severity orders notifications: alerts first.
@@ -94,8 +102,9 @@ type Notification struct {
 	BucketID       string
 	CycleID        string
 	TargetID       string
-	// Amount is the bill's amount, what the bucket is missing, or what's
-	// held for the savings target.
+	// Amount is the bill's amount, what the bucket is missing, what's held
+	// for the savings target, what a BSU is over its limit by, or what was
+	// taken out of it.
 	Amount   decimal.NullDecimal
 	Currency string
 }
@@ -110,6 +119,8 @@ type Settings struct {
 	BucketUncovered   *bool `json:"bucket_uncovered"`
 	SavingsTransfer   *bool `json:"savings_transfer"`
 	SavingsShort      *bool `json:"savings_short"`
+	BSUOverLimit      *bool `json:"bsu_over_limit"`
+	BSUWithdrawal     *bool `json:"bsu_withdrawal"`
 }
 
 // On reports whether a kind shows.
@@ -117,7 +128,7 @@ func (s Settings) On(k Kind) bool {
 	v := map[Kind]*bool{
 		KindQueue: s.ApprovalQueue, KindBill: s.UpcomingBills,
 		KindBalance: s.InvestmentBalance, KindBucket: s.BucketUncovered, KindSavings: s.SavingsTransfer,
-		KindSavingsShort: s.SavingsShort,
+		KindSavingsShort: s.SavingsShort, KindBSUOverLimit: s.BSUOverLimit, KindBSUWithdrawal: s.BSUWithdrawal,
 	}[k]
 	return v == nil || *v
 }
@@ -283,6 +294,7 @@ func (s *Service) work(ctx context.Context, q *sqlc.Queries, userID string, sett
 	}{
 		{KindQueue, s.queue}, {KindBill, s.bills}, {KindBalance, s.balances}, {KindBucket, s.uncovered},
 		{KindSavings, s.held}, {KindSavingsShort, s.short},
+		{KindBSUOverLimit, s.bsuOver}, {KindBSUWithdrawal, s.bsuWithdrawals},
 	}
 	for _, step := range steps {
 		if !settings.On(step.kind) {
@@ -481,6 +493,58 @@ func (s *Service) short(ctx context.Context, q *sqlc.Queries, userID string, _ S
 			n.At = *e.ThisCycle.At
 		}
 		out = append(out, n)
+	}
+	return out, nil
+}
+
+// bsuOver is one notification per BSU account whose deposits this year are
+// over the yearly or total limit (#214), with how much, keyed by account and
+// year.
+func (s *Service) bsuOver(ctx context.Context, q *sqlc.Queries, userID string, _ Settings) ([]Notification, error) {
+	accounts, err := q.ListAccounts(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	now := s.now()
+	statuses, err := bsu.Statuses(ctx, s.pool, userID, accounts, now)
+	if err != nil {
+		return nil, err
+	}
+	out := []Notification{}
+	for _, a := range accounts {
+		st, ok := statuses[a.ID]
+		if !ok || !st.Over {
+			continue
+		}
+		over := decimal.Max(st.DepositedYear.Sub(st.YearlyLimit), st.DepositedTotal.Sub(st.TotalLimit))
+		start, _ := bsu.YearBounds(st.Year)
+		out = append(out, Notification{
+			Key:  keyPrefix[KindBSUOverLimit] + a.ID + ":" + strconv.Itoa(st.Year),
+			Kind: KindBSUOverLimit, Severity: Warning, At: start, AccountID: a.ID,
+			Amount: decimal.NullDecimal{Decimal: over, Valid: true}, Currency: a.Currency,
+		})
+	}
+	return out, nil
+}
+
+// bsuWithdrawals is one notification per withdrawal a schedule recorded
+// from a BSU account this year (#214), keyed by the transaction.
+func (s *Service) bsuWithdrawals(ctx context.Context, q *sqlc.Queries, userID string, _ Settings) ([]Notification, error) {
+	now := s.now()
+	from, _ := bsu.YearBounds(bsu.Year(now))
+	rows, err := q.ListScheduledWithdrawals(ctx, sqlc.ListScheduledWithdrawalsParams{
+		UserID: userID, FromAt: from, ToAt: now.Add(time.Microsecond),
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Notification, len(rows))
+	for i, r := range rows {
+		out[i] = Notification{
+			Key:  keyPrefix[KindBSUWithdrawal] + r.ID,
+			Kind: KindBSUWithdrawal, Severity: Warning, At: r.TransactionAt.UTC(), AccountID: r.AccountID,
+			Amount: decimal.NullDecimal{Decimal: r.Net.Neg(), Valid: true}, Currency: bsu.Currency,
+		}
 	}
 	return out, nil
 }

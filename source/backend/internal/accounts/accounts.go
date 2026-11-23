@@ -23,6 +23,7 @@ import (
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/allocation"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/balance"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/bsu"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ids"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
@@ -48,6 +49,9 @@ var (
 	ErrBalanceNotZero = errors.New("the account still has money in it")
 	// ErrHasBuckets is wrapped by *HasBucketsError.
 	ErrHasBuckets = errors.New("buckets still use the account as their source")
+	// ErrBSUCurrency means a BSU account would be in another currency than
+	// NOK (#214).
+	ErrBSUCurrency = errors.New("a BSU account must be in NOK")
 )
 
 // BalanceNotZeroError means an account can't be deleted until its remaining
@@ -100,6 +104,9 @@ type Account struct {
 	// (spec §9). Invalid until entered.
 	ExpectedIncome decimal.NullDecimal
 	CreatedAt      time.Time
+	// BSU is a BSU account's deposits against this year's limits (#214);
+	// nil for other types.
+	BSU *bsu.Status
 }
 
 // New describes an account to create.
@@ -230,9 +237,13 @@ func (s *Service) List(ctx context.Context, userID string) ([]Account, error) {
 	if err != nil {
 		return nil, err
 	}
+	statuses, err := bsu.Statuses(ctx, s.pool, userID, rows, s.now())
+	if err != nil {
+		return nil, err
+	}
 	out := make([]Account, len(rows))
 	for i, r := range rows {
-		out[i] = toAccount(r, money[r.ID])
+		out[i] = toAccount(r, money[r.ID], statuses)
 	}
 	return out, nil
 }
@@ -263,6 +274,9 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Account, er
 	}
 	if err := money.ValidCurrency(n.Currency); err != nil {
 		return Account{}, fmt.Errorf("%w: %w", ErrInvalid, err)
+	}
+	if n.Type == sqlc.AccountTypeBsu && n.Currency != bsu.Currency {
+		return Account{}, ErrBSUCurrency
 	}
 	if err := money.Valid(n.OpeningBalance); err != nil {
 		return Account{}, fmt.Errorf("%w: opening balance: %w", ErrInvalid, err)
@@ -296,8 +310,8 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Account, er
 				return fmt.Errorf("record opening balance: %w", err)
 			}
 		}
-		out = toAccount(row, balance.NewMoney(n.OpeningBalance, decimal.Zero, decimal.Zero))
-		return nil
+		out, err = s.get(ctx, tx, userID, row.ID)
+		return err
 	})
 	if err != nil {
 		return Account{}, err
@@ -335,6 +349,9 @@ func (s *Service) Update(ctx context.Context, userID, id string, c Changes) (Acc
 				return fmt.Errorf("%w: account type %q", ErrInvalid, *c.Type)
 			}
 			params.AccountType = *c.Type
+			if params.AccountType == sqlc.AccountTypeBsu && row.Currency != bsu.Currency {
+				return ErrBSUCurrency
+			}
 		}
 		if c.ExpectedIncome != nil {
 			if e := *c.ExpectedIncome; e.Valid {
@@ -614,15 +631,23 @@ func (s *Service) get(ctx context.Context, db sqlc.DBTX, userID, id string) (Acc
 	if err != nil {
 		return Account{}, err
 	}
-	return toAccount(row, money[id]), nil
+	statuses, err := bsu.Statuses(ctx, db, userID, []sqlc.BankAccount{row}, s.now())
+	if err != nil {
+		return Account{}, err
+	}
+	return toAccount(row, money[id], statuses), nil
 }
 
-func toAccount(r sqlc.BankAccount, m balance.Money) Account {
-	return Account{
+func toAccount(r sqlc.BankAccount, m balance.Money, statuses map[string]bsu.Status) Account {
+	a := Account{
 		ID: r.ID, Name: r.Name, Type: r.AccountType, Currency: r.Currency, Bank: r.Bank,
 		Balance: m.Balance, Unallocated: m.Unallocated, Reserved: m.Reserved, ReservedUncovered: m.Uncovered(),
 		ExpectedIncome: r.ExpectedIncome, CreatedAt: r.CreatedAt,
 	}
+	if st, ok := statuses[r.ID]; ok {
+		a.BSU = &st
+	}
+	return a
 }
 
 func checkName(name string) (string, error) {

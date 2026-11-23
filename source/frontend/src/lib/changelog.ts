@@ -16,6 +16,32 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.29.01",
+    date: "2026-11-23",
+    title: {
+      en: "BSU limits, behind the scenes",
+      nb: "BSU-grenser, bak kulissene",
+      nn: "BSU-grenser, bak kulissane",
+    },
+    changes: {
+      en: [
+        "The groundwork for BSU accounts: they're in NOK only, and a deposit over this year's or the total limit, or money taken out, asks you to confirm it. Interest doesn't count as a deposit.",
+        "New notifications when a BSU account is over its limit, or a scheduled transaction took money out of one. You can switch them off in Settings.",
+        "The setup of a BSU's history, and its screens, come in the next update.",
+      ],
+      nb: [
+        "Grunnlaget for BSU-kontoer: de er bare i NOK, og et innskudd over årets eller den samlede grensen, eller et uttak, ber deg bekrefte det. Renter teller ikke som innskudd.",
+        "Nye varsler når en BSU-konto er over grensen, eller en planlagt transaksjon tok penger ut av en. Du kan slå dem av i Innstillinger.",
+        "Oppsettet av BSU-historikken, og skjermbildene, kommer i neste oppdatering.",
+      ],
+      nn: [
+        "Grunnlaget for BSU-kontoar: dei er berre i NOK, og eit innskot over årets eller den samla grensa, eller eit uttak, ber deg stadfeste det. Renter tel ikkje som innskot.",
+        "Nye varsel når ein BSU-konto er over grensa, eller ein planlagd transaksjon tok pengar ut av ein. Du kan slå dei av i Innstillingar.",
+        "Oppsettet av BSU-historikken, og skjermbileta, kjem i neste oppdatering.",
+      ],
+    },
+  },
+  {
     version: "v2.29.00",
     date: "2026-11-22",
     title: {
