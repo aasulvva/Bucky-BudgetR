@@ -430,3 +430,24 @@ export function budgetTargets(
   if (!account) return [];
   return targets.filter((x) => x.currency === account.currency && x.account_id !== account.id);
 }
+
+/**
+ * A BSU target's room this year (#236): what it may still be given beyond
+ * what's held, which the distributor, overflow and the savings budget never
+ * pass. Null for other targets.
+ */
+export function bsuRoom(target: SavingsTarget): { text: string; full: boolean } | null {
+  if (target.bsu_room === null) return null;
+  const full = compareAmounts(target.bsu_room, "0") <= 0;
+  return {
+    full,
+    text: full
+      ? i18n.t("savings.bsuFull")
+      : i18n.t("savings.bsuRoom", { amount: formatMoney(target.bsu_room, target.currency) }),
+  };
+}
+
+/** Whether adding the amount is more than a BSU target's room this year. */
+export function pastBsuRoom(target: SavingsTarget, amount: string | null): boolean {
+  return target.bsu_room !== null && amount !== null && compareAmounts(amount, target.bsu_room) > 0;
+}

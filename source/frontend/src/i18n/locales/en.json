@@ -855,7 +855,8 @@
       "previewDirect": "{{amount}} goes straight into {{name}} from {{account}}'s unallocated money.",
       "pastGoal": "That goes past the goal of {{goal}}, which is fine.",
       "added": "{{amount}} held for {{name}}.",
-      "addedDirect": "{{amount}} added to {{name}}."
+      "addedDirect": "{{amount}} added to {{name}}.",
+      "pastBsuRoom": "More than the {{amount}} left this year. Done may go over the BSU limit."
     },
     "done": {
       "title": "Done: {{name}}",
@@ -948,7 +949,9 @@
         "atCycleEnd": "Runs at cycle end.",
         "noCycle": "Runs in an active cycle."
       }
-    }
+    },
+    "bsuRoom": "{{amount}} left this year (BSU)",
+    "bsuFull": "Full for this year (BSU)"
   },
   "savingsSetup": {
     "intro": "A savings target is a Fully manual bucket, or a savings, BSU, fund or investment account, with a goal. Its progress counts the bucket's funds or the account's balance, plus what's held for it.",
@@ -1044,7 +1047,8 @@
       "nobodyTakes": "No target would get anything: check the rules.",
       "ruleCount_one": "{{count}} distributor rule",
       "ruleCount_other": "{{count}} distributor rules",
-      "editRules": "Edit in the distributor"
+      "editRules": "Edit in the distributor",
+      "bsuCap": "The distributor gives it no more this year"
     },
     "deleteRules_one": "Its distributor rule is deleted.",
     "deleteRules_other": "Its {{count}} distributor rules are deleted.",

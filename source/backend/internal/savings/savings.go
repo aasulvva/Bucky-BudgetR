@@ -119,7 +119,11 @@ type Target struct {
 	// Current is the bucket's TF or the account's balance.
 	Current decimal.Decimal
 	// Held is the money held for the target, per source account.
-	Held       []Held
+	Held []Held
+	// BSURoom is what a BSU account target may still be given this year
+	// beyond what's held (bsu.Room, #236): a cap, like the goal. Nil for
+	// other targets and a locked BSU, which takes nothing (#214).
+	BSURoom    *decimal.Decimal
 	CreatedAt  time.Time
 	ModifiedAt time.Time
 }
@@ -169,6 +173,9 @@ type Done struct {
 	// future, nor before the funds were held.
 	At          time.Time
 	Description string
+	// BSUConfirmed records it even when it takes a BSU account over its
+	// deposit limits, or money out of one (#214, #236).
+	BSUConfirmed bool
 }
 
 // Options configures a Service.
@@ -196,12 +203,12 @@ func NewService(pool *pgxpool.Pool, l *ledger.Ledger, opts Options) *Service {
 
 // List returns the user's targets, oldest first.
 func (s *Service) List(ctx context.Context, userID string) ([]Target, error) {
-	return list(ctx, s.pool, userID)
+	return s.list(ctx, s.pool, userID)
 }
 
 // Get returns one of the user's targets.
 func (s *Service) Get(ctx context.Context, userID, id string) (Target, error) {
-	return get(ctx, s.pool, userID, id)
+	return s.get(ctx, s.pool, userID, id)
 }
 
 // Create creates a target.
@@ -271,7 +278,7 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Target, err
 		if err != nil {
 			return err
 		}
-		out, err = get(ctx, tx, userID, id)
+		out, err = s.get(ctx, tx, userID, id)
 		return err
 	})
 	if err != nil {
@@ -316,7 +323,7 @@ func (s *Service) Update(ctx context.Context, userID, id string, c Changes) (Tar
 		if _, err := sqlc.New(tx).UpdateSavingsTarget(ctx, p); err != nil {
 			return err
 		}
-		out, err = get(ctx, tx, userID, id)
+		out, err = s.get(ctx, tx, userID, id)
 		return err
 	})
 	if err != nil {
@@ -385,7 +392,7 @@ func (s *Service) Add(ctx context.Context, userID, id, accountID string, amount 
 		if _, err := s.ledger.Record(ctx, tx, e); err != nil {
 			return err
 		}
-		out, err = get(ctx, tx, userID, id)
+		out, err = s.get(ctx, tx, userID, id)
 		return err
 	})
 	if err != nil {
@@ -454,10 +461,20 @@ func (s *Service) Done(ctx context.Context, userID, id string, d Done) (Target, 
 				}
 			}
 		}
+		// The transfer into or out of a BSU, as a transaction's (#236).
+		if !d.BSUConfirmed && len(e.BankLines) > 0 {
+			changes := make([]bsu.Change, 0, len(e.BankLines))
+			for _, l := range e.BankLines {
+				changes = append(changes, bsu.Change{AccountID: l.AccountID, Before: decimal.Zero, After: l.Amount})
+			}
+			if err := bsu.Check(ctx, tx, userID, sqlc.TransactionTypeTRF, nil, d.At, changes); err != nil {
+				return err
+			}
+		}
 		if _, err := s.ledger.Record(ctx, tx, e); err != nil {
 			return err
 		}
-		out, err = get(ctx, tx, userID, id)
+		out, err = s.get(ctx, tx, userID, id)
 		return err
 	})
 	if err != nil {
@@ -491,7 +508,7 @@ func (s *Service) Clear(ctx context.Context, userID, id, accountID string, amoun
 			return err
 		}
 		var err error
-		out, err = get(ctx, tx, userID, id)
+		out, err = s.get(ctx, tx, userID, id)
 		return err
 	})
 	if err != nil {
@@ -728,8 +745,8 @@ func notFound(err error, what, id string) error {
 	return err
 }
 
-func get(ctx context.Context, db sqlc.DBTX, userID, id string) (Target, error) {
-	all, err := list(ctx, db, userID)
+func (s *Service) get(ctx context.Context, db sqlc.DBTX, userID, id string) (Target, error) {
+	all, err := s.list(ctx, db, userID)
 	if err != nil {
 		return Target{}, err
 	}
@@ -740,7 +757,7 @@ func get(ctx context.Context, db sqlc.DBTX, userID, id string) (Target, error) {
 	return all[i], nil
 }
 
-func list(ctx context.Context, db sqlc.DBTX, userID string) ([]Target, error) {
+func (s *Service) list(ctx context.Context, db sqlc.DBTX, userID string) ([]Target, error) {
 	q := sqlc.New(db)
 	rows, err := q.ListSavingsTargets(ctx, userID)
 	if err != nil {
@@ -759,6 +776,23 @@ func list(ctx context.Context, db sqlc.DBTX, userID string) ([]Target, error) {
 		return nil, err
 	}
 	covered := coverage(held, money)
+	// Each BSU account target's status this year (#236).
+	var bsuAccounts []sqlc.BankAccount
+	if slices.ContainsFunc(rows, func(r sqlc.ListSavingsTargetsRow) bool { return r.AccountID.Valid }) {
+		all, err := q.ListAccounts(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+		for _, a := range all {
+			if a.AccountType == sqlc.AccountTypeBsu {
+				bsuAccounts = append(bsuAccounts, a)
+			}
+		}
+	}
+	statuses, err := bsu.Statuses(ctx, db, userID, bsuAccounts, s.now())
+	if err != nil {
+		return nil, err
+	}
 
 	out := make([]Target, len(rows))
 	for i, r := range rows {
@@ -780,6 +814,10 @@ func list(ctx context.Context, db sqlc.DBTX, userID string) ([]Target, error) {
 			if h.HolderID == r.ID {
 				t.Held = append(t.Held, Held{AccountID: h.AccountID, Amount: h.Held, Covered: covered[h.HolderID+" "+h.AccountID]})
 			}
+		}
+		if st, ok := statuses[t.AccountID]; ok && !st.Locked {
+			room := bsu.Room(st, t.HeldTotal())
+			t.BSURoom = &room
 		}
 		out[i] = t
 	}

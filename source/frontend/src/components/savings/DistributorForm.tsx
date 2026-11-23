@@ -43,6 +43,7 @@ import {
   distributorHeldOn,
   distributorSources,
   gapsOf,
+  bsuRoom,
   goalLimit,
   position,
   rangeProblem,
@@ -213,6 +214,7 @@ function TargetRules({
   const gaps = gapsOf(rules);
   const cap = goalLimit(bucket);
   const end = rulesEnd(rules);
+  const room = bsuRoom(target);
 
   return (
     <Stack gap="xs" component="section" aria-label={target.name}>
@@ -225,6 +227,11 @@ function TargetRules({
           })}
         </Text>
       </Group>
+      {room && (
+        <Text size="xs" c={room.full ? "var(--mantine-color-orange-text)" : "dimmed"} mt={-6}>
+          {room.text} · {t("savingsSetup.distributor.bsuCap")}
+        </Text>
+      )}
       {rules.length === 0 && editing !== "new" && (
         <Text size="sm" c="dimmed">
           {t("savingsSetup.distributor.noRules")}

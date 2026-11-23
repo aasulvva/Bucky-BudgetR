@@ -54,6 +54,10 @@ func TestSavingsDistributorAPI(t *testing.T) {
 		return decode[api.SavingsTarget](t, w)
 	}
 	bt, ht := target(buffer, "5000.00"), target(home, "5000.00")
+	// A BSU target says what it may still be given this year (#236).
+	if !bt.BsuRoom.IsNull() || ht.BsuRoom.MustGet() != "27500.00" {
+		t.Errorf("rooms %v, %v", bt.BsuRoom, ht.BsuRoom)
+	}
 
 	w := do(http.MethodGet, "/api/v1/savings/distributor", nil)
 	expect(t, "get", w, http.StatusOK, "")
@@ -115,6 +119,20 @@ func TestSavingsDistributorAPI(t *testing.T) {
 	if rules := decode[[]api.SavingsRule](t, w); len(rules) != 1 || rules[0].TargetId != ht.Id {
 		t.Errorf("rules %+v", rules)
 	}
+
+	// Done past the BSU's limit asks first (#236).
+	expect(t, "fill the BSU", do(http.MethodPost, "/api/v1/transactions", map[string]any{"type": "INC", "account_id": home.Id, "amount": "27500.00"}),
+		http.StatusCreated, "")
+	w = do(http.MethodGet, "/api/v1/savings/targets/"+ht.Id, nil)
+	expect(t, "home", w, http.StatusOK, "")
+	got := decode[api.SavingsTarget](t, w)
+	if got.BsuRoom.MustGet() != "0.00" || len(got.Held) != 1 {
+		t.Fatalf("home once full %+v", got)
+	}
+	done := map[string]any{"account_id": main.Id, "amount": got.Held[0].Amount}
+	expect(t, "done past the limit", do(http.MethodPost, "/api/v1/savings/targets/"+ht.Id+"/done", done), http.StatusConflict, "bsu_over_limit")
+	done["bsu_confirmed"] = true
+	expect(t, "done past the limit, confirmed", do(http.MethodPost, "/api/v1/savings/targets/"+ht.Id+"/done", done), http.StatusOK, "")
 }
 
 // TestBucketOverflowTargetAPI: a bucket's overflow can go to a savings target

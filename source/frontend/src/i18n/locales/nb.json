@@ -855,7 +855,8 @@
       "previewDirect": "{{amount}} går rett inn i {{name}} fra de ufordelte pengene på {{account}}.",
       "pastGoal": "Da går du forbi målet på {{goal}}, og det går fint.",
       "added": "{{amount}} satt av til {{name}}.",
-      "addedDirect": "{{amount}} lagt til i {{name}}."
+      "addedDirect": "{{amount}} lagt til i {{name}}.",
+      "pastBsuRoom": "Mer enn de {{amount}} som er igjen i år. Utført kan gå over BSU-grensen."
     },
     "done": {
       "title": "Utført: {{name}}",
@@ -948,7 +949,9 @@
         "atCycleEnd": "Kjøres ved periodeslutt.",
         "noCycle": "Kjøres i en aktiv periode."
       }
-    }
+    },
+    "bsuRoom": "{{amount}} igjen i år (BSU)",
+    "bsuFull": "Full for i år (BSU)"
   },
   "savingsSetup": {
     "intro": "Et sparemål er en bøtte med Helt manuelt, eller en sparekonto, BSU-, fonds- eller investeringskonto, med et mål. Fremgangen teller midlene i bøtta eller saldoen på kontoen, pluss det som er satt av til målet.",
@@ -1044,7 +1047,8 @@
       "nobodyTakes": "Ingen sparemål ville fått noe: sjekk reglene.",
       "ruleCount_one": "{{count}} regel i sparefordeleren",
       "ruleCount_other": "{{count}} regler i sparefordeleren",
-      "editRules": "Rediger i sparefordeleren"
+      "editRules": "Rediger i sparefordeleren",
+      "bsuCap": "Fordeleren gir den ikke mer i år"
     },
     "deleteRules_one": "Regelen i sparefordeleren slettes.",
     "deleteRules_other": "De {{count}} reglene i sparefordeleren slettes.",

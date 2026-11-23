@@ -364,6 +364,13 @@ func Statuses(ctx context.Context, db sqlc.DBTX, userID string, accounts []sqlc.
 	return out, nil
 }
 
+// Room is what a BSU may still be given this year beyond held, the money
+// already held for it (#236): the least of the yearly and total limits left,
+// less held, and at least 0.
+func Room(st Status, held decimal.Decimal) decimal.Decimal {
+	return decimal.Max(decimal.Min(st.LeftYear, st.LeftTotal).Sub(held), decimal.Zero)
+}
+
 // Change is a transaction family's net on an account before and after it's
 // recorded or corrected (Before is 0 for a new one).
 type Change struct {

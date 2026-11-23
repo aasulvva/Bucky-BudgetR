@@ -561,3 +561,18 @@ func TestLock(t *testing.T) {
 		t.Fatalf("deleting a locked BSU: %v", err)
 	}
 }
+
+// TestRoom: the least of the limits left, less what's held, at least 0 (#236).
+func TestRoom(t *testing.T) {
+	for _, c := range []struct{ year, total, held, want string }{
+		{"9500", "180000", "0", "9500.00"},
+		{"9500", "180000", "2000", "7500.00"},
+		{"9500", "4000", "1000", "3000.00"},
+		{"9500", "180000", "12000", "0.00"},
+	} {
+		got := bsu.Room(bsu.Status{LeftYear: dec(c.year), LeftTotal: dec(c.total)}, dec(c.held))
+		if got.StringFixed(2) != c.want {
+			t.Errorf("Room(%s, %s, held %s) = %s, want %s", c.year, c.total, c.held, got.StringFixed(2), c.want)
+		}
+	}
+}

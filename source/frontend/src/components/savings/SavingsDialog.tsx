@@ -15,6 +15,7 @@ import type { SavingsTarget } from "@/api/savings";
 import { AmountInput } from "@/components/AmountInput";
 import { DateTimeInput } from "@/components/DateTimeInput";
 import { ErrorAlert } from "@/components/ErrorAlert";
+import { BsuConfirm } from "@/components/transactions/BsuConfirm";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
 import i18n from "@/i18n";
 import { isOverdue } from "@/lib/cycles";
@@ -26,11 +27,13 @@ import {
   bucketRoom,
   heldOn,
   heldProblem,
+  pastBsuRoom,
   pastGoal,
   sourceAccounts,
   targetBucket,
   type AmountProblem,
 } from "@/lib/savings";
+import { bsuAsk } from "@/lib/bsu";
 
 /** Which dialog is open: Add to savings, or Done or Clear for the money held on an account. */
 export type SavingsAction =
@@ -186,6 +189,11 @@ function AddForm({ target, onDone }: { target: SavingsTarget; onDone: () => void
           {t("savings.add.pastGoal", { goal: money(target.goal) })}
         </Text>
       )}
+      {account && problem === null && pastBsuRoom(target, amount) && (
+        <Text size="sm" c="var(--mantine-color-orange-text)">
+          {t("savings.add.pastBsuRoom", { amount: money(target.bsu_room ?? "0") })}
+        </Text>
+      )}
       {blocked && <Alert color="orange">{t("savings.needsCycle")}</Alert>}
       {add.error && <ErrorAlert error={add.error} />}
       <Group justify="flex-end" gap="xs">
@@ -243,7 +251,8 @@ function HeldForm({
   const blocked = done && target.bucket_id !== null && !usable;
 
   const apply = useMutation({
-    mutationFn: () =>
+    // confirmed resends a Done the BSU check asked about (#236).
+    mutationFn: (confirmed: boolean) =>
       done
         ? unwrap(
             api.POST("/api/v1/savings/targets/{targetId}/done", {
@@ -253,6 +262,7 @@ function HeldForm({
                 amount: amount ?? "",
                 ...(at ? { at } : {}),
                 ...(description.trim() ? { description: description.trim() } : {}),
+                ...(confirmed ? { bsu_confirmed: true } : {}),
               },
             }),
           )
@@ -275,6 +285,9 @@ function HeldForm({
       await refresh();
     },
   });
+
+  // A BSU over its limits, or money out of one, asks first (#236).
+  const ask = done ? bsuAsk(apply.error) : undefined;
 
   const to =
     target.account_id !== null
@@ -339,7 +352,20 @@ function HeldForm({
       )}
       {problem === null && <Text size="sm">{preview}</Text>}
       {blocked && <Alert color="orange">{t("savings.needsCycle")}</Alert>}
-      {apply.error && <ErrorAlert error={apply.error} />}
+      {ask ? (
+        <BsuConfirm
+          ask={ask}
+          pending={apply.isPending}
+          onConfirm={() => {
+            apply.mutate(true);
+          }}
+          onCancel={() => {
+            apply.reset();
+          }}
+        />
+      ) : (
+        apply.error && <ErrorAlert error={apply.error} />
+      )}
       <Group justify="flex-end" gap="xs">
         <Button variant="default" onClick={onDone}>
           {t("common.cancel")}
@@ -347,9 +373,9 @@ function HeldForm({
         <Button
           color={done ? undefined : "red"}
           loading={apply.isPending}
-          disabled={problem !== null || blocked}
+          disabled={problem !== null || blocked || ask !== undefined}
           onClick={() => {
-            apply.mutate();
+            apply.mutate(false);
           }}
         >
           {t(done ? "savings.done.submit" : "savings.clear.submit")}
