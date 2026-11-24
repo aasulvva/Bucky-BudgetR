@@ -44,7 +44,57 @@ var (
 	ErrSource = errors.New("a credit card can't be a bucket's source or a savings source")
 	// ErrTypeChange means an account would change to or from a credit card.
 	ErrTypeChange = errors.New("an account can't change to or from a credit card")
+	// ErrAutoFinalize means auto-finalize is on without a default account to
+	// pay the bill from (#262).
+	ErrAutoFinalize = errors.New("auto-finalize pays the bill from the card's default account: choose one first")
 )
+
+// MaxPayDaysBefore is how many days before the due date a bill can be paid
+// by default (#262).
+const MaxPayDaysBefore = 14
+
+// Pay rules: what a bill payment pays (#262).
+const (
+	PayFull    = sqlc.CardPayRuleFull
+	PayMinimum = sqlc.CardPayRuleMinimum
+	PayFixed   = sqlc.CardPayRuleFixed
+)
+
+// Pay is how a card's bill is paid by default (#262): what (Rule, with
+// Amount for PayFixed), on the due date or DaysBefore it, recorded or asked
+// first (Mode), and whether it's finalized by itself on that day.
+type Pay struct {
+	Rule         sqlc.CardPayRule
+	Amount       decimal.Decimal
+	DaysBefore   int
+	Mode         sqlc.ScheduleMode
+	AutoFinalize bool
+}
+
+// DefaultPay is a new card's: the full bill on the due date, asked first.
+func DefaultPay() Pay {
+	return Pay{Rule: PayFull, Mode: sqlc.ScheduleModeApprove}
+}
+
+// Check checks p's rules; AutoFinalize needs the default account, which
+// CheckFields checks.
+func (p Pay) Check() error {
+	if !p.Rule.Valid() {
+		return fmt.Errorf("%w: pay rule %q", ErrInvalid, p.Rule)
+	}
+	if p.Rule == PayFixed {
+		if err := money.Valid(p.Amount); err != nil || !p.Amount.IsPositive() {
+			return fmt.Errorf("%w: a fixed bill payment must be above 0", ErrInvalid)
+		}
+	}
+	if p.DaysBefore < 0 || p.DaysBefore > MaxPayDaysBefore {
+		return fmt.Errorf("%w: the bill is paid on the due date or up to %d days before", ErrInvalid, MaxPayDaysBefore)
+	}
+	if !p.Mode.Valid() {
+		return fmt.Errorf("%w: pay mode %q", ErrInvalid, p.Mode)
+	}
+	return nil
+}
 
 // OverLimitError says which card would go past its limit, and what's
 // available on it now.
@@ -68,6 +118,9 @@ type Fields struct {
 	StatementDay     int
 	DueDay           int
 	MinimumPayment   decimal.Decimal
+	// Pay is how the bill is paid by default (#262). Nil when not given:
+	// the defaults for a new card, unchanged for an edited one.
+	Pay *Pay
 }
 
 // Status is a card's fields and what's owed on it.
@@ -136,6 +189,14 @@ func CheckFields(f Fields) error {
 	if !ValidDay(f.StatementDay) || !ValidDay(f.DueDay) {
 		return fmt.Errorf("%w: the statement and due days are 1–28, or %d for the last day of the month", ErrInvalid, LastDay)
 	}
+	if f.Pay != nil {
+		if err := f.Pay.Check(); err != nil {
+			return err
+		}
+		if f.Pay.AutoFinalize && f.DefaultAccountID == "" {
+			return ErrAutoFinalize
+		}
+	}
 	return nil
 }
 
@@ -169,9 +230,14 @@ type Columns struct {
 	StatementDay     pgtype.Int2
 	DueDay           pgtype.Int2
 	MinimumPayment   decimal.NullDecimal
+	PayRule          sqlc.NullCardPayRule
+	PayAmount        decimal.NullDecimal
+	PayDaysBefore    pgtype.Int2
+	PayMode          sqlc.NullScheduleMode
+	AutoFinalize     pgtype.Bool
 }
 
-// ToColumns returns f's columns.
+// ToColumns returns f's columns; f.Pay must be set.
 func ToColumns(f *Fields) Columns {
 	if f == nil {
 		return Columns{}
@@ -182,6 +248,11 @@ func ToColumns(f *Fields) Columns {
 		StatementDay:     pgtype.Int2{Int16: int16(f.StatementDay), Valid: true}, //nolint:gosec // 1–31
 		DueDay:           pgtype.Int2{Int16: int16(f.DueDay), Valid: true},       //nolint:gosec // 1–31
 		MinimumPayment:   decimal.NullDecimal{Decimal: f.MinimumPayment, Valid: true},
+		PayRule:          sqlc.NullCardPayRule{CardPayRule: f.Pay.Rule, Valid: true},
+		PayAmount:        decimal.NullDecimal{Decimal: f.Pay.Amount, Valid: f.Pay.Rule == PayFixed},
+		PayDaysBefore:    pgtype.Int2{Int16: int16(f.Pay.DaysBefore), Valid: true}, //nolint:gosec // 0–14
+		PayMode:          sqlc.NullScheduleMode{ScheduleMode: f.Pay.Mode, Valid: true},
+		AutoFinalize:     pgtype.Bool{Bool: f.Pay.AutoFinalize, Valid: true},
 	}
 }
 
@@ -196,6 +267,10 @@ func FieldsOf(a sqlc.BankAccount) (Fields, bool) {
 		StatementDay:     int(a.CardStatementDay.Int16),
 		DueDay:           int(a.CardDueDay.Int16),
 		MinimumPayment:   a.CardMinimumPayment.Decimal,
+		Pay: &Pay{
+			Rule: a.CardPayRule.CardPayRule, Amount: a.CardPayAmount.Decimal, DaysBefore: int(a.CardPayDaysBefore.Int16),
+			Mode: a.CardPayMode.ScheduleMode, AutoFinalize: a.CardAutoFinalize.Bool,
+		},
 	}, true
 }
 

@@ -133,7 +133,16 @@ func (s *Service) handle(ctx context.Context, tx pgx.Tx, userID string, sch Sche
 	}
 	p := sqlc.CreateOccurrenceParams{ScheduleID: sch.ID, UserID: userID, ScheduledAt: at.UTC()}
 	reason, detail := sqlc.OccurrenceReasonApproval, ""
-	if sch.Mode == sqlc.ScheduleModeAuto {
+	switch {
+	case sch.Bill != nil && !sch.Transaction.Amount.IsPositive():
+		// A bill payment with nothing left to pay (#262): paid by hand.
+		// A reason comes with when it was handled and due, as for a queued one.
+		p.State = sqlc.OccurrenceStateSkipped
+		p.Reason = sqlc.NullOccurrenceReason{OccurrenceReason: sqlc.OccurrenceReasonPaid, Valid: true}
+		p.QueuedAt = pgtype.Timestamptz{Time: now, Valid: true}
+		p.DueAt = pgtype.Timestamptz{Time: at.UTC(), Valid: true}
+		p.ResolvedAt = pgtype.Timestamptz{Time: now, Valid: true}
+	case sch.Mode == sqlc.ScheduleModeAuto:
 		id, err := s.record(ctx, tx, userID, sch, at)
 		if reason, detail = reasonOf(err); reason == "" && err != nil {
 			return err
@@ -158,9 +167,10 @@ func (s *Service) handle(ctx context.Context, tx pgx.Tx, userID string, sch Sche
 		return ids.Inserted(err)
 	})
 	if err == nil {
-		if p.State == sqlc.OccurrenceStateApplied {
+		switch p.State {
+		case sqlc.OccurrenceStateApplied:
 			n.recorded++
-		} else {
+		case sqlc.OccurrenceStateQueued:
 			n.queued++
 		}
 	}

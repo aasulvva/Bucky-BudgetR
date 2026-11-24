@@ -379,6 +379,9 @@ func (s *Service) bills(ctx context.Context, q *sqlc.Queries, userID string, set
 		if sch.Paused || sch.NextAt.IsZero() || (t.Type != sqlc.TransactionTypeEXP && t.Type != sqlc.TransactionTypeTRF) {
 			continue
 		}
+		if sch.Bill != nil && !t.Amount.IsPositive() {
+			continue // a card bill already paid (#262)
+		}
 		rule, err := sch.Rule()
 		if err != nil {
 			continue
@@ -622,6 +625,10 @@ func (s *Service) cardBills(ctx context.Context, q *sqlc.Queries, userID string,
 		switch {
 		case st.Due.Before(today):
 			kind, severity = KindCardBillCarried, Alert
+		case paymentPending(bill.Payment):
+			// The schedule's own reminders take over (Upcoming bills, the
+			// queue).
+			continue
 		case !today.Before(st.Due.AddDays(-settings.Days())):
 			kind, severity = KindCardBillDue, Warning
 		}
@@ -633,6 +640,12 @@ func (s *Service) cardBills(ctx context.Context, q *sqlc.Queries, userID string,
 		})
 	}
 	return out, nil
+}
+
+// paymentPending reports whether a bill's payment is still to come:
+// scheduled or waiting for approval.
+func paymentPending(p *cards.Payment) bool {
+	return p != nil && (p.State == "scheduled" || p.State == "queued")
 }
 
 // bsuWithdrawals is one notification per withdrawal a schedule recorded

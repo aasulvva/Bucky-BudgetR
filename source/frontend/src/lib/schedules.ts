@@ -366,6 +366,8 @@ export function reasonText(o: Pick<Occurrence, "reason" | "detail">, t: TFunctio
       return o.detail
         ? t("schedules.reasons.invalidDetail", { detail: o.detail })
         : t("schedules.reasons.invalid");
+    case "paid":
+      return t("schedules.reasons.paid");
     case "approval":
     case null:
       return t("schedules.reasons.approval");

@@ -13,6 +13,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/accounts"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/api"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/cards"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/money"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/transactions"
 )
@@ -32,6 +33,9 @@ func cardError(err error) error {
 	case errors.Is(err, cards.ErrTypeChange):
 		return &Error{Status: http.StatusBadRequest, Code: "card_type",
 			Detail: "An account can't change to or from a credit card. Create a new account instead."}
+	case errors.Is(err, cards.ErrAutoFinalize):
+		return &Error{Status: http.StatusBadRequest, Code: "card_auto_finalize",
+			Detail: "Auto-finalize pays the bill from the card's default account: choose one first."}
 	case errors.Is(err, cards.ErrSource):
 		return &Error{Status: http.StatusBadRequest, Code: "card_source",
 			Detail: "A credit card can't fund a bucket or hold savings."}
@@ -54,10 +58,37 @@ func cardFields(f *api.CreditCardFields) (*cards.Fields, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &cards.Fields{
+	out := &cards.Fields{
 		DefaultAccountID: deref(f.DefaultAccountId), CreditLimit: limit, StatementDay: f.StatementDay, DueDay: f.DueDay,
 		MinimumPayment: minimum,
-	}, nil
+	}
+	if p := f.Pay; p != nil {
+		pay := cards.Pay{
+			Rule: sqlc.CardPayRule(p.Rule), DaysBefore: p.DaysBefore, Mode: sqlc.ScheduleMode(p.Mode), AutoFinalize: p.AutoFinalize,
+		}
+		if p.Amount.IsSpecified() && !p.Amount.IsNull() {
+			if pay.Amount, err = parseAmount(p.Amount.MustGet()); err != nil {
+				return nil, err
+			}
+		}
+		out.Pay = &pay
+	}
+	return out, nil
+}
+
+func toAPIPay(p *cards.Pay) api.CardPayDefaults {
+	out := api.CardPayDefaults{Rule: api.CardPayRuleFull, Mode: api.ScheduleModeApprove, Amount: nullable.NewNullNullable[api.Amount]()}
+	if p == nil {
+		return out
+	}
+	out = api.CardPayDefaults{
+		Rule: api.CardPayRule(p.Rule), DaysBefore: p.DaysBefore, Mode: api.ScheduleMode(p.Mode), AutoFinalize: p.AutoFinalize,
+		Amount: nullable.NewNullNullable[api.Amount](),
+	}
+	if p.Rule == cards.PayFixed {
+		out.Amount.Set(p.Amount.StringFixed(money.Places))
+	}
+	return out
 }
 
 func toAPICard(st cards.Status) api.CreditCard {
@@ -67,6 +98,7 @@ func toAPICard(st cards.Status) api.CreditCard {
 		StatementDay:     st.StatementDay,
 		DueDay:           st.DueDay,
 		MinimumPayment:   st.MinimumPayment.StringFixed(money.Places),
+		Pay:              toAPIPay(st.Pay),
 		Owed:             st.Owed.StringFixed(money.Places),
 		Available:        st.Available.StringFixed(money.Places),
 		HeldOn:           make([]api.CardHeldOn, len(st.HeldOn)),

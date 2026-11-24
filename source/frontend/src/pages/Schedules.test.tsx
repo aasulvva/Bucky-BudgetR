@@ -31,6 +31,7 @@ function schedule(overrides: Partial<Schedule> & Pick<Schedule, "id">): Schedule
     next_index: 3,
     next_at: "2026-11-25T16:00:00Z",
     created_at: "2026-08-01T00:00:00Z",
+    bill: null,
     updated_at: "2026-08-01T00:00:00Z",
     ...overrides,
   };

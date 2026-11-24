@@ -72,3 +72,6 @@ RETURNING id;
 SELECT * FROM bank_accounts
 WHERE account_type = 'credit_card' AND NOT deleted AND card_bill_set_up_at IS NOT NULL
 ORDER BY user_id, id;
+
+-- name: GetCardStatement :one
+SELECT * FROM card_statements WHERE id = $1;

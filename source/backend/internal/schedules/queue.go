@@ -68,6 +68,9 @@ func (s *Service) Approve(ctx context.Context, userID, id string, override *tran
 			if err != nil {
 				return err
 			}
+			if sch.Bill != nil && !sch.Transaction.Amount.IsPositive() {
+				return ErrBillPaid
+			}
 			n = sch.Transaction
 			n.At = s.now()
 			c, err := q.GetActiveCycle(ctx, userID)

@@ -45,6 +45,7 @@ const (
 	FixedByBank  = sqlc.CardStatementFixBank
 	FixedByDue   = sqlc.CardStatementFixDue
 	FixedBySetup = sqlc.CardStatementFixSetup
+	FixedByAuto  = sqlc.CardStatementFixAuto
 )
 
 // Statement is one of a card's statements, fixed or worked out.
@@ -76,6 +77,24 @@ type Bill struct {
 	Current  *Statement
 	Previous *Statement
 	Next     calendar.Date
+	// Payment is the current statement's scheduled payment, the newest, if
+	// any (#262).
+	Payment *Payment
+}
+
+// Payment is a scheduled bill payment: the schedule, its rule, what it pays
+// now (or paid), from where, when, how, and where it's got to: "scheduled",
+// or its occurrence's state ("queued", "applied", "skipped").
+type Payment struct {
+	ScheduleID string
+	Rule       sqlc.CardPayRule
+	Amount     decimal.Decimal
+	AccountID  string
+	At         time.Time
+	Mode       sqlc.ScheduleMode
+	State      string
+	// Reason is a skipped one's: "paid" when nothing was left.
+	Reason string
 }
 
 // dayIn returns day of the month, LastDay being its last day.
@@ -168,6 +187,11 @@ func BillOf(ctx context.Context, q *sqlc.Queries, card sqlc.BankAccount, loc *ti
 		return Bill{}, false, err
 	}
 	bill.Current = cur
+	if cur != nil && cur.Fixed {
+		if bill.Payment, err = paymentFor(ctx, q, *cur); err != nil {
+			return Bill{}, false, err
+		}
+	}
 	if cur != nil {
 		prev := PreviousStatementDate(f.StatementDay, s)
 		for _, r := range stored {
@@ -181,6 +205,27 @@ func BillOf(ctx context.Context, q *sqlc.Queries, card sqlc.BankAccount, loc *ti
 		}
 	}
 	return bill, true, nil
+}
+
+// paymentFor returns the statement's newest scheduled payment, nil without.
+func paymentFor(ctx context.Context, q *sqlc.Queries, st Statement) (*Payment, error) {
+	rows, err := q.StatementSchedules(ctx, pgtype.Text{String: st.ID, Valid: true})
+	if err != nil || len(rows) == 0 {
+		return nil, err
+	}
+	r := rows[0]
+	p := &Payment{
+		ScheduleID: r.ID, Rule: r.BillRule.CardPayRule, AccountID: r.AccountID, At: r.PayAt, Mode: r.Mode,
+		State: r.OccurrenceState, Reason: r.OccurrenceReason,
+		Amount: PayAmount(st, r.BillRule.CardPayRule, r.Amount),
+	}
+	if p.State == "" {
+		p.State = "scheduled"
+	}
+	if p.State != "queued" && p.State != "scheduled" {
+		p.Amount = r.Amount // what it was made with; paid or skipped
+	}
+	return p, nil
 }
 
 // statementOn returns the statement on day s: the stored one, or worked out
@@ -226,6 +271,28 @@ func fromRow(ctx context.Context, q *sqlc.Queries, r sqlc.CardStatement, next *t
 		Fixed: true, FixedBy: r.FixedBy, FixedAt: r.FixedAt,
 	}
 	return st, paid(ctx, q, r.CardID, &st, r.PaidBefore, next)
+}
+
+// StatementByID returns a fixed statement with everything paid on it since
+// its cutoff (#262: what a scheduled bill payment pays).
+func StatementByID(ctx context.Context, q *sqlc.Queries, id string) (Statement, error) {
+	r, err := q.GetCardStatement(ctx, id)
+	if err != nil {
+		return Statement{}, err
+	}
+	return fromRow(ctx, q, r, nil)
+}
+
+// PayAmount is what a bill payment by rule pays on st now: what's left, the
+// minimum left, or fixed, at most what's left.
+func PayAmount(st Statement, rule sqlc.CardPayRule, fixed decimal.Decimal) decimal.Decimal {
+	switch rule {
+	case PayMinimum:
+		return st.MinimumLeft
+	case PayFixed:
+		return decimal.Min(fixed, st.Left)
+	}
+	return st.Left
 }
 
 // paid fills in Paid, Left and MinimumLeft.

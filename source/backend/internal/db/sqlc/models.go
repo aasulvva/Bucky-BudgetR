@@ -125,12 +125,66 @@ func (e BucketCapMode) Valid() bool {
 	return false
 }
 
+type CardPayRule string
+
+const (
+	CardPayRuleFull    CardPayRule = "full"
+	CardPayRuleMinimum CardPayRule = "minimum"
+	CardPayRuleFixed   CardPayRule = "fixed"
+)
+
+func (e *CardPayRule) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = CardPayRule(s)
+	case string:
+		*e = CardPayRule(s)
+	default:
+		return fmt.Errorf("unsupported scan type for CardPayRule: %T", src)
+	}
+	return nil
+}
+
+type NullCardPayRule struct {
+	CardPayRule CardPayRule
+	Valid       bool // Valid is true if CardPayRule is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullCardPayRule) Scan(value interface{}) error {
+	if value == nil {
+		ns.CardPayRule, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.CardPayRule.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullCardPayRule) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.CardPayRule), nil
+}
+
+func (e CardPayRule) Valid() bool {
+	switch e {
+	case CardPayRuleFull,
+		CardPayRuleMinimum,
+		CardPayRuleFixed:
+		return true
+	}
+	return false
+}
+
 type CardStatementFix string
 
 const (
 	CardStatementFixBank  CardStatementFix = "bank"
 	CardStatementFixDue   CardStatementFix = "due"
 	CardStatementFixSetup CardStatementFix = "setup"
+	CardStatementFixAuto  CardStatementFix = "auto"
 )
 
 func (e *CardStatementFix) Scan(src interface{}) error {
@@ -172,7 +226,8 @@ func (e CardStatementFix) Valid() bool {
 	switch e {
 	case CardStatementFixBank,
 		CardStatementFixDue,
-		CardStatementFixSetup:
+		CardStatementFixSetup,
+		CardStatementFixAuto:
 		return true
 	}
 	return false
@@ -342,6 +397,7 @@ const (
 	OccurrenceReasonNoActiveCycle OccurrenceReason = "no_active_cycle"
 	OccurrenceReasonOutsideCycle  OccurrenceReason = "outside_cycle"
 	OccurrenceReasonInvalid       OccurrenceReason = "invalid"
+	OccurrenceReasonPaid          OccurrenceReason = "paid"
 )
 
 func (e *OccurrenceReason) Scan(src interface{}) error {
@@ -384,7 +440,8 @@ func (e OccurrenceReason) Valid() bool {
 	case OccurrenceReasonApproval,
 		OccurrenceReasonNoActiveCycle,
 		OccurrenceReasonOutsideCycle,
-		OccurrenceReasonInvalid:
+		OccurrenceReasonInvalid,
+		OccurrenceReasonPaid:
 		return true
 	}
 	return false
@@ -920,6 +977,11 @@ type BankAccount struct {
 	CardDueDay           pgtype.Int2
 	CardMinimumPayment   decimal.NullDecimal
 	CardBillSetUpAt      pgtype.Timestamptz
+	CardPayRule          NullCardPayRule
+	CardPayAmount        decimal.NullDecimal
+	CardPayDaysBefore    pgtype.Int2
+	CardPayMode          NullScheduleMode
+	CardAutoFinalize     pgtype.Bool
 }
 
 type BankTransaction struct {
@@ -1152,6 +1214,8 @@ type Schedule struct {
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 	Description     string
+	CardStatementID pgtype.Text
+	BillRule        NullCardPayRule
 }
 
 type ScheduleBucketLine struct {

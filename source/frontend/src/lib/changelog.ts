@@ -16,6 +16,32 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.34.03",
+    date: "2026-11-24",
+    title: {
+      en: "Finalizing card bills, behind the scenes",
+      nb: "Fullføre kortregninger, bak kulissene",
+      nn: "Fullføre kortrekningar, bak kulissane",
+    },
+    changes: {
+      en: [
+        "A credit card's bill can now be finalized: checked against the bank's statement, then paid now or scheduled as a one-off payment, recorded or asked first.",
+        "A scheduled bill payment pays what's left when it runs, the full bill, the minimum or a fixed amount, so paying part by hand first is safe. It's skipped when nothing's left.",
+        "Each card has defaults for paying its bill, and auto-finalize can finalize and pay it on the payment day. The screens for all this come next.",
+      ],
+      nb: [
+        "Regningen på et kredittkort kan nå fullføres: sjekkes mot bankens faktura, og så betales nå eller planlegges som en engangsbetaling, som føres eller spør først.",
+        "En planlagt regningsbetaling betaler det som gjenstår når den kjøres, hele regningen, minstebeløpet eller et fast beløp, så det går fint å betale en del selv først. Den hoppes over når ingenting gjenstår.",
+        "Hvert kort har standardvalg for å betale regningen, og automatisk fullføring kan fullføre og betale den på betalingsdagen. Skjermene for dette kommer neste gang.",
+      ],
+      nn: [
+        "Rekninga på eit kredittkort kan no fullførast: sjekkast mot fakturaen frå banken, og så betalast no eller planleggast som ei eingongsbetaling, som vert ført eller spør først.",
+        "Ei planlagd rekningsbetaling betaler det som står att når ho vert køyrd, heile rekninga, minstebeløpet eller eit fast beløp, så det går fint å betale ein del sjølv først. Ho vert hoppa over når ingenting står att.",
+        "Kvart kort har standardval for å betale rekninga, og automatisk fullføring kan fullføre og betale ho på betalingsdagen. Skjermane for dette kjem neste gong.",
+      ],
+    },
+  },
+  {
     version: "v2.34.02",
     date: "2026-11-24",
     title: {

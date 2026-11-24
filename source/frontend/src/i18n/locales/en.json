@@ -2496,7 +2496,8 @@
       "no_active_cycle": "There was no active cycle",
       "outside_cycle": "Its time was outside the active cycle",
       "invalid": "It couldn't be recorded",
-      "invalidDetail": "It couldn't be recorded: {{detail}}"
+      "invalidDetail": "It couldn't be recorded: {{detail}}",
+      "paid": "Nothing was left to pay on the card's bill"
     }
   },
   "notifications": {

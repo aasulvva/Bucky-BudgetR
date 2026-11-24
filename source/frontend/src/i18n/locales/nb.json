@@ -2496,7 +2496,8 @@
       "no_active_cycle": "Det var ingen aktiv syklus",
       "outside_cycle": "Tidspunktet var utenfor den aktive syklusen",
       "invalid": "Den kunne ikke registreres",
-      "invalidDetail": "Den kunne ikke registreres: {{detail}}"
+      "invalidDetail": "Den kunne ikke registreres: {{detail}}",
+      "paid": "Det var ikke noe igjen å betale på kortregningen"
     }
   },
   "notifications": {

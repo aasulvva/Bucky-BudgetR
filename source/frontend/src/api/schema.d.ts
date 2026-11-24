@@ -756,7 +756,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/accounts/{accountId}/bill/confirm": {
+    "/api/v1/accounts/{accountId}/bill/finalize": {
         parameters: {
             query?: never;
             header?: never;
@@ -768,15 +768,27 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Check a credit card's bill against the bank's statement
-         * @description Fixes the current statement with the bank's amount. When it differs
-         *     from the app's, a balance adjustment (BLA) dated just before the
-         *     cutoff first makes what the card owed then the bank's amount (a fee
-         *     or purchase the app missed). 409 `no_statement` without a current
-         *     statement, `statement_fixed` when it's fixed, `bill_not_set_up`
-         *     before the setup.
+         * Finalize a credit card's bill and pay it
+         * @description Finalizes the current statement (#262), all in one go. When the
+         *     bank's amount differs from the app's, a balance adjustment (BLA)
+         *     dated just before the cutoff first makes what the card owed then the
+         *     bank's amount (a fee or purchase the app missed). Then the statement
+         *     is fixed (`bank`), and the payment, if any, made:
+         *     - `auto` with `at` null or not in the future: recorded now, asking
+         *       first like a transaction (409 `bsu_withdrawal`, `bsu_over_limit`,
+         *       `over_credit_limit`, sent again with `bsu_confirmed` or
+         *       `limit_confirmed`);
+         *     - otherwise a one-off schedule tied to the statement, at `at`. An
+         *       `approve` one is queued for approval at once, due at `at`. When it
+         *       runs (or is approved) it pays what its rule says then: what's left
+         *       (`full`), the minimum left (`minimum`), or `amount`, at most what's
+         *       left (`fixed`), and it's skipped (`paid`) when nothing's left.
+         *
+         *     With nothing left to pay, no payment is made. 409 `no_statement`
+         *     without a current statement, `statement_fixed` when it's fixed,
+         *     `bill_not_set_up` before the setup.
          */
-        post: operations["confirmCardBill"];
+        post: operations["finalizeCardBill"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2969,6 +2981,23 @@ export interface components {
             due_day: components["schemas"]["CardDay"];
             /** @description Above 0. */
             minimum_payment: components["schemas"]["Amount"];
+            pay?: components["schemas"]["CardPayDefaults"];
+        };
+        /**
+         * @description How the card's bill is paid by default (#262): finalizing it starts
+         *     from these, and auto-finalize finalizes it on the payment day (the
+         *     due date, or `days_before` it) with them, paying from the default
+         *     account (400 `card_auto_finalize` without one). Left out on create
+         *     for the full bill on the due date, asked first, and on an edit to
+         *     keep them (auto-finalize goes off when the default account does).
+         */
+        CardPayDefaults: {
+            rule: components["schemas"]["CardPayRule"];
+            /** @description For `fixed`, above 0; otherwise null. */
+            amount?: (string & components["schemas"]["Amount"]) | null;
+            days_before: number;
+            mode: components["schemas"]["ScheduleMode"];
+            auto_finalize: boolean;
         };
         CreditCard: {
             /**
@@ -2980,6 +3009,7 @@ export interface components {
             statement_day: components["schemas"]["CardDay"];
             due_day: components["schemas"]["CardDay"];
             minimum_payment: components["schemas"]["Amount"];
+            pay: components["schemas"]["CardPayDefaults"];
             /** @description What's owed, −balance and at least 0. A balance above 0 is money in credit. */
             owed: components["schemas"]["Amount"];
             /** @description The credit left, credit_limit + balance; below 0 when past the limit. */
@@ -3018,8 +3048,11 @@ export interface components {
             minimum_left: components["schemas"]["Amount"];
             /** @description False while it's worked out from the transactions (an estimate). */
             fixed: boolean;
-            /** @enum {string|null} */
-            fixed_by: "bank" | "due" | "setup" | null;
+            /**
+             * @description `bank`: finalized by the user; `auto`: auto-finalized; `due`: its due date passed; `setup`: the bill's setup.
+             * @enum {string|null}
+             */
+            fixed_by: "bank" | "due" | "setup" | "auto" | null;
             /** Format: date-time */
             fixed_at: string | null;
         };
@@ -3032,6 +3065,28 @@ export interface components {
             previous: components["schemas"]["CardStatement"] | null;
             /** Format: date */
             next_statement_date: string;
+            /** @description The current statement's scheduled payment, the newest; null without one. */
+            payment: components["schemas"]["CardBillPayment"] | null;
+        };
+        /**
+         * @description What a bill payment pays: what's left of the statement, the minimum left, or a fixed amount, at most what's left.
+         * @enum {string}
+         */
+        CardPayRule: "full" | "minimum" | "fixed";
+        /** @description A statement's scheduled payment (#262). */
+        CardBillPayment: {
+            schedule_id: components["schemas"]["ScheduleId"];
+            rule: components["schemas"]["CardPayRule"];
+            /** @description What it pays now while scheduled or queued; otherwise what it was made with. */
+            amount: components["schemas"]["Amount"];
+            account_id: components["schemas"]["AccountId"];
+            /** Format: date-time */
+            at: string;
+            mode: components["schemas"]["ScheduleMode"];
+            /** @enum {string} */
+            state: "scheduled" | "queued" | "applied" | "skipped";
+            /** @description Why it was queued or skipped (`paid`: nothing was left). */
+            reason: string | null;
         };
         /** @description A card's last statement before the app knew it (#262). */
         CardLastStatement: {
@@ -3044,9 +3099,33 @@ export interface components {
             /** @description Null when there's no statement yet. */
             last_statement: components["schemas"]["CardLastStatement"] | null;
         };
-        CardBillConfirm: {
+        CardBillFinalize: {
             /** @description The bank's statement amount, at least 0. */
             amount: components["schemas"]["Amount"];
+            /** @description Null to finalize without paying. */
+            payment: components["schemas"]["CardBillPay"] | null;
+        };
+        CardBillPay: {
+            rule: components["schemas"]["CardPayRule"];
+            /** @description For `fixed`, above 0. */
+            amount?: components["schemas"]["Amount"];
+            /** @description An account in the card's currency that isn't a card. */
+            account_id: components["schemas"]["AccountId"];
+            /**
+             * Format: date-time
+             * @description When to pay; left out for now.
+             */
+            at?: string;
+            mode: components["schemas"]["ScheduleMode"];
+            bsu_confirmed?: boolean;
+            limit_confirmed?: boolean;
+        };
+        CardBillFinalized: {
+            bill: components["schemas"]["CardBill"];
+            /** @description The payment's schedule, when it's scheduled. */
+            schedule_id: (string & components["schemas"]["ScheduleId"]) | null;
+            /** @description The payment, when it was made now. */
+            transaction_id: (string & components["schemas"]["TransactionId"]) | null;
         };
         /**
          * @description A BSU account's deposits (#214, spec §3): incomes and transfers into
@@ -4582,10 +4661,19 @@ export interface components {
              * @description When the next occurrence is due. Null when the schedule has ended.
              */
             next_at: string | null;
+            /** @description The card statement it pays, for a bill payment (#262); its `transaction.amount` is what it pays now. */
+            bill: components["schemas"]["ScheduleBill"] | null;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+        };
+        ScheduleBill: {
+            card_id: components["schemas"]["AccountId"];
+            statement_id: string;
+            rule: components["schemas"]["CardPayRule"];
+            /** @description The amount it was made with (the fixed amount, for `fixed`). */
+            amount: components["schemas"]["Amount"];
         };
         /** @enum {string} */
         ScheduledTransactionState: "applied" | "queued" | "skipped";
@@ -4595,7 +4683,7 @@ export interface components {
          *     broke a rule (see `detail`), for example a deleted account or bucket.
          * @enum {string}
          */
-        ScheduledTransactionReason: "approval" | "no_active_cycle" | "outside_cycle" | "invalid";
+        ScheduledTransactionReason: "approval" | "no_active_cycle" | "outside_cycle" | "invalid" | "paid";
         ScheduledTransaction: {
             id: components["schemas"]["ScheduledTransactionId"];
             schedule_id: components["schemas"]["ScheduleId"];
@@ -5721,7 +5809,7 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
-    confirmCardBill: {
+    finalizeCardBill: {
         parameters: {
             query?: never;
             header?: never;
@@ -5732,17 +5820,17 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CardBillConfirm"];
+                "application/json": components["schemas"]["CardBillFinalize"];
             };
         };
         responses: {
-            /** @description The bill. */
+            /** @description The bill, and the payment's schedule or transaction. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CardBill"];
+                    "application/json": components["schemas"]["CardBillFinalized"];
                 };
             };
             400: components["responses"]["Error"];
