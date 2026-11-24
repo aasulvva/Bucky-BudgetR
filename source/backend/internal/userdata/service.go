@@ -2,6 +2,7 @@ package userdata
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -27,7 +28,11 @@ const App = "bucky-budgetr"
 //
 // Format 2 (#201): saved modules and module widgets instead of saved graphs
 // and graph widgets.
-const Format = 2
+//
+// Format 3 (#262): a credit card has defaults for paying its bill, required
+// on cards; older files' cards get the app's (the full bill on the due
+// date, asked first, not auto-finalized).
+const Format = 3
 
 // ErrNewer means the file is from a newer version of the app, which this one
 // can't read.
@@ -120,6 +125,15 @@ func upgrade(f File) (File, error) {
 			return File{}, fmt.Errorf("%w: %w", ErrInvalid, err)
 		}
 		f.Data.Preferences, f.Format = p, 2
+	}
+	if f.Format < 3 {
+		for _, r := range f.Data.Tables["bank_accounts"] {
+			if r["account_type"] == "credit_card" && r["card_pay_rule"] == nil {
+				r["card_pay_rule"], r["card_pay_days_before"] = "full", json.Number("0")
+				r["card_pay_mode"], r["card_auto_finalize"] = "approve", false
+			}
+		}
+		f.Format = 3
 	}
 	return f, nil
 }

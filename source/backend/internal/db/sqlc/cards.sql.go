@@ -146,7 +146,7 @@ func (q *Queries) CardStatementsFor(ctx context.Context, arg CardStatementsForPa
 }
 
 const cardsWithBills = `-- name: CardsWithBills :many
-SELECT id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income, bank, bsu_set_up_at, bsu_opened_year, card_default_account_id, card_credit_limit, card_statement_day, card_due_day, card_minimum_payment, card_bill_set_up_at FROM bank_accounts
+SELECT id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income, bank, bsu_set_up_at, bsu_opened_year, card_default_account_id, card_credit_limit, card_statement_day, card_due_day, card_minimum_payment, card_bill_set_up_at, card_pay_rule, card_pay_amount, card_pay_days_before, card_pay_mode, card_auto_finalize FROM bank_accounts
 WHERE account_type = 'credit_card' AND NOT deleted AND card_bill_set_up_at IS NOT NULL
 ORDER BY user_id, id
 `
@@ -181,6 +181,11 @@ func (q *Queries) CardsWithBills(ctx context.Context) ([]BankAccount, error) {
 			&i.CardDueDay,
 			&i.CardMinimumPayment,
 			&i.CardBillSetUpAt,
+			&i.CardPayRule,
+			&i.CardPayAmount,
+			&i.CardPayDaysBefore,
+			&i.CardPayMode,
+			&i.CardAutoFinalize,
 		); err != nil {
 			return nil, err
 		}
@@ -266,6 +271,29 @@ func (q *Queries) CreateCardStatement(ctx context.Context, arg CreateCardStateme
 		arg.FixedBy,
 		arg.CreatedBy,
 	)
+	var i CardStatement
+	err := row.Scan(
+		&i.ID,
+		&i.CardID,
+		&i.StatementDate,
+		&i.Cutoff,
+		&i.DueDate,
+		&i.Amount,
+		&i.Minimum,
+		&i.PaidBefore,
+		&i.FixedBy,
+		&i.FixedAt,
+		&i.CreatedBy,
+	)
+	return i, err
+}
+
+const getCardStatement = `-- name: GetCardStatement :one
+SELECT id, card_id, statement_date, cutoff, due_date, amount, minimum, paid_before, fixed_by, fixed_at, created_by FROM card_statements WHERE id = $1
+`
+
+func (q *Queries) GetCardStatement(ctx context.Context, id string) (CardStatement, error) {
+	row := q.db.QueryRow(ctx, getCardStatement, id)
 	var i CardStatement
 	err := row.Scan(
 		&i.ID,

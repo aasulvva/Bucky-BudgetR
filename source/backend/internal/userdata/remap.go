@@ -34,7 +34,8 @@ const (
 	kBudget
 	kCardLine
 	// kStatement is a card statement's ID (#262): the card's, then the
-	// statement day, so it takes the card's new ID.
+	// statement day, so it takes the card's new ID; also a bill payment's
+	// schedule's statement.
 	kStatement
 	// kKept is kept as it is: a notification dismissal's key (#57). It names
 	// IDs, so a clone's no longer match and are forgotten when its
@@ -63,7 +64,7 @@ var idColumns = map[string]map[string]kind{
 	"savings_budget_entries":  {"id": kBudget, "user_id": kUser, "account_id": kAccount, "target_id": kHolder},
 	"savings_budget_runs":     {"entry_id": kBudget, "cycle_id": kCycle, "user_id": kUser, "svr_id": kTransaction, "income_id": kTransaction},
 	"savings_follow_ons":      {"source_id": kTransaction, "follow_id": kTransaction, "user_id": kUser},
-	"schedules":               {"id": kSchedule, "user_id": kUser, "account_id": kAccount, "to_account_id": kAccount},
+	"schedules":               {"id": kSchedule, "user_id": kUser, "account_id": kAccount, "to_account_id": kAccount, "card_statement_id": kStatement},
 	"schedule_bucket_lines":   {"schedule_id": kSchedule, "bucket_id": kBucket, "user_id": kUser},
 	"schedule_occurrences":    {"id": kOccurrence, "schedule_id": kSchedule, "user_id": kUser, "transaction_id": kTransaction},
 	"notification_dismissals": {"user_id": kUser, "key": kKept},
@@ -166,8 +167,12 @@ func remap(ctx context.Context, tx pgx.Tx, userID string, data Data) (Data, erro
 				case kCardLine:
 					n[col] = lineID(m[kCardLine], old, func() string { return ids.NewCardDebtLine(m[kAccount][fmt.Sprint(r["card_id"])]) })
 				case kStatement:
-					card, ok := m[kAccount][fmt.Sprint(r["card_id"])]
-					if !ok || len(old) < 4 {
+					// The card's ID, then the statement day.
+					card, ok := "", len(old) > 4
+					if ok {
+						card, ok = m[kAccount][old[:4]]
+					}
+					if !ok {
 						return Data{}, fmt.Errorf("%w: %s.%s %s refers to nothing in the snapshot", ErrInvalid, name, col, old)
 					}
 					n[col] = card + old[4:]

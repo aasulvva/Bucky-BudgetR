@@ -273,7 +273,7 @@ func TestExportImport(t *testing.T) {
 			t.Fatal(err)
 		}
 		read := must[userdata.File](t)(userdata.ParseFile(raw))
-		if read.Format != 2 {
+		if read.Format != userdata.Format {
 			t.Errorf("format %d", read.Format)
 		}
 		must[userdata.Counts](t)(e.svc.Import(ctx, alice.ID, read))

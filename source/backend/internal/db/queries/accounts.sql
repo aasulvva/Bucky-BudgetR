@@ -3,8 +3,10 @@
 -- A new credit card's bill is set up as it's created (#262): card_bill_set_up_at.
 INSERT INTO bank_accounts (id, user_id, name, currency, account_type, bank,
     card_default_account_id, card_credit_limit, card_statement_day, card_due_day, card_minimum_payment,
-    card_bill_set_up_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, sqlc.narg(card_bill_set_up_at))
+    card_bill_set_up_at, card_pay_rule, card_pay_amount, card_pay_days_before, card_pay_mode, card_auto_finalize)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, sqlc.narg(card_bill_set_up_at),
+    sqlc.narg(card_pay_rule), sqlc.narg(card_pay_amount), sqlc.narg(card_pay_days_before), sqlc.narg(card_pay_mode),
+    sqlc.narg(card_auto_finalize))
 ON CONFLICT (id) DO NOTHING
 RETURNING *;
 
@@ -25,7 +27,9 @@ SELECT * FROM bank_accounts WHERE id = $1 AND user_id = $2 AND NOT deleted FOR U
 -- only (#260), which never change type.
 UPDATE bank_accounts SET name = $3, account_type = $4, expected_income = $5, bank = $6, modified_at = now(),
     card_default_account_id = $7, card_credit_limit = $8, card_statement_day = $9, card_due_day = $10,
-    card_minimum_payment = $11,
+    card_minimum_payment = $11, card_pay_rule = sqlc.narg(card_pay_rule), card_pay_amount = sqlc.narg(card_pay_amount),
+    card_pay_days_before = sqlc.narg(card_pay_days_before), card_pay_mode = sqlc.narg(card_pay_mode),
+    card_auto_finalize = sqlc.narg(card_auto_finalize),
     bsu_set_up_at = CASE WHEN account_type = $4 THEN bsu_set_up_at END,
     bsu_opened_year = CASE WHEN account_type = $4 THEN bsu_opened_year END
 WHERE id = $1 AND user_id = $2 AND NOT deleted
@@ -44,8 +48,9 @@ UPDATE buckets SET source_account_id = $3, caf = 0, modified_at = now() WHERE id
 
 -- name: ClearCardDefaultAccount :exec
 -- The cards whose default account this was have none (#260): the account is
--- deleted, or can't be a default account any more.
-UPDATE bank_accounts SET card_default_account_id = NULL, modified_at = now()
+-- deleted, or can't be a default account any more. Auto-finalize, which pays
+-- from it, goes off (#262).
+UPDATE bank_accounts SET card_default_account_id = NULL, card_auto_finalize = false, modified_at = now()
 WHERE user_id = $1 AND card_default_account_id = $2 AND NOT deleted;
 
 -- name: ListCardIDs :many

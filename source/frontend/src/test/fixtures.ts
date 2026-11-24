@@ -62,7 +62,14 @@ export function creditCard(
     held_on: [],
     set_aside: "0.00",
     not_set_aside: "4520.00",
-    bill: { set_up: true, current: null, previous: null, next_statement_date: "2026-12-01" },
+    pay: { rule: "full", amount: null, days_before: 0, mode: "approve", auto_finalize: false },
+    bill: {
+      set_up: true,
+      current: null,
+      previous: null,
+      next_statement_date: "2026-12-01",
+      payment: null,
+    },
     ...overrides,
   };
 }

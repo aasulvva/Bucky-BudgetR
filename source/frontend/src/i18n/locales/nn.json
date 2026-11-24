@@ -2496,7 +2496,8 @@
       "no_active_cycle": "Det var ingen aktiv syklus",
       "outside_cycle": "Tidspunktet var utanfor den aktive syklusen",
       "invalid": "Han kunne ikkje registrerast",
-      "invalidDetail": "Han kunne ikkje registrerast: {{detail}}"
+      "invalidDetail": "Han kunne ikkje registrerast: {{detail}}",
+      "paid": "Det var ikkje noko att å betale på kortrekninga"
     }
   },
   "notifications": {

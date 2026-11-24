@@ -20,7 +20,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/shopspring/decimal"
 
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/cards"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ids"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
@@ -32,6 +34,8 @@ var (
 	ErrNotFound = errors.New("not found")
 	// ErrInvalid means the input breaks a rule. The message says which.
 	ErrInvalid = errors.New("invalid")
+	// ErrBillPaid means a bill payment has nothing left to pay (#262).
+	ErrBillPaid = errors.New("nothing is left to pay on the card's statement")
 )
 
 const (
@@ -74,6 +78,19 @@ type Settings struct {
 	EndCount int
 	EndDate  time.Time
 	Paused   bool
+	// Bill ties a schedule to the card statement it pays (#262); nil for
+	// others. Only finalizing a bill sets it.
+	Bill *Bill
+}
+
+// Bill is the card statement a schedule pays (#262): its Transaction is a
+// transfer to the card, whose Amount is what the rule pays now: what's left
+// of the statement (cards.PayFull), the minimum left, or Amount at most what's
+// left (cards.PayFixed). Amount is the amount it was made with.
+type Bill struct {
+	StatementID string
+	Rule        sqlc.CardPayRule
+	Amount      decimal.Decimal
 }
 
 // Schedule is a saved schedule.
@@ -172,6 +189,7 @@ func (s *Service) CreateRecordingFirst(ctx context.Context, userID string, in Se
 }
 
 func (s *Service) create(ctx context.Context, userID string, in Settings, recordFirst bool) (Schedule, error) {
+	in.Bill = nil // only finalizing a bill makes a bill payment
 	var out Schedule
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		// The checks share-lock accounts and buckets, so the user's lock
@@ -179,6 +197,36 @@ func (s *Service) create(ctx context.Context, userID string, in Settings, record
 		if err := ledger.LockUser(ctx, tx, userID); err != nil {
 			return err
 		}
+		var err error
+		out, err = s.createIn(ctx, tx, userID, in, recordFirst)
+		return err
+	})
+	return out, err
+}
+
+// CreateBillPayment saves a card statement's payment (#262), in.Bill set, in
+// tx; the caller holds the user's lock. One that's due (an ask-first one
+// queued at once) is handled right away.
+func (s *Service) CreateBillPayment(ctx context.Context, tx pgx.Tx, userID string, in Settings) (Schedule, error) {
+	if in.Bill == nil {
+		return Schedule{}, errors.New("not a bill payment")
+	}
+	sch, err := s.createIn(ctx, tx, userID, in, false)
+	if err != nil {
+		return Schedule{}, err
+	}
+	if !sch.NextAt.IsZero() && !handleFrom(sch, sch.NextAt).After(s.now()) {
+		if err := s.runSchedule(ctx, tx, userID, sch, s.now(), &handled{}); err != nil {
+			return Schedule{}, err
+		}
+		return get(ctx, sqlc.New(tx), userID, sch.ID)
+	}
+	return sch, nil
+}
+
+func (s *Service) createIn(ctx context.Context, tx pgx.Tx, userID string, in Settings, recordFirst bool) (Schedule, error) {
+	var out Schedule
+	err := func() error {
 		q := sqlc.New(tx)
 		p, err := s.params(ctx, tx, userID, &in)
 		if err != nil {
@@ -251,7 +299,7 @@ func (s *Service) create(ctx context.Context, userID string, in Settings, record
 		}
 		out, err = get(ctx, q, userID, row.ID)
 		return err
-	})
+	}()
 	return out, err
 }
 
@@ -265,8 +313,12 @@ func (s *Service) Update(ctx context.Context, userID, id string, in Settings) (S
 			return err
 		}
 		q := sqlc.New(tx)
-		if _, err := q.GetScheduleForUpdate(ctx, sqlc.GetScheduleForUpdateParams{ID: id, UserID: userID}); err != nil {
+		row, err := q.GetScheduleForUpdate(ctx, sqlc.GetScheduleForUpdateParams{ID: id, UserID: userID})
+		if err != nil {
 			return notFound(err, id)
+		}
+		if err := keepBill(ctx, q, row, &in); err != nil {
+			return err
 		}
 		p, err := s.params(ctx, tx, userID, &in)
 		if err != nil {
@@ -286,6 +338,40 @@ func (s *Service) Update(ctx context.Context, userID, id string, in Settings) (S
 		return err
 	})
 	return out, err
+}
+
+// keepBill keeps a bill payment's link to its statement (#262) through an
+// update: it stays a transfer to the card. An amount other than what it
+// pays now makes it pay that amount, at most what's left.
+func keepBill(ctx context.Context, q *sqlc.Queries, row sqlc.Schedule, in *Settings) error {
+	in.Bill = nil
+	if !row.CardStatementID.Valid {
+		return nil
+	}
+	b := Bill{StatementID: row.CardStatementID.String, Rule: row.BillRule.CardPayRule, Amount: row.Amount}
+	n := in.Transaction
+	if n.Type != sqlc.TransactionTypeTRF || n.ToAccountID != row.ToAccountID.String {
+		return fmt.Errorf("%w: a bill payment stays a transfer to its card", ErrInvalid)
+	}
+	now, err := billAmount(ctx, q, b)
+	if err != nil {
+		return err
+	}
+	if !n.Amount.Equal(now) {
+		b.Rule, b.Amount = cards.PayFixed, n.Amount
+	}
+	in.Transaction.Amount = b.Amount
+	in.Bill = &b
+	return nil
+}
+
+// billAmount is what a bill payment pays now.
+func billAmount(ctx context.Context, q *sqlc.Queries, b Bill) (decimal.Decimal, error) {
+	st, err := cards.StatementByID(ctx, q, b.StatementID)
+	if err != nil {
+		return decimal.Decimal{}, err
+	}
+	return cards.PayAmount(st, b.Rule, b.Amount), nil
 }
 
 // Delete deletes a schedule and its occurrences. The transactions it
@@ -448,6 +534,10 @@ func (s *Service) params(ctx context.Context, tx pgx.Tx, userID string, in *Sett
 	if !in.EndDate.IsZero() {
 		p.EndDate = pgtype.Date{Time: in.EndDate, Valid: true}
 	}
+	if in.Bill != nil {
+		p.CardStatementID = pgtype.Text{String: in.Bill.StatementID, Valid: true}
+		p.BillRule = sqlc.NullCardPayRule{CardPayRule: in.Bill.Rule, Valid: true}
+	}
 	if k, at, ok := rule.NextAt(s.now()); ok {
 		p.NextIndex = int32(k) //nolint:gosec // at most maxIndex
 		p.NextAt = pgtype.Timestamptz{Time: at.UTC(), Valid: true}
@@ -539,6 +629,12 @@ func withLines(ctx context.Context, q *sqlc.Queries, rows []sqlc.Schedule) ([]Sc
 	out := make([]Schedule, len(rows))
 	for i, r := range rows {
 		out[i] = fromRow(r, lines)
+		// A bill payment's amount is what it pays now (#262).
+		if b := out[i].Bill; b != nil {
+			if out[i].Transaction.Amount, err = billAmount(ctx, q, *b); err != nil {
+				return nil, err
+			}
+		}
 	}
 	return out, nil
 }
@@ -559,6 +655,9 @@ func fromRow(r sqlc.Schedule, lines []sqlc.ScheduleBucketLine) Schedule {
 	}
 	if r.EndDate.Valid {
 		s.EndDate = r.EndDate.Time
+	}
+	if r.CardStatementID.Valid {
+		s.Bill = &Bill{StatementID: r.CardStatementID.String, Rule: r.BillRule.CardPayRule, Amount: r.Amount}
 	}
 	if r.NextAt.Valid {
 		s.NextAt = r.NextAt.Time

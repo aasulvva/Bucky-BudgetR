@@ -164,14 +164,14 @@ func TestSchedulesAPI(t *testing.T) {
 	expect(t, "approve without cycle", do(http.MethodPost, base+"/approve", nil, alice), http.StatusConflict, "no_active_cycle")
 	w = do(http.MethodGet, base, nil, alice)
 	expect(t, "still queued", w, http.StatusOK, "")
-	if o := decode[api.ScheduledTransaction](t, w); o.State != api.Queued || o.Overdue {
+	if o := decode[api.ScheduledTransaction](t, w); o.State != api.ScheduledTransactionStateQueued || o.Overdue {
 		t.Errorf("still queued %+v", o)
 	}
 	// Edited without the bucket line, it's recorded now.
 	w = do(http.MethodPost, base+"/approve", map[string]any{"type": "EXP", "account_id": main, "amount": "8500", "counterparty": "Landlord"}, alice)
 	expect(t, "approve edited", w, http.StatusOK, "")
 	approved := decode[api.ApprovedScheduledTransaction](t, w)
-	if approved.ScheduledTransaction.State != api.Applied || approved.Transaction.ScheduleId.MustGet() != exp.Id ||
+	if approved.ScheduledTransaction.State != api.ScheduledTransactionStateApplied || approved.Transaction.ScheduleId.MustGet() != exp.Id ||
 		approved.ScheduledTransaction.TransactionId.MustGet() != approved.Transaction.Id || !approved.Transaction.At.Equal(now) {
 		t.Errorf("approved %+v", approved)
 	}
@@ -201,7 +201,7 @@ func TestSchedulesAPI(t *testing.T) {
 	w = do(http.MethodGet, "/api/v1/scheduled-transactions?schedule_id="+rec.Id, nil, alice)
 	expect(t, "recorded", w, http.StatusOK, "")
 	page = decode[api.ScheduledTransactionPage](t, w)
-	if len(page.Items) != 1 || page.Items[0].State != api.Applied {
+	if len(page.Items) != 1 || page.Items[0].State != api.ScheduledTransactionStateApplied {
 		t.Fatalf("recorded %+v", page)
 	}
 	w = do(http.MethodGet, "/api/v1/transactions/"+page.Items[0].TransactionId.MustGet(), nil, alice)

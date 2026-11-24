@@ -30,7 +30,9 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ids"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/money"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/schedules"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/stats"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/transactions"
 )
 
 // Errors returned by the service. They wrap a message that says what is wrong.
@@ -200,14 +202,20 @@ type Options struct {
 	// Savings releases savings when an account or bucket goes away. Nil
 	// skips it (tests without savings).
 	Savings Savings
+	// Transactions and Schedules pay a card's bill when it's finalized
+	// (#262). Nil without bill payments (tests).
+	Transactions *transactions.Service
+	Schedules    *schedules.Service
 }
 
 // Service manages bank accounts.
 type Service struct {
-	pool    *pgxpool.Pool
-	ledger  *ledger.Ledger
-	now     func() time.Time
-	savings Savings
+	pool      *pgxpool.Pool
+	ledger    *ledger.Ledger
+	now       func() time.Time
+	savings   Savings
+	txs       *transactions.Service
+	schedules *schedules.Service
 }
 
 // NewService returns a Service that records money movements in l.
@@ -215,7 +223,7 @@ func NewService(pool *pgxpool.Pool, l *ledger.Ledger, opts Options) *Service {
 	if opts.Now == nil {
 		opts.Now = time.Now
 	}
-	return &Service{pool: pool, ledger: l, now: opts.Now, savings: opts.Savings}
+	return &Service{pool: pool, ledger: l, now: opts.Now, savings: opts.Savings, txs: opts.Transactions, schedules: opts.Schedules}
 }
 
 // TargetTypes are the account types that can be a savings target (#231).
@@ -302,6 +310,10 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Account, er
 		return Account{}, fmt.Errorf("%w: a credit card needs its card fields, and only a card has them", ErrInvalid)
 	}
 	if n.Card != nil {
+		if n.Card.Pay == nil {
+			p := cards.DefaultPay()
+			n.Card.Pay = &p
+		}
 		if err := cards.CheckFields(*n.Card); err != nil {
 			return Account{}, err
 		}
@@ -333,6 +345,8 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Account, er
 				CardDefaultAccountID: c.DefaultAccountID, CardCreditLimit: c.CreditLimit, CardStatementDay: c.StatementDay,
 				CardDueDay: c.DueDay, CardMinimumPayment: c.MinimumPayment,
 				CardBillSetUpAt: pgtype.Timestamptz{Time: s.now(), Valid: n.Card != nil},
+				CardPayRule:     c.PayRule, CardPayAmount: c.PayAmount, CardPayDaysBefore: c.PayDaysBefore,
+				CardPayMode: c.PayMode, CardAutoFinalize: c.AutoFinalize,
 			})
 			return ids.Inserted(err)
 		})
@@ -377,6 +391,8 @@ func (s *Service) Update(ctx context.Context, userID, id string, c Changes) (Acc
 			ID: id, UserID: userID, Name: row.Name, AccountType: row.AccountType, ExpectedIncome: row.ExpectedIncome, Bank: row.Bank,
 			CardDefaultAccountID: row.CardDefaultAccountID, CardCreditLimit: row.CardCreditLimit, CardStatementDay: row.CardStatementDay,
 			CardDueDay: row.CardDueDay, CardMinimumPayment: row.CardMinimumPayment,
+			CardPayRule: row.CardPayRule, CardPayAmount: row.CardPayAmount, CardPayDaysBefore: row.CardPayDaysBefore,
+			CardPayMode: row.CardPayMode, CardAutoFinalize: row.CardAutoFinalize,
 		}
 		isCard := row.AccountType == sqlc.AccountTypeCreditCard
 		if c.Bank != nil {
@@ -406,6 +422,15 @@ func (s *Service) Update(ctx context.Context, userID, id string, c Changes) (Acc
 			if !isCard {
 				return fmt.Errorf("%w: only a credit card has card fields", ErrInvalid)
 			}
+			// Paying the bill (#262) stays as it was unless given; without a
+			// default account, auto-finalize goes off.
+			if c.Card.Pay == nil {
+				old, _ := cards.FieldsOf(row)
+				c.Card.Pay = old.Pay
+				if c.Card.DefaultAccountID == "" {
+					c.Card.Pay.AutoFinalize = false
+				}
+			}
 			if err := cards.CheckFields(*c.Card); err != nil {
 				return err
 			}
@@ -415,6 +440,8 @@ func (s *Service) Update(ctx context.Context, userID, id string, c Changes) (Acc
 			cc := cards.ToColumns(c.Card)
 			params.CardDefaultAccountID, params.CardCreditLimit, params.CardStatementDay = cc.DefaultAccountID, cc.CreditLimit, cc.StatementDay
 			params.CardDueDay, params.CardMinimumPayment = cc.DueDay, cc.MinimumPayment
+			params.CardPayRule, params.CardPayAmount, params.CardPayDaysBefore = cc.PayRule, cc.PayAmount, cc.PayDaysBefore
+			params.CardPayMode, params.CardAutoFinalize = cc.PayMode, cc.AutoFinalize
 		}
 		if c.ExpectedIncome != nil {
 			if e := *c.ExpectedIncome; e.Valid {
@@ -465,34 +492,16 @@ func (s *Service) AdjustBalance(ctx context.Context, userID, id string, a Adjust
 	if a.At.IsZero() {
 		a.At = s.now()
 	}
-	at := a.At.UTC().Truncate(time.Microsecond) // as the ledger stores it
 
 	var out Account
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		if err := ledger.LockUser(ctx, tx, userID); err != nil {
 			return err
 		}
-		if _, err := sqlc.New(tx).GetAccountForUpdate(ctx, sqlc.GetAccountForUpdateParams{ID: id, UserID: userID}); err != nil {
-			return notFound(err, id)
-		}
-		// A locked BSU's balance comes from its history setup (#214).
-		if err := bsu.Locked(ctx, tx, userID, id); err != nil {
+		if err := s.adjustIn(ctx, tx, userID, id, a); err != nil {
 			return err
 		}
-		balances, err := balance.AccountsBefore(ctx, tx, userID, at.Add(time.Microsecond))
-		if err != nil {
-			return err
-		}
-		diff := a.Target.Sub(balances[id])
-		if diff.IsZero() {
-			return ErrNoChange
-		}
-		if _, err := s.ledger.Record(ctx, tx, ledger.Entry{
-			UserID: userID, CreatedBy: userID, Type: sqlc.TransactionTypeBLA, At: at,
-			BankLines: []ledger.BankLine{{AccountID: id, Amount: diff}},
-		}); err != nil {
-			return fmt.Errorf("record balance adjustment: %w", err)
-		}
+		var err error
 		out, err = s.get(ctx, tx, userID, id)
 		return err
 	})
@@ -500,6 +509,34 @@ func (s *Service) AdjustBalance(ctx context.Context, userID, id string, a Adjust
 		return Account{}, err
 	}
 	return out, nil
+}
+
+// adjustIn records the balance adjustment a (its At set) in tx; the caller
+// holds the user's lock.
+func (s *Service) adjustIn(ctx context.Context, tx pgx.Tx, userID, id string, a Adjustment) error {
+	at := a.At.UTC().Truncate(time.Microsecond) // as the ledger stores it
+	if _, err := sqlc.New(tx).GetAccountForUpdate(ctx, sqlc.GetAccountForUpdateParams{ID: id, UserID: userID}); err != nil {
+		return notFound(err, id)
+	}
+	// A locked BSU's balance comes from its history setup (#214).
+	if err := bsu.Locked(ctx, tx, userID, id); err != nil {
+		return err
+	}
+	balances, err := balance.AccountsBefore(ctx, tx, userID, at.Add(time.Microsecond))
+	if err != nil {
+		return err
+	}
+	diff := a.Target.Sub(balances[id])
+	if diff.IsZero() {
+		return ErrNoChange
+	}
+	if _, err := s.ledger.Record(ctx, tx, ledger.Entry{
+		UserID: userID, CreatedBy: userID, Type: sqlc.TransactionTypeBLA, At: at,
+		BankLines: []ledger.BankLine{{AccountID: id, Amount: diff}},
+	}); err != nil {
+		return fmt.Errorf("record balance adjustment: %w", err)
+	}
+	return nil
 }
 
 // Reallocate recalculates the CAF of the buckets funded from the account now,

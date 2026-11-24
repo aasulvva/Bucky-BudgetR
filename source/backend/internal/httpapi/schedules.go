@@ -257,6 +257,9 @@ func scheduleError(err error) error {
 	switch {
 	case errors.Is(err, schedules.ErrNotFound):
 		return &Error{Status: http.StatusNotFound, Code: "not_found", Detail: "Schedule not found.", Err: err}
+	case errors.Is(err, schedules.ErrBillPaid):
+		return &Error{Status: http.StatusConflict, Code: "bill_paid",
+			Detail: "Nothing is left to pay on the card's statement: skip it.", Err: err}
 	case errors.Is(err, schedules.ErrResolved):
 		return &Error{Status: http.StatusConflict, Code: "already_resolved",
 			Detail: "It has been approved or skipped already.", Err: err}
@@ -338,7 +341,13 @@ func toAPISchedule(s schedules.Schedule) api.Schedule {
 		TimeZone: s.TimeZone, Frequency: api.ScheduleFrequency(s.Frequency), Every: s.Every, Paused: s.Paused,
 		NextIndex: s.NextIndex, CreatedAt: s.CreatedAt.UTC(), UpdatedAt: s.UpdatedAt.UTC(),
 		EndCount: nullable.NewNullNullable[int](), EndDate: nullable.NewNullNullable[openapi_types.Date](),
-		NextAt: nullable.NewNullNullable[time.Time](),
+		NextAt: nullable.NewNullNullable[time.Time](), Bill: nullable.NewNullNullable[api.ScheduleBill](),
+	}
+	if b := s.Bill; b != nil {
+		out.Bill.Set(api.ScheduleBill{
+			CardId: n.ToAccountID, StatementId: b.StatementID, Rule: api.CardPayRule(b.Rule),
+			Amount: b.Amount.StringFixed(money.Places),
+		})
 	}
 	if s.EndCount > 0 {
 		out.EndCount.Set(s.EndCount)

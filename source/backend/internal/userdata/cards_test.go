@@ -1,14 +1,19 @@
 package userdata_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/accounts"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/authtest"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/cards"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/schedules"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/transactions"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/userdata"
 )
@@ -88,11 +93,27 @@ func TestCardStatementsFollow(t *testing.T) {
 	e := setup(t)
 	ctx := t.Context()
 	carol := authtest.NewUser(t, e.pool, "carol")
+	main := must[accounts.Account](t)(e.accounts.Create(ctx, carol.ID, accounts.New{Name: "Main", OpeningBalance: dec("5000")}))
 	visa := must[accounts.Account](t)(e.accounts.Create(ctx, carol.ID, accounts.New{
 		Name: "Visa", Type: sqlc.AccountTypeCreditCard, OpeningBalance: dec("-1500"),
 		Card:          &cards.Fields{CreditLimit: dec("20000"), StatementDay: 1, DueDay: 15, MinimumPayment: dec("300")},
 		LastStatement: &cards.LastStatement{Amount: dec("1200"), Paid: dec("200")},
 	}))
+	sch := schedules.NewService(e.pool, schedules.Options{Now: clock, Transactions: e.tx})
+	if err := pgx.BeginFunc(ctx, e.pool, func(tx pgx.Tx) error {
+		if err := ledger.LockUser(ctx, tx, carol.ID); err != nil {
+			return err
+		}
+		_, err := sch.CreateBillPayment(ctx, tx, carol.ID, schedules.Settings{
+			Transaction: transactions.New{Type: sqlc.TransactionTypeTRF, AccountID: main.ID, ToAccountID: visa.ID, Amount: dec("1000")},
+			Mode:        sqlc.ScheduleModeAuto, Start: clock().AddDate(0, 0, 3), Minute: 8 * 60, TimeZone: "UTC",
+			Frequency: sqlc.ScheduleFrequencyOnce,
+			Bill:      &schedules.Bill{StatementID: visa.Card.Bill.Current.ID, Rule: cards.PayFull, Amount: dec("1000")},
+		})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
 	f, _ := e.file(t, carol.ID)
 	if n := len(f.Data.Tables["card_statements"]); n != 1 {
 		t.Fatalf("exported %d card statements, want 1", n)
@@ -110,5 +131,40 @@ func TestCardStatementsFollow(t *testing.T) {
 	if card.ID == visa.ID || bill == nil || !bill.SetUp || bill.Current == nil || !bill.Current.Fixed ||
 		bill.Current.ID != card.ID+visa.Card.Bill.Current.ID[4:] || bill.Current.Left.StringFixed(2) != "1000.00" {
 		t.Errorf("the copy's bill %+v (card %s)", bill, card.ID)
+	}
+	// The statement's payment follows it, paying what's left.
+	if p := bill.Payment; p == nil || p.AccountID == main.ID || p.Amount.StringFixed(2) != "1000.00" || p.Rule != cards.PayFull {
+		t.Errorf("the copy's payment %+v", p)
+	}
+}
+
+// A format 2 file's credit cards get the app's defaults for paying the bill
+// (#262).
+func TestCardPayDefaultsUpgrade(t *testing.T) {
+	e := setup(t)
+	ctx := t.Context()
+	carol := authtest.NewUser(t, e.pool, "carol")
+	must[accounts.Account](t)(e.accounts.Create(ctx, carol.ID, accounts.New{
+		Name: "Visa", Type: sqlc.AccountTypeCreditCard,
+		Card: &cards.Fields{CreditLimit: dec("20000"), StatementDay: 1, DueDay: 15, MinimumPayment: dec("300")},
+	}))
+	f, _ := e.file(t, carol.ID)
+	f.Format = 2
+	for _, r := range f.Data.Tables["bank_accounts"] {
+		for _, c := range []string{"card_pay_rule", "card_pay_amount", "card_pay_days_before", "card_pay_mode", "card_auto_finalize"} {
+			delete(r, c)
+		}
+	}
+	raw, err := json.Marshal(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := must[userdata.File](t)(userdata.ParseFile(raw))
+	dave := authtest.NewUser(t, e.pool, "dave")
+	must[userdata.Counts](t)(e.svc.Import(ctx, dave.ID, read))
+	for _, a := range must[[]accounts.Account](t)(e.accounts.List(ctx, dave.ID)) {
+		if p := a.Card.Pay; p == nil || p.Rule != cards.PayFull || p.Mode != sqlc.ScheduleModeApprove || p.AutoFinalize {
+			t.Errorf("the copy's pay defaults %+v", p)
+		}
 	}
 }

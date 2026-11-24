@@ -107,8 +107,8 @@ func TestCardBillAPI(t *testing.T) {
 	if b := bill(visa.Id); b.SetUp || !b.Current.IsNull() {
 		t.Fatalf("a locked bill %+v", b)
 	}
-	expect(t, "confirm before the setup", do(http.MethodPost, "/api/v1/accounts/"+visa.Id+"/bill/confirm",
-		map[string]any{"amount": "1"}), http.StatusConflict, "bill_not_set_up")
+	expect(t, "finalize before the setup", do(http.MethodPost, "/api/v1/accounts/"+visa.Id+"/bill/finalize",
+		map[string]any{"amount": "1", "payment": nil}), http.StatusConflict, "bill_not_set_up")
 	if n := cardNotes(); len(n) != 0 {
 		t.Fatalf("notifications before the setup %+v", n)
 	}
@@ -167,16 +167,16 @@ func TestCardBillAPI(t *testing.T) {
 	if got := decode[api.Account](t, w).CreditCard.MustGet().Bill.Current.MustGet(); got.Amount != "3620.00" {
 		t.Fatalf("the card's bill %+v", got)
 	}
-	w = do(http.MethodPost, "/api/v1/accounts/"+visa.Id+"/bill/confirm", map[string]any{"amount": "3620"})
+	w = do(http.MethodPost, "/api/v1/accounts/"+visa.Id+"/bill/finalize", map[string]any{"amount": "3620", "payment": nil})
 	expect(t, "it matches the bank", w, http.StatusOK, "")
-	if cur = decode[api.CardBill](t, w).Current.MustGet(); !cur.Fixed || cur.FixedBy.MustGet() != api.CardStatementFixedByBank {
+	if cur = decode[api.CardBillFinalized](t, w).Bill.Current.MustGet(); !cur.Fixed || cur.FixedBy.MustGet() != api.CardStatementFixedByBank {
 		t.Fatalf("checked %+v", cur)
 	}
 	purchase("50", "2026-11-29T12:00:00Z")
 	if cur = bill(visa.Id).Current.MustGet(); cur.Amount != "3620.00" {
 		t.Fatalf("a fixed statement changed %+v", cur)
 	}
-	expect(t, "confirm twice", do(http.MethodPost, "/api/v1/accounts/"+visa.Id+"/bill/confirm", map[string]any{"amount": "3620"}),
+	expect(t, "finalize twice", do(http.MethodPost, "/api/v1/accounts/"+visa.Id+"/bill/finalize", map[string]any{"amount": "3620", "payment": nil}),
 		http.StatusConflict, "statement_fixed")
 
 	// A card created with its last statement; a bank amount that differs
@@ -191,9 +191,9 @@ func TestCardBillAPI(t *testing.T) {
 	if cur = bill(amex.Id).Current.MustGet(); cur.Fixed || cur.Amount != "1200.00" {
 		t.Fatalf("Amex in January %+v", cur)
 	}
-	w = do(http.MethodPost, "/api/v1/accounts/"+amex.Id+"/bill/confirm", map[string]any{"amount": "1250"})
+	w = do(http.MethodPost, "/api/v1/accounts/"+amex.Id+"/bill/finalize", map[string]any{"amount": "1250", "payment": nil})
 	expect(t, "a differing bank amount", w, http.StatusOK, "")
-	if cur = decode[api.CardBill](t, w).Current.MustGet(); !cur.Fixed || cur.Amount != "1250.00" {
+	if cur = decode[api.CardBillFinalized](t, w).Bill.Current.MustGet(); !cur.Fixed || cur.Amount != "1250.00" {
 		t.Fatalf("adjusted %+v", cur)
 	}
 	var bla time.Time
@@ -211,7 +211,7 @@ func TestCardBillAPI(t *testing.T) {
 
 	// Once the due date has passed, the loop fixes the statement.
 	now = time.Date(2027, 1, 16, 10, 0, 0, 0, time.UTC)
-	if err := acc.FixDueBills(t.Context()); err != nil {
+	if err := acc.RunBills(t.Context(), discard()); err != nil {
 		t.Fatal(err)
 	}
 	var by string

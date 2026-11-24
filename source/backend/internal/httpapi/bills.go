@@ -11,9 +11,11 @@ import (
 	"github.com/oapi-codegen/nullable"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/accounts"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/api"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/calendar"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/cards"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/money"
 )
 
@@ -66,7 +68,7 @@ func (s *server) SetupCardBill(ctx context.Context, req api.SetupCardBillRequest
 	return api.SetupCardBill200JSONResponse(toAPIBill(bill)), nil
 }
 
-func (s *server) ConfirmCardBill(ctx context.Context, req api.ConfirmCardBillRequestObject) (api.ConfirmCardBillResponseObject, error) {
+func (s *server) FinalizeCardBill(ctx context.Context, req api.FinalizeCardBillRequestObject) (api.FinalizeCardBillResponseObject, error) {
 	svc, err := s.accountService()
 	if err != nil {
 		return nil, err
@@ -75,11 +77,51 @@ func (s *server) ConfirmCardBill(ctx context.Context, req api.ConfirmCardBillReq
 	if err != nil {
 		return nil, err
 	}
-	bill, err := svc.ConfirmBill(ctx, sessionFrom(ctx).User.ID, req.AccountId, amount)
-	if err != nil {
-		return nil, billOrAccountError(err)
+	f := accounts.Finalize{Amount: amount}
+	if req.Body.Payment.IsSpecified() && !req.Body.Payment.IsNull() {
+		p := req.Body.Payment.MustGet()
+		pay := accounts.Payment{
+			Rule: sqlc.CardPayRule(p.Rule), AccountID: p.AccountId, Mode: sqlc.ScheduleMode(p.Mode),
+			BSUConfirmed: deref(p.BsuConfirmed), LimitConfirmed: deref(p.LimitConfirmed),
+		}
+		if p.Amount != nil {
+			if pay.Amount, err = parseAmount(*p.Amount); err != nil {
+				return nil, err
+			}
+		}
+		if p.At != nil {
+			pay.At = *p.At
+		}
+		f.Payment = &pay
 	}
-	return api.ConfirmCardBill200JSONResponse(toAPIBill(bill)), nil
+	done, err := svc.FinalizeBill(ctx, sessionFrom(ctx).User.ID, req.AccountId, f)
+	if err != nil {
+		return nil, finalizeError(err)
+	}
+	out := api.CardBillFinalized{
+		Bill:          toAPIBill(done.Bill),
+		ScheduleId:    nullable.NewNullNullable[api.ScheduleId](),
+		TransactionId: nullable.NewNullNullable[api.TransactionId](),
+	}
+	if done.ScheduleID != "" {
+		out.ScheduleId.Set(done.ScheduleID)
+	}
+	if done.TransactionID != "" {
+		out.TransactionId.Set(done.TransactionID)
+	}
+	return api.FinalizeCardBill200JSONResponse(out), nil
+}
+
+// finalizeError maps finalizing's errors: the bill's and the account's, then
+// the payment's, as a transaction's or a schedule's.
+func finalizeError(err error) error {
+	if e := billError(err); e != nil {
+		return e
+	}
+	if errors.Is(err, accounts.ErrInvalid) || errors.Is(err, accounts.ErrNotFound) {
+		return accountError(err)
+	}
+	return scheduleError(err)
 }
 
 func billOrAccountError(err error) error {
@@ -119,6 +161,18 @@ func toAPIBill(b cards.Bill) api.CardBill {
 	}
 	if b.Previous != nil {
 		out.Previous = nullable.NewNullableWithValue(toAPIStatement(*b.Previous))
+	}
+	out.Payment = nullable.NewNullNullable[api.CardBillPayment]()
+	if p := b.Payment; p != nil {
+		reason := nullable.NewNullNullable[string]()
+		if p.Reason != "" {
+			reason.Set(p.Reason)
+		}
+		out.Payment.Set(api.CardBillPayment{
+			ScheduleId: p.ScheduleID, Rule: api.CardPayRule(p.Rule), Amount: p.Amount.StringFixed(money.Places),
+			AccountId: p.AccountID, At: p.At.UTC(), Mode: api.ScheduleMode(p.Mode),
+			State: api.CardBillPaymentState(p.State), Reason: reason,
+		})
 	}
 	return out
 }
