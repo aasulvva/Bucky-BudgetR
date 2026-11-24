@@ -316,6 +316,10 @@ function CreateAccount({
   const card = type === "credit_card";
   const [cardValue, setCard] = useState<CardDraft>(EMPTY_CARD);
   const [tried, setTried] = useState(false);
+  // Its last statement, if it's had one (#262), so its bill is known.
+  const [lastAmount, setLastAmount] = useState<string | null>(null);
+  const [lastPaid, setLastPaid] = useState<string | null>(null);
+  const lastWrong = lastAmount !== null && compareAmounts(lastAmount, "0") < 0;
   // The default account starts as the one usage account in the currency.
   const preselect = (cur: string): CardDraft => {
     const usage = defaultAccountChoices(accounts, cur).filter((a) => a.type === "usage");
@@ -343,6 +347,9 @@ function CreateAccount({
             type,
             currency,
             ...(card ? { credit_card: cardFields(cardValue) } : {}),
+            ...(card && lastAmount !== null
+              ? { last_statement: { amount: lastAmount, paid: lastPaid ?? "0" } }
+              : {}),
             ...(balance !== null && compareAmounts(balance, "0") !== 0
               ? {
                   opening_balance: balance,
@@ -374,7 +381,7 @@ function CreateAccount({
         const found = { name: checkName(name) };
         setErrors(found);
         setTried(true);
-        if (card && Object.keys(cardProblems(cardValue)).length > 0) return;
+        if (card && (Object.keys(cardProblems(cardValue)).length > 0 || lastWrong)) return;
         if (!found.name) create.mutate();
       }}
     >
@@ -442,6 +449,34 @@ function CreateAccount({
             value={openingAt}
             onChange={setOpeningAt}
           />
+        )}
+        {card && (
+          <Stack gap="xs" component="section" aria-label={t("cards.bill.lastStatement")}>
+            <div>
+              <Text size="sm" fw={600}>
+                {t("cards.bill.lastStatement")}
+              </Text>
+              <Text size="xs" c="dimmed">
+                {t("cards.bill.lastStatementHint")}
+              </Text>
+            </div>
+            <AmountInput
+              label={t("cards.bill.lastAmount")}
+              currency={currency}
+              value={lastAmount}
+              onChange={setLastAmount}
+              error={tried && lastWrong ? t("cards.bill.setupAmount") : undefined}
+            />
+            {lastAmount !== null && (
+              <AmountInput
+                label={t("cards.bill.lastPaid")}
+                description={t("cards.bill.lastPaidHint")}
+                currency={currency}
+                value={lastPaid}
+                onChange={setLastPaid}
+              />
+            )}
+          </Stack>
         )}
         {create.error && !nameProblem(create.error) && <ErrorAlert error={create.error} />}
         <Group justify="flex-end" gap="xs">

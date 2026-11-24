@@ -10,6 +10,8 @@ export interface ScheduleText {
   /** Signed: an expense is negative. Empty without the schedule. */
   amount: string;
   income: boolean;
+  /** A card bill's payment (#262): what its amount is, e.g. what's left. */
+  rule?: string;
 }
 
 /** How a schedule's transaction reads in a row: its title and its amount. */
@@ -25,6 +27,7 @@ export function useScheduleText(): (s: Schedule | undefined) => ScheduleText {
       title: scheduleTitle(s, t, names.accountName),
       amount: formatMoney(tx.type === "EXP" ? `-${tx.amount}` : tx.amount, currency),
       income: tx.type === "INC",
+      ...(s.bill ? { rule: t(`cards.bill.rules.${s.bill.rule}`) } : {}),
     };
   };
 }

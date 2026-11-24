@@ -136,7 +136,7 @@ export function ScheduledTab() {
 function ScheduleRow({ schedule: s, names }: { schedule: Schedule; names: Lookups }) {
   const { t, i18n } = useTranslation();
   const [confirming, setConfirming] = useState(false);
-  const { title, amount, income } = useScheduleText()(s);
+  const { title, amount, income, rule } = useScheduleText()(s);
   const tx = s.transaction;
   const where =
     tx.type === "TRF" && tx.to_account_id
@@ -189,6 +189,11 @@ function ScheduleRow({ schedule: s, names }: { schedule: Schedule; names: Lookup
               >
                 {amount}
               </Text>
+              {rule && (
+                <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
+                  {rule}
+                </Text>
+              )}
               {s.mode === "approve" && (
                 <Badge variant="light" size="sm" radius="sm">
                   {t("schedules.approve")}

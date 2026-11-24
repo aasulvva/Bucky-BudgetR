@@ -244,6 +244,11 @@ function QueueRow({
               >
                 {text.amount}
               </Text>
+              {text.rule && (
+                <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
+                  {text.rule}
+                </Text>
+              )}
               <DueBadge occurrence={o} />
             </Stack>
           </Group>

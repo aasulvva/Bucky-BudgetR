@@ -4,12 +4,15 @@
 // and a BSU's limits (#272).
 
 import { Text } from "@mantine/core";
+import type { TFunction } from "i18next";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { Account, Bucket } from "@/api/accounts";
+import { useUpcomingDays } from "@/app/session";
 import { FigureRows, type FigureRow } from "@/components/accounts/FigureRows";
-import { cardNear, negate, positiveHolds } from "@/lib/cards";
+import { billState, cardNear, negate, positiveHolds } from "@/lib/cards";
+import { formatDate } from "@/lib/dates";
 import { addAmounts, compareAmounts, formatMoney, percentOf, subtractAmounts } from "@/lib/money";
 
 /**
@@ -155,6 +158,7 @@ export function BsuFigures({ account }: { account: Account }) {
  */
 export function CardFigures({ card }: { card: Account }) {
   const { t } = useTranslation();
+  const days = useUpcomingDays();
   const c = card.credit_card;
   if (!c) return null;
   const money = (a: string) => formatMoney(a, card.currency);
@@ -181,5 +185,59 @@ export function CardFigures({ card }: { card: Account }) {
         }
       : { label: t("cards.figures.available"), value: money(c.available) },
   ];
+  const bill = billRow(card, days, t);
+  if (bill) rows.push(bill);
   return <FigureRows label={t("cards.figures.label", { name: card.name })} rows={rows} />;
+}
+
+/**
+ * The card's bill as a row (#262): what's left to pay and when it's due,
+ * whether it's finalized or its payment scheduled; orange when due soon or
+ * not set up, red past due.
+ */
+function billRow(card: Account, days: number, t: TFunction): FigureRow | null {
+  const bill = card.credit_card?.bill;
+  if (!bill) return null;
+  const money = (a: string) => formatMoney(a, card.currency);
+  const state = billState(card, days);
+  const label = t("cards.figures.bill");
+  const cur = bill.current;
+  if (state === "locked") {
+    return { label, value: t("cards.figures.billLocked"), orange: true };
+  }
+  if (!cur || state === "none") {
+    return {
+      label,
+      value: "–",
+      note: t("cards.figures.billNone", { date: formatDate(bill.next_statement_date) }),
+    };
+  }
+  if (state === "paid") {
+    return {
+      label,
+      value: t("cards.figures.billPaid"),
+      note: t("cards.figures.billNext", { date: formatDate(bill.next_statement_date) }),
+    };
+  }
+  const status =
+    bill.payment?.state === "queued"
+      ? t("cards.figures.billQueued")
+      : bill.payment?.state === "scheduled"
+        ? t("cards.figures.billScheduled")
+        : cur.fixed
+          ? null
+          : t("cards.figures.billOpen");
+  const minimum =
+    compareAmounts(cur.minimum_left, "0") > 0 && compareAmounts(cur.minimum_left, cur.left) < 0
+      ? t("cards.figures.billMinimum", { amount: money(cur.minimum_left) })
+      : null;
+  return {
+    label,
+    value: money(cur.left),
+    orange: state === "soon",
+    red: state === "past",
+    end: t("cards.figures.billDue", { date: formatDate(cur.due_date) }),
+    note: [status, minimum].filter(Boolean).join(" · ") || undefined,
+    ...(state === "past" ? { warning: t("cards.figures.billPast") } : {}),
+  };
 }

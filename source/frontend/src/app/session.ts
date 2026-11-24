@@ -7,7 +7,7 @@ import { useNavigate } from "react-router";
 
 import { api } from "@/api/client";
 import { ApiError, unwrap } from "@/api/errors";
-import { NOTIFICATIONS_KEY } from "@/api/notifications";
+import { DEFAULT_UPCOMING_DAYS, NOTIFICATIONS_KEY } from "@/api/notifications";
 import type { components } from "@/api/schema";
 import { browserTimeZone } from "@/lib/cycleRule";
 
@@ -28,6 +28,11 @@ async function fetchSession(): Promise<User | null> {
 /** The logged-in user, or null without a session. */
 export function useSession() {
   return useQuery({ queryKey: SESSION_KEY, queryFn: fetchSession, staleTime: 5 * 60_000 });
+}
+
+/** The days ahead the user's bills show (Settings › Notifications). */
+export function useUpcomingDays(): number {
+  return useSession().data?.preferences.notifications?.upcoming_days ?? DEFAULT_UPCOMING_DAYS;
 }
 
 /** PATCHes preferences and puts the result into the session user. */

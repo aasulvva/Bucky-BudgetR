@@ -58,10 +58,10 @@ import {
   bucketsFor,
   carryPrefill,
   defaultSetAside,
-  heldFor,
   holderChoices,
   isCard,
   limitAsk,
+  releaseProblem,
   positiveHolds,
   setAsideOf,
 } from "@/lib/cards";
@@ -189,6 +189,8 @@ export function TransactionForm({
   const zone = preferences?.time_zone ?? browserTimeZone();
   const scheduleMode = schedule !== undefined;
   const approving = approve !== undefined;
+  // A card bill's payment (#262) stays a transfer to its card.
+  const bill = schedule?.editing?.bill ?? approve?.schedule.bill ?? null;
   const from = schedule?.from && isSchedulable(schedule.from) ? schedule.from : undefined;
   const active = useCurrentCycles().data?.active ?? null;
   const amountId = useId();
@@ -552,19 +554,13 @@ export function TransactionForm({
     }
     const debtMoney = (a: string) => formatMoney(a, currency);
     if (paying && releases !== null && auto) {
-      const over = accounts.find(
-        (a) => compareAmounts(releaseValues[a.id] ?? "0", heldFor(a, cardTo.id)) > 0,
+      const problem = releaseProblem(
+        cardTo,
+        accounts,
+        releaseValues,
+        subtractAmounts(amount ?? "0", auto.clears),
       );
-      const rest = subtractAmounts(amount ?? "0", auto.clears);
-      const total = addAmounts(...positiveEntries(releaseValues).map((e) => e[1]));
-      if (over) {
-        found.cardDebt = t("cards.debt.overHeld", {
-          name: over.name,
-          amount: debtMoney(heldFor(over, cardTo.id)),
-        });
-      } else if (compareAmounts(total, rest) > 0) {
-        found.cardDebt = t("cards.debt.overRest", { amount: debtMoney(rest) });
-      }
+      if (problem) found.cardDebt = problem;
     }
     if (carrying && carryOn) {
       const over = positiveHolds(account).find(
@@ -759,7 +755,7 @@ export function TransactionForm({
               ? t("newTransaction.noOther", { currency })
               : lockedNote
           }
-          disabled={others.length === 0 || heldTransfer}
+          disabled={others.length === 0 || heldTransfer || bill !== null}
         />
       )}
       {bsuHint && (
@@ -970,7 +966,14 @@ export function TransactionForm({
           scroll container and push the bar up over the last fields (#103). */}
       <Card withBorder padding={isDesktop ? "lg" : "md"} maw={960} style={{ overflow: "visible" }}>
         <Stack gap="lg">
-          {!editing && !approving && (
+          {bill && (
+            <Text size="sm" c="dimmed">
+              {t(`cards.bill.scheduleNote.${bill.rule}`, {
+                card: accounts.find((a) => a.id === bill.card_id)?.name ?? bill.card_id,
+              })}
+            </Text>
+          )}
+          {!editing && !approving && !bill && (
             <SegmentedControl
               aria-label={t("newTransaction.type")}
               value={newType}
