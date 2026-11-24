@@ -47,6 +47,28 @@ func AfterRecord(ctx context.Context, tx pgx.Tx, t *ledger.Transaction) error {
 		a.Banked = true
 		a.Bank = a.Bank.Sub(l.Amount)
 	}
+	// What a bucket owes its account for a waiting purchase (#264) counts as
+	// money there: the purchase's part leaves the account's buckets as they
+	// were, and a DBC moves its bucket's CAF as an expense would.
+	if len(t.WaitingLines) > 0 {
+		ids := make([]string, len(t.WaitingLines))
+		for i, l := range t.WaitingLines {
+			ids[i] = l.BucketID
+		}
+		rows, err := sqlc.New(tx).BucketAccounts(ctx, ids)
+		if err != nil {
+			return err
+		}
+		source := make(map[string]string, len(rows))
+		for _, r := range rows {
+			source[r.ID] = r.SourceAccountID
+		}
+		for _, l := range t.WaitingLines {
+			a := at(source[l.BucketID])
+			a.Banked = true
+			a.Bank = a.Bank.Add(l.Amount)
+		}
+	}
 	if len(t.BucketLines) > 0 {
 		ids := make([]string, len(t.BucketLines))
 		for i, l := range t.BucketLines {
@@ -92,6 +114,10 @@ func run(ctx context.Context, tx pgx.Tx, userID string, accountIDs []string, for
 	if err != nil {
 		return err
 	}
+	waiting, err := balance.Waiting(ctx, tx, userID)
+	if err != nil {
+		return err
+	}
 	tf, err := balance.Buckets(ctx, tx, userID)
 	if err != nil {
 		return err
@@ -106,7 +132,7 @@ func run(ctx context.Context, tx pgx.Tx, userID string, accountIDs []string, for
 		stored[r.ID] = r.Caf
 	}
 	for account, buckets := range byAccount {
-		available := balance.NewMoney(balances[account], debt[account], decimal.Zero, decimal.Zero).ForBuckets()
+		available := balance.NewMoney(balances[account], waiting[account], debt[account], decimal.Zero, decimal.Zero).ForBuckets()
 		recalc := force
 		if l := lines[account]; l != nil && Follow(available, buckets, *l) {
 			recalc = true

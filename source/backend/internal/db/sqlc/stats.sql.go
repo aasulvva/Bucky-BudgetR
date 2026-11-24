@@ -586,3 +586,38 @@ func (q *Queries) StatsCycles(ctx context.Context, arg StatsCyclesParams) ([]Sta
 	}
 	return items, nil
 }
+
+const statsWaitingParts = `-- name: StatsWaitingParts :many
+SELECT l.purchase_id AS id, SUM(l.amount)::numeric AS waiting
+FROM waiting_lines l
+JOIN transaction_headers h ON h.id = l.transaction_id
+WHERE l.purchase_id = ANY($1::text[]) AND COALESCE(h.parent_id, h.id) = l.purchase_id
+GROUP BY l.purchase_id
+`
+
+type StatsWaitingPartsRow struct {
+	ID      string
+	Waiting decimal.Decimal
+}
+
+// What of each of these purchases waits for its buckets (#264): its own
+// waiting lines, which count in the buckets when a DBC takes them.
+func (q *Queries) StatsWaitingParts(ctx context.Context, ids []string) ([]StatsWaitingPartsRow, error) {
+	rows, err := q.db.Query(ctx, statsWaitingParts, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []StatsWaitingPartsRow{}
+	for rows.Next() {
+		var i StatsWaitingPartsRow
+		if err := rows.Scan(&i.ID, &i.Waiting); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

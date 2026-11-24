@@ -42,7 +42,7 @@ SELECT
     COALESCE(SUM(l.amount) FILTER (WHERE l.cycle_id = this.id AND h.transaction_type = 'OPF'), 0)::numeric AS opening,
     COALESCE(SUM(l.amount) FILTER (WHERE l.cycle_id = this.id AND h.transaction_type IN ('BUA', 'SVB', 'SVD')), 0)::numeric AS adjustments,
     COALESCE(SUM(l.amount) FILTER (WHERE l.cycle_id = this.id AND h.transaction_type = 'BAT'), 0)::numeric AS transfers,
-    COALESCE(SUM(l.amount) FILTER (WHERE l.cycle_id = this.id AND h.transaction_type = 'EXP'), 0)::numeric AS expenses,
+    COALESCE(SUM(l.amount) FILTER (WHERE l.cycle_id = this.id AND h.transaction_type IN ('EXP', 'DBC')), 0)::numeric AS expenses,
     COALESCE(SUM(l.amount) FILTER (WHERE l.cycle_id = this.id AND h.transaction_type = 'OVF'), 0)::numeric AS overflow,
     -- The overflow of refills that pushed TF above BC (and its reversals),
     -- rather than of the cycle's end.

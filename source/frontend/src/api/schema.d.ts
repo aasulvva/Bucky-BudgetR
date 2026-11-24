@@ -1541,6 +1541,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/waiting-charges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the purchases waiting for their buckets
+         * @description The waiting charges (#264) with something left on live buckets,
+         *     oldest purchase first: what each bucket hasn't taken yet of a
+         *     purchase that counts in it later. With `account_id`, only those of
+         *     buckets on that account (where their advance is).
+         */
+        get: operations["listWaitingCharges"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/waiting-charges/{chargeId}/take": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take what's left of a waiting charge now
+         * @description The bucket takes what's left of a purchase that waits for it (#264)
+         *     now, in the active cycle, with a DBC: its TF and CAF go down, and the
+         *     advance on its account with them, so unallocated doesn't change.
+         *     409 `no_active_cycle` without an active cycle, `charge_closed` when
+         *     nothing is left or the bucket is gone.
+         */
+        post: operations["takeWaitingCharge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tags": {
         parameters: {
             query?: never;
@@ -2302,6 +2349,12 @@ export interface paths {
          *       `amount` and `currency`. Until interest or a fee (a transaction on
          *       the card tagged `interest` or `fee`, not reversed) dated from that
          *       due date is registered, or the next statement.
+         *     - `bucket_charge` (#264, info, under `bucket_charges`): a bucket took
+         *       a purchase that waited for it, at the active cycle's start; with
+         *       `bucket_id`, `cycle_id`, `at` (the cycle's start), what it took as
+         *       `amount`, `currency`, and the purchase as `transaction_id` and
+         *       `counterparty`. One per take, until dismissed or the cycle ends. A
+         *       take by hand, or when a payment paid a card purchase off, has none.
          */
         get: operations["listNotifications"];
         put?: never;
@@ -2920,14 +2973,22 @@ export interface components {
             balance: components["schemas"]["Amount"];
             /**
              * @description The part of the balance that's neither held for credit card debt,
-             *     nor backs a bucket, nor is reserved for savings: balance − the
-             *     covered part of the card debt in `card_holds` − Σ CAF of its
-             *     buckets − the covered part of `reserved` (spec §7, §8, #261).
+             *     nor backs a bucket, nor is reserved for savings: balance +
+             *     `waiting` − the covered part of the card debt in `card_holds` −
+             *     Σ CAF of its buckets − the covered part of `reserved` (spec §7,
+             *     §8, #261, #264).
              *     Negative when the account is overdrawn.
              */
             unallocated: components["schemas"]["Amount"];
             /** @description What's held on the account for savings (#231), whether or not the balance covers it. */
             reserved: components["schemas"]["Amount"];
+            /**
+             * @description What the account's buckets owe it for purchases that count in
+             *     them later (#264), an advance: it counts as money on the account
+             *     until the buckets take the purchases, so a purchase that waits
+             *     leaves `unallocated` as it was. `GET /waiting-charges` lists them.
+             */
+            waiting: components["schemas"]["Amount"];
             /** @description The part of `reserved` the balance doesn't cover. Card debt and the buckets are funded first, so reservations are short first. */
             reserved_uncovered: components["schemas"]["Amount"];
             /**
@@ -4263,10 +4324,13 @@ export interface components {
          *     CDH (card debt hold) and CDR (card debt release) come from the card
          *     debt endpoints and deleting an account (#261); they too can be
          *     reversed, not corrected. A purchase, refund or transfer can have card
-         *     lines.
+         *     lines. DBC (deferred bucket charge, #264) is a bucket taking a
+         *     purchase that waited for it: a bucket line and a waiting line. The
+         *     system records and reverses it; it can't be corrected or reversed
+         *     by hand.
          * @enum {string}
          */
-        TransactionType: "OPB" | "BLA" | "INC" | "EXP" | "TRF" | "INP" | "OPF" | "REF" | "BUA" | "BAT" | "OVF" | "SVR" | "SVC" | "SVB" | "SVD" | "CDH" | "CDR";
+        TransactionType: "OPB" | "BLA" | "INC" | "EXP" | "TRF" | "INP" | "OPF" | "REF" | "BUA" | "BAT" | "OVF" | "SVR" | "SVC" | "SVB" | "SVD" | "CDH" | "CDR" | "DBC";
         /** @enum {string} */
         CorrectionType: "none" | "adjustment" | "reversal";
         TransactionBankLine: {
@@ -4289,6 +4353,75 @@ export interface components {
             account_id: components["schemas"]["AccountId"];
             /** @description Signed, in the card's currency. Positive holds money for the card's debt, negative releases it. */
             amount: components["schemas"]["Amount"];
+        };
+        TransactionWaitingLine: {
+            /** @description The purchase (an expense) that waits for the bucket. */
+            purchase_id: components["schemas"]["TransactionId"];
+            bucket_id: components["schemas"]["BucketId"];
+            /**
+             * @description Signed, in the bucket's currency (#264). Positive is a purchase's
+             *     part that waits for the bucket, an advance on the bucket's
+             *     account; negative is what a DBC took of it.
+             */
+            amount: components["schemas"]["Amount"];
+        };
+        /**
+         * @description When a purchase's bucket parts count in their buckets (#264):
+         *     `paid` as a credit card purchase is paid off (payments clear the
+         *     card's debt oldest first, and each bucket takes its share of what's
+         *     paid), `cycle` at a planned cycle's start, `month` at the start of
+         *     the first cycle that starts in or after a month.
+         * @enum {string}
+         */
+        WaitingChargeWhen: "paid" | "cycle" | "month";
+        /** @description Counts an expense's bucket parts in their buckets later (#264), instead of now. */
+        CountLater: {
+            when: components["schemas"]["WaitingChargeWhen"];
+            /** @description For `cycle`, a planned cycle. */
+            cycle_id?: components["schemas"]["CycleId"];
+            /** @description For `month`, YYYY-MM, after the active cycle's start month. */
+            month?: string;
+        };
+        /** @description A purchase's part for one bucket that counts in it later (#264). */
+        WaitingCharge: {
+            id: components["schemas"]["WaitingChargeId"];
+            bucket_id: components["schemas"]["BucketId"];
+            when: components["schemas"]["WaitingChargeWhen"];
+            /** @description The planned cycle of a `cycle` charge; null once that cycle is deleted, when `take_on` stands in for it. */
+            cycle_id: string | null;
+            /**
+             * Format: date
+             * @description The date from whose cycle start a `cycle` or `month` charge is taken; null for `paid`.
+             */
+            take_on: string | null;
+            /** @description The purchase's part, positive. */
+            amount: components["schemas"]["Amount"];
+            /** @description What the bucket hasn't taken yet. */
+            left: components["schemas"]["Amount"];
+            /** @description The bucket is gone, so it won't take the rest. */
+            bucket_deleted: boolean;
+        };
+        /** @description The bucket's ID and 14 random digits (#264). */
+        WaitingChargeId: string;
+        OpenWaitingCharge: {
+            id: components["schemas"]["WaitingChargeId"];
+            purchase_id: components["schemas"]["TransactionId"];
+            bucket_id: components["schemas"]["BucketId"];
+            /** @description The bucket's account, which the advance is on. */
+            account_id: components["schemas"]["AccountId"];
+            when: components["schemas"]["WaitingChargeWhen"];
+            cycle_id: string | null;
+            /** Format: date */
+            take_on: string | null;
+            /**
+             * Format: date-time
+             * @description When the purchase happened.
+             */
+            at: string;
+            /** @description The purchase's counterparty. */
+            counterparty: string;
+            /** @description What the bucket hasn't taken yet, positive. */
+            left: components["schemas"]["Amount"];
         };
         TransactionBalance: {
             account_id: components["schemas"]["AccountId"];
@@ -4339,6 +4472,10 @@ export interface components {
             savings_lines: components["schemas"]["TransactionSavingsLine"][];
             /** @description Effective amounts of card debt held per card and account (#261), as `bank_lines`. */
             card_lines: components["schemas"]["TransactionCardLine"][];
+            /** @description Effective amounts waiting for buckets per purchase and bucket (#264), as `bank_lines`. */
+            waiting_lines: components["schemas"]["TransactionWaitingLine"][];
+            /** @description A purchase's waiting charges (#264), one per bucket; empty when it counts now. */
+            waiting: components["schemas"]["WaitingCharge"][];
             /**
              * @description Set on a reversed transaction: its effective lines just before the
              *     reversal, so what it amounted to can still be shown. Null otherwise.
@@ -4366,12 +4503,14 @@ export interface components {
             bucket_lines: components["schemas"]["TransactionBucketLine"][];
             savings_lines: components["schemas"]["TransactionSavingsLine"][];
             card_lines: components["schemas"]["TransactionCardLine"][];
+            waiting_lines: components["schemas"]["TransactionWaitingLine"][];
         };
         TransactionLines: {
             bank_lines: components["schemas"]["TransactionBankLine"][];
             bucket_lines: components["schemas"]["TransactionBucketLine"][];
             savings_lines: components["schemas"]["TransactionSavingsLine"][];
             card_lines: components["schemas"]["TransactionCardLine"][];
+            waiting_lines: components["schemas"]["TransactionWaitingLine"][];
         };
         TransactionPage: {
             items: components["schemas"]["Transaction"][];
@@ -4453,6 +4592,14 @@ export interface components {
              *     holds first.
              */
             release_card_debt?: components["schemas"]["CardDebtChange"][];
+            /**
+             * @description Only for an expense with bucket lines (#264): its bucket parts
+             *     count in their buckets later instead of now, and don't need an
+             *     active cycle. Until a bucket takes its part, the part is an
+             *     advance on the bucket's account, so unallocated doesn't change.
+             *     `paid` needs a credit card (400 `card_only`).
+             */
+            count_later?: components["schemas"]["CountLater"];
         };
         Tag: {
             name: string;
@@ -4530,6 +4677,14 @@ export interface components {
              *     creating.
              */
             release_card_debt?: components["schemas"]["CardDebtChange"][];
+            /**
+             * @description Makes an expense's bucket parts count in their buckets later, or
+             *     changes when (#264). A purchase that waits can't count now again
+             *     (400): Take its charges instead. Changing its amount or bucket
+             *     parts can't leave a bucket owing less than nothing (409
+             *     `charge_taken`).
+             */
+            count_later?: components["schemas"]["CountLater"];
         };
         /** @description RFC 9457 problem details. */
         Problem: {
@@ -4749,7 +4904,7 @@ export interface components {
             next_cursor: string | null;
         };
         /** @enum {string} */
-        NotificationKind: "approval_queue" | "upcoming_bill" | "investment_balance" | "bucket_uncovered" | "savings_transfer" | "savings_short" | "bsu_over_limit" | "bsu_withdrawal" | "credit_limit" | "card_bill" | "card_bill_due" | "card_bill_carried" | "card_interest";
+        NotificationKind: "approval_queue" | "upcoming_bill" | "investment_balance" | "bucket_uncovered" | "savings_transfer" | "savings_short" | "bsu_over_limit" | "bsu_withdrawal" | "credit_limit" | "card_bill" | "card_bill_due" | "card_bill_carried" | "card_interest" | "bucket_charge";
         /**
          * @description A reminder or to-do. The client words it from `kind` and the fields
          *     that kind uses (see `listNotifications`); the others are null.
@@ -4792,6 +4947,10 @@ export interface components {
             /** @description What's left of a card bill's minimum payment (#262). */
             minimum: string | null;
             currency: string | null;
+            /** @description The purchase a bucket took (#264). */
+            transaction_id: string | null;
+            /** @description The counterparty of the purchase a bucket took (#264). */
+            counterparty: string | null;
         };
         NotificationList: {
             items: components["schemas"]["Notification"][];
@@ -4823,6 +4982,8 @@ export interface components {
             credit_limit?: boolean | null;
             /** @description Credit card bills ready, due soon (`upcoming_days` ahead) or carried over (#262). Null means true. */
             card_bills?: boolean | null;
+            /** @description Purchases that waited for their buckets, taken at a cycle's start (#264). Null means true. */
+            bucket_charges?: boolean | null;
         };
     };
     responses: {
@@ -6734,6 +6895,58 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listWaitingCharges: {
+        parameters: {
+            query?: {
+                account_id?: components["schemas"]["AccountId"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The open waiting charges. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenWaitingCharge"][];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    takeWaitingCharge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chargeId: components["schemas"]["WaitingChargeId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The purchase, with its waiting charges. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transaction"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
             409: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };

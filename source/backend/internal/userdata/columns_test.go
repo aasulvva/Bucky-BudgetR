@@ -88,6 +88,8 @@ bucket_transactions: amount, bucket_id, created_at, created_by, cycle_id, id, tr
 savings_transactions: account_id, amount, created_at, created_by, cycle_id, holder_id, id, transaction_id
 card_debt_lines: account_id, amount, card_id, created_at, created_by, id, transaction_id
 card_statements: amount, card_id, created_by, cutoff, due_date, fixed_at, fixed_by, id, minimum, paid_before, statement_date
+waiting_charges: bucket_id, created_at, cycle_id, id, modified_at, take_on, transaction_id, user_id, when
+waiting_lines: amount, bucket_id, created_at, created_by, id, purchase_id, transaction_id
 transaction_tags: tag_id, transaction_id, user_id
 refills: bucket_id, created_at, cycle_id, income_id, ovf_id, ref_id, trigger, user_id
 savings_budget_runs: created_at, cycle_id, entry_id, income_id, reserved, svr_id, trigger, user_id, wanted

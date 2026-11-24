@@ -897,6 +897,7 @@ const (
 	TransactionTypeSVD TransactionType = "SVD"
 	TransactionTypeCDH TransactionType = "CDH"
 	TransactionTypeCDR TransactionType = "CDR"
+	TransactionTypeDBC TransactionType = "DBC"
 )
 
 func (e *TransactionType) Scan(src interface{}) error {
@@ -952,7 +953,61 @@ func (e TransactionType) Valid() bool {
 		TransactionTypeSVB,
 		TransactionTypeSVD,
 		TransactionTypeCDH,
-		TransactionTypeCDR:
+		TransactionTypeCDR,
+		TransactionTypeDBC:
+		return true
+	}
+	return false
+}
+
+type WaitingChargeWhen string
+
+const (
+	WaitingChargeWhenPaid  WaitingChargeWhen = "paid"
+	WaitingChargeWhenCycle WaitingChargeWhen = "cycle"
+	WaitingChargeWhenMonth WaitingChargeWhen = "month"
+)
+
+func (e *WaitingChargeWhen) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = WaitingChargeWhen(s)
+	case string:
+		*e = WaitingChargeWhen(s)
+	default:
+		return fmt.Errorf("unsupported scan type for WaitingChargeWhen: %T", src)
+	}
+	return nil
+}
+
+type NullWaitingChargeWhen struct {
+	WaitingChargeWhen WaitingChargeWhen
+	Valid             bool // Valid is true if WaitingChargeWhen is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullWaitingChargeWhen) Scan(value interface{}) error {
+	if value == nil {
+		ns.WaitingChargeWhen, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.WaitingChargeWhen.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullWaitingChargeWhen) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.WaitingChargeWhen), nil
+}
+
+func (e WaitingChargeWhen) Valid() bool {
+	switch e {
+	case WaitingChargeWhenPaid,
+		WaitingChargeWhenCycle,
+		WaitingChargeWhenMonth:
 		return true
 	}
 	return false
@@ -1291,4 +1346,26 @@ type User struct {
 	ModifiedAt         time.Time
 	CreatedBy          pgtype.Text
 	LastSeenAt         pgtype.Timestamptz
+}
+
+type WaitingCharge struct {
+	ID            string
+	UserID        string
+	TransactionID string
+	BucketID      string
+	When          WaitingChargeWhen
+	CycleID       pgtype.Text
+	TakeOn        pgtype.Date
+	CreatedAt     time.Time
+	ModifiedAt    time.Time
+}
+
+type WaitingLine struct {
+	ID            string
+	TransactionID string
+	PurchaseID    string
+	BucketID      string
+	Amount        decimal.Decimal
+	CreatedAt     time.Time
+	CreatedBy     pgtype.Text
 }

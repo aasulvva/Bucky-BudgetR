@@ -143,7 +143,7 @@ func TestSchedulesAPI(t *testing.T) {
 	w = do(http.MethodGet, "/api/v1/scheduled-transactions?state=queued", nil, alice)
 	expect(t, "queued", w, http.StatusOK, "")
 	page := decode[api.ScheduledTransactionPage](t, w)
-	if len(page.Items) != 1 || page.Items[0].ScheduleId != exp.Id || page.Items[0].Reason.MustGet() != api.Approval ||
+	if len(page.Items) != 1 || page.Items[0].ScheduleId != exp.Id || page.Items[0].Reason.MustGet() != api.ScheduledTransactionReasonApproval ||
 		!page.Items[0].DueAt.MustGet().Equal(page.Items[0].ScheduledAt) || page.Items[0].TransactionId.IsSpecified() && !page.Items[0].TransactionId.IsNull() ||
 		!page.NextCursor.IsNull() {
 		t.Errorf("queued %+v", page)

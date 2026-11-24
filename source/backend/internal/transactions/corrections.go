@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/shopspring/decimal"
 
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/balance"
@@ -84,6 +85,10 @@ type Changes struct {
 	SetAsideOn *string
 	Carry      []CardAmount
 	Release    *[]AccountAmount
+	// CountLater makes an expense's bucket parts count in their buckets
+	// later, or changes when (#264); nil keeps it. A purchase that waits
+	// can't count now again: its buckets take it with Take.
+	CountLater *CountLater
 }
 
 // Correct records an adjustment that turns the transaction into what c
@@ -121,6 +126,18 @@ func (s *Service) correct(ctx context.Context, tx pgx.Tx, userID, id string, c C
 	want.BSUConfirmed = c.BSUConfirmed
 	want.LimitConfirmed = c.LimitConfirmed
 	q := sqlc.New(tx)
+	// A purchase's parts that wait for their buckets (#264) keep waiting.
+	if cur.rule() != nil && want.CountLater == nil {
+		return "", fmt.Errorf("%w: a purchase that counts in its buckets later can't count now; take it instead", ErrInvalid)
+	}
+	var on pgtype.Date
+	if c.CountLater != nil {
+		if on, err = takeOn(ctx, q, userID, want.AccountID, want); err != nil {
+			return "", err
+		}
+	} else if want.CountLater != nil && len(cur.Waiting) > 0 {
+		on = pgtype.Date{Time: cur.Waiting[0].TakeOn, Valid: !cur.Waiting[0].TakeOn.IsZero()}
+	}
 	if err := keepCardChoices(ctx, q, userID, cur, c, &want); err != nil {
 		return "", err
 	}
@@ -152,18 +169,20 @@ func (s *Service) correct(ctx context.Context, tx pgx.Tx, userID, id string, c C
 	if err != nil {
 		return "", err
 	}
+	waiting := waitingDiff(cur, want)
 	// Card debt follows the amounts and buckets (#261), or what c chooses.
 	var cardLinesDiff []ledger.CardLine
 	cardChoice := c.SetAsideOn != nil || c.Carry != nil || c.Release != nil
 	if cur.Type != sqlc.TransactionTypeOPB && cur.Type != sqlc.TransactionTypeBLA &&
-		(len(bank) > 0 || len(buckets) > 0 || cardChoice) {
+		(len(bank) > 0 || len(buckets) > 0 || len(waiting) > 0 || cardChoice) {
 		wantCards, err := cardLines(ctx, tx, userID, want, &cur)
 		if err != nil {
 			return "", err
 		}
 		cardLinesDiff = cardDiff(cur.CardLines, wantCards)
 	}
-	if len(bank) == 0 && len(buckets) == 0 && len(cardLinesDiff) == 0 && sameHeader(cur, want) {
+	if len(bank) == 0 && len(buckets) == 0 && len(cardLinesDiff) == 0 && len(waiting) == 0 && sameHeader(cur, want) &&
+		sameRule(cur.rule(), want.CountLater) {
 		return "", ErrNoChange
 	}
 	if len(bank) > 0 {
@@ -180,6 +199,11 @@ func (s *Service) correct(ctx context.Context, tx pgx.Tx, userID, id string, c C
 			changed.Buckets = append(changed.Buckets, BucketAmount{BucketID: l.BucketID})
 		}
 	}
+	for _, l := range waiting {
+		if slices.ContainsFunc(want.Buckets, func(b BucketAmount) bool { return b.BucketID == l.BucketID }) {
+			changed.Buckets = append(changed.Buckets, BucketAmount{BucketID: l.BucketID})
+		}
+	}
 	if err := checkBuckets(ctx, q, userID, changed); err != nil {
 		return "", err
 	}
@@ -189,12 +213,20 @@ func (s *Service) correct(ctx context.Context, tx pgx.Tx, userID, id string, c C
 	if err := checkCard(ctx, tx, userID, want, cur.BankLines); err != nil {
 		return "", err
 	}
-	if _, err := s.ledger.Record(ctx, tx, ledger.Entry{
-		UserID: userID, CreatedBy: userID, Type: cur.Type, Correction: sqlc.CorrectionTypeAdjustment,
-		ParentID: cur.ID, At: cur.At, Counterparty: want.Counterparty, Description: want.Description, Tags: want.Tags,
-		TriggersRefill: *want.TriggersRefill, BankLines: bank, BucketLines: buckets, CardLines: cardLinesDiff,
-	}); err != nil {
-		return "", correctionError(err)
+	if len(bank) > 0 || len(buckets) > 0 || len(cardLinesDiff) > 0 || len(waiting) > 0 || !sameHeader(cur, want) {
+		if _, err := s.ledger.Record(ctx, tx, ledger.Entry{
+			UserID: userID, CreatedBy: userID, Type: cur.Type, Correction: sqlc.CorrectionTypeAdjustment,
+			ParentID: cur.ID, At: cur.At, Counterparty: want.Counterparty, Description: want.Description, Tags: want.Tags,
+			TriggersRefill: *want.TriggersRefill, BankLines: bank, BucketLines: buckets, CardLines: cardLinesDiff,
+			WaitingLines: waiting,
+		}); err != nil {
+			return "", correctionError(err)
+		}
+	}
+	if want.CountLater != nil {
+		if err := s.settleWaiting(ctx, tx, userID, cur.ID, want, on); err != nil {
+			return "", err
+		}
 	}
 	if s.refills == nil || *want.TriggersRefill == cur.TriggersRefill {
 		return cur.ID, nil
@@ -227,7 +259,8 @@ func (s *Service) Reverse(ctx context.Context, userID, id string) (Transaction, 
 }
 
 func (s *Service) reverse(ctx context.Context, tx pgx.Tx, userID string, cur Transaction) error {
-	if len(cur.BankLines) == 0 && len(cur.BucketLines) == 0 && len(cur.SavingsLines) == 0 && len(cur.CardLines) == 0 {
+	if len(cur.BankLines) == 0 && len(cur.BucketLines) == 0 && len(cur.SavingsLines) == 0 && len(cur.CardLines) == 0 &&
+		len(cur.WaitingLines) == 0 {
 		return fmt.Errorf("%w: the transaction has no amounts left to reverse", ErrNoChange)
 	}
 	if err := checkSavingsReversal(ctx, tx, userID, cur); err != nil {
@@ -235,6 +268,12 @@ func (s *Service) reverse(ctx context.Context, tx pgx.Tx, userID string, cur Tra
 	}
 	if err := checkCardReversal(ctx, tx, userID, cur); err != nil {
 		return err
+	}
+	// What its buckets took of it goes back first (#264).
+	if len(cur.Waiting) > 0 {
+		if err := s.ledger.UndoTakes(ctx, tx, userID, cur.ID); err != nil {
+			return err
+		}
 	}
 	e := ledger.Entry{
 		UserID: userID, CreatedBy: userID, Type: cur.Type, Correction: sqlc.CorrectionTypeReversal,
@@ -252,6 +291,9 @@ func (s *Service) reverse(ctx context.Context, tx pgx.Tx, userID string, cur Tra
 	}
 	for _, l := range cur.CardLines {
 		e.CardLines = append(e.CardLines, ledger.CardLine{CardID: l.CardID, AccountID: l.AccountID, Amount: l.Amount.Neg()})
+	}
+	for _, l := range cur.ownWaiting() {
+		e.WaitingLines = append(e.WaitingLines, ledger.WaitingLine{BucketID: l.BucketID, Amount: l.Amount.Neg()})
 	}
 	if _, err := s.ledger.Record(ctx, tx, e); err != nil {
 		return correctionError(err)
@@ -361,6 +403,11 @@ func desired(cur Transaction, c Changes) (New, error) {
 		for _, l := range cur.BucketLines {
 			n.Buckets = append(n.Buckets, BucketAmount{BucketID: l.BucketID, Amount: l.Amount.Mul(sign)})
 		}
+		// Parts that wait for their buckets (#264) are positive already.
+		for _, l := range cur.ownWaiting() {
+			n.Buckets = append(n.Buckets, BucketAmount{BucketID: l.BucketID, Amount: l.Amount})
+		}
+		n.CountLater = cur.rule()
 	case sqlc.TransactionTypeTRF:
 		for _, l := range cur.BankLines {
 			if l.Amount.IsNegative() {
@@ -381,6 +428,9 @@ func desired(cur Transaction, c Changes) (New, error) {
 	}
 	if c.SetBuckets {
 		n.Buckets = c.Buckets
+	}
+	if c.CountLater != nil {
+		n.CountLater = c.CountLater
 	}
 	if _, _, err := signedLines(n); err != nil {
 		return New{}, err
@@ -415,6 +465,9 @@ func diff(cur Transaction, want New) ([]ledger.BankLine, []ledger.BucketLine, er
 		if bank, buckets, err = signedLines(want); err != nil {
 			return nil, nil, err
 		}
+		if want.CountLater != nil {
+			buckets = nil // they wait instead (#264): see waitingDiff
+		}
 	}
 
 	var bankDiff []ledger.BankLine
@@ -447,6 +500,38 @@ func diff(cur Transaction, want New) ([]ledger.BankLine, []ledger.BucketLine, er
 		}
 	}
 	return bankDiff, bucketDiff, nil
+}
+
+// waitingDiff returns the waiting lines that turn cur's parts that wait for
+// their buckets (#264) into want's: none when want counts now.
+func waitingDiff(cur Transaction, want New) []ledger.WaitingLine {
+	var out []ledger.WaitingLine
+	have := cur.ownWaiting()
+	if want.CountLater != nil {
+		for _, b := range want.Buckets {
+			d := b.Amount
+			if i := slices.IndexFunc(have, func(l WaitingLine) bool { return l.BucketID == b.BucketID }); i >= 0 {
+				d = d.Sub(have[i].Amount)
+			}
+			if !d.IsZero() {
+				out = append(out, ledger.WaitingLine{BucketID: b.BucketID, Amount: d})
+			}
+		}
+	}
+	for _, l := range have {
+		if want.CountLater == nil || !slices.ContainsFunc(want.Buckets, func(b BucketAmount) bool { return b.BucketID == l.BucketID }) {
+			out = append(out, ledger.WaitingLine{BucketID: l.BucketID, Amount: l.Amount.Neg()})
+		}
+	}
+	return out
+}
+
+// sameRule reports whether two CountLater are alike.
+func sameRule(a, b *CountLater) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.When == b.When && a.CycleID == b.CycleID && a.Month.Equal(b.Month)
 }
 
 // sameHeader reports whether want has t's counterparty, description and

@@ -16,6 +16,29 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.36.01",
+    date: "2026-11-24",
+    title: {
+      en: "Counting a purchase in its bucket later, behind the scenes",
+      nb: "Telle et kjøp i bøtta senere, bak kulissene",
+      nn: "Telje eit kjøp i bøtta seinare, bak kulissane",
+    },
+    changes: {
+      en: [
+        "The server can now let an expense count in its buckets later: as a credit card purchase is paid off (payments clear the oldest debt first), or at the start of a later cycle or month. Until then, the account isn't short of it. The screens for this come next.",
+        "A new notification and setting, Purchases counted later, tells you when a cycle's start counts a waiting purchase in its bucket.",
+      ],
+      nb: [
+        "Serveren kan nå la en utgift telle i bøttene sine senere: etter hvert som et kredittkortkjøp betales ned (innbetalinger dekker den eldste gjelden først), eller ved starten av en senere periode eller måned. Inntil da mangler ikke kontoen pengene. Skjermbildene for dette kommer etterpå.",
+        "Et nytt varsel og en ny innstilling, Kjøp som teller senere, sier fra når starten på en periode teller et ventende kjøp i bøtta.",
+      ],
+      nn: [
+        "Serveren kan no la ei utgift telje i bøttene sine seinare: etter kvart som eit kredittkortkjøp vert betalt ned (innbetalingar dekkjer den eldste gjelda først), eller ved starten av ein seinare periode eller månad. Til då manglar ikkje kontoen pengane. Skjermbileta for dette kjem etterpå.",
+        "Eit nytt varsel og ei ny innstilling, Kjøp som tel seinare, seier frå når starten på ein periode tel eit ventande kjøp i bøtta.",
+      ],
+    },
+  },
+  {
     version: "v2.36.00",
     date: "2026-11-24",
     title: {

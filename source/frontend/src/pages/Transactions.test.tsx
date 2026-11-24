@@ -52,6 +52,7 @@ const wine = transaction({
     bucket_lines: [],
     savings_lines: [],
     card_lines: [],
+    waiting_lines: [],
   },
 });
 
@@ -235,6 +236,7 @@ describe("Transactions", () => {
           bucket_lines: [],
           savings_lines: [],
           card_lines: [],
+          waiting_lines: [],
         },
         {
           id: "2026102400000009",
@@ -245,6 +247,7 @@ describe("Transactions", () => {
           bucket_lines: [],
           savings_lines: [],
           card_lines: [],
+          waiting_lines: [],
         },
       ],
     };

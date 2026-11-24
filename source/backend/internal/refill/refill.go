@@ -47,6 +47,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/allocation"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/balance"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/buckets"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/cards"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
 )
@@ -122,19 +123,27 @@ func NewService(pool *pgxpool.Pool, l *ledger.Ledger, opts Options) *Service {
 
 // OnStart refills the Auto buckets, dated at the cycle's start, then runs
 // the At cycle start savings budget entries, and the After the refills
-// sweeps of the accounts that are refilled now (#235). It is the cycles
-// OnStart hook.
+// sweeps of the accounts that are refilled now (#235). Last, the buckets take
+// the purchases that waited for the cycle (#264). It is the cycles OnStart
+// hook.
 func (s *Service) OnStart(ctx context.Context, tx pgx.Tx, c sqlc.Cycle) error {
 	if err := s.refillAll(ctx, tx, c, sqlc.RefillModeAuto, "", c.StartAt, ""); err != nil {
 		return err
 	}
-	if s.savings == nil {
-		return nil
+	if s.savings != nil {
+		if err := s.savings.RunBudget(ctx, tx, c.UserID, c, sqlc.SavingsBudgetWhenCycleStart, "", c.StartAt, ""); err != nil {
+			return err
+		}
+		if err := s.sweep(ctx, tx, c.UserID, c, "", c.StartAt); err != nil {
+			return err
+		}
 	}
-	if err := s.savings.RunBudget(ctx, tx, c.UserID, c, sqlc.SavingsBudgetWhenCycleStart, "", c.StartAt, ""); err != nil {
+	// Then the buckets take the purchases that waited for this cycle (#264).
+	loc, err := cards.Location(ctx, sqlc.New(tx), c.UserID)
+	if err != nil {
 		return err
 	}
-	return s.sweep(ctx, tx, c.UserID, c, "", c.StartAt)
+	return s.ledger.TakeDue(ctx, tx, c, loc)
 }
 
 // sweep runs the After the refills sweeps (of accountID, or all for "")

@@ -108,6 +108,9 @@ type Account struct {
 	// CardDebtUncovered the part of their sum the balance doesn't cover.
 	CardHolds         map[string]decimal.Decimal
 	CardDebtUncovered decimal.Decimal
+	// Waiting is what its buckets owe it for purchases that count in them
+	// later (#264).
+	Waiting decimal.Decimal
 	// ExpectedIncome is the income expected per cycle, for Budget setup
 	// (spec §9). Invalid until entered.
 	ExpectedIncome decimal.NullDecimal
@@ -820,7 +823,7 @@ func toAccount(r sqlc.BankAccount, all map[string]balance.Money, statuses map[st
 	a := Account{
 		ID: r.ID, Name: r.Name, Type: r.AccountType, Currency: r.Currency, Bank: r.Bank,
 		Balance: m.Balance, Unallocated: m.Unallocated, Reserved: m.Reserved, ReservedUncovered: m.Uncovered(),
-		CardHolds: m.CardHolds, CardDebtUncovered: m.CardUncovered(),
+		CardHolds: m.CardHolds, CardDebtUncovered: m.CardUncovered(), Waiting: m.Waiting,
 		ExpectedIncome: r.ExpectedIncome, CreatedAt: r.CreatedAt,
 	}
 	if st, ok := statuses[r.ID]; ok {

@@ -37,6 +37,10 @@ const (
 	// statement day, so it takes the card's new ID; also a bill payment's
 	// schedule's statement.
 	kStatement
+	// kWaitingCharge and kWaitingLine are a waiting charge's and a waiting
+	// line's IDs (#264): the bucket's, then random digits.
+	kWaitingCharge
+	kWaitingLine
 	// kKept is kept as it is: a notification dismissal's key (#57). It names
 	// IDs, so a clone's no longer match and are forgotten when its
 	// notifications are next read.
@@ -59,6 +63,8 @@ var idColumns = map[string]map[string]kind{
 	"savings_transactions":    {"id": kSavingsLine, "transaction_id": kTransaction, "holder_id": kHolder, "account_id": kAccount, "cycle_id": kCycle, "created_by": kUser},
 	"card_debt_lines":         {"id": kCardLine, "transaction_id": kTransaction, "card_id": kAccount, "account_id": kAccount, "created_by": kUser},
 	"card_statements":         {"id": kStatement, "card_id": kAccount, "created_by": kUser},
+	"waiting_charges":         {"id": kWaitingCharge, "user_id": kUser, "transaction_id": kTransaction, "bucket_id": kBucket, "cycle_id": kCycle},
+	"waiting_lines":           {"id": kWaitingLine, "transaction_id": kTransaction, "purchase_id": kTransaction, "bucket_id": kBucket, "created_by": kUser},
 	"transaction_tags":        {"transaction_id": kTransaction, "tag_id": kTag, "user_id": kUser},
 	"refills":                 {"bucket_id": kBucket, "cycle_id": kCycle, "user_id": kUser, "ref_id": kTransaction, "ovf_id": kTransaction, "income_id": kTransaction},
 	"savings_budget_entries":  {"id": kBudget, "user_id": kUser, "account_id": kAccount, "target_id": kHolder},
@@ -139,6 +145,8 @@ func remap(ctx context.Context, tx pgx.Tx, userID string, data Data) (Data, erro
 	m[kOccurrence] = map[string]string{}
 	m[kSavingsLine] = map[string]string{}
 	m[kCardLine] = map[string]string{}
+	m[kWaitingCharge] = map[string]string{}
+	m[kWaitingLine] = map[string]string{}
 
 	out := Data{Tables: map[string][]row{}}
 	for name, rows := range data.Tables {
@@ -166,6 +174,10 @@ func remap(ctx context.Context, tx pgx.Tx, userID string, data Data) (Data, erro
 					n[col] = lineID(m[kSavingsLine], old, func() string { return ids.NewSavingsLine(m[kHolder][fmt.Sprint(r["holder_id"])]) })
 				case kCardLine:
 					n[col] = lineID(m[kCardLine], old, func() string { return ids.NewCardDebtLine(m[kAccount][fmt.Sprint(r["card_id"])]) })
+				case kWaitingCharge:
+					n[col] = lineID(m[kWaitingCharge], old, func() string { return ids.NewWaitingCharge(m[kBucket][fmt.Sprint(r["bucket_id"])]) })
+				case kWaitingLine:
+					n[col] = lineID(m[kWaitingLine], old, func() string { return ids.NewWaitingLine(m[kBucket][fmt.Sprint(r["bucket_id"])]) })
 				case kStatement:
 					// The card's ID, then the statement day.
 					card, ok := "", len(old) > 4

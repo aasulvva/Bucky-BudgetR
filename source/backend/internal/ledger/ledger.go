@@ -92,6 +92,20 @@ type Entry struct {
 	// CardLines hold money for a credit card's debt (positive) or release
 	// it (#261).
 	CardLines []CardLine
+	// WaitingLines are bucket parts that count in their buckets later
+	// (#264): what a bucket owes its account for a purchase (positive), or
+	// pays back when it takes it (a DBC, negative).
+	WaitingLines []WaitingLine
+}
+
+// WaitingLine is an amount a bucket owes its account for a purchase that
+// waits for it (#264).
+type WaitingLine struct {
+	// PurchaseID is the purchase (an original expense). Empty means this
+	// transaction's own family: itself, or the parent of a correction.
+	PurchaseID string
+	BucketID   string
+	Amount     decimal.Decimal
 }
 
 // BankLine is an amount on a bank account, in the account's currency.
@@ -138,6 +152,7 @@ type Transaction struct {
 	BucketLines  []sqlc.BucketTransaction
 	SavingsLines []sqlc.SavingsTransaction
 	CardLines    []sqlc.CardDebtLine
+	WaitingLines []sqlc.WaitingLine
 	// Tags are sorted case-insensitively.
 	Tags []string
 }
@@ -166,6 +181,7 @@ type shape struct {
 	minBucket, maxBucket   int // maxBucket < 0: no limit
 	minSavings, maxSavings int // maxSavings < 0: no limit
 	minCard, maxCard       int // maxCard < 0: no limit
+	minWaiting, maxWaiting int // maxWaiting < 0: no limit
 }
 
 var shapes = map[sqlc.TransactionType]shape{
@@ -174,7 +190,8 @@ var shapes = map[sqlc.TransactionType]shape{
 	// A purchase or refund on a credit card holds or releases its debt on
 	// the accounts of its buckets and the one chosen for the rest (#261).
 	sqlc.TransactionTypeINC: {bank: 1, maxBucket: -1, maxCard: -1},
-	sqlc.TransactionTypeEXP: {bank: 1, maxBucket: -1, maxCard: -1},
+	// An expense's bucket parts can wait for their buckets (#264).
+	sqlc.TransactionTypeEXP: {bank: 1, maxBucket: -1, maxCard: -1, maxWaiting: -1},
 	// A transfer that does Done on held funds (#231) has a savings line; one
 	// that pays a card, takes cash from one or carries held card debt along
 	// has card lines (#261).
@@ -198,6 +215,8 @@ var shapes = map[sqlc.TransactionType]shape{
 	// Card debt set aside on an account, or released from accounts (#261).
 	sqlc.TransactionTypeCDH: {minCard: 1, maxCard: 1},
 	sqlc.TransactionTypeCDR: {minCard: 1, maxCard: -1},
+	// A bucket takes (part of) a purchase that waited for it (#264).
+	sqlc.TransactionTypeDBC: {minBucket: 1, maxBucket: 1, minWaiting: 1, maxWaiting: 1},
 }
 
 // Create records e in a new database transaction.
@@ -366,6 +385,35 @@ func (l *Ledger) Record(ctx context.Context, tx pgx.Tx, e Entry) (*Transaction, 
 		t.CardLines = append(t.CardLines, row)
 	}
 
+	family := t.Header.ID
+	if e.ParentID != "" {
+		family = e.ParentID
+	}
+	for _, line := range e.WaitingLines {
+		purchase := line.PurchaseID
+		if purchase == "" {
+			purchase = family
+		}
+		var row sqlc.WaitingLine
+		_, err := ids.Insert(ctx, ids.WaitingLine, func() string { return ids.NewWaitingLine(line.BucketID) },
+			func(ctx context.Context, id string) (bool, error) {
+				var err error
+				row, err = q.CreateWaitingLine(ctx, sqlc.CreateWaitingLineParams{
+					ID:            id,
+					TransactionID: t.Header.ID,
+					PurchaseID:    purchase,
+					BucketID:      line.BucketID,
+					Amount:        line.Amount,
+					CreatedBy:     createdBy,
+				})
+				return ids.Inserted(err)
+			})
+		if err != nil {
+			return nil, fmt.Errorf("create waiting line: %w", err)
+		}
+		t.WaitingLines = append(t.WaitingLines, row)
+	}
+
 	for _, name := range e.Tags {
 		tag, err := q.UpsertTag(ctx, sqlc.UpsertTagParams{UserID: e.UserID, Name: name})
 		if err != nil {
@@ -382,6 +430,17 @@ func (l *Ledger) Record(ctx context.Context, tx pgx.Tx, e Entry) (*Transaction, 
 
 	if l.opts.AfterRecord != nil {
 		if err := l.opts.AfterRecord(ctx, tx, t); err != nil {
+			return nil, err
+		}
+	}
+	// A payment, refund or anything else on a credit card may pay off part
+	// of purchases that wait for their buckets until then (#264).
+	if e.Type != sqlc.TransactionTypeDBC && len(t.BankLines) > 0 {
+		accounts := make([]string, len(t.BankLines))
+		for i, b := range t.BankLines {
+			accounts[i] = b.AccountID
+		}
+		if err := l.SyncPaid(ctx, tx, e.UserID, accounts, e.At, e.CreatedBy); err != nil {
 			return nil, err
 		}
 	}
@@ -423,6 +482,9 @@ func Get(ctx context.Context, db sqlc.DBTX, userID, id string) (*Transaction, er
 		return nil, err
 	}
 	if t.CardLines, err = q.ListCardDebtLines(ctx, id); err != nil {
+		return nil, err
+	}
+	if t.WaitingLines, err = q.ListWaitingLines(ctx, id); err != nil {
 		return nil, err
 	}
 	if t.Tags, err = q.ListTransactionTags(ctx, id); err != nil {
@@ -500,6 +562,12 @@ func normalize(e Entry) (Entry, error) {
 			}
 			return invalid("%s needs at least %d card debt line(s), got %d", e.Type, s.minCard, n)
 		}
+		if n := len(e.WaitingLines); n < s.minWaiting || (s.maxWaiting >= 0 && n > s.maxWaiting) {
+			if s.maxWaiting == 0 {
+				return invalid("%s can't have waiting lines", e.Type)
+			}
+			return invalid("%s needs %d waiting line(s), got %d", e.Type, s.minWaiting, n)
+		}
 	case sqlc.CorrectionTypeAdjustment, sqlc.CorrectionTypeReversal:
 		if !ids.Transaction.Valid(e.ParentID) {
 			return invalid("a %s needs a parent transaction", e.Correction)
@@ -510,7 +578,7 @@ func normalize(e Entry) (Entry, error) {
 		// A correction changes some of its parent's lines, so it can have
 		// fewer lines than the type needs, but none of a kind the type lacks.
 		// An adjustment without lines changes only the counterparty or tags.
-		if e.Correction == sqlc.CorrectionTypeReversal && len(e.BankLines)+len(e.BucketLines)+len(e.SavingsLines)+len(e.CardLines) == 0 {
+		if e.Correction == sqlc.CorrectionTypeReversal && len(e.BankLines)+len(e.BucketLines)+len(e.SavingsLines)+len(e.CardLines)+len(e.WaitingLines) == 0 {
 			return invalid("a reversal needs at least one line")
 		}
 		if len(e.BankLines) > s.bank {
@@ -524,6 +592,9 @@ func normalize(e Entry) (Entry, error) {
 		}
 		if s.maxCard >= 0 && len(e.CardLines) > s.maxCard {
 			return invalid("%s has at most %d card debt line(s)", e.Type, s.maxCard)
+		}
+		if s.maxWaiting >= 0 && len(e.WaitingLines) > s.maxWaiting {
+			return invalid("%s has at most %d waiting line(s)", e.Type, s.maxWaiting)
 		}
 	default:
 		return invalid("unknown correction type %q", e.Correction)
@@ -592,6 +663,23 @@ func normalize(e Entry) (Entry, error) {
 		key := "card " + line.CardID + " " + line.AccountID
 		if seen[key] {
 			return invalid("card %s appears twice on account %s", line.CardID, line.AccountID)
+		}
+		seen[key] = true
+		if err := checkAmount(line.Amount); err != nil {
+			return Entry{}, err
+		}
+	}
+
+	for _, line := range e.WaitingLines {
+		if line.PurchaseID != "" && !ids.Transaction.Valid(line.PurchaseID) {
+			return invalid("purchase ID %q", line.PurchaseID)
+		}
+		if !ids.Bucket.Valid(line.BucketID) {
+			return invalid("bucket ID %q", line.BucketID)
+		}
+		key := "waiting " + line.PurchaseID + " " + line.BucketID
+		if seen[key] {
+			return invalid("bucket %s waits twice for one purchase", line.BucketID)
 		}
 		seen[key] = true
 		if err := checkAmount(line.Amount); err != nil {
@@ -676,10 +764,15 @@ func checkOwned(ctx context.Context, q *sqlc.Queries, e Entry) error {
 			return fmt.Errorf("%w: account %s", ErrNotFound, missing)
 		}
 	}
-	if len(e.BucketLines) > 0 {
-		want := make([]string, len(e.BucketLines))
-		for i, line := range e.BucketLines {
-			want[i] = line.BucketID
+	if len(e.BucketLines)+len(e.WaitingLines) > 0 {
+		var want []string
+		for _, line := range e.BucketLines {
+			want = append(want, line.BucketID)
+		}
+		for _, line := range e.WaitingLines {
+			if !slices.Contains(want, line.BucketID) {
+				want = append(want, line.BucketID)
+			}
 		}
 		rows, err := q.GetOwnedBuckets(ctx, sqlc.GetOwnedBucketsParams{Ids: want, UserID: e.UserID})
 		if err != nil {
