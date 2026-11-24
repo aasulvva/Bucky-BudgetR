@@ -4,6 +4,7 @@ import {
   IconBucket,
   IconBuildingBank,
   IconCreditCard,
+  IconHourglass,
   IconPigMoney,
   IconRepeat,
   IconX,
@@ -16,16 +17,17 @@ import { Link } from "react-router";
 
 import { useRefreshMoney } from "@/api/accounts";
 import { api } from "@/api/client";
-import { useCurrentCycles } from "@/api/cycles";
+import { useCurrentCycles, useCycles } from "@/api/cycles";
 import { unwrap } from "@/api/errors";
 import { useSchedules } from "@/api/schedules";
 import { useTransaction, type Transaction } from "@/api/transactions";
+import { useTakeCharge, type WaitingCharge } from "@/api/waiting";
 import { useSession } from "@/app/session";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { QueryState } from "@/components/QueryState";
 import { cycleRange } from "@/lib/cycles";
 import { formatDateTime } from "@/lib/dates";
-import { formatMoney } from "@/lib/money";
+import { formatMoney, subtractAmounts } from "@/lib/money";
 import { isSchedulable, scheduleTitle } from "@/lib/schedules";
 import {
   bucketLinesLocked,
@@ -36,6 +38,7 @@ import {
   linesAmount,
   shownLines,
 } from "@/lib/transactionList";
+import { canTake, purchaseOf, ruleText } from "@/lib/waiting";
 
 import { signedMoney, transactionTitle, useLookups, type Lookups } from "./lookups";
 
@@ -171,6 +174,34 @@ function Detail({
         </Section>
       )}
 
+      {tx.waiting.length > 0 && (
+        <Section
+          title={t("waiting.detail.title", { count: tx.waiting.length })}
+          icon={IconHourglass}
+        >
+          {tx.waiting.map((w) => (
+            <WaitingRow
+              key={w.id}
+              charge={w}
+              name={names.bucketName(w.bucket_id)}
+              currency={currency}
+              reversed={tx.reversed}
+            />
+          ))}
+        </Section>
+      )}
+
+      {purchaseOf(tx) && (
+        <Text size="sm">
+          <Trans
+            i18nKey="waiting.detail.forPurchase"
+            components={{
+              open: <Anchor component={Link} to={openLink(purchaseOf(tx) ?? "")} />,
+            }}
+          />
+        </Text>
+      )}
+
       {lines.savings_lines.length > 0 && (
         <Section
           title={t("transactions.savingsLines", { count: lines.savings_lines.length })}
@@ -254,9 +285,11 @@ function Detail({
               ? "transactions.reversedNote"
               : CARD_DEBT_TYPES.includes(tx.type) && isReversible(tx)
                 ? "transactions.cardDebtNote"
-                : isReversible(tx)
-                  ? "transactions.savingsNote"
-                  : "transactions.systemNote",
+                : tx.type === "DBC"
+                  ? "waiting.detail.chargeNote"
+                  : isReversible(tx)
+                    ? "transactions.savingsNote"
+                    : "transactions.systemNote",
           )}
         </Text>
       )}
@@ -278,6 +311,67 @@ function Detail({
             </Text>
           )
         ))}
+    </Stack>
+  );
+}
+
+/**
+ * A bucket's part of a purchase that counts later (#264): what it's taken,
+ * when it takes the rest, and Take now.
+ */
+function WaitingRow({
+  charge,
+  name,
+  currency,
+  reversed,
+}: {
+  charge: WaitingCharge;
+  name: string;
+  currency: string | undefined;
+  reversed: boolean;
+}) {
+  const { t } = useTranslation();
+  const cycles = useCycles().data ?? [];
+  const money = (a: string) => formatMoney(a, currency);
+  const take = useTakeCharge(() => {
+    notifications.show({
+      color: "green",
+      message: t("waiting.detail.taken", { bucket: name, amount: money(charge.left) }),
+    });
+  });
+  const open = canTake(charge) && !reversed;
+  const taken = subtractAmounts(charge.amount, charge.left);
+  return (
+    <Stack gap={4}>
+      <Row
+        label={name}
+        note={
+          charge.bucket_deleted
+            ? t("waiting.detail.bucketDeleted")
+            : t("waiting.detail.takenOf", { taken: money(taken), amount: money(charge.amount) })
+        }
+      >
+        {open ? t("waiting.detail.left", { amount: money(charge.left) }) : t("waiting.detail.done")}
+      </Row>
+      {open && (
+        <Group justify="space-between" gap="xs" wrap="nowrap">
+          <Text size="xs" c="dimmed">
+            {ruleText(charge, cycles, t)}
+          </Text>
+          <Button
+            size="compact-xs"
+            variant="light"
+            loading={take.isPending}
+            aria-label={t("waiting.detail.takeName", { bucket: name })}
+            onClick={() => {
+              take.mutate(charge.id);
+            }}
+          >
+            {t("waiting.detail.take")}
+          </Button>
+        </Group>
+      )}
+      {take.error && <ErrorAlert error={take.error} />}
     </Stack>
   );
 }
@@ -312,6 +406,7 @@ function Actions({ tx, locked, names }: { tx: Transaction; locked: boolean; name
               {tx.triggers_refill ? ` ${t("transactions.reverseRefills")}` : ""}
               {tx.savings_lines.length > 0 ? ` ${t(reverseSavingsKey(tx))}` : ""}
               {tx.card_lines.length > 0 ? ` ${t(reverseCardKey(tx))}` : ""}
+              {tx.waiting.length > 0 ? ` ${t("waiting.detail.reverse")}` : ""}
             </Text>
             {reverse.error && <ErrorAlert error={reverse.error} />}
             <Group gap="xs">

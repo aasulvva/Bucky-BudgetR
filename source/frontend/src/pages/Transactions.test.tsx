@@ -398,4 +398,64 @@ describe("Transactions", () => {
     expect(await screen.findByRole("link", { name: /Rema 1000/ })).toHaveTextContent("Endra");
     expect(screen.getByRole("checkbox", { name: "Vis påfyll og justeringar" })).toBeInTheDocument();
   });
+
+  it("shows what waits for its buckets, takes it now, and links a DBC to its purchase (#264)", async () => {
+    const trip = transaction({
+      id: "2026102300000005",
+      counterparty: "Travel Co",
+      bank_lines: [{ account_id: main.id, amount: "-3000.00" }],
+      waiting_lines: [
+        { purchase_id: "2026102300000005", bucket_id: groceries.id, amount: "3000.00" },
+      ],
+      waiting: [
+        {
+          id: "100000000112345678901234",
+          bucket_id: groceries.id,
+          when: "paid",
+          cycle_id: null,
+          take_on: null,
+          amount: "3000.00",
+          left: "2000.00",
+          bucket_deleted: false,
+        },
+      ],
+    });
+    const charge = transaction({
+      id: "2026102300000006",
+      type: "DBC",
+      counterparty: "Travel Co",
+      bank_lines: [],
+      bucket_lines: [{ bucket_id: groceries.id, cycle_id: active.id, amount: "-1000.00" }],
+      waiting_lines: [{ purchase_id: trip.id, bucket_id: groceries.id, amount: "-1000.00" }],
+    });
+    apiMock.on("GET /api/v1/transactions", { body: { items: [charge, trip], next_cursor: null } });
+    apiMock.on(`GET /api/v1/transactions/${trip.id}`, { body: { ...trip, history: [] } });
+    apiMock.on(`GET /api/v1/transactions/${charge.id}`, { body: { ...charge, history: [] } });
+    apiMock.on("POST /api/v1/waiting-charges/100000000112345678901234/take", {
+      body: { ...trip, waiting: [{ ...trip.waiting[0], left: "0.00" }] },
+    });
+    const { router } = renderRoute(`/transactions?system=1&open=${trip.id}`);
+    const rows = await screen.findAllByRole("link", { name: /Travel Co/ });
+    const tripRow = rows.find((r) => r.getAttribute("href")?.includes(trip.id));
+    expect(tripRow).toHaveTextContent(`${m("2000.00")} waiting`);
+    expect(tripRow).toHaveTextContent("Groceries (later)");
+
+    const panel = within(await screen.findByRole("article", { name: "Travel Co" }));
+    expect(panel.getByText(`${m("1000.00")} of ${m("3000.00")} counted`)).toBeInTheDocument();
+    expect(panel.getByText(`${m("2000.00")} left`)).toBeInTheDocument();
+    expect(panel.getByText("Counted as it's paid off")).toBeInTheDocument();
+    await userEvent.click(panel.getByRole("button", { name: "Take now for Groceries" }));
+    expect(await screen.findByText(`Groceries counted ${m("2000.00")}`)).toBeInTheDocument();
+    expect(
+      apiMock.calls("POST /api/v1/waiting-charges/100000000112345678901234/take"),
+    ).toHaveLength(1);
+
+    await router.navigate(`/transactions?system=1&open=${charge.id}`);
+    const link = await screen.findByRole("link", { name: "this purchase" });
+    expect(screen.getByText(/Recorded when a bucket counted a purchase/)).toBeInTheDocument();
+    await userEvent.click(link);
+    await waitFor(() => {
+      expect(router.state.location.search).toContain(`open=${trip.id}`);
+    });
+  });
 });

@@ -19,13 +19,14 @@ import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
-import { useRefreshMoney, type Account, type CardStatement } from "@/api/accounts";
+import { useBuckets, useRefreshMoney, type Account, type CardStatement } from "@/api/accounts";
 import { api } from "@/api/client";
 import { unwrap } from "@/api/errors";
 import { useRefreshSchedules } from "@/api/schedules";
 import { useUpcomingDays } from "@/app/session";
 import { AmountInput } from "@/components/AmountInput";
 import { FigureRows, type FigureRow } from "@/components/accounts/FigureRows";
+import { WaitingOnCard } from "@/components/accounts/WaitingOnCard";
 import { DateTimeInput } from "@/components/DateTimeInput";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { PaymentReleases, type DebtAmounts } from "@/components/transactions/CardDebtFields";
@@ -688,6 +689,7 @@ function PayBillForm({
 }) {
   const { t } = useTranslation();
   const refresh = useRefreshMoney();
+  const buckets = useBuckets().data ?? [];
   const money = (a: string) => formatMoney(a, card.currency);
   const [rule, setRule] = useState<PayRule>("full");
   const [other, setOther] = useState<string | null>(null);
@@ -785,6 +787,7 @@ function PayBillForm({
         {rule !== "fixed" && (
           <Text size="sm">{t("cards.bill.paysNow", { amount: money(amount) })}</Text>
         )}
+        <WaitingOnCard card={card} buckets={buckets} />
         <FromInput
           card={card}
           accounts={accounts}

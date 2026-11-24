@@ -333,6 +333,35 @@ describe("Notifications", () => {
     );
   });
 
+  it("tells when a cycle's start counted a waiting purchase in its bucket (#264)", async () => {
+    apiMock.on("GET /api/v1/notifications", {
+      body: {
+        items: [
+          notification({
+            key: "bucket-charge:2027020150296413",
+            kind: "bucket_charge",
+            bucket_id: rent.id,
+            cycle_id: "100001000002",
+            transaction_id: "2027010520838349",
+            counterparty: "Game shop",
+            at: "2027-02-01T00:00:00Z",
+            amount: "1200.00",
+            currency: "NOK",
+          }),
+        ],
+      },
+    });
+    renderRoute("/notifications");
+    const [row] = (await rows()).map((r) => within(r));
+    if (!row) throw new Error("a row");
+    expect(await row.findByText(/^Rent took NOK.1,200\.00$/)).toBeInTheDocument();
+    expect(row.getByText(/The purchase from Game shop waited for this cycle/)).toBeInTheDocument();
+    expect(row.getByRole("link", { name: "Open transactions" })).toHaveAttribute(
+      "href",
+      `/transactions?bucket_id=${rent.id}&cycle_id=100001000002&system=1`,
+    );
+  });
+
   it("says when there's nothing to do", async () => {
     apiMock.on("GET /api/v1/notifications", { body: { items: [] } });
     renderRoute("/notifications");

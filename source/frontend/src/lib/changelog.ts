@@ -16,6 +16,32 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.37.00",
+    date: "2026-11-24",
+    title: {
+      en: "Count a purchase in its bucket later",
+      nb: "Tell et kjøp i bøtta senere",
+      nn: "Tel eit kjøp i bøtta seinare",
+    },
+    changes: {
+      en: [
+        "An expense with buckets has Count in bucket: now, as it's paid off (on a credit card used as a loan, each bucket counts its share as payments reach the purchase, oldest debt first), in a later cycle, or in a month. Until then, the account isn't short of it, so unallocated money doesn't move.",
+        "A purchase that waits shows what's left on its row, and its detail shows each bucket's part with Take now. When a bucket counts it, a Bucket charge links back to the purchase.",
+        "Accounts shows what's spent ahead as Waiting for buckets, Buckets what each bucket is still to count, and paying a card how much of what's owed waits for buckets.",
+      ],
+      nb: [
+        "En utgift med bøtter har Tell i bøtta: nå, etter hvert som det betales ned (på et kredittkort brukt som lån teller hver bøtte sin del etter hvert som innbetalingene når kjøpet, eldste gjeld først), i en senere periode, eller i en måned. Til da mangler ikke kontoen pengene, så de ufordelte pengene endres ikke.",
+        "Et kjøp som venter, viser hva som gjenstår på raden sin, og detaljene viser hver bøttes del med Ta nå. Når en bøtte teller det, lenker en Bøttebelastning tilbake til kjøpet.",
+        "Kontoer viser det som er brukt på forskudd som Venter på bøtter, Bøtter hva hver bøtte ennå skal telle, og betaling av et kort hvor mye av gjelden som venter på bøtter.",
+      ],
+      nn: [
+        "Ei utgift med bøtter har Tel i bøtta: no, etter kvart som det vert betalt ned (på eit kredittkort brukt som lån tel kvar bøtte sin del etter kvart som innbetalingane når kjøpet, eldste gjeld først), i ein seinare periode, eller i ein månad. Til då manglar ikkje kontoen pengane, så dei ufordelte pengane vert ikkje endra.",
+        "Eit kjøp som ventar, viser kva som står att på rada si, og detaljane viser delen til kvar bøtte med Ta no. Når ei bøtte tel det, lenkjer ei Bøttebelastning tilbake til kjøpet.",
+        "Kontoar viser det som er brukt på førehand som Ventar på bøtter, Bøtter kva kvar bøtte enno skal telje, og betaling av eit kort kor mykje av gjelda som ventar på bøtter.",
+      ],
+    },
+  },
+  {
     version: "v2.36.01",
     date: "2026-11-24",
     title: {

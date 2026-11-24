@@ -66,12 +66,14 @@ WHERE c.id = $1 AND c.user_id = $2;
 
 -- name: ListOpenWaitingCharges :many
 -- The user's waiting charges with something left on live buckets, oldest
--- purchase first; optionally only those of buckets on one account.
+-- purchase first, with the account the purchase is on; optionally only those
+-- of buckets on one account.
 SELECT c.id, c.transaction_id, c.bucket_id, c."when", c.cycle_id, c.take_on, k.source_account_id,
-    h.transaction_at, h.counterparty, w.left_amount::numeric AS left_amount
+    b.account_id AS purchase_account_id, h.transaction_at, h.counterparty, w.left_amount::numeric AS left_amount
 FROM waiting_charges c
 JOIN buckets k ON k.id = c.bucket_id
 JOIN transaction_headers h ON h.id = c.transaction_id
+JOIN bank_transactions b ON b.transaction_id = c.transaction_id
 JOIN LATERAL (SELECT COALESCE(SUM(l.amount), 0) AS left_amount FROM waiting_lines l
               WHERE l.purchase_id = c.transaction_id AND l.bucket_id = c.bucket_id) w ON true
 WHERE c.user_id = sqlc.arg(user_id) AND NOT k.deleted AND w.left_amount > 0

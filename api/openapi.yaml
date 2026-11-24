@@ -7594,7 +7594,7 @@ components:
     OpenWaitingCharge:
       type: object
       additionalProperties: false
-      required: [id, purchase_id, bucket_id, account_id, when, cycle_id, take_on, at, counterparty, left]
+      required: [id, purchase_id, bucket_id, account_id, purchase_account_id, when, cycle_id, take_on, at, counterparty, left]
       properties:
         id:
           $ref: "#/components/schemas/WaitingChargeId"
@@ -7606,6 +7606,10 @@ components:
           allOf:
             - $ref: "#/components/schemas/AccountId"
           description: The bucket's account, which the advance is on.
+        purchase_account_id:
+          allOf:
+            - $ref: "#/components/schemas/AccountId"
+          description: The account the purchase is on; for `paid`, its credit card.
         when:
           $ref: "#/components/schemas/WaitingChargeWhen"
         cycle_id:

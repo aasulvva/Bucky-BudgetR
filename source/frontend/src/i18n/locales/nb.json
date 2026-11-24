@@ -2925,5 +2925,57 @@
         "fee": "et gebyr"
       }
     }
+  },
+  "waiting": {
+    "form": {
+      "label": "Tell i bøtta",
+      "hint": {
+        "now": "Bøttene teller det i denne perioden.",
+        "paid": "Hver bøtte teller sin del etter hvert som kortets innbetalinger når dette kjøpet, eldste gjeld først. Til da rører det ikke de ufordelte pengene.",
+        "cycle": "Bøttene teller det når den perioden starter. Til da rører det ikke de ufordelte pengene.",
+        "month": "Bøttene teller det når den første perioden som starter i den måneden (eller senere) starter. Til da rører det ikke de ufordelte pengene."
+      },
+      "when": {
+        "now": "Nå",
+        "paid": "Etter hvert som det betales ned",
+        "cycle": "I en senere periode",
+        "month": "I en måned"
+      },
+      "cycle": "Periode",
+      "noCycles": "Ingen planlagte perioder: planlegg en under Perioder, eller velg en måned",
+      "month": "Måned",
+      "monthHint": "Den første perioden som starter i eller etter den.",
+      "needsBuckets": "Legg til bøttene som teller det senere.",
+      "chooseCycle": "Velg en periode.",
+      "chooseMonth": "Velg en måned."
+    },
+    "rule": {
+      "paid": "Telles etter hvert som det betales ned",
+      "cycle": "Telles ved starten av {{range}}",
+      "month": "Telles i første periode fra {{month}}",
+      "from": "Telles i første periode fra {{date}}"
+    },
+    "detail": {
+      "title_one": "Telles senere",
+      "title_other": "Telles senere",
+      "forPurchase": "En bøtte som teller <open>dette kjøpet</open> senere.",
+      "chargeNote": "Registrert da en bøtte talte et kjøp som ventet på den. Korriger eller reverser kjøpet i stedet.",
+      "taken": "{{bucket}} talte {{amount}}",
+      "bucketDeleted": "Bøtta er slettet",
+      "takenOf": "{{taken}} av {{amount}} telt",
+      "left": "{{amount}} igjen",
+      "done": "Alt telt",
+      "take": "Ta nå",
+      "takeName": "Ta nå for {{bucket}}",
+      "reverse": "Det bøttene har talt, gis tilbake; en del talt i en avsluttet periode kan ikke det."
+    },
+    "row": "{{amount}} venter",
+    "later": "{{name}} (senere)",
+    "breakdown": "Venter på bøtter",
+    "breakdownNote": "Brukt på forskudd; bøttene teller det senere",
+    "bucket_one": "{{amount}} venter på å telles, 1 kjøp",
+    "bucket_other": "{{amount}} venter på å telles, {{count}} kjøp",
+    "payment_one": "{{amount}} av gjelden venter på {{buckets}} etter hvert som det betales ned. Innbetalinger dekker den eldste gjelden først, og bøttene teller det som når kjøpet.",
+    "payment_other": "{{amount}} av gjelden venter på {{buckets}} etter hvert som det betales ned. Innbetalinger dekker den eldste gjelden først, og bøttene teller det som når kjøpene."
   }
 }

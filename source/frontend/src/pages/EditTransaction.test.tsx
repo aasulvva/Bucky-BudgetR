@@ -166,4 +166,45 @@ describe("Edit transaction", () => {
     expect(await screen.findByText(/has been reversed, so it can't change/)).toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: "Amount" })).not.toBeInTheDocument();
   });
+
+  it("edits a purchase that waits for its buckets: its parts, and when, but not now again (#264)", async () => {
+    const waiting = {
+      ...rema,
+      bucket_lines: [],
+      waiting_lines: [{ purchase_id: rema.id, bucket_id: groceries.id, amount: "200.40" }],
+      waiting: [
+        {
+          id: "100000000112345678901234",
+          bucket_id: groceries.id,
+          when: "month" as const,
+          cycle_id: null,
+          take_on: "2099-03-01",
+          amount: "200.40",
+          left: "200.40",
+          bucket_deleted: false,
+        },
+      ],
+      history: [],
+    };
+    apiMock.on(`GET ${path}`, { body: waiting });
+    renderRoute(`/transactions/${rema.id}/edit`);
+    const split = within(await screen.findByRole("region", { name: "Buckets" }));
+    expect(split.getByRole("textbox", { name: "Amount for Groceries" })).toHaveValue("200.40");
+    expect(split.getByRole("combobox", { name: "Count in bucket" })).toHaveValue("In a month");
+    expect(split.getByRole("combobox", { name: "Month" })).toHaveValue("March 2099");
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    await userEvent.click(split.getByRole("combobox", { name: "Count in bucket" }));
+    expect(await screen.findByRole("option", { name: "Now" })).toHaveAttribute(
+      "data-combobox-disabled",
+      "true",
+    );
+    await userEvent.click(screen.getByRole("option", { name: "In a month" }));
+
+    await userEvent.clear(split.getByRole("textbox", { name: "Amount for Groceries" }));
+    await userEvent.type(split.getByRole("textbox", { name: "Amount for Groceries" }), "250.40");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(sent()).toEqual({ bucket_lines: [{ bucket_id: groceries.id, amount: "250.40" }] });
+    });
+  });
 });

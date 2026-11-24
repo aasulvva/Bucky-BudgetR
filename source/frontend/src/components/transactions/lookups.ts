@@ -60,7 +60,13 @@ export function transactionTitle(tx: Transaction, names: Lookups): string {
 export function transactionSubLine(tx: Transaction, names: Lookups): string {
   const lines = shownLines(tx);
   const accounts = lines.bank_lines.map((l) => names.accountName(l.account_id));
-  const buckets = lines.bucket_lines.map((l) => names.bucketName(l.bucket_id));
+  const buckets = [
+    ...lines.bucket_lines.map((l) => names.bucketName(l.bucket_id)),
+    // Parts that count later (#264).
+    ...lines.waiting_lines
+      .filter((l) => tx.type === "EXP" && l.purchase_id === tx.id && !l.amount.startsWith("-"))
+      .map((l) => i18n.t("waiting.later", { name: names.bucketName(l.bucket_id) })),
+  ];
   let parts: string[];
   switch (tx.type) {
     case "TRF":

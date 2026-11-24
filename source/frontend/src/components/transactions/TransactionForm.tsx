@@ -22,13 +22,13 @@ import { useMediaQuery } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import { IconPlus, IconX } from "@tabler/icons-react";
 import { useMutation } from "@tanstack/react-query";
-import { useId, useState } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { Link, useLocation, useNavigate } from "react-router";
 
 import { useRefreshMoney, type Account, type Bucket } from "@/api/accounts";
 import { api } from "@/api/client";
-import { useCurrentCycles, type Cycle } from "@/api/cycles";
+import { useCurrentCycles, useCycles, type Cycle } from "@/api/cycles";
 import { unwrap } from "@/api/errors";
 import { useApprove, useSaveSchedule } from "@/api/schedules";
 import {
@@ -44,6 +44,7 @@ import { useSession } from "@/app/session";
 import { AmountInput } from "@/components/AmountInput";
 import { DateTimeInput } from "@/components/DateTimeInput";
 import { ErrorAlert } from "@/components/ErrorAlert";
+import { WaitingOnCard } from "@/components/accounts/WaitingOnCard";
 import {
   CarryDebt,
   PaymentReleases,
@@ -86,6 +87,16 @@ import {
   type SplitLine,
 } from "@/lib/transactionForm";
 import { bucketLinesLocked, isCorrectableType, isSavingsTransfer } from "@/lib/transactionList";
+import {
+  COUNT_NOW,
+  choiceOf,
+  countLaterOf,
+  formatMonth,
+  monthChoices,
+  plannedCycles,
+  type CountChoice,
+  type CountWhen,
+} from "@/lib/waiting";
 import {
   approveDate,
   defaultRepeat,
@@ -134,6 +145,8 @@ interface Errors {
   cardDebt?: string;
   /** Per row key. */
   lines?: Record<number, { bucket?: string; amount?: string }>;
+  /** Count in bucket's cycle or month (#264). */
+  count?: string;
 }
 
 /** A schedule form (#154): the transaction a schedule records, and when. */
@@ -229,6 +242,8 @@ export function TransactionForm({
   // new amount reshapes them from here (followAmount).
   const [base, setBase] = useState({ amount: start?.amount ?? null, lines: start?.lines ?? [] });
   const [refill, setRefill] = useState<boolean | null>(start?.triggersRefill ?? null);
+  // When the buckets count an expense (#264): now, or later.
+  const [count, setCount] = useState<CountChoice>(() => (editing ? choiceOf(editing) : COUNT_NOW));
   const [errors, setErrors] = useState<Errors>({});
   // Card debt (#261): where a card purchase's rest is set aside (null: the
   // card's default), what a payment releases (null: as the server would)
@@ -273,6 +288,19 @@ export function TransactionForm({
   const own = bucketsFor(account, accounts, buckets);
   const others = accounts.filter((a) => a.id !== accountId && a.currency === currency);
   const totals = bucketTotals(amount, lines);
+  // Count in bucket (#264): an expense recorded now (or corrected) whose
+  // buckets can still change.
+  const countShown =
+    type === "EXP" &&
+    !scheduled &&
+    !approving &&
+    !locked &&
+    account !== undefined &&
+    own.length + lines.length > 0;
+  const counted = countShown ? count : COUNT_NOW;
+  const later = counted.when !== "now";
+  // A purchase that waits can't count now again: its charges are taken instead.
+  const waitsAlready = editing !== undefined && editing.waiting.length > 0;
   const inCycle = insideCycle(at, active);
   const waiting = type === "INC" && !editing ? waitingOnIncome(buckets, accountId) : [];
   const refillShown = type === "INC" && (inCycle || scheduled) && accountId !== null;
@@ -355,6 +383,7 @@ export function TransactionForm({
           tags,
           lines,
           triggersRefill: refillChecked,
+          ...(countShown ? { count } : {}),
         },
         locked,
       )
@@ -413,6 +442,10 @@ export function TransactionForm({
     setReleases(null);
     setCarryOn(false);
     setCarry(null);
+    // As it's paid off is for a card's purchases only.
+    if (count.when === "paid" && !isCard(accounts.find((a) => a.id === id))) {
+      setCount(COUNT_NOW);
+    }
     if (toAccountId === id) setToAccountId(null);
   };
 
@@ -548,8 +581,16 @@ export function TransactionForm({
           amount: money(subtractAmounts("0", totals.notTied)),
         });
       }
-      if (!editing && !scheduled && active && !inCycle) {
+      if (!editing && !scheduled && !later && active && !inCycle) {
         found.at = t("newTransaction.outsideCycle", { range: cycleRange(active) });
+      }
+    }
+    if (later) {
+      if (lines.length === 0) found.split = t("waiting.form.needsBuckets");
+      else if (!countLaterOf(counted)) {
+        found.count = t(
+          counted.when === "cycle" ? "waiting.form.chooseCycle" : "waiting.form.chooseMonth",
+        );
       }
     }
     const debtMoney = (a: string) => formatMoney(a, currency);
@@ -638,6 +679,7 @@ export function TransactionForm({
               }
             : {}),
           ...(refillShown ? { triggers_refill: refillChecked } : {}),
+          ...(later && lines.length > 0 ? { count_later: countLaterOf(counted) } : {}),
           ...(setAsideShown && direct
             ? { set_aside_account_id: setAsideValue === NOWHERE ? null : setAsideValue }
             : {}),
@@ -699,7 +741,7 @@ export function TransactionForm({
           error={errors.at}
           // A later time schedules it; an approved one is recorded by now.
           {...(approving ? {} : { maxDate: undefined })}
-          {...(!transfer && lines.length > 0 && active && !isOverdue(active)
+          {...(!transfer && !later && lines.length > 0 && active && !isOverdue(active)
             ? { minDate: new Date(active.start_at) }
             : {})}
         />
@@ -768,6 +810,7 @@ export function TransactionForm({
           {cardHint}
         </Text>
       )}
+      {paying && <WaitingOnCard card={cardTo} buckets={buckets} />}
       {setAsideShown && (
         <Select
           label={t(type === "INC" ? "cards.debt.releaseFrom" : "cards.debt.setAsideOn")}
@@ -827,7 +870,7 @@ export function TransactionForm({
                 accountTouched,
                 tags,
                 lines,
-                bucketsAllowed: (active !== null || scheduled) && !locked,
+                bucketsAllowed: (active !== null || scheduled || later) && !locked,
               },
               accounts,
               buckets,
@@ -1005,7 +1048,19 @@ export function TransactionForm({
                 onChange={changeLines}
                 errors={errors}
                 locked={locked}
-                needsCycle={!scheduled}
+                needsCycle={!scheduled && !later}
+                count={
+                  countShown && (
+                    <CountField
+                      value={count}
+                      onChange={setCount}
+                      card={card}
+                      active={active}
+                      nowAllowed={!waitsAlready}
+                      error={errors.count}
+                    />
+                  )
+                }
               />
             )}
           </Group>
@@ -1172,6 +1227,7 @@ function BucketSplit({
   errors,
   locked,
   needsCycle,
+  count,
 }: {
   account: Account | undefined;
   accounts: Account[];
@@ -1186,6 +1242,8 @@ function BucketSplit({
   locked: boolean;
   /** Bucket lines need an active cycle, unlike a schedule's. */
   needsCycle: boolean;
+  /** Count in bucket (#264), under the split. */
+  count?: ReactNode;
 }) {
   const { t } = useTranslation();
   const money = (value: string) => formatMoney(value, account?.currency);
@@ -1369,6 +1427,89 @@ function BucketSplit({
         )}
       </Group>
       {body}
+      {count}
+    </Stack>
+  );
+}
+
+/**
+ * Count in bucket (#264): when an expense's buckets count it. Now, as a card
+ * purchase is paid off, or at the start of a planned cycle or a month.
+ */
+function CountField({
+  value,
+  onChange,
+  card,
+  active,
+  nowAllowed,
+  error,
+}: {
+  value: CountChoice;
+  onChange: (value: CountChoice) => void;
+  card: boolean;
+  active: Cycle | null;
+  /** A purchase that already waits can't count now again. */
+  nowAllowed: boolean;
+  error?: string;
+}) {
+  const { t } = useTranslation();
+  const cycles = plannedCycles(useCycles().data ?? []);
+  const months = monthChoices(active);
+  const whens: CountWhen[] = ["now", ...(card ? (["paid"] as const) : []), "cycle", "month"];
+  return (
+    <Stack gap="xs" pt="xs" style={{ borderTop: "1px solid var(--mantine-color-default-border)" }}>
+      <Select
+        label={t("waiting.form.label")}
+        description={t(`waiting.form.hint.${value.when}`)}
+        data={whens.map((w) => ({
+          value: w,
+          label: t(`waiting.form.when.${w}`),
+          disabled: w === "now" && !nowAllowed && value.when !== "now",
+        }))}
+        value={value.when}
+        allowDeselect={false}
+        comboboxProps={{ withinPortal: false }}
+        onChange={(v) => {
+          const when = whens.find((w) => w === v);
+          if (!when) return;
+          onChange({
+            when,
+            cycleId: when === "cycle" ? (value.cycleId ?? cycles[0]?.id ?? null) : null,
+            month: when === "month" ? (value.month ?? months[0] ?? null) : null,
+          });
+        }}
+      />
+      {value.when === "cycle" && (
+        <Select
+          label={t("waiting.form.cycle")}
+          placeholder={cycles.length === 0 ? t("waiting.form.noCycles") : undefined}
+          data={cycles.map((c) => ({ value: c.id, label: cycleRange(c) }))}
+          value={value.cycleId}
+          allowDeselect={false}
+          comboboxProps={{ withinPortal: false }}
+          error={error}
+          disabled={cycles.length === 0}
+          onChange={(v) => {
+            onChange({ ...value, cycleId: v });
+          }}
+        />
+      )}
+      {value.when === "month" && (
+        <Select
+          label={t("waiting.form.month")}
+          description={t("waiting.form.monthHint")}
+          data={[...new Set([...(value.month ? [value.month] : []), ...months])]
+            .sort()
+            .map((m) => ({ value: m, label: formatMonth(m) }))}
+          value={value.month}
+          allowDeselect={false}
+          comboboxProps={{ withinPortal: false }}
+          error={error}
+          onChange={(v) => {
+            onChange({ ...value, month: v });
+          }}
+        />
+      )}
     </Stack>
   );
 }

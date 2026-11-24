@@ -17,7 +17,8 @@ import { addAmounts, compareAmounts, formatMoney, percentOf, subtractAmounts } f
 
 /**
  * The account's money, part by part: in its buckets (with what they're
- * short), set aside for each card, reserved for savings (each with what isn't
+ * short), less what they're still to count for purchases that wait (#264),
+ * set aside for each card, reserved for savings (each with what isn't
  * covered) and unallocated. Just "No buckets" when there's nothing but
  * unallocated money.
  */
@@ -35,7 +36,9 @@ export function AccountBreakdown({
   const own = buckets.filter((b) => b.source_account_id === account.id);
   const holds = positiveHolds(account);
   const reserved = compareAmounts(account.reserved, "0") > 0;
-  if (own.length === 0 && holds.length === 0 && !reserved) {
+  // Spent ahead for purchases its buckets count later (#264).
+  const waiting = compareAmounts(account.waiting, "0") > 0;
+  if (own.length === 0 && holds.length === 0 && !reserved && !waiting) {
     return (
       <Text size="sm" c="dimmed">
         {t("accounts.noBuckets")}
@@ -59,6 +62,13 @@ export function AccountBreakdown({
         compareAmounts(short, "0") > 0
           ? t("accounts.breakdown.short", { amount: money(short) })
           : undefined,
+    });
+  }
+  if (waiting) {
+    rows.push({
+      label: t("waiting.breakdown"),
+      value: money(negate(account.waiting)),
+      note: t("waiting.breakdownNote"),
     });
   }
   holds.forEach((h, i) => {

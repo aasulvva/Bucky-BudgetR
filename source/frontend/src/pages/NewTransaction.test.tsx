@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 
 import type { CounterpartySuggestion } from "@/api/transactions";
 import { apiMock, problem, testUser } from "@/test/api";
-import { account, bsuStatus, bucket } from "@/test/fixtures";
+import { account, bsuStatus, bucket, creditCard, cycle } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
 
@@ -336,6 +336,68 @@ describe("Create transaction", () => {
     expect(screen.queryByRole("button", { name: "Add bucket" })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("radio", { name: "Income" }));
     expect(screen.queryByRole("checkbox", { name: "Triggers refill" })).not.toBeInTheDocument();
+  });
+
+  it("counts a card purchase in its buckets as it's paid off (#264)", async () => {
+    const visa = account({
+      id: "4567",
+      name: "Visa",
+      type: "credit_card",
+      balance: "-4520.00",
+      credit_card: creditCard(),
+    });
+    apiMock.on("GET /api/v1/accounts", { body: [buffer, euro, main, visa] });
+    renderRoute("/transactions/new");
+    await userEvent.type(await screen.findByRole("textbox", { name: "Amount" }), "3000");
+    await pick("Account", /^Visa/);
+    await userEvent.click(screen.getByRole("button", { name: "Add bucket" }));
+    await pick("Bucket", /^Groceries/);
+    expect(screen.getByRole("combobox", { name: "Count in bucket" })).toHaveValue("Now");
+    await pick("Count in bucket", "As it's paid off");
+    expect(screen.getByText(/oldest debt first/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(sent()).toMatchObject({
+        account_id: "4567",
+        bucket_lines: [{ bucket_id: "1000000001", amount: "3000.00" }],
+        count_later: { when: "paid" },
+      });
+    });
+  });
+
+  it("counts a purchase in a later cycle or month, without an active cycle (#264)", async () => {
+    localStorage.setItem("bucky.lastAccount", "1234");
+    const later = cycle({
+      id: "100001000002",
+      state: "future",
+      start_at: "2099-03-01T00:00:00Z",
+      end_at: "2099-04-01T00:00:00Z",
+    });
+    apiMock.on("GET /api/v1/cycles/active", { body: { active: null, next: later } });
+    apiMock.on("GET /api/v1/cycles", { body: [later] });
+    renderRoute("/transactions/new");
+    await userEvent.type(await screen.findByRole("textbox", { name: "Amount" }), "800");
+    expect(screen.getByText(/Bucket lines need an active cycle/)).toBeInTheDocument();
+    // Only a card can wait until it's paid off.
+    await userEvent.click(screen.getByRole("combobox", { name: "Count in bucket" }));
+    expect(screen.queryByRole("option", { name: "As it's paid off" })).not.toBeInTheDocument();
+    await userEvent.click(await screen.findByRole("option", { name: "In a later cycle" }));
+    // Counting later needs no active cycle.
+    await userEvent.click(screen.getByRole("button", { name: "Add bucket" }));
+    await pick("Bucket", /^Household/);
+    // The first planned cycle is picked.
+    expect(screen.getByRole<HTMLInputElement>("combobox", { name: "Cycle" }).value).toMatch(/2099/);
+    // A month instead: the first cycle starting in or after it.
+    await pick("Count in bucket", "In a month");
+    expect(screen.getByRole("combobox", { name: "Month" })).not.toHaveValue("");
+    await pick("Count in bucket", "In a later cycle");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(sent()).toMatchObject({
+        count_later: { when: "cycle", cycle_id: "100001000002" },
+        bucket_lines: [{ bucket_id: "1000000002", amount: "800.00" }],
+      });
+    });
   });
 
   it("keeps Save at hand on mobile", async () => {

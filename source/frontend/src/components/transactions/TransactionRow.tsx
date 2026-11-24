@@ -7,6 +7,7 @@ import type { Transaction } from "@/api/transactions";
 import { formatMoney } from "@/lib/money";
 import { firstLine } from "@/lib/transactionForm";
 import { rowAmount, type TransactionFilter } from "@/lib/transactionList";
+import { waitingLeft } from "@/lib/waiting";
 
 import { signedMoney, transactionSubLine, transactionTitle, type Lookups } from "./lookups";
 
@@ -42,6 +43,9 @@ export function TransactionRow({
       : tx.corrected
         ? t("transactions.edited")
         : "";
+  // What its buckets haven't counted yet (#264).
+  const waiting = tx.reversed ? "0.00" : waitingLeft(tx);
+  const waits = waiting !== "0.00" && !waiting.startsWith("-");
   // Filtered to one account: its balance after the transaction (#106).
   const account = filter.accountId;
   const balance = account
@@ -109,6 +113,11 @@ export function TransactionRow({
             {t("transactions.balanceAfter", {
               amount: formatMoney(balance, names.accountCurrency(account ?? "")),
             })}
+          </Text>
+        )}
+        {waits && (
+          <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
+            {t("waiting.row", { amount: formatMoney(waiting, names.currencyOf(tx)) })}
           </Text>
         )}
         {note && (

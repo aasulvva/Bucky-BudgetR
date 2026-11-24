@@ -2925,5 +2925,57 @@
         "fee": "a fee"
       }
     }
+  },
+  "waiting": {
+    "form": {
+      "label": "Count in bucket",
+      "hint": {
+        "now": "The buckets count it in this cycle.",
+        "paid": "Each bucket counts its share as the card's payments reach this purchase, oldest debt first. Until then it doesn't touch unallocated money.",
+        "cycle": "The buckets count it when that cycle starts. Until then it doesn't touch unallocated money.",
+        "month": "The buckets count it when the first cycle starting in that month (or later) starts. Until then it doesn't touch unallocated money."
+      },
+      "when": {
+        "now": "Now",
+        "paid": "As it's paid off",
+        "cycle": "In a later cycle",
+        "month": "In a month"
+      },
+      "cycle": "Cycle",
+      "noCycles": "No planned cycles: plan one in Cycles, or choose a month",
+      "month": "Month",
+      "monthHint": "The first cycle starting in or after it.",
+      "needsBuckets": "Add the buckets that count it later.",
+      "chooseCycle": "Choose a cycle.",
+      "chooseMonth": "Choose a month."
+    },
+    "rule": {
+      "paid": "Counted as it's paid off",
+      "cycle": "Counted at the start of {{range}}",
+      "month": "Counted at the first cycle from {{month}}",
+      "from": "Counted at the first cycle from {{date}}"
+    },
+    "detail": {
+      "title_one": "Counted later",
+      "title_other": "Counted later",
+      "forPurchase": "A bucket counting <open>this purchase</open> later.",
+      "chargeNote": "Recorded when a bucket counted a purchase that waited for it. Correct or reverse the purchase instead.",
+      "taken": "{{bucket}} counted {{amount}}",
+      "bucketDeleted": "The bucket is deleted",
+      "takenOf": "{{taken}} of {{amount}} counted",
+      "left": "{{amount}} left",
+      "done": "All counted",
+      "take": "Take now",
+      "takeName": "Take now for {{bucket}}",
+      "reverse": "What its buckets counted is given back; a part counted in a finished cycle can't be."
+    },
+    "row": "{{amount}} waiting",
+    "later": "{{name}} (later)",
+    "breakdown": "Waiting for buckets",
+    "breakdownNote": "Spent ahead; the buckets count it later",
+    "bucket_one": "{{amount}} waiting to count, 1 purchase",
+    "bucket_other": "{{amount}} waiting to count, {{count}} purchases",
+    "payment_one": "{{amount}} of what's owed waits for {{buckets}} as it's paid off. Payments clear the oldest debt first, and the buckets count what reaches it.",
+    "payment_other": "{{amount}} of what's owed waits for {{buckets}} as it's paid off. Payments clear the oldest debt first, and the buckets count what reaches it."
   }
 }

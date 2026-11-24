@@ -72,9 +72,11 @@ export function accountSummary(
   const left = addAmounts(...own.map((b) => b.target_funds));
   const short = own.filter((b) => positive(coverage(b).gap));
   const tone = short.some((b) => b.priority) ? "alert" : short.length > 0 ? "warn" : "ok";
+  // What buckets owe the account for purchases that wait (#264) counts as
+  // money there.
   const missing = subtractAmounts(
     addAmounts(...own.map((b) => (positive(b.target_funds) ? b.target_funds : "0"))),
-    account.balance,
+    addAmounts(account.balance, account.waiting),
   );
   return {
     left,
