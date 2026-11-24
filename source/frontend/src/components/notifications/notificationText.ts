@@ -23,6 +23,11 @@ export function adjustPath(accountId: string): string {
   return `/accounts?adjust=${encodeURIComponent(accountId)}`;
 }
 
+/** Where a card's interest reminder opens: its Interest and fees (#263). */
+export function interestPath(cardId: string): string {
+  return `/accounts?interest=${encodeURIComponent(cardId)}`;
+}
+
 /** Where a card bill's notification opens: the card's Bill panel (#262). */
 export function billPath(cardId: string): string {
   return `/accounts?bill=${encodeURIComponent(cardId)}`;
@@ -187,6 +192,19 @@ export function useNotificationText(): (n: Notification) => NotificationText {
           open: t("notifications.cardBill.open"),
         };
       }
+      case "card_interest":
+        return {
+          ...base,
+          title: t("notifications.cardInterest.title", {
+            name: names.accountName(n.account_id ?? ""),
+          }),
+          body: t("notifications.cardInterest.body", {
+            amount: n.amount ? formatMoney(n.amount, n.currency ?? undefined) : "",
+            date: n.at ? formatDate(n.at) : "",
+          }),
+          link: interestPath(n.account_id ?? ""),
+          open: t("notifications.cardInterest.open"),
+        };
     }
   };
 }

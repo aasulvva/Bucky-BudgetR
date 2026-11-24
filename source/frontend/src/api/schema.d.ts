@@ -2295,6 +2295,13 @@ export interface paths {
          *       due date, `card_bill_due` (warning) from then, `card_bill_carried`
          *       after it, until the next statement: an alert while the minimum
          *       isn't paid (past due), info once it is (what's left carries over).
+         *     - `card_interest` (#263, info, under `card_bills`): the statement
+         *       before a card's current one wasn't paid in full by its due date, so
+         *       the bank may charge interest; with `account_id`, `at` (that due
+         *       date's start in the user's time zone), what was left then as
+         *       `amount` and `currency`. Until interest or a fee (a transaction on
+         *       the card tagged `interest` or `fee`, not reversed) dated from that
+         *       due date is registered, or the next statement.
          */
         get: operations["listNotifications"];
         put?: never;
@@ -3105,6 +3112,21 @@ export interface components {
             amount: components["schemas"]["Amount"];
             /** @description Null to finalize without paying. */
             payment: components["schemas"]["CardBillPay"] | null;
+            difference?: components["schemas"]["CardBillDifference"];
+        };
+        /**
+         * @description Optional (#263): when the bank's amount is more than the app's,
+         *     the difference is registered as interest or a fee the bank charged
+         *     instead of a balance adjustment: an expense on the card dated just
+         *     before the cutoff, to `counterparty`, tagged `tag`, never triggering
+         *     a refill, set aside on the card's default account. Ignored when the
+         *     bank's amount isn't more.
+         */
+        CardBillDifference: {
+            /** @enum {string} */
+            tag: "interest" | "fee";
+            /** @description Usually the card's bank. */
+            counterparty: string;
         };
         CardBillPay: {
             rule: components["schemas"]["CardPayRule"];
@@ -4727,7 +4749,7 @@ export interface components {
             next_cursor: string | null;
         };
         /** @enum {string} */
-        NotificationKind: "approval_queue" | "upcoming_bill" | "investment_balance" | "bucket_uncovered" | "savings_transfer" | "savings_short" | "bsu_over_limit" | "bsu_withdrawal" | "credit_limit" | "card_bill" | "card_bill_due" | "card_bill_carried";
+        NotificationKind: "approval_queue" | "upcoming_bill" | "investment_balance" | "bucket_uncovered" | "savings_transfer" | "savings_short" | "bsu_over_limit" | "bsu_withdrawal" | "credit_limit" | "card_bill" | "card_bill_due" | "card_bill_carried" | "card_interest";
         /**
          * @description A reminder or to-do. The client words it from `kind` and the fields
          *     that kind uses (see `listNotifications`); the others are null.

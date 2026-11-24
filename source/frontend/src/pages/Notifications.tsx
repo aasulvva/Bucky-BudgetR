@@ -12,6 +12,7 @@ import {
   IconCreditCardPay,
   IconFileInvoice,
   IconHomeExclamation,
+  IconPercentage,
   IconPigMoney,
   IconTrendingUp,
   IconX,
@@ -42,6 +43,7 @@ const ICONS: Record<NotificationKind, Icon> = {
   card_bill: IconFileInvoice,
   card_bill_due: IconCalendarDollar,
   card_bill_carried: IconCreditCardPay,
+  card_interest: IconPercentage,
 };
 
 const COLORS: Record<Notification["severity"], string> = {

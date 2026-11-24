@@ -43,6 +43,7 @@ import {
   CardFigures,
 } from "@/components/accounts/AccountBreakdown";
 import { CardBillPanel, type BillView } from "@/components/accounts/CardBill";
+import { CardChargesForm } from "@/components/accounts/CardCharges";
 import { CardDebtForm } from "@/components/accounts/CardDebt";
 import { AmountInput } from "@/components/AmountInput";
 import { DateTimeInput } from "@/components/DateTimeInput";
@@ -67,7 +68,8 @@ type Panel = { kind: PanelKind; accountId: string } | null;
 
 /**
  * Accounts (spec §9, canvas "Accounts"): the balance of each account, its
- * buckets at a glance, and the balance adjustment and interest actions.
+ * buckets at a glance, and the balance adjustment and interest actions (on a
+ * card, its interest and fees, #263; `?interest=<accountId>`).
  * `?adjust=<accountId>` opens that account's balance adjustment,
  * `?bill=<accountId>` a credit card's bill (#262), and `?bsu=<accountId>` a
  * locked BSU's history setup (#214).
@@ -84,11 +86,15 @@ export default function Accounts() {
   const [params, setParams] = useSearchParams();
   const adjustId = params.get("adjust");
   const billId = params.get("bill");
+  // The card interest reminder opens Interest and fees (#263).
+  const interestId = params.get("interest");
   const linked: Panel = adjustId
     ? { kind: "adjust", accountId: adjustId }
     : billId
       ? { kind: "bill", accountId: billId }
-      : null;
+      : interestId
+        ? { kind: "interest", accountId: interestId }
+        : null;
   const panel: Panel = chosen ?? linked;
   // The bill panel's form: the bill, Finalize bill or Pay bill.
   const [billView, setBillView] = useState<BillView>("bill");
@@ -119,6 +125,7 @@ export default function Accounts() {
               (p) => {
                 p.delete("adjust");
                 p.delete("bill");
+                p.delete("interest");
                 return p;
               },
               { replace: true },
@@ -351,8 +358,7 @@ function AccountCard({
               {t(billLocked(account) ? "cards.bill.setUp" : "cards.bill.open")}
             </Button>
           )}
-          {/* Card interest and fees come with #263. */}
-          {isCard(account) ? (
+          {isCard(account) &&
             CARD_DEBT_MODES.map((mode) => (
               <Button
                 key={mode}
@@ -365,12 +371,11 @@ function AccountCard({
               >
                 {t(`cards.debt.${mode}`)}
               </Button>
-            ))
-          ) : (
-            <Button size="xs" variant="default" onClick={onInterest} disabled={locked}>
-              {t("accounts.interest")}
-            </Button>
-          )}
+            ))}
+          {/* A card's interest and fees (#263). */}
+          <Button size="xs" variant="default" onClick={onInterest} disabled={locked}>
+            {t(isCard(account) ? "cards.charges.title" : "accounts.interest")}
+          </Button>
         </Group>
       </Stack>
     </Card>
@@ -457,7 +462,7 @@ function AccountRow({
           <Menu.Item onClick={onAdjust} disabled={locked}>
             {t("accounts.adjust")}
           </Menu.Item>
-          {isCard(account) ? (
+          {isCard(account) &&
             CARD_DEBT_MODES.map((mode) => (
               <Menu.Item
                 key={mode}
@@ -468,12 +473,10 @@ function AccountRow({
               >
                 {t(`cards.debt.${mode}`)}
               </Menu.Item>
-            ))
-          ) : (
-            <Menu.Item onClick={onInterest} disabled={locked}>
-              {t("accounts.interest")}
-            </Menu.Item>
-          )}
+            ))}
+          <Menu.Item onClick={onInterest} disabled={locked}>
+            {t(isCard(account) ? "cards.charges.title" : "accounts.interest")}
+          </Menu.Item>
         </Menu.Dropdown>
       </Menu>
     </Group>
@@ -500,7 +503,7 @@ function PanelContent({
     kind === "adjust"
       ? t("accounts.adjust")
       : kind === "interest"
-        ? t("accounts.interest")
+        ? t(isCard(account) ? "cards.charges.title" : "accounts.interest")
         : kind === "bill"
           ? billLocked(account)
             ? t("cards.bill.setUpTitle")
@@ -524,6 +527,8 @@ function PanelContent({
       {/* Keyed so that switching accounts starts the form afresh. */}
       {kind === "adjust" ? (
         <AdjustForm key={account.id} account={account} onDone={onClose} />
+      ) : kind === "interest" && isCard(account) ? (
+        <CardChargesForm key={account.id} card={account} accounts={accounts} onDone={onClose} />
       ) : kind === "interest" ? (
         <InterestForm key={account.id} account={account} onDone={onClose} />
       ) : kind === "bill" ? (

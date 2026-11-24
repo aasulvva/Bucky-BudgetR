@@ -16,6 +16,32 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.36.00",
+    date: "2026-11-24",
+    title: {
+      en: "Card interest and fees",
+      nb: "Renter og gebyrer på kort",
+      nn: "Renter og gebyr på kort",
+    },
+    changes: {
+      en: [
+        "Interest and fees on a credit card registers what the bank charged, as an expense to the card's bank tagged interest or fee, set aside like a purchase.",
+        "When the bank's statement amount is higher than the app's, Finalize bill can register the difference as interest or a fee instead of an adjustment.",
+        "When a bill isn't paid in full by its due date, the next statement reminds you to register the interest and fees, under Card bills in Settings.",
+      ],
+      nb: [
+        "Renter og gebyrer på et kredittkort registrerer det banken tok, som en utgift til kortets bank tagget interest eller fee, holdt av som et kjøp.",
+        "Når fakturabeløpet fra banken er høyere enn appens, kan Fullfør regning registrere differansen som renter eller et gebyr i stedet for en justering.",
+        "Når en regning ikke er betalt i sin helhet ved forfall, minner neste faktura deg på å registrere renter og gebyrer, under Kortregninger i Innstillinger.",
+      ],
+      nn: [
+        "Renter og gebyr på eit kredittkort registrerer det banken tok, som ei utgift til banken til kortet tagga interest eller fee, halde av som eit kjøp.",
+        "Når fakturabeløpet frå banken er høgare enn det appen har, kan Fullfør rekning registrere differansen som renter eller eit gebyr i staden for ei justering.",
+        "Når ei rekning ikkje er betalt i si heilskap ved forfall, minner neste faktura deg på å registrere renter og gebyr, under Kortrekningar i Innstillingar.",
+      ],
+    },
+  },
+  {
     version: "v2.35.00",
     date: "2026-11-24",
     title: {

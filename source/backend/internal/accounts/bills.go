@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -78,7 +79,23 @@ func (s *Service) SetUpBill(ctx context.Context, userID, cardID string, last *ca
 type Finalize struct {
 	Amount  decimal.Decimal
 	Payment *Payment
+	// Difference registers a bank's amount above the app's as interest or a
+	// fee (#263) instead of a balance adjustment.
+	Difference *Difference
 }
+
+// Difference is interest or a fee the bank charged (#263): an expense on
+// the card to Counterparty tagged Tag ("interest" or "fee").
+type Difference struct {
+	Tag          string
+	Counterparty string
+}
+
+// The tags of a card's interest and fees (#263).
+const (
+	InterestTag = "interest"
+	FeeTag      = "fee"
+)
 
 // Payment is how a finalized bill is paid: by Rule (Amount for
 // cards.PayFixed) from AccountID, at At (zero: now) recorded (auto) or asked
@@ -146,7 +163,11 @@ func (s *Service) finalizeIn(ctx context.Context, tx pgx.Tx, userID, cardID stri
 	case cur.Fixed:
 		return Finalized{}, cards.ErrStatementFixed
 	}
-	if !cur.Amount.Equal(f.Amount) {
+	if d := f.Difference; d != nil && f.Amount.GreaterThan(cur.Amount) {
+		if err := s.charge(ctx, tx, userID, cardID, *d, f.Amount.Sub(cur.Amount), cur.Cutoff.Add(-time.Microsecond)); err != nil {
+			return Finalized{}, err
+		}
+	} else if !cur.Amount.Equal(f.Amount) {
 		if err := s.adjustIn(ctx, tx, userID, cardID, Adjustment{
 			Target: f.Amount.Neg(), At: cur.Cutoff.Add(-time.Microsecond),
 		}); err != nil && !errors.Is(err, ErrNoChange) {
@@ -163,6 +184,28 @@ func (s *Service) finalizeIn(ctx context.Context, tx pgx.Tx, userID, cardID stri
 		return Finalized{}, err
 	}
 	return s.payBill(ctx, tx, userID, cardID, *cur, *f.Payment, by == cards.FixedByAuto)
+}
+
+// charge records interest or a fee the bank charged on the card (#263): an
+// expense of amount at at, set aside on the card's default account.
+func (s *Service) charge(ctx context.Context, tx pgx.Tx, userID, cardID string, d Difference,
+	amount decimal.Decimal, at time.Time) error {
+	if d.Tag != InterestTag && d.Tag != FeeTag {
+		return fmt.Errorf("%w: the difference is interest or a fee", ErrInvalid)
+	}
+	counterparty := strings.TrimSpace(d.Counterparty)
+	if counterparty == "" {
+		return fmt.Errorf("%w: interest or a fee needs a counterparty", ErrInvalid)
+	}
+	if s.txs == nil {
+		return errors.New("no transactions service")
+	}
+	// An expense never triggers a refill.
+	_, err := s.txs.RecordIn(ctx, tx, userID, transactions.New{
+		Type: sqlc.TransactionTypeEXP, AccountID: cardID, Amount: amount, At: at,
+		Counterparty: counterparty, Tags: []string{d.Tag},
+	})
+	return err
 }
 
 // payBill records or schedules the payment of the fixed statement st.
