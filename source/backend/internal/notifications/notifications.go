@@ -80,6 +80,9 @@ const (
 	// bank charged on a balance that carried over (#263): the bill before the
 	// current one wasn't paid in full by its due date.
 	KindCardInterest Kind = "card_interest"
+	// KindBucketCharge is a purchase that waited for its bucket and that the
+	// bucket took at the active cycle's start (#264).
+	KindBucketCharge Kind = "bucket_charge"
 )
 
 // keyPrefix is each kind's key prefix.
@@ -88,7 +91,7 @@ var keyPrefix = map[Kind]string{
 	KindSavings: "savings:", KindSavingsShort: "savings-short:",
 	KindBSUOverLimit: "bsu-over:", KindBSUWithdrawal: "bsu-withdrawal:", KindCreditLimit: "card-limit:",
 	KindCardBill: "card-bill:", KindCardBillDue: "card-due:", KindCardBillCarried: "card-carried:",
-	KindCardInterest: "card-interest:",
+	KindCardInterest: "card-interest:", KindBucketCharge: "bucket-charge:",
 }
 
 // Severity orders notifications: alerts first.
@@ -129,6 +132,9 @@ type Notification struct {
 	Amount   decimal.NullDecimal
 	Minimum  decimal.NullDecimal
 	Currency string
+	// TransactionID and Counterparty are the purchase a bucket took (#264).
+	TransactionID string
+	Counterparty  string
 }
 
 // Settings is the user's notifications preference. Nil fields use the
@@ -146,6 +152,8 @@ type Settings struct {
 	CreditLimit       *bool `json:"credit_limit"`
 	// CardBills switches all three card bill kinds (#262).
 	CardBills *bool `json:"card_bills"`
+	// BucketCharges switches KindBucketCharge (#264).
+	BucketCharges *bool `json:"bucket_charges"`
 }
 
 // On reports whether a kind shows.
@@ -156,7 +164,7 @@ func (s Settings) On(k Kind) bool {
 		KindSavingsShort: s.SavingsShort, KindBSUOverLimit: s.BSUOverLimit, KindBSUWithdrawal: s.BSUWithdrawal,
 		KindCreditLimit: s.CreditLimit,
 		KindCardBill:    s.CardBills, KindCardBillDue: s.CardBills, KindCardBillCarried: s.CardBills,
-		KindCardInterest: s.CardBills,
+		KindCardInterest: s.CardBills, KindBucketCharge: s.BucketCharges,
 	}[k]
 	return v == nil || *v
 }
@@ -312,6 +320,33 @@ func kindOf(key string) Kind {
 	return ""
 }
 
+// bucketCharges are the purchases that waited for their buckets and that
+// the active cycle's start took (#264): what each bucket took, and the
+// purchase's counterparty. A take by hand, or one when a payment paid a
+// card purchase off, was the user's doing.
+func (s *Service) bucketCharges(ctx context.Context, q *sqlc.Queries, userID string, _ Settings) ([]Notification, error) {
+	c, err := q.GetActiveCycle(ctx, userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	rows, err := q.AutoTakesIn(ctx, sqlc.AutoTakesInParams{UserID: userID, FromAt: c.StartAt, ToAt: c.EndAt})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Notification, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, Notification{
+			Key: keyPrefix[KindBucketCharge] + r.ID, Kind: KindBucketCharge, Severity: Info, At: r.TransactionAt,
+			BucketID: r.BucketID, CycleID: c.ID, TransactionID: r.PurchaseID, Counterparty: r.Counterparty,
+			Amount: decimal.NewNullDecimal(r.Taken), Currency: strings.TrimSpace(r.Currency),
+		})
+	}
+	return out, nil
+}
+
 // work works out the notifications of the kinds switched on, dismissed or
 // not.
 func (s *Service) work(ctx context.Context, q *sqlc.Queries, userID string, settings Settings) ([]Notification, error) {
@@ -324,7 +359,7 @@ func (s *Service) work(ctx context.Context, q *sqlc.Queries, userID string, sett
 		{KindSavings, s.held}, {KindSavingsShort, s.short},
 		{KindBSUOverLimit, s.bsuOver}, {KindBSUWithdrawal, s.bsuWithdrawals},
 		{KindCreditLimit, s.creditLimits},
-		{KindCardBill, s.cardBills},
+		{KindCardBill, s.cardBills}, {KindBucketCharge, s.bucketCharges},
 	}
 	for _, step := range steps {
 		if !settings.On(step.kind) {

@@ -18,6 +18,8 @@
 //	SavingsBudgetEntry User + 4 random 10 digits
 //	CardDebtLine Account (card) + 20 random  24 digits
 //	CardStatement Account (card) + YYYYMMDD  12 digits (the statement day)
+//	WaitingCharge Bucket + 14 random  24 digits
+//	WaitingLine  Bucket + 14 random   24 digits
 //
 // The database stores them as text with a CHECK on Kind.Pattern. They are
 // drawn with crypto/rand; see Insert for handling collisions.
@@ -68,6 +70,10 @@ var (
 	CardDebtLine = newKind("card debt line", 24, `^[1-9][0-9]{23}$`)
 	// CardStatement is a credit card's statement, one per statement day (#262).
 	CardStatement = newKind("card statement", 12, `^[1-9][0-9]{11}$`)
+	// WaitingCharge is a purchase's bucket part that counts in its bucket
+	// later (#264), and WaitingLine a line of what the bucket owes for it.
+	WaitingCharge = newKind("waiting charge", 24, `^[1-9][0-9]{23}$`)
+	WaitingLine   = newKind("waiting line", 24, `^[1-9][0-9]{23}$`)
 )
 
 // Valid reports whether s is a well-formed ID of this kind. For transactions
@@ -140,6 +146,12 @@ func CardStatementID(cardID string, year int, month time.Month, day int) string 
 // NewCardDebtLine returns a random ID for a card debt line of the credit
 // card cardID.
 func NewCardDebtLine(cardID string) string { return withPrefix(Account, cardID, 20) }
+
+// NewWaitingCharge returns a random ID for a waiting charge on bucketID.
+func NewWaitingCharge(bucketID string) string { return withPrefix(Bucket, bucketID, 14) }
+
+// NewWaitingLine returns a random ID for a waiting line on bucketID.
+func NewWaitingLine(bucketID string) string { return withPrefix(Bucket, bucketID, 14) }
 
 // withPrefix appends n random digits to an owner ID. A malformed owner ID is
 // a programming error, so it panics rather than returning an error.

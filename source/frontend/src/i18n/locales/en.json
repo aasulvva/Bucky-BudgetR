@@ -1273,7 +1273,8 @@
     "SVB": "Savings to bucket",
     "SVD": "Savings distribution",
     "CDH": "Card debt set aside",
-    "CDR": "Card debt released"
+    "CDR": "Card debt released",
+    "DBC": "Bucket charge"
   },
   "transactions": {
     "new": "New transaction",
@@ -2557,7 +2558,9 @@
       "credit_limit": "Credit limits",
       "credit_limitHint": "Credit cards with 90% or more of their limit used.",
       "card_bills": "Card bills",
-      "card_billsHint": "A credit card's bill: ready, due within the days ahead, and carried over when not paid in full, then a reminder to register the interest and fees."
+      "card_billsHint": "A credit card's bill: ready, due within the days ahead, and carried over when not paid in full, then a reminder to register the interest and fees.",
+      "bucket_charges": "Purchases counted later",
+      "bucket_chargesHint": "A purchase that waited for its bucket and is taken at a cycle's start."
     },
     "savings": {
       "title": "Money held for {{name}}",
@@ -2601,6 +2604,11 @@
       "title": "Register interest and fees for {{name}}",
       "body": "{{amount}} was left on the bill due {{date}}, so the bank may charge interest. Register what its statement shows.",
       "open": "Register"
+    },
+    "bucketCharge": {
+      "title": "{{bucket}} took {{amount}}",
+      "body": "The purchase from {{counterparty}} waited for this cycle and now counts in the bucket.",
+      "open": "Open transactions"
     }
   },
   "bsu": {

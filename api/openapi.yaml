@@ -2594,6 +2594,72 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/v1/waiting-charges:
+    get:
+      operationId: listWaitingCharges
+      tags: [transactions]
+      summary: List the purchases waiting for their buckets
+      description: |
+        The waiting charges (#264) with something left on live buckets,
+        oldest purchase first: what each bucket hasn't taken yet of a
+        purchase that counts in it later. With `account_id`, only those of
+        buckets on that account (where their advance is).
+      parameters:
+        - name: account_id
+          in: query
+          schema:
+            $ref: "#/components/schemas/AccountId"
+      responses:
+        "200":
+          description: The open waiting charges.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OpenWaitingCharge"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/waiting-charges/{chargeId}/take:
+    post:
+      operationId: takeWaitingCharge
+      tags: [transactions]
+      summary: Take what's left of a waiting charge now
+      description: |
+        The bucket takes what's left of a purchase that waits for it (#264)
+        now, in the active cycle, with a DBC: its TF and CAF go down, and the
+        advance on its account with them, so unallocated doesn't change.
+        409 `no_active_cycle` without an active cycle, `charge_closed` when
+        nothing is left or the bucket is gone.
+      parameters:
+        - name: chargeId
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/WaitingChargeId"
+      responses:
+        "200":
+          description: The purchase, with its waiting charges.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
   /api/v1/tags:
     get:
       operationId: listTags
@@ -3780,6 +3846,12 @@ paths:
           `amount` and `currency`. Until interest or a fee (a transaction on
           the card tagged `interest` or `fee`, not reversed) dated from that
           due date is registered, or the next statement.
+        - `bucket_charge` (#264, info, under `bucket_charges`): a bucket took
+          a purchase that waited for it, at the active cycle's start; with
+          `bucket_id`, `cycle_id`, `at` (the cycle's start), what it took as
+          `amount`, `currency`, and the purchase as `transaction_id` and
+          `counterparty`. One per take, until dismissed or the cycle ends. A
+          take by hand, or when a payment paid a card purchase off, has none.
       responses:
         "200":
           description: The open notifications.
@@ -4848,7 +4920,7 @@ components:
     Account:
       type: object
       additionalProperties: false
-      required: [id, name, type, currency, balance, unallocated, reserved, reserved_uncovered, card_holds, card_debt_uncovered, expected_income, bank, created_at, bsu, credit_card]
+      required: [id, name, type, currency, balance, unallocated, reserved, reserved_uncovered, card_holds, card_debt_uncovered, waiting, expected_income, bank, created_at, bsu, credit_card]
       properties:
         id:
           $ref: "#/components/schemas/AccountId"
@@ -4867,14 +4939,23 @@ components:
             - $ref: "#/components/schemas/Amount"
           description: |
             The part of the balance that's neither held for credit card debt,
-            nor backs a bucket, nor is reserved for savings: balance − the
-            covered part of the card debt in `card_holds` − Σ CAF of its
-            buckets − the covered part of `reserved` (spec §7, §8, #261).
+            nor backs a bucket, nor is reserved for savings: balance +
+            `waiting` − the covered part of the card debt in `card_holds` −
+            Σ CAF of its buckets − the covered part of `reserved` (spec §7,
+            §8, #261, #264).
             Negative when the account is overdrawn.
         reserved:
           allOf:
             - $ref: "#/components/schemas/Amount"
           description: What's held on the account for savings (#231), whether or not the balance covers it.
+        waiting:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: |
+            What the account's buckets owe it for purchases that count in
+            them later (#264), an advance: it counts as money on the account
+            until the buckets take the purchases, so a purchase that waits
+            leaves `unallocated` as it was. `GET /waiting-charges` lists them.
         reserved_uncovered:
           allOf:
             - $ref: "#/components/schemas/Amount"
@@ -7357,7 +7438,7 @@ components:
 
     TransactionType:
       type: string
-      enum: [OPB, BLA, INC, EXP, TRF, INP, OPF, REF, BUA, BAT, OVF, SVR, SVC, SVB, SVD, CDH, CDR]
+      enum: [OPB, BLA, INC, EXP, TRF, INP, OPF, REF, BUA, BAT, OVF, SVR, SVC, SVB, SVD, CDH, CDR, DBC]
       description: |
         See spec §5.4. Only INC, EXP and TRF can be created with
         `POST /transactions`. SVR (savings reserve), SVC (savings cancel) and
@@ -7369,7 +7450,10 @@ components:
         CDH (card debt hold) and CDR (card debt release) come from the card
         debt endpoints and deleting an account (#261); they too can be
         reversed, not corrected. A purchase, refund or transfer can have card
-        lines.
+        lines. DBC (deferred bucket charge, #264) is a bucket taking a
+        purchase that waited for it: a bucket line and a waiting line. The
+        system records and reverses it; it can't be corrected or reversed
+        by hand.
 
     CorrectionType:
       type: string
@@ -7423,6 +7507,126 @@ components:
             - $ref: "#/components/schemas/Amount"
           description: Signed, in the card's currency. Positive holds money for the card's debt, negative releases it.
 
+    TransactionWaitingLine:
+      type: object
+      additionalProperties: false
+      required: [purchase_id, bucket_id, amount]
+      properties:
+        purchase_id:
+          allOf:
+            - $ref: "#/components/schemas/TransactionId"
+          description: The purchase (an expense) that waits for the bucket.
+        bucket_id:
+          $ref: "#/components/schemas/BucketId"
+        amount:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: |
+            Signed, in the bucket's currency (#264). Positive is a purchase's
+            part that waits for the bucket, an advance on the bucket's
+            account; negative is what a DBC took of it.
+
+    WaitingChargeWhen:
+      type: string
+      enum: [paid, cycle, month]
+      description: |
+        When a purchase's bucket parts count in their buckets (#264):
+        `paid` as a credit card purchase is paid off (payments clear the
+        card's debt oldest first, and each bucket takes its share of what's
+        paid), `cycle` at a planned cycle's start, `month` at the start of
+        the first cycle that starts in or after a month.
+
+    CountLater:
+      type: object
+      additionalProperties: false
+      required: [when]
+      description: Counts an expense's bucket parts in their buckets later (#264), instead of now.
+      properties:
+        when:
+          $ref: "#/components/schemas/WaitingChargeWhen"
+        cycle_id:
+          allOf:
+            - $ref: "#/components/schemas/CycleId"
+          description: For `cycle`, a planned cycle.
+        month:
+          type: string
+          pattern: '^[0-9]{4}-(0[1-9]|1[0-2])$'
+          description: For `month`, YYYY-MM, after the active cycle's start month.
+
+    WaitingCharge:
+      type: object
+      additionalProperties: false
+      required: [id, bucket_id, when, cycle_id, take_on, amount, left, bucket_deleted]
+      description: A purchase's part for one bucket that counts in it later (#264).
+      properties:
+        id:
+          $ref: "#/components/schemas/WaitingChargeId"
+        bucket_id:
+          $ref: "#/components/schemas/BucketId"
+        when:
+          $ref: "#/components/schemas/WaitingChargeWhen"
+        cycle_id:
+          type: string
+          nullable: true
+          description: The planned cycle of a `cycle` charge; null once that cycle is deleted, when `take_on` stands in for it.
+        take_on:
+          type: string
+          format: date
+          nullable: true
+          description: The date from whose cycle start a `cycle` or `month` charge is taken; null for `paid`.
+        amount:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: The purchase's part, positive.
+        left:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: What the bucket hasn't taken yet.
+        bucket_deleted:
+          type: boolean
+          description: The bucket is gone, so it won't take the rest.
+
+    WaitingChargeId:
+      type: string
+      pattern: '^[1-9][0-9]{23}$'
+      description: The bucket's ID and 14 random digits (#264).
+
+    OpenWaitingCharge:
+      type: object
+      additionalProperties: false
+      required: [id, purchase_id, bucket_id, account_id, when, cycle_id, take_on, at, counterparty, left]
+      properties:
+        id:
+          $ref: "#/components/schemas/WaitingChargeId"
+        purchase_id:
+          $ref: "#/components/schemas/TransactionId"
+        bucket_id:
+          $ref: "#/components/schemas/BucketId"
+        account_id:
+          allOf:
+            - $ref: "#/components/schemas/AccountId"
+          description: The bucket's account, which the advance is on.
+        when:
+          $ref: "#/components/schemas/WaitingChargeWhen"
+        cycle_id:
+          type: string
+          nullable: true
+        take_on:
+          type: string
+          format: date
+          nullable: true
+        at:
+          type: string
+          format: date-time
+          description: When the purchase happened.
+        counterparty:
+          type: string
+          description: The purchase's counterparty.
+        left:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: What the bucket hasn't taken yet, positive.
+
     TransactionBalance:
       type: object
       additionalProperties: false
@@ -7452,7 +7656,7 @@ components:
     Transaction:
       type: object
       additionalProperties: false
-      required: [id, type, at, counterparty, description, tags, triggers_refill, created_at, created_by, corrected, reversed, replaces, replaced_by, schedule_id, bank_lines, bucket_lines, savings_lines, card_lines, before_reversal, balances_after]
+      required: [id, type, at, counterparty, description, tags, triggers_refill, created_at, created_by, corrected, reversed, replaces, replaced_by, schedule_id, bank_lines, bucket_lines, savings_lines, card_lines, waiting_lines, waiting, before_reversal, balances_after]
       properties:
         id:
           $ref: "#/components/schemas/TransactionId"
@@ -7521,6 +7725,16 @@ components:
           description: Effective amounts of card debt held per card and account (#261), as `bank_lines`.
           items:
             $ref: "#/components/schemas/TransactionCardLine"
+        waiting_lines:
+          type: array
+          description: Effective amounts waiting for buckets per purchase and bucket (#264), as `bank_lines`.
+          items:
+            $ref: "#/components/schemas/TransactionWaitingLine"
+        waiting:
+          type: array
+          description: A purchase's waiting charges (#264), one per bucket; empty when it counts now.
+          items:
+            $ref: "#/components/schemas/WaitingCharge"
         before_reversal:
           description: |
             Set on a reversed transaction: its effective lines just before the
@@ -7549,7 +7763,7 @@ components:
     TransactionVersion:
       type: object
       additionalProperties: false
-      required: [id, correction_type, created_at, created_by, bank_lines, bucket_lines, savings_lines, card_lines]
+      required: [id, correction_type, created_at, created_by, bank_lines, bucket_lines, savings_lines, card_lines, waiting_lines]
       properties:
         id:
           $ref: "#/components/schemas/TransactionId"
@@ -7577,11 +7791,15 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TransactionCardLine"
+        waiting_lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransactionWaitingLine"
 
     TransactionLines:
       type: object
       additionalProperties: false
-      required: [bank_lines, bucket_lines, savings_lines, card_lines]
+      required: [bank_lines, bucket_lines, savings_lines, card_lines, waiting_lines]
       properties:
         bank_lines:
           type: array
@@ -7599,6 +7817,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TransactionCardLine"
+        waiting_lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransactionWaitingLine"
 
     TransactionPage:
       type: object
@@ -7743,6 +7965,15 @@ components:
             holds first.
           items:
             $ref: "#/components/schemas/CardDebtChange"
+        count_later:
+          allOf:
+            - $ref: "#/components/schemas/CountLater"
+          description: |
+            Only for an expense with bucket lines (#264): its bucket parts
+            count in their buckets later instead of now, and don't need an
+            active cycle. Until a bucket takes its part, the part is an
+            advance on the bucket's account, so unallocated doesn't change.
+            `paid` needs a credit card (400 `card_only`).
     Tag:
       type: object
       additionalProperties: false
@@ -7873,6 +8104,15 @@ components:
             creating.
           items:
             $ref: "#/components/schemas/CardDebtChange"
+        count_later:
+          allOf:
+            - $ref: "#/components/schemas/CountLater"
+          description: |
+            Makes an expense's bucket parts count in their buckets later, or
+            changes when (#264). A purchase that waits can't count now again
+            (400): Take its charges instead. Changing its amount or bucket
+            parts can't leave a bucket owing less than nothing (409
+            `charge_taken`).
     Problem:
       type: object
       description: RFC 9457 problem details.
@@ -8233,12 +8473,12 @@ components:
 
     NotificationKind:
       type: string
-      enum: [approval_queue, upcoming_bill, investment_balance, bucket_uncovered, savings_transfer, savings_short, bsu_over_limit, bsu_withdrawal, credit_limit, card_bill, card_bill_due, card_bill_carried, card_interest]
+      enum: [approval_queue, upcoming_bill, investment_balance, bucket_uncovered, savings_transfer, savings_short, bsu_over_limit, bsu_withdrawal, credit_limit, card_bill, card_bill_due, card_bill_carried, card_interest, bucket_charge]
 
     Notification:
       type: object
       additionalProperties: false
-      required: [key, kind, severity, at, count, overdue, schedule_id, account_id, bucket_id, cycle_id, target_id, amount, minimum, currency]
+      required: [key, kind, severity, at, count, overdue, schedule_id, account_id, bucket_id, cycle_id, target_id, amount, minimum, currency, transaction_id, counterparty]
       description: |
         A reminder or to-do. The client words it from `kind` and the fields
         that kind uses (see `listNotifications`); the others are null.
@@ -8302,6 +8542,14 @@ components:
         currency:
           type: string
           nullable: true
+        transaction_id:
+          type: string
+          nullable: true
+          description: The purchase a bucket took (#264).
+        counterparty:
+          type: string
+          nullable: true
+          description: The counterparty of the purchase a bucket took (#264).
 
     NotificationList:
       type: object
@@ -8374,3 +8622,7 @@ components:
           type: boolean
           nullable: true
           description: Credit card bills ready, due soon (`upcoming_days` ahead) or carried over (#262). Null means true.
+        bucket_charges:
+          type: boolean
+          nullable: true
+          description: Purchases that waited for their buckets, taken at a cycle's start (#264). Null means true.

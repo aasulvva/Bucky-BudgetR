@@ -492,7 +492,7 @@ func (s *Service) cardDebt(ctx context.Context, userID, cardID, accountID string
 		if err != nil {
 			return err
 		}
-		out = merge([]sqlc.TransactionHeader{t.Header}, t.BankLines, t.BucketLines, t.SavingsLines, t.CardLines, t.Tags, false)
+		out = merge([]sqlc.TransactionHeader{t.Header}, t.BankLines, t.BucketLines, t.SavingsLines, t.CardLines, t.WaitingLines, t.Tags, false)
 		return nil
 	})
 	if err != nil {

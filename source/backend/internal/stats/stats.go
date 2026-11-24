@@ -343,7 +343,9 @@ func (s *sums) flowKey(q Query, currency, account string, typ sqlc.TransactionTy
 
 // flows sums spending or income.
 func (s *sums) flows(ctx context.Context, queries *sqlc.Queries, userID string, q Query) error {
-	types := []string{string(sqlc.TransactionTypeEXP)}
+	// A bucket taking a purchase that waited for it (DBC, #264) is spending
+	// in the bucket then; it has no bank lines.
+	types := []string{string(sqlc.TransactionTypeEXP), string(sqlc.TransactionTypeDBC)}
 	if q.Metric == Income {
 		types = []string{string(sqlc.TransactionTypeINC)}
 	}
@@ -410,9 +412,22 @@ func (s *sums) flows(ctx context.Context, queries *sqlc.Queries, userID string, 
 		onBuckets[fa] = onBuckets[fa].Add(r.Net)
 	}
 	// Grouped by bucket without a bucket filter: the rest of each family's
-	// bank net is on no bucket.
+	// bank net is on no bucket, but for what waits for buckets (#264): that
+	// counts when they take it.
+	families := make([]string, len(bank))
+	for i, r := range bank {
+		families[i] = r.ID
+	}
+	parts, err := queries.StatsWaitingParts(ctx, families)
+	if err != nil {
+		return err
+	}
+	waiting := make(map[string]decimal.Decimal, len(parts))
+	for _, p := range parts {
+		waiting[p.ID] = p.Waiting
+	}
 	for _, r := range bank {
-		rest := r.Net.Sub(onBuckets[famAccount{r.ID, r.AccountID}])
+		rest := r.Net.Sub(onBuckets[famAccount{r.ID, r.AccountID}]).Add(waiting[r.ID])
 		if rest.IsZero() {
 			continue
 		}

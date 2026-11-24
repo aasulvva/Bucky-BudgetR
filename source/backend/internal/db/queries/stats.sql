@@ -177,3 +177,12 @@ WHERE h.user_id = sqlc.arg(user_id) AND h.correction_type = 'none' AND h.transac
   AND (sqlc.narg(account_ids)::text[] IS NULL OR k.source_account_id = ANY(sqlc.narg(account_ids)::text[]))
   AND (sqlc.narg(bucket_ids)::text[] IS NULL OR l.bucket_id = ANY(sqlc.narg(bucket_ids)::text[]))
 ORDER BY l.bucket_id, h.transaction_at;
+
+-- name: StatsWaitingParts :many
+-- What of each of these purchases waits for its buckets (#264): its own
+-- waiting lines, which count in the buckets when a DBC takes them.
+SELECT l.purchase_id AS id, SUM(l.amount)::numeric AS waiting
+FROM waiting_lines l
+JOIN transaction_headers h ON h.id = l.transaction_id
+WHERE l.purchase_id = ANY(sqlc.arg(ids)::text[]) AND COALESCE(h.parent_id, h.id) = l.purchase_id
+GROUP BY l.purchase_id;

@@ -258,6 +258,7 @@ func toAPIAccount(a accounts.Account) api.Account {
 		ReservedUncovered: a.ReservedUncovered.StringFixed(money.Places),
 		CardHolds:         toAPICardHolds(a.CardHolds),
 		CardDebtUncovered: a.CardDebtUncovered.StringFixed(money.Places),
+		Waiting:           a.Waiting.StringFixed(money.Places),
 		ExpectedIncome:    nullable.NewNullNullable[api.Amount](),
 		CreatedAt:         a.CreatedAt.UTC(),
 	}

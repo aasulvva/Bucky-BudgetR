@@ -161,6 +161,9 @@ func (s *server) CorrectTransaction(ctx context.Context, req api.CorrectTransact
 	if b.CarryCardDebt != nil && c.Carry == nil {
 		c.Carry = []transactions.CardAmount{}
 	}
+	if c.CountLater, err = fromAPICountLater(b.CountLater); err != nil {
+		return nil, err
+	}
 	t, err := svc.Correct(ctx, sessionFrom(ctx).User.ID, req.TransactionId, c)
 	if err != nil {
 		return nil, transactionError(err)
@@ -216,6 +219,15 @@ func transactionError(err error) error {
 		return bsuError(err)
 	}
 	switch {
+	case errors.Is(err, transactions.ErrChargeTaken):
+		return &Error{Status: http.StatusConflict, Code: "charge_taken",
+			Detail: "A bucket has already taken this purchase, in a finished cycle or more than the change leaves.", Err: err}
+	case errors.Is(err, transactions.ErrChargeClosed):
+		return &Error{Status: http.StatusConflict, Code: "charge_closed",
+			Detail: "Nothing is left for the bucket to take, or the bucket is gone.", Err: err}
+	case errors.Is(err, transactions.ErrCardOnly):
+		return &Error{Status: http.StatusBadRequest, Code: "card_only",
+			Detail: "Only a credit card purchase can count in its buckets as it's paid off.", Err: err}
 	case errors.Is(err, transactions.ErrNotFound):
 		return &Error{Status: http.StatusNotFound, Code: "not_found", Detail: "Transaction not found.", Err: err}
 	case errors.Is(err, transactions.ErrNotCorrectable):
@@ -311,6 +323,9 @@ func fromAPITransactionCreate(b api.TransactionCreate) (transactions.New, error)
 		n.Tags = *b.Tags
 	}
 	var err error
+	if n.CountLater, err = fromAPICountLater(b.CountLater); err != nil {
+		return transactions.New{}, err
+	}
 	if n.Amount, err = parseAmount(b.Amount); err != nil {
 		return transactions.New{}, err
 	}
@@ -384,6 +399,8 @@ func toAPITransaction(t transactions.Transaction) api.Transaction {
 		BucketLines:    toAPIBucketLines(t.BucketLines),
 		SavingsLines:   toAPISavingsLines(t.SavingsLines),
 		CardLines:      toAPICardLines(t.CardLines),
+		WaitingLines:   toAPIWaitingLines(t.WaitingLines),
+		Waiting:        toAPIWaiting(t.Waiting),
 		BeforeReversal: nullable.NewNullNullable[api.TransactionLines](),
 		BalancesAfter:  make([]api.TransactionBalance, len(t.BalancesAfter)),
 	}
@@ -393,7 +410,7 @@ func toAPITransaction(t transactions.Transaction) api.Transaction {
 	if b := t.BeforeReversal; b != nil {
 		out.BeforeReversal = nullable.NewNullableWithValue(api.TransactionLines{
 			BankLines: toAPIBankLines(b.Bank), BucketLines: toAPIBucketLines(b.Buckets), SavingsLines: toAPISavingsLines(b.Savings),
-			CardLines: toAPICardLines(b.Cards),
+			CardLines: toAPICardLines(b.Cards), WaitingLines: toAPIWaitingLines(b.Waiting),
 		})
 	}
 	if t.History != nil {
@@ -408,6 +425,7 @@ func toAPITransaction(t transactions.Transaction) api.Transaction {
 				BucketLines:    toAPIBucketLines(v.BucketLines),
 				SavingsLines:   toAPISavingsLines(v.SavingsLines),
 				CardLines:      toAPICardLines(v.CardLines),
+				WaitingLines:   toAPIWaitingLines(v.WaitingLines),
 			}
 		}
 		out.History = &h

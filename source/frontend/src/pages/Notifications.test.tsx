@@ -50,6 +50,8 @@ function notification(n: Partial<Notification> & Pick<Notification, "key" | "kin
     amount: null,
     minimum: null,
     currency: null,
+    transaction_id: null,
+    counterparty: null,
     ...n,
   };
 }

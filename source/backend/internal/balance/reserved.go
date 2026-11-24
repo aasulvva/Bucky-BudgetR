@@ -13,6 +13,11 @@ import (
 // savings, and what's left.
 type Money struct {
 	Balance decimal.Decimal
+	// Waiting is what the account's buckets owe it for purchases that count
+	// in them later (#264): an advance, so the purchase leaves unallocated as
+	// it was until the bucket takes it. The money figures use Balance +
+	// Waiting.
+	Waiting decimal.Decimal
 	// CardHolds is what's held on the account per credit card (#261), by
 	// card ID: sums that aren't 0, below 0 when a refund took more off than
 	// was held.
@@ -40,22 +45,23 @@ func (m Money) Uncovered() decimal.Decimal { return m.Reserved.Sub(m.Covered) }
 func (m Money) CardUncovered() decimal.Decimal { return m.CardDebt.Sub(m.CardCovered) }
 
 // ForBuckets is what the account's buckets can have (spec §7): the balance
-// less the card debt held on it.
-func (m Money) ForBuckets() decimal.Decimal { return m.Balance.Sub(m.CardDebt) }
+// with what its buckets owe it (#264), less the card debt held on it.
+func (m Money) ForBuckets() decimal.Decimal { return m.Balance.Add(m.Waiting).Sub(m.CardDebt) }
 
-// NewMoney works out an account's Money from its balance, its card holds,
-// Σ CAF and Σ savings lines.
-func NewMoney(bal decimal.Decimal, holds map[string]decimal.Decimal, allocated, reserved decimal.Decimal) Money {
+// NewMoney works out an account's Money from its balance, what its buckets
+// owe it for waiting purchases, its card holds, Σ CAF and Σ savings lines.
+func NewMoney(bal, waiting decimal.Decimal, holds map[string]decimal.Decimal, allocated, reserved decimal.Decimal) Money {
 	debt := decimal.Zero
 	for _, h := range holds {
 		debt = debt.Add(h)
 	}
 	debt = decimal.Max(debt, decimal.Zero)
-	cardCovered := decimal.Max(decimal.Zero, decimal.Min(debt, bal))
-	left := bal.Sub(cardCovered).Sub(allocated)
+	funds := bal.Add(waiting)
+	cardCovered := decimal.Max(decimal.Zero, decimal.Min(debt, funds))
+	left := funds.Sub(cardCovered).Sub(allocated)
 	covered := decimal.Max(decimal.Zero, decimal.Min(reserved, left))
 	return Money{
-		Balance: bal, CardHolds: holds, CardDebt: debt, CardCovered: cardCovered,
+		Balance: bal, Waiting: waiting, CardHolds: holds, CardDebt: debt, CardCovered: cardCovered,
 		Allocated: allocated, Reserved: reserved, Covered: covered,
 		Unallocated: left.Sub(covered),
 	}
@@ -106,9 +112,27 @@ func AccountMoney(ctx context.Context, db sqlc.DBTX, userID string) (map[string]
 	if err != nil {
 		return nil, err
 	}
+	waiting, err := Waiting(ctx, db, userID)
+	if err != nil {
+		return nil, err
+	}
 	out := make(map[string]Money, len(balances))
 	for id, bal := range balances {
-		out[id] = NewMoney(bal, holds[id], caf[id], held[id])
+		out[id] = NewMoney(bal, waiting[id], holds[id], caf[id], held[id])
+	}
+	return out, nil
+}
+
+// Waiting returns what the user's live buckets owe each account for
+// purchases that count in them later (#264), by account ID.
+func Waiting(ctx context.Context, db sqlc.DBTX, userID string) (map[string]decimal.Decimal, error) {
+	rows, err := sqlc.New(db).WaitingByAccount(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]decimal.Decimal, len(rows))
+	for _, r := range rows {
+		out[r.SourceAccountID] = r.Waiting
 	}
 	return out, nil
 }

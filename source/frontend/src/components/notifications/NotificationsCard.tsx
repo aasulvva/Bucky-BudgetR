@@ -18,7 +18,8 @@ type Toggle =
   | "bsu_over_limit"
   | "bsu_withdrawal"
   | "credit_limit"
-  | "card_bills";
+  | "card_bills"
+  | "bucket_charges";
 const TOGGLES: Toggle[] = [
   "approval_queue",
   "upcoming_bills",
@@ -30,6 +31,7 @@ const TOGGLES: Toggle[] = [
   "bsu_withdrawal",
   "credit_limit",
   "card_bills",
+  "bucket_charges",
 ];
 
 /** Settings › Notifications (#57): which kinds show, and how far ahead bills do. */

@@ -1273,7 +1273,8 @@
     "SVB": "Sparing til bøtte",
     "SVD": "Sparefordeling",
     "CDH": "Kortgjeld sett av",
-    "CDR": "Kortgjeld frigjord"
+    "CDR": "Kortgjeld frigjord",
+    "DBC": "Bøttebelastning"
   },
   "transactions": {
     "new": "Ny transaksjon",
@@ -2557,7 +2558,9 @@
       "credit_limit": "Kredittgrenser",
       "credit_limitHint": "Kredittkort der 90 % eller meir av grensa er brukt.",
       "card_bills": "Kortrekningar",
-      "card_billsHint": "Rekninga på eit kredittkort: klar, forfell innan dagane framover, og overført når ho ikkje er betalt i si heilskap, og så ei påminning om å registrere renter og gebyr."
+      "card_billsHint": "Rekninga på eit kredittkort: klar, forfell innan dagane framover, og overført når ho ikkje er betalt i si heilskap, og så ei påminning om å registrere renter og gebyr.",
+      "bucket_charges": "Kjøp som tel seinare",
+      "bucket_chargesHint": "Eit kjøp som venta på bøtta si og vert teke ved starten av ein periode."
     },
     "savings": {
       "title": "Pengar sette av til {{name}}",
@@ -2601,6 +2604,11 @@
       "title": "Registrer renter og gebyr for {{name}}",
       "body": "{{amount}} stod att på rekninga som forfall {{date}}, så banken kan ta renter. Registrer det fakturaen viser.",
       "open": "Registrer"
+    },
+    "bucketCharge": {
+      "title": "{{bucket}} tok {{amount}}",
+      "body": "Kjøpet frå {{counterparty}} venta på denne perioden og tel no i bøtta.",
+      "open": "Opne transaksjonar"
     }
   },
   "bsu": {

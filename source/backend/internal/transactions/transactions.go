@@ -94,6 +94,47 @@ type New struct {
 	// LimitConfirmed records it even when it takes a credit card's debt past
 	// its credit limit (#260); without it, that's *cards.OverLimitError.
 	LimitConfirmed bool
+	// CountLater makes an expense's bucket parts count in their buckets
+	// later (#264); nil counts them now.
+	CountLater *CountLater
+}
+
+// CountLater is when an expense's bucket parts count in their buckets
+// (#264): as the card purchase is paid off, at a planned cycle's start, or at
+// the start of the first cycle that starts in or after a month.
+type CountLater struct {
+	When sqlc.WaitingChargeWhen
+	// CycleID is the planned cycle, for WaitingChargeWhenCycle.
+	CycleID string
+	// Month is its first day (a date at 00:00 UTC), for
+	// WaitingChargeWhenMonth.
+	Month time.Time
+}
+
+// WaitingLine is what a bucket owes its account for a purchase that waits
+// for it (#264): the purchase's part (positive), or what a DBC took
+// (negative).
+type WaitingLine struct {
+	PurchaseID string
+	BucketID   string
+	Amount     decimal.Decimal
+}
+
+// WaitingCharge is a purchase's part for one bucket that counts in it later
+// (#264).
+type WaitingCharge struct {
+	ID       string
+	BucketID string
+	When     sqlc.WaitingChargeWhen
+	// CycleID is the planned cycle of a cycle charge, "" once deleted.
+	CycleID string
+	// TakeOn is the date from whose cycle start a cycle or month charge is
+	// taken; zero for a paid one.
+	TakeOn time.Time
+	// Part is the purchase's part, Left what the bucket hasn't taken of it.
+	Part, Left decimal.Decimal
+	// BucketDeleted is set when the bucket is gone: it won't take the rest.
+	BucketDeleted bool
 }
 
 // CardAmount is a positive amount of a credit card's debt.
@@ -148,6 +189,12 @@ type Transaction struct {
 	// CardLines are the effective amounts of card debt held (positive) or
 	// released per credit card and account (#261).
 	CardLines []CardLine
+	// WaitingLines are the effective amounts waiting for buckets (#264):
+	// a purchase's parts, or what a DBC took (negative), per purchase and
+	// bucket.
+	WaitingLines []WaitingLine
+	// Waiting are a purchase's waiting charges (#264).
+	Waiting []WaitingCharge
 	// BeforeReversal is set on a reversed transaction: its effective lines
 	// just before the reversal, which are what it amounted to.
 	BeforeReversal *Lines
@@ -167,6 +214,7 @@ type Lines struct {
 	Buckets []BucketLine
 	Savings []SavingsLine
 	Cards   []CardLine
+	Waiting []WaitingLine
 }
 
 // CardLine is an amount of a credit card's debt held on an account (#261).
@@ -213,6 +261,7 @@ type Version struct {
 	BucketLines  []BucketLine
 	SavingsLines []SavingsLine
 	CardLines    []CardLine
+	WaitingLines []WaitingLine
 }
 
 // Filter narrows List. Zero fields match everything.
@@ -293,7 +342,16 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Transaction
 		if err != nil {
 			return err
 		}
-		out = merge([]sqlc.TransactionHeader{t.Header}, t.BankLines, t.BucketLines, t.SavingsLines, t.CardLines, t.Tags, false)
+		if n.CountLater != nil {
+			// With its waiting charges, and what a paid off part took.
+			list, err := s.load(ctx, sqlc.New(tx), userID, []string{t.Header.ID}, false)
+			if err != nil {
+				return err
+			}
+			out = list[0]
+			return nil
+		}
+		out = merge([]sqlc.TransactionHeader{t.Header}, t.BankLines, t.BucketLines, t.SavingsLines, t.CardLines, t.WaitingLines, t.Tags, false)
 		return nil
 	})
 	if err != nil {
@@ -341,7 +399,7 @@ func (s *Service) RecordIn(ctx context.Context, tx pgx.Tx, userID string, n New)
 	if err != nil {
 		return Transaction{}, err
 	}
-	return merge([]sqlc.TransactionHeader{t.Header}, t.BankLines, t.BucketLines, t.SavingsLines, t.CardLines, t.Tags, false), nil
+	return merge([]sqlc.TransactionHeader{t.Header}, t.BankLines, t.BucketLines, t.SavingsLines, t.CardLines, t.WaitingLines, t.Tags, false), nil
 }
 
 // record checks n and records it inside tx. replaces is the transaction it
@@ -376,6 +434,15 @@ func (s *Service) record(ctx context.Context, tx pgx.Tx, userID string, n New, r
 	if err != nil {
 		return nil, err
 	}
+	// Bucket parts that count later wait for their buckets instead (#264).
+	var waiting []ledger.WaitingLine
+	var on pgtype.Date
+	if n.CountLater != nil {
+		if on, err = takeOn(ctx, q, userID, n.AccountID, n); err != nil {
+			return nil, err
+		}
+		waiting, buckets = waitingParts(n), nil
+	}
 	triggers := n.TriggersRefill != nil && *n.TriggersRefill
 	if n.TriggersRefill == nil && n.Type == sqlc.TransactionTypeINC && s.refills != nil {
 		if triggers, err = refill.Triggers(ctx, tx, userID, n.Counterparty, n.Amount); err != nil {
@@ -385,10 +452,15 @@ func (s *Service) record(ctx context.Context, tx pgx.Tx, userID string, n New, r
 	t, err := s.ledger.Record(ctx, tx, ledger.Entry{
 		UserID: userID, CreatedBy: userID, Type: n.Type, At: n.At, ReplacesID: replaces, TriggersRefill: triggers,
 		Counterparty: n.Counterparty, Description: n.Description, Tags: n.Tags, BankLines: bank, BucketLines: buckets,
-		CardLines: held,
+		CardLines: held, WaitingLines: waiting,
 	})
 	if err != nil {
 		return nil, err
+	}
+	if n.CountLater != nil {
+		if err := s.settleWaiting(ctx, tx, userID, t.Header.ID, n, on); err != nil {
+			return nil, err
+		}
 	}
 	if triggers && s.refills != nil {
 		// Only a flag the user just set must take effect; a moved income
@@ -897,6 +969,14 @@ func (s *Service) load(ctx context.Context, q *sqlc.Queries, userID string, orig
 	if err != nil {
 		return nil, err
 	}
+	waitingLines, err := q.ListWaitingLinesFor(ctx, all)
+	if err != nil {
+		return nil, err
+	}
+	charges, err := q.WaitingChargesFor(ctx, originals)
+	if err != nil {
+		return nil, err
+	}
 	tags, err := q.ListTagsFor(ctx, all)
 	if err != nil {
 		return nil, err
@@ -932,7 +1012,13 @@ func (s *Service) load(ctx context.Context, q *sqlc.Queries, userID string, orig
 			filter(buckets, func(l sqlc.BucketTransaction) bool { return inFamily(l.TransactionID) }),
 			filter(savings, func(l sqlc.SavingsTransaction) bool { return inFamily(l.TransactionID) }),
 			filter(cardLines, func(l sqlc.CardDebtLine) bool { return inFamily(l.TransactionID) }),
+			filter(waitingLines, func(l sqlc.WaitingLine) bool { return inFamily(l.TransactionID) }),
 			famTags, history)
+		for _, c := range charges {
+			if c.TransactionID == id {
+				t.Waiting = append(t.Waiting, waitingCharge(c))
+			}
+		}
 		for _, r := range replaced {
 			if r.ReplacesID == id {
 				t.ReplacedBy = r.ID
@@ -1021,12 +1107,34 @@ func sumCards(fam []sqlc.TransactionHeader, lines []sqlc.CardDebtLine) []CardLin
 	return slices.DeleteFunc(out, func(l CardLine) bool { return l.Amount.IsZero() })
 }
 
+// sumWaiting sums the waiting lines of these headers per purchase and
+// bucket, in the order they first appear, leaving out sums of 0.
+func sumWaiting(fam []sqlc.TransactionHeader, lines []sqlc.WaitingLine) []WaitingLine {
+	out := []WaitingLine{}
+	for _, h := range fam {
+		for _, l := range lines {
+			if l.TransactionID != h.ID {
+				continue
+			}
+			if i := slices.IndexFunc(out, func(w WaitingLine) bool {
+				return w.PurchaseID == l.PurchaseID && w.BucketID == l.BucketID
+			}); i >= 0 {
+				out[i].Amount = out[i].Amount.Add(l.Amount)
+			} else {
+				out = append(out, WaitingLine{PurchaseID: l.PurchaseID, BucketID: l.BucketID, Amount: l.Amount})
+			}
+		}
+	}
+	return slices.DeleteFunc(out, func(l WaitingLine) bool { return l.Amount.IsZero() })
+}
+
 // merge builds a Transaction from a family: the original header first, then
 // its corrections, with all their lines. tags are the newest header's, which
 // like its counterparty and description are the effective ones: every
 // correction carries them.
 func merge(fam []sqlc.TransactionHeader, bank []sqlc.BankTransaction, buckets []sqlc.BucketTransaction,
-	savings []sqlc.SavingsTransaction, cardLines []sqlc.CardDebtLine, tags []string, history bool) Transaction {
+	savings []sqlc.SavingsTransaction, cardLines []sqlc.CardDebtLine, waiting []sqlc.WaitingLine, tags []string,
+	history bool) Transaction {
 	orig := fam[0]
 	t := Transaction{
 		ID: orig.ID, Type: orig.TransactionType, At: orig.TransactionAt, Counterparty: fam[len(fam)-1].Counterparty,
@@ -1048,6 +1156,7 @@ func merge(fam []sqlc.TransactionHeader, bank []sqlc.BankTransaction, buckets []
 	t.BankLines, t.BucketLines = sumLines(fam, bank, buckets)
 	t.SavingsLines = sumSavings(fam, savings)
 	t.CardLines = sumCards(fam, cardLines)
+	t.WaitingLines = sumWaiting(fam, waiting)
 	if i := slices.IndexFunc(fam, func(h sqlc.TransactionHeader) bool {
 		return h.CorrectionType == sqlc.CorrectionTypeReversal
 	}); i > 0 {
@@ -1055,6 +1164,7 @@ func merge(fam []sqlc.TransactionHeader, bank []sqlc.BankTransaction, buckets []
 		before.Bank, before.Buckets = sumLines(fam[:i], bank, buckets)
 		before.Savings = sumSavings(fam[:i], savings)
 		before.Cards = sumCards(fam[:i], cardLines)
+		before.Waiting = sumWaiting(fam[:i], waiting)
 		t.BeforeReversal = &before
 	}
 
@@ -1062,7 +1172,8 @@ func merge(fam []sqlc.TransactionHeader, bank []sqlc.BankTransaction, buckets []
 		t.History = make([]Version, len(fam))
 		for i, h := range fam {
 			v := Version{ID: h.ID, Correction: h.CorrectionType, CreatedAt: h.CreatedAt, CreatedBy: h.CreatedBy.String,
-				BankLines: []BankLine{}, BucketLines: []BucketLine{}, SavingsLines: []SavingsLine{}, CardLines: []CardLine{}}
+				BankLines: []BankLine{}, BucketLines: []BucketLine{}, SavingsLines: []SavingsLine{}, CardLines: []CardLine{},
+				WaitingLines: []WaitingLine{}}
 			for _, l := range bank {
 				if l.TransactionID == h.ID {
 					v.BankLines = append(v.BankLines, BankLine{AccountID: l.AccountID, Amount: l.Amount})
@@ -1081,6 +1192,11 @@ func merge(fam []sqlc.TransactionHeader, bank []sqlc.BankTransaction, buckets []
 			for _, l := range cardLines {
 				if l.TransactionID == h.ID {
 					v.CardLines = append(v.CardLines, CardLine{CardID: l.CardID, AccountID: l.AccountID, Amount: l.Amount})
+				}
+			}
+			for _, l := range waiting {
+				if l.TransactionID == h.ID {
+					v.WaitingLines = append(v.WaitingLines, WaitingLine{PurchaseID: l.PurchaseID, BucketID: l.BucketID, Amount: l.Amount})
 				}
 			}
 			t.History[i] = v

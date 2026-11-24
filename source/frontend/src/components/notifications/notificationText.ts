@@ -205,6 +205,17 @@ export function useNotificationText(): (n: Notification) => NotificationText {
           link: interestPath(n.account_id ?? ""),
           open: t("notifications.cardInterest.open"),
         };
+      case "bucket_charge":
+        return {
+          ...base,
+          title: t("notifications.bucketCharge.title", {
+            bucket: names.bucketName(n.bucket_id ?? ""),
+            amount: n.amount ? formatMoney(n.amount, n.currency ?? undefined) : "",
+          }),
+          body: t("notifications.bucketCharge.body", { counterparty: n.counterparty ?? "" }),
+          link: `/transactions?bucket_id=${encodeURIComponent(n.bucket_id ?? "")}&cycle_id=${encodeURIComponent(n.cycle_id ?? "")}&system=1`,
+          open: t("notifications.bucketCharge.open"),
+        };
     }
   };
 }
