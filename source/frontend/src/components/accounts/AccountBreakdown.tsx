@@ -220,13 +220,15 @@ function billRow(card: Account, days: number, t: TFunction): FigureRow | null {
     };
   }
   const status =
-    bill.payment?.state === "queued"
-      ? t("cards.figures.billQueued")
-      : bill.payment?.state === "scheduled"
-        ? t("cards.figures.billScheduled")
-        : cur.fixed
-          ? null
-          : t("cards.figures.billOpen");
+    state === "carried"
+      ? t("cards.figures.billCarried")
+      : bill.payment?.state === "queued"
+        ? t("cards.figures.billQueued")
+        : bill.payment?.state === "scheduled"
+          ? t("cards.figures.billScheduled")
+          : cur.fixed
+            ? null
+            : t("cards.figures.billOpen");
   const minimum =
     compareAmounts(cur.minimum_left, "0") > 0 && compareAmounts(cur.minimum_left, cur.left) < 0
       ? t("cards.figures.billMinimum", { amount: money(cur.minimum_left) })

@@ -387,16 +387,19 @@ func storeLast(ctx context.Context, q *sqlc.Queries, userID string, row sqlc.Ban
 	return store(ctx, q, userID, row.ID, Statement{
 		Date: s, Cutoff: s.Time(loc), Due: DueDate(s, f.DueDay),
 		Amount: last.Amount, Minimum: decimal.Min(f.MinimumPayment, last.Amount),
-	}, last.Paid, FixedBySetup)
+	}, last.Paid, FixedBySetup, now)
 }
 
+// store stores a statement, fixed by by at now (the app's clock, so a
+// moved debug clock shows too).
 func store(ctx context.Context, q *sqlc.Queries, userID, cardID string, st Statement,
-	paidBefore decimal.Decimal, by sqlc.CardStatementFix) error {
+	paidBefore decimal.Decimal, by sqlc.CardStatementFix, now time.Time) error {
 	_, err := q.CreateCardStatement(ctx, sqlc.CreateCardStatementParams{
 		ID: ids.CardStatementID(cardID, st.Date.Year, st.Date.Month, st.Date.Day), CardID: cardID,
 		StatementDate: dateTime(st.Date), Cutoff: st.Cutoff, DueDate: dateTime(st.Due),
 		Amount: st.Amount, Minimum: st.Minimum, PaidBefore: paidBefore, FixedBy: by,
 		CreatedBy: pgtype.Text{String: userID, Valid: by != FixedByDue},
+		FixedAt:   now,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil // fixed meanwhile
@@ -440,7 +443,7 @@ func Fix(ctx context.Context, db sqlc.DBTX, userID, cardID string, by sqlc.CardS
 	case cur.Fixed:
 		return ErrStatementFixed
 	}
-	return store(ctx, sqlc.New(db), userID, cardID, *cur, decimal.Zero, by)
+	return store(ctx, sqlc.New(db), userID, cardID, *cur, decimal.Zero, by, now)
 }
 
 // FixDue stores the statements whose due date has passed and aren't stored
@@ -473,7 +476,7 @@ func FixDue(ctx context.Context, db sqlc.DBTX, row sqlc.BankAccount, now time.Ti
 			}
 			continue
 		}
-		if err := store(ctx, q, row.UserID, row.ID, *st, decimal.Zero, FixedByDue); err != nil {
+		if err := store(ctx, q, row.UserID, row.ID, *st, decimal.Zero, FixedByDue, now); err != nil {
 			return err
 		}
 	}

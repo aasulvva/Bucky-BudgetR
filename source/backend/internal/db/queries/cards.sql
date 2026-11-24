@@ -31,8 +31,8 @@ SELECT * FROM card_statements WHERE card_id = $1 ORDER BY statement_date DESC LI
 -- name: CreateCardStatement :one
 -- A statement already fixed for the day returns no row.
 INSERT INTO card_statements (id, card_id, statement_date, cutoff, due_date, amount, minimum, paid_before,
-    fixed_by, created_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    fixed_by, created_by, fixed_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 ON CONFLICT (card_id, statement_date) DO NOTHING
 RETURNING *;
 

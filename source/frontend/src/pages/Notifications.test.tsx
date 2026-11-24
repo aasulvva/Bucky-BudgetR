@@ -298,7 +298,7 @@ describe("Notifications", () => {
     expect(
       due.getByText(/NOK.1,500\.00 is left to pay. The minimum payment is paid/),
     ).toBeInTheDocument();
-    expect(carried.getByText(`${main.name}'s bill wasn't paid in full`)).toBeInTheDocument();
+    expect(carried.getByText(`${main.name}'s bill is past due`)).toBeInTheDocument();
     expect(carried.getByText(/NOK.300\.00 of it the minimum payment/)).toBeInTheDocument();
   });
 

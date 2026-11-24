@@ -2591,10 +2591,11 @@
       "dueTitle": "Rekninga for {{name}} forfell {{date}}",
       "dueBody": "{{amount}} står att å betale, minst {{minimum}}.",
       "dueBodyMinimumPaid": "{{amount}} står att å betale. Minstebeløpet er betalt.",
-      "carriedTitle": "Rekninga for {{name}} vart ikkje betalt i si heilskap",
+      "carriedTitle": "Rekninga for {{name}} vart overført",
       "carriedBody": "{{amount}} stod att ved forfall {{date}} og vert overført, av det minstebeløpet {{minimum}}.",
-      "carriedBodyMinimumPaid": "{{amount}} stod att ved forfall {{date}} og vert overført.",
-      "open": "Opne rekninga"
+      "carriedBodyMinimumPaid": "{{amount}} stod att ved forfall {{date}} og vert overført til neste rekning. Minstebeløpet vart betalt.",
+      "open": "Opne rekninga",
+      "pastDueTitle": "Rekninga for {{name}} har forfalle"
     }
   },
   "bsu": {
@@ -2783,7 +2784,8 @@
       "billQueued": "Betalinga ventar på godkjenning",
       "billOpen": "Ikkje fullført",
       "billMinimum": "Minst {{amount}}",
-      "billPast": "Har forfalle"
+      "billPast": "Har forfalle",
+      "billCarried": "Overført"
     },
     "needsDefault": "Automatisk fullføring betaler frå standardkontoen. Vel ein først.",
     "billShort": "Rekning {{amount}} forfell {{date}}",
@@ -2831,7 +2833,7 @@
       "left": "Står att å betale",
       "minimumLeft": "{{amount}} av minstebeløpet står att",
       "due": "Forfall",
-      "carried": "Har forfalle: det som står att vert overført.",
+      "carried": "Overført til neste rekning.",
       "firstOn": "Inga rekning enno. Den første fakturaen vert laga {{date}}.",
       "previousLeft": "{{amount}} stod att på fakturaen frå {{date}} og vart overført.",
       "finalize": "Fullfør rekning",
@@ -2884,7 +2886,8 @@
         "full": "Det som står att",
         "minimum": "Minstebeløpet som står att",
         "fixed": "Høgst det som står att"
-      }
+      },
+      "pastDue": "Har forfalle: minstebeløpet er ikkje betalt. Det som står att vert overført."
     }
   }
 }

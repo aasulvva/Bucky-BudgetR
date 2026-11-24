@@ -111,7 +111,8 @@ function statementRows(
       ...(compareAmounts(st.minimum_left, "0") > 0
         ? { note: t("cards.bill.minimumLeft", { amount: money(st.minimum_left) }) }
         : {}),
-      ...(state === "past" ? { warning: t("cards.bill.carried") } : {}),
+      ...(state === "past" ? { warning: t("cards.bill.pastDue") } : {}),
+      ...(state === "carried" ? { note: t("cards.bill.carried") } : {}),
     },
     { label: t("cards.bill.due"), value: formatDate(st.due_date), orange: leftOrange },
   ];

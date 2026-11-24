@@ -2591,10 +2591,11 @@
       "dueTitle": "Regningen for {{name}} forfaller {{date}}",
       "dueBody": "{{amount}} gjenstår å betale, minst {{minimum}}.",
       "dueBodyMinimumPaid": "{{amount}} gjenstår å betale. Minstebeløpet er betalt.",
-      "carriedTitle": "Regningen for {{name}} ble ikke betalt i sin helhet",
+      "carriedTitle": "Regningen for {{name}} ble overført",
       "carriedBody": "{{amount}} gjensto ved forfall {{date}} og overføres, hvorav minstebeløpet er {{minimum}}.",
-      "carriedBodyMinimumPaid": "{{amount}} gjensto ved forfall {{date}} og overføres.",
-      "open": "Åpne regningen"
+      "carriedBodyMinimumPaid": "{{amount}} gjensto ved forfall {{date}} og overføres til neste regning. Minstebeløpet ble betalt.",
+      "open": "Åpne regningen",
+      "pastDueTitle": "Regningen for {{name}} har forfalt"
     }
   },
   "bsu": {
@@ -2783,7 +2784,8 @@
       "billQueued": "Betalingen venter på godkjenning",
       "billOpen": "Ikke fullført",
       "billMinimum": "Minst {{amount}}",
-      "billPast": "Har forfalt"
+      "billPast": "Har forfalt",
+      "billCarried": "Overført"
     },
     "needsDefault": "Automatisk fullføring betaler fra standardkontoen. Velg en først.",
     "billShort": "Regning {{amount}} forfaller {{date}}",
@@ -2831,7 +2833,7 @@
       "left": "Gjenstår å betale",
       "minimumLeft": "{{amount}} av minstebeløpet gjenstår",
       "due": "Forfall",
-      "carried": "Har forfalt: det som gjenstår overføres.",
+      "carried": "Overført til neste regning.",
       "firstOn": "Ingen regning ennå. Den første fakturaen lages {{date}}.",
       "previousLeft": "{{amount}} gjensto på fakturaen fra {{date}} og ble overført.",
       "finalize": "Fullfør regning",
@@ -2884,7 +2886,8 @@
         "full": "Det som gjenstår",
         "minimum": "Minstebeløpet som gjenstår",
         "fixed": "Høyst det som gjenstår"
-      }
+      },
+      "pastDue": "Har forfalt: minstebeløpet er ikke betalt. Det som gjenstår overføres."
     }
   }
 }

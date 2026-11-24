@@ -135,6 +135,35 @@ describe("A card's bill on Accounts (#262)", () => {
     });
   });
 
+  it("carries what's left over once the minimum is paid, without past due", async () => {
+    at("2026-12-16T10:00:00Z");
+    apiMock.on("GET /api/v1/accounts", {
+      body: [
+        main,
+        visa({
+          current: {
+            ...statement,
+            fixed: true,
+            fixed_by: "due",
+            fixed_at: "2026-12-16T09:00:00Z",
+            paid: "2500.00",
+            left: "2020.00",
+            minimum_left: "0.00",
+          },
+        }),
+      ],
+    });
+    const panel = await openBill();
+    const figures = screen.getByLabelText("Credit on Visa");
+    expect(within(figures).getByText("Carried over")).toBeInTheDocument();
+    expect(within(figures).queryByText("Past due")).not.toBeInTheDocument();
+    expect(within(figures).getByText("Bill")).not.toHaveStyle({
+      color: "var(--mantine-color-red-text)",
+    });
+    expect(within(panel).getByText("Carried over to the next bill.")).toBeInTheDocument();
+    expect(within(panel).queryByText(/^Past due/)).not.toBeInTheDocument();
+  });
+
   it("shows a scheduled payment, and says when it's paid", async () => {
     apiMock.on("GET /api/v1/accounts", {
       body: [

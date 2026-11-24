@@ -25,21 +25,21 @@ export const CHANGELOG: ChangelogEntry[] = [
     },
     changes: {
       en: [
-        "Each credit card on Accounts now shows its bill: what's left to pay and when it's due, orange when it's due soon and red past due. On mobile, the card's line shows the bill when it needs you.",
+        "Each credit card on Accounts now shows its bill: what's left to pay and when it's due, orange when it's due soon and red when it's past due without the minimum paid; with the minimum paid, what's left just carries over. On mobile, the card's line shows the bill when it needs you.",
         "Bill opens the card's statement. Finalize bill checks it against the bank's statement and schedules the payment, or pays it now. Pay bill pays it now, all of it, the minimum or another amount.",
         "In Account setup, each card has defaults for paying its bill, and auto-finalize to finalize and pay it by itself on the payment day. A new card can start from its last statement.",
         "Cards from before the bill came ask to be set up once, with their last statement.",
         "A scheduled bill payment shows as the card's bill on the Scheduled tab and pays what's left when it runs.",
       ],
       nb: [
-        "Hvert kredittkort på Kontoer viser nå regningen: det som gjenstår å betale og når den forfaller, oransje når den forfaller snart og rød når den har forfalt. På mobil viser kortets linje regningen når den trenger deg.",
+        "Hvert kredittkort på Kontoer viser nå regningen: det som gjenstår å betale og når den forfaller, oransje når den forfaller snart og rød når den har forfalt uten at minstebeløpet er betalt; med minstebeløpet betalt overføres bare det som gjenstår. På mobil viser kortets linje regningen når den trenger deg.",
         "Regning åpner kortets faktura. Fullfør regning sjekker den mot fakturaen fra banken og planlegger betalingen, eller betaler den nå. Betal regning betaler den nå, hele, minstebeløpet eller et annet beløp.",
         "I Kontooppsett har hvert kort standardvalg for å betale regningen, og automatisk fullføring som fullfører og betaler den selv på betalingsdagen. Et nytt kort kan starte fra den siste fakturaen.",
         "Kort fra før regningen kom ber om å bli satt opp én gang, med den siste fakturaen.",
         "En planlagt regningsbetaling vises som kortets regning på fanen Planlagte og betaler det som gjenstår når den kjøres.",
       ],
       nn: [
-        "Kvart kredittkort på Kontoar viser no rekninga: det som står att å betale og når ho forfell, oransje når ho forfell snart og raud når ho har forfalle. På mobil viser linja til kortet rekninga når ho treng deg.",
+        "Kvart kredittkort på Kontoar viser no rekninga: det som står att å betale og når ho forfell, oransje når ho forfell snart og raud når ho har forfalle utan at minstebeløpet er betalt; med minstebeløpet betalt vert berre det som står att overført. På mobil viser linja til kortet rekninga når ho treng deg.",
         "Rekning opnar fakturaen til kortet. Fullfør rekning sjekkar ho mot fakturaen frå banken og planlegg betalinga, eller betaler ho no. Betal rekning betaler ho no, heile, minstebeløpet eller eit anna beløp.",
         "I Kontooppsett har kvart kort standardval for å betale rekninga, og automatisk fullføring som fullfører og betaler ho sjølv på betalingsdagen. Eit nytt kort kan starte frå den siste fakturaen.",
         "Kort frå før rekninga kom ber om å verte sette opp éin gong, med den siste fakturaen.",

@@ -152,6 +152,13 @@ describe("credit cards (#260)", () => {
       expect(billState(card(), 3, on("2026-12-12"))).toBe("soon");
       expect(billState(card(), 3, on("2026-12-15"))).toBe("soon");
       expect(billState(card(), 3, on("2026-12-16"))).toBe("past");
+      // With the minimum paid, what's left carries over: not past due.
+      const minimumPaid = card({
+        current: { ...statement, paid: "300.00", left: "4220.00", minimum_left: "0.00" },
+      });
+      expect(billState(minimumPaid, 3, on("2026-12-14"))).toBe("soon");
+      expect(billState(minimumPaid, 3, on("2026-12-16"))).toBe("carried");
+      expect(cardRow(minimumPaid, 3, on("2026-12-16"))?.color).toBeUndefined();
       const paid = card({
         current: { ...statement, paid: "4520.00", left: "0.00", minimum_left: "0.00" },
       });

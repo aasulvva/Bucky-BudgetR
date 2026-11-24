@@ -350,9 +350,12 @@ export function setAsideOf(tx: Transaction, buckets: Bucket[]): string | null {
 /**
  * Where a card's bill stands: not set up (locked), no statement yet, nothing
  * left to pay (paid), its payment scheduled or waiting for approval, due
- * within days (soon), past its due date with something left, or just open.
+ * within days (soon), or just open. Past its due date with something left,
+ * it's past due while the minimum isn't paid; with the minimum paid, what's
+ * left just carries over to the next bill (carried).
  */
-export type BillState = "locked" | "none" | "paid" | "scheduled" | "open" | "soon" | "past";
+export type BillState =
+  "locked" | "none" | "paid" | "scheduled" | "open" | "soon" | "past" | "carried";
 
 /** Today as an API date, in local time. */
 export function isoDay(d: Date): string {
@@ -386,7 +389,7 @@ export function billState(card: Account, days: number, today: Date = now()): Bil
   if (!cur) return "none";
   if (compareAmounts(cur.left, "0") <= 0) return "paid";
   const day = isoDay(today);
-  if (cur.due_date < day) return "past";
+  if (cur.due_date < day) return compareAmounts(cur.minimum_left, "0") > 0 ? "past" : "carried";
   if (paymentPending(bill)) return "scheduled";
   return day >= addDays(cur.due_date, -days) ? "soon" : "open";
 }

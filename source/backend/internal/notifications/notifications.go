@@ -624,7 +624,12 @@ func (s *Service) cardBills(ctx context.Context, q *sqlc.Queries, userID string,
 		kind, severity := KindCardBill, Info
 		switch {
 		case st.Due.Before(today):
-			kind, severity = KindCardBillCarried, Alert
+			// Past due while the minimum isn't paid; with it paid, what's
+			// left just carries over to the next bill.
+			kind, severity = KindCardBillCarried, Info
+			if st.MinimumLeft.IsPositive() {
+				severity = Alert
+			}
 		case paymentPending(bill.Payment):
 			// The schedule's own reminders take over (Upcoming bills, the
 			// queue).

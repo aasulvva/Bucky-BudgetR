@@ -2591,10 +2591,11 @@
       "dueTitle": "{{name}}'s bill is due {{date}}",
       "dueBody": "{{amount}} is left to pay, at least {{minimum}}.",
       "dueBodyMinimumPaid": "{{amount}} is left to pay. The minimum payment is paid.",
-      "carriedTitle": "{{name}}'s bill wasn't paid in full",
+      "carriedTitle": "{{name}}'s bill carried over",
       "carriedBody": "{{amount}} was left when it was due on {{date}} and carries over, {{minimum}} of it the minimum payment.",
-      "carriedBodyMinimumPaid": "{{amount}} was left when it was due on {{date}} and carries over.",
-      "open": "Open the bill"
+      "carriedBodyMinimumPaid": "{{amount}} was left when it was due on {{date}} and carries over to the next bill. The minimum payment was paid.",
+      "open": "Open the bill",
+      "pastDueTitle": "{{name}}'s bill is past due"
     }
   },
   "bsu": {
@@ -2783,7 +2784,8 @@
       "billQueued": "Payment waits for approval",
       "billOpen": "Not finalized",
       "billMinimum": "Minimum {{amount}}",
-      "billPast": "Past due"
+      "billPast": "Past due",
+      "billCarried": "Carried over"
     },
     "needsDefault": "Auto-finalize pays from the default account. Choose one first.",
     "billShort": "Bill {{amount}} due {{date}}",
@@ -2831,7 +2833,7 @@
       "left": "Left to pay",
       "minimumLeft": "{{amount}} of the minimum left",
       "due": "Due",
-      "carried": "Past due: what's left carries over.",
+      "carried": "Carried over to the next bill.",
       "firstOn": "No bill yet. The first statement is made on {{date}}.",
       "previousLeft": "{{amount}} was left on the statement of {{date}} and carried over.",
       "finalize": "Finalize bill",
@@ -2884,7 +2886,8 @@
         "full": "What's left",
         "minimum": "Minimum left",
         "fixed": "At most what's left"
-      }
+      },
+      "pastDue": "Past due: the minimum payment isn't paid. What's left carries over."
     }
   }
 }
