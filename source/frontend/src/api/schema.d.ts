@@ -4409,6 +4409,8 @@ export interface components {
             bucket_id: components["schemas"]["BucketId"];
             /** @description The bucket's account, which the advance is on. */
             account_id: components["schemas"]["AccountId"];
+            /** @description The account the purchase is on; for `paid`, its credit card. */
+            purchase_account_id: components["schemas"]["AccountId"];
             when: components["schemas"]["WaitingChargeWhen"];
             cycle_id: string | null;
             /** Format: date */

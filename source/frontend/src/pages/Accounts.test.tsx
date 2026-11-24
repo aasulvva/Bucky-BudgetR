@@ -60,6 +60,20 @@ async function card(name: string) {
 }
 
 describe("Accounts", () => {
+  it("shows what's spent ahead for purchases its buckets count later (#264)", async () => {
+    apiMock.on("GET /api/v1/accounts", {
+      body: [{ ...main, balance: "11340.50", waiting: "1000.00" }],
+    });
+    renderRoute("/accounts");
+    const mainMoney = await (
+      await card("Main account")
+    ).findByLabelText("Where the money in Main account is");
+    expect(amountOf(mainMoney, "Waiting for buckets")).toBe(money("-1000.00"));
+    expect(
+      within(mainMoney).getByText("Spent ahead; the buckets count it later"),
+    ).toBeInTheDocument();
+  });
+
   it("shows each account's balance and buckets, and totals per currency", async () => {
     renderRoute("/accounts");
     const mainCard = await card("Main account");
@@ -80,6 +94,7 @@ describe("Accounts", () => {
     expect((await card("Euro account")).getByText(money("100.00", "EUR"))).toBeInTheDocument();
 
     expect(screen.getByText(money("37340.50"))).toBeInTheDocument();
+    expect(within(mainMoney).queryByText("Waiting for buckets")).not.toBeInTheDocument();
     expect(screen.getAllByText(money("100.00", "EUR"))).toHaveLength(2);
 
     expect(mainCard.getByRole("link", { name: "Account setup for Main account" })).toHaveAttribute(

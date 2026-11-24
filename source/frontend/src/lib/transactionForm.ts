@@ -13,6 +13,7 @@ import type {
 
 import { now as clockNow } from "./clock";
 import { addAmounts, compareAmounts, splitAmount, subtractAmounts } from "./money";
+import { choiceOf, countLaterOf, ownWaiting, sameChoice, type CountChoice } from "./waiting";
 
 type IncomeRefillRule = components["schemas"]["IncomeRefillRule"];
 
@@ -169,6 +170,8 @@ export interface EditValues {
   tags: string[];
   lines: SplitLine[];
   triggersRefill: boolean;
+  /** When an expense's buckets count it (#264); left out, it doesn't change. */
+  count?: CountChoice;
 }
 
 const isBalance = (tx: Transaction) => tx.type === "OPB" || tx.type === "BLA";
@@ -188,8 +191,12 @@ export function editState(tx: Transaction): EditValues {
     counterparty: tx.counterparty,
     description: tx.description,
     tags: tx.tags,
-    lines: tx.bucket_lines.map((l) => newLine(l.bucket_id, positive(l.amount))),
+    // Parts that wait for their buckets (#264) are the split too.
+    lines: [...tx.bucket_lines, ...ownWaiting(tx)].map((l) =>
+      newLine(l.bucket_id, positive(l.amount)),
+    ),
     triggersRefill: tx.triggers_refill,
+    count: choiceOf(tx),
   };
 }
 
@@ -242,6 +249,10 @@ export function correctionBody(
   }
   if (tx.type === "INC" && values.triggersRefill !== start.triggersRefill) {
     body.triggers_refill = values.triggersRefill;
+  }
+  if (tx.type === "EXP" && values.count && !sameChoice(values.count, choiceOf(tx))) {
+    const later = countLaterOf(values.count);
+    if (later) body.count_later = later;
   }
   return Object.keys(body).length > 0 ? body : null;
 }

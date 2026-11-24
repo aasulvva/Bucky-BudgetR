@@ -41,6 +41,7 @@ import {
 import { api } from "@/api/client";
 import { useCurrentCycles, type Cycle } from "@/api/cycles";
 import { unwrap } from "@/api/errors";
+import { useWaitingCharges } from "@/api/waiting";
 import { AdjustButton } from "@/components/buckets/AdjustFunds";
 import { BucketHistory } from "@/components/buckets/BucketHistory";
 import { FundsButtons } from "@/components/buckets/FundsButtons";
@@ -55,7 +56,7 @@ import i18n from "@/i18n";
 import type { HistoryKind } from "@/lib/bucketHistory";
 import { accountSummary, coverage, isFullyManual, refillOf, toneStyle } from "@/lib/buckets";
 import { cycleRange, daysLeftLabel, isOverdue } from "@/lib/cycles";
-import { compareAmounts, formatMoney } from "@/lib/money";
+import { addAmounts, compareAmounts, formatMoney } from "@/lib/money";
 
 type View = "list" | "grid";
 
@@ -345,6 +346,7 @@ function BucketTable({
                   </Table.Td>
                   <Table.Td>
                     <LeftFunds bucket={b} />
+                    <WaitingNote bucket={b} />
                   </Table.Td>
                   <Table.Td>
                     <Group gap="xs" wrap="wrap">
@@ -397,6 +399,7 @@ function BucketCard({
             {t("buckets.leftThisCycle")}
           </Text>
           <LeftFunds bucket={bucket} large />
+          <WaitingNote bucket={bucket} />
         </div>
         <UsedThisCycle
           bucket={bucket}
@@ -424,6 +427,22 @@ function BucketCard({
         {mobile && <FundsButtons bucket={bucket} active={active} full />}
       </Stack>
     </Card>
+  );
+}
+
+/**
+ * What the bucket is still to count for purchases that wait for it (#264),
+ * opening the expenses on its account.
+ */
+function WaitingNote({ bucket }: { bucket: Bucket }) {
+  const { t } = useTranslation();
+  const charges = (useWaitingCharges().data ?? []).filter((c) => c.bucket_id === bucket.id);
+  if (charges.length === 0) return null;
+  const amount = formatMoney(addAmounts(...charges.map((c) => c.left)), bucket.currency);
+  return (
+    <Text size="xs" c="dimmed" mt={4}>
+      {t("waiting.bucket", { count: charges.length, amount })}
+    </Text>
   );
 }
 

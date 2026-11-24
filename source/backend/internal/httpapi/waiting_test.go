@@ -170,7 +170,7 @@ func TestWaitingCardLoan(t *testing.T) {
 	}
 	if open := decode[[]api.OpenWaitingCharge](t, w.ok("open", http.MethodGet,
 		"/api/v1/waiting-charges?account_id="+main.Id, nil, http.StatusOK)); len(open) != 1 || open[0].Left != "30000.00" ||
-		open[0].PurchaseId != trip.Id || open[0].Counterparty != "Travel Co" {
+		open[0].PurchaseId != trip.Id || open[0].PurchaseAccountId != visa.Id || open[0].Counterparty != "Travel Co" {
 		t.Fatalf("open charges %+v", open)
 	}
 

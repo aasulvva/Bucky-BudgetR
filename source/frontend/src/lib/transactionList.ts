@@ -13,7 +13,8 @@ export const USER_TYPES: TransactionType[] = ["INC", "EXP", "TRF", "OPB", "BLA"]
 /**
  * What the routines, Bucket setup and Savings record: refills, overflow,
  * adjustments, savings reserved, released, moved into a bucket (#231) or
- * distributed (#232), and card debt set aside or released (#261).
+ * distributed (#232), card debt set aside or released (#261), and a
+ * bucket taking a purchase that counted later (#264).
  */
 export const SYSTEM_TYPES: TransactionType[] = [
   "REF",
@@ -27,6 +28,7 @@ export const SYSTEM_TYPES: TransactionType[] = [
   "SVD",
   "CDH",
   "CDR",
+  "DBC",
 ];
 /** The types that can be corrected and reversed. */
 export type CorrectableType = "INC" | "EXP" | "TRF" | "OPB" | "BLA";
@@ -207,7 +209,12 @@ export function groupByDay(items: Transaction[]): { day: LocalDate; items: Trans
   return out;
 }
 
-type Lines = Pick<Transaction, "bank_lines" | "bucket_lines" | "savings_lines" | "card_lines">;
+/** The lines a row's amount comes from. */
+type AmountLines = Pick<
+  Transaction,
+  "bank_lines" | "bucket_lines" | "savings_lines" | "card_lines"
+>;
+type Lines = AmountLines & Pick<Transaction, "waiting_lines">;
 
 /** The lines a transaction amounts to: the effective ones, or before its reversal. */
 export function shownLines(tx: Transaction): Lines {
@@ -226,7 +233,7 @@ const abs = (a: string) => (compareAmounts(a, "0") < 0 ? negate(a) : a);
  * unsigned otherwise.
  */
 export function linesAmount(
-  lines: Lines,
+  lines: AmountLines,
   focus?: string | null,
 ): { amount: string; signed: boolean } {
   const list =
@@ -254,7 +261,7 @@ export function rowAmount(
 }
 
 /** A transfer's sending and receiving account. */
-export function transferAccounts(lines: Lines): { from?: string; to?: string } {
+export function transferAccounts(lines: AmountLines): { from?: string; to?: string } {
   return {
     from: lines.bank_lines.find((l) => compareAmounts(l.amount, "0") < 0)?.account_id,
     to: lines.bank_lines.find((l) => compareAmounts(l.amount, "0") > 0)?.account_id,

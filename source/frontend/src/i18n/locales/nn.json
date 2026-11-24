@@ -2925,5 +2925,57 @@
         "fee": "eit gebyr"
       }
     }
+  },
+  "waiting": {
+    "form": {
+      "label": "Tel i bøtta",
+      "hint": {
+        "now": "Bøttene tel det i denne perioden.",
+        "paid": "Kvar bøtte tel sin del etter kvart som innbetalingane til kortet når dette kjøpet, eldste gjeld først. Til då rører det ikkje dei ufordelte pengane.",
+        "cycle": "Bøttene tel det når den perioden startar. Til då rører det ikkje dei ufordelte pengane.",
+        "month": "Bøttene tel det når den første perioden som startar i den månaden (eller seinare) startar. Til då rører det ikkje dei ufordelte pengane."
+      },
+      "when": {
+        "now": "No",
+        "paid": "Etter kvart som det vert betalt ned",
+        "cycle": "I ein seinare periode",
+        "month": "I ein månad"
+      },
+      "cycle": "Periode",
+      "noCycles": "Ingen planlagde periodar: planlegg ein under Periodar, eller vel ein månad",
+      "month": "Månad",
+      "monthHint": "Den første perioden som startar i eller etter han.",
+      "needsBuckets": "Legg til bøttene som tel det seinare.",
+      "chooseCycle": "Vel ein periode.",
+      "chooseMonth": "Vel ein månad."
+    },
+    "rule": {
+      "paid": "Vert talt etter kvart som det vert betalt ned",
+      "cycle": "Vert talt ved starten av {{range}}",
+      "month": "Vert talt i første periode frå {{month}}",
+      "from": "Vert talt i første periode frå {{date}}"
+    },
+    "detail": {
+      "title_one": "Vert talt seinare",
+      "title_other": "Vert talt seinare",
+      "forPurchase": "Ei bøtte som tel <open>dette kjøpet</open> seinare.",
+      "chargeNote": "Registrert då ei bøtte talde eit kjøp som venta på henne. Korriger eller reverser kjøpet i staden.",
+      "taken": "{{bucket}} talde {{amount}}",
+      "bucketDeleted": "Bøtta er sletta",
+      "takenOf": "{{taken}} av {{amount}} talt",
+      "left": "{{amount}} att",
+      "done": "Alt talt",
+      "take": "Ta no",
+      "takeName": "Ta no for {{bucket}}",
+      "reverse": "Det bøttene har talt, vert gitt tilbake; ein del talt i ein avslutta periode kan ikkje det."
+    },
+    "row": "{{amount}} ventar",
+    "later": "{{name}} (seinare)",
+    "breakdown": "Ventar på bøtter",
+    "breakdownNote": "Brukt på førehand; bøttene tel det seinare",
+    "bucket_one": "{{amount}} ventar på å bli talt, 1 kjøp",
+    "bucket_other": "{{amount}} ventar på å bli talt, {{count}} kjøp",
+    "payment_one": "{{amount}} av gjelda ventar på {{buckets}} etter kvart som det vert betalt ned. Innbetalingar dekkjer den eldste gjelda først, og bøttene tel det som når kjøpet.",
+    "payment_other": "{{amount}} av gjelda ventar på {{buckets}} etter kvart som det vert betalt ned. Innbetalingar dekkjer den eldste gjelda først, og bøttene tel det som når kjøpa."
   }
 }

@@ -226,9 +226,12 @@ type OpenCharge struct {
 	BucketID   string
 	// AccountID is the bucket's account, where the advance is.
 	AccountID string
-	When      sqlc.WaitingChargeWhen
-	CycleID   string
-	TakeOn    time.Time
+	// PurchaseAccountID is the account the purchase is on: for `paid`, its
+	// card.
+	PurchaseAccountID string
+	When              sqlc.WaitingChargeWhen
+	CycleID           string
+	TakeOn            time.Time
 	// At and Counterparty are the purchase's.
 	At           time.Time
 	Counterparty string
@@ -248,7 +251,8 @@ func (s *Service) Waiting(ctx context.Context, userID, accountID string) ([]Open
 	for i, r := range rows {
 		out[i] = OpenCharge{
 			ID: r.ID, PurchaseID: r.TransactionID, BucketID: r.BucketID, AccountID: r.SourceAccountID,
-			When: r.When, CycleID: r.CycleID.String, At: r.TransactionAt, Counterparty: r.Counterparty, Left: r.LeftAmount,
+			PurchaseAccountID: r.PurchaseAccountID,
+			When:              r.When, CycleID: r.CycleID.String, At: r.TransactionAt, Counterparty: r.Counterparty, Left: r.LeftAmount,
 		}
 		if r.TakeOn.Valid {
 			out[i].TakeOn = r.TakeOn.Time

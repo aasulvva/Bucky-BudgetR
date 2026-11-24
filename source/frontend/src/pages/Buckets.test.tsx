@@ -130,6 +130,36 @@ describe("Buckets", () => {
     expect(other.getByText("Auto · not refilled · keeps funds")).toBeInTheDocument();
   });
 
+  it("shows what a bucket is still to count for purchases that wait (#264)", async () => {
+    const open = (id: string, left: string) => ({
+      id,
+      purchase_id: "2026110100000001",
+      bucket_id: groceries.id,
+      account_id: main.id,
+      purchase_account_id: main.id,
+      when: "month",
+      cycle_id: null,
+      take_on: "2027-03-01",
+      at: "2026-11-01T10:00:00Z",
+      counterparty: "Console shop",
+      left,
+    });
+    apiMock.on("GET /api/v1/waiting-charges", {
+      body: [
+        open("100000000112345678901234", "500.00"),
+        open("100000000112345678901235", "250.00"),
+      ],
+    });
+    renderRoute("/buckets");
+    const section = within(await screen.findByRole("region", { name: "Main account" }));
+    const row = within((await section.findByText("Groceries")).closest("tr") as HTMLElement);
+    expect(
+      await row.findByText(`${m("750.00")} waiting to count, 2 purchases`),
+    ).toBeInTheDocument();
+    const rentRow = within(section.getByText("Rent").closest("tr") as HTMLElement);
+    expect(rentRow.queryByText(/waiting to count/)).not.toBeInTheDocument();
+  });
+
   it("warns about buckets that aren't covered, in red for priority ones", async () => {
     apiMock.on("GET /api/v1/buckets", {
       body: [groceries, { ...rent, current_available_funds: "500.00" }],
@@ -294,7 +324,7 @@ describe("a bucket's transactions", () => {
     const query = apiMock.calls("GET /api/v1/transactions")[0]?.query;
     expect(query?.get("bucket_id")).toBe(groceries.id);
     expect(query?.get("cycle_id")).toBe(active);
-    expect(query?.getAll("type")).toHaveLength(16);
+    expect(query?.getAll("type")).toHaveLength(17);
     // A row opens it on the Transactions screen.
     expect(dialog.getByRole("link", { name: /Rema 1000/ })).toHaveAttribute(
       "href",

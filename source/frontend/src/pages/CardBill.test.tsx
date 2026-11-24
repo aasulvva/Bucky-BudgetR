@@ -11,7 +11,7 @@ import { formatDate } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
 import { apiMock, problem } from "@/test/api";
 import { amountOf } from "@/test/breakdown";
-import { account, creditCard } from "@/test/fixtures";
+import { account, bucket, creditCard } from "@/test/fixtures";
 import { renderRoute } from "@/test/render";
 import { viewport } from "@/test/setup";
 
@@ -514,6 +514,37 @@ describe("Pay bill (#262)", () => {
         amount: "750.00",
       });
     });
+  });
+
+  it("says how much of what's owed waits for buckets as it's paid off (#264)", async () => {
+    apiMock.on("GET /api/v1/buckets", {
+      body: [bucket({ id: "1000000001", name: "Vacation", source_account_id: main.id })],
+    });
+    apiMock.on("GET /api/v1/waiting-charges", {
+      body: [
+        {
+          id: "100000000112345678901234",
+          purchase_id: "2026110100000001",
+          bucket_id: "1000000001",
+          account_id: main.id,
+          purchase_account_id: "9000",
+          when: "paid",
+          cycle_id: null,
+          take_on: null,
+          at: "2026-11-01T10:00:00Z",
+          counterparty: "Travel Co",
+          left: "3000.00",
+        },
+      ],
+    });
+    const panel = await openBill();
+    await userEvent.click(within(panel).getByRole("button", { name: "Pay bill" }));
+    const form = await screen.findByRole("region", { name: "Pay bill" });
+    expect(
+      await within(form).findByText(
+        `${m("3000.00")} of what's owed waits for Vacation as it's paid off. Payments clear the oldest debt first, and the buckets count what reaches it.`,
+      ),
+    ).toBeInTheDocument();
   });
 });
 

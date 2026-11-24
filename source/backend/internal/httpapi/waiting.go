@@ -77,7 +77,8 @@ func (s *server) ListWaitingCharges(ctx context.Context, req api.ListWaitingChar
 	for i, w := range list {
 		out[i] = api.OpenWaitingCharge{
 			Id: w.ID, PurchaseId: w.PurchaseID, BucketId: w.BucketID, AccountId: w.AccountID,
-			When: api.WaitingChargeWhen(w.When), CycleId: nullableString(w.CycleID), TakeOn: dateOrNull(w.TakeOn),
+			PurchaseAccountId: w.PurchaseAccountID,
+			When:              api.WaitingChargeWhen(w.When), CycleId: nullableString(w.CycleID), TakeOn: dateOrNull(w.TakeOn),
 			At: w.At.UTC(), Counterparty: w.Counterparty, Left: w.Left.StringFixed(money.Places),
 		}
 	}

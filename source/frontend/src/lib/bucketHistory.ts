@@ -66,5 +66,7 @@ export function historyRows(
 export function ofKind(row: HistoryRow, kind: HistoryKind): boolean {
   if (kind === "all") return true;
   if (kind === "bucket") return BUCKET_TYPES.includes(row.tx.type);
+  // A purchase counted later (#264) is spending, as Used counts it.
+  if (kind === "EXP") return row.tx.type === "EXP" || row.tx.type === "DBC";
   return row.tx.type === kind;
 }
