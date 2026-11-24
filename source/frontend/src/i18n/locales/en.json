@@ -2557,7 +2557,7 @@
       "credit_limit": "Credit limits",
       "credit_limitHint": "Credit cards with 90% or more of their limit used.",
       "card_bills": "Card bills",
-      "card_billsHint": "A credit card's bill: ready, due within the days ahead, and carried over when not paid in full."
+      "card_billsHint": "A credit card's bill: ready, due within the days ahead, and carried over when not paid in full, then a reminder to register the interest and fees."
     },
     "savings": {
       "title": "Money held for {{name}}",
@@ -2596,6 +2596,11 @@
       "carriedBodyMinimumPaid": "{{amount}} was left when it was due on {{date}} and carries over to the next bill. The minimum payment was paid.",
       "open": "Open the bill",
       "pastDueTitle": "{{name}}'s bill is past due"
+    },
+    "cardInterest": {
+      "title": "Register interest and fees for {{name}}",
+      "body": "{{amount}} was left on the bill due {{date}}, so the bank may charge interest. Register what its statement shows.",
+      "open": "Register"
     }
   },
   "bsu": {
@@ -2887,7 +2892,30 @@
         "minimum": "Minimum left",
         "fixed": "At most what's left"
       },
-      "pastDue": "Past due: the minimum payment isn't paid. What's left carries over."
+      "pastDue": "Past due: the minimum payment isn't paid. What's left carries over.",
+      "differenceAs": "Register the difference ({{amount}}) as",
+      "differenceInterest": "Interest",
+      "differenceFee": "Fee",
+      "differenceAdjust": "Adjustment",
+      "bankDiffersCharge": "The app has {{app}}. Finalizing registers the difference as {{what}} from {{counterparty}}, just before {{date}}."
+    },
+    "charges": {
+      "title": "Interest and fees",
+      "kind": "Interest or fee",
+      "interest": "Interest",
+      "fee": "Fee",
+      "amount": "Amount",
+      "when": "When the bank charged it. Empty means now.",
+      "setAsideHint": "Held there until the bill is paid, as a purchase is.",
+      "note": "Recorded as an expense on the card with the counterparty <b>{{counterparty}}</b> and the tag <b>{{tag}}</b>. It doesn't come from a bucket.",
+      "register": "Register",
+      "interestDone": "Registered {{amount}} interest on {{card}}.",
+      "feeDone": "Registered a {{amount}} fee on {{card}}.",
+      "feeCounterparty": "Fee",
+      "words": {
+        "interest": "interest",
+        "fee": "a fee"
+      }
     }
   }
 }

@@ -44,6 +44,7 @@ import {
   type PayRule,
 } from "@/lib/cards";
 import { now } from "@/lib/clock";
+import { chargeCounterparty, type ChargeTag } from "@/lib/interest";
 import { formatDate, formatDateTime, parseDate } from "@/lib/dates";
 import { canonicalAmount, compareAmounts, formatMoney, subtractAmounts } from "@/lib/money";
 
@@ -441,9 +442,18 @@ function FinalizeForm({
   const minimumLeft = clamp(subtractAmounts(minimum, st.paid));
   const pays = payAmount(rule, left, minimumLeft, other);
   const differs = amount !== null && compareAmounts(amount, st.amount) !== 0;
+  // A bank's amount above the app's can be interest or a fee it charged
+  // (#263): interest by default when the last bill carried over.
+  const higher = amount !== null && compareAmounts(amount, st.amount) > 0;
+  const carried = compareAmounts(card.credit_card?.bill.previous?.left ?? "0", "0") > 0;
+  const [differenceAs, setDifferenceAs] = useState<ChargeTag | "adjust">(
+    carried ? "interest" : "adjust",
+  );
+  const charge = higher && differenceAs !== "adjust" ? differenceAs : null;
 
   interface Body {
     amount: string;
+    difference?: { tag: ChargeTag; counterparty: string };
     payment: {
       rule: PayRule;
       amount?: string;
@@ -498,6 +508,9 @@ function FinalizeForm({
         if (Object.keys(found).length > 0 || amount === null) return;
         save.mutate({
           amount,
+          ...(charge
+            ? { difference: { tag: charge, counterparty: chargeCounterparty(card, charge) } }
+            : {}),
           payment:
             when === "none" || from === null
               ? null
@@ -515,12 +528,19 @@ function FinalizeForm({
         <AmountInput
           label={t("cards.bill.bankAmount")}
           description={
-            differs
-              ? t("cards.bill.bankDiffers", {
+            charge
+              ? t("cards.bill.bankDiffersCharge", {
                   app: money(st.amount),
+                  what: t(`cards.charges.words.${charge}`),
+                  counterparty: chargeCounterparty(card, charge),
                   date: formatDateTime(st.cutoff),
                 })
-              : t("cards.bill.bankHint")
+              : differs
+                ? t("cards.bill.bankDiffers", {
+                    app: money(st.amount),
+                    date: formatDateTime(st.cutoff),
+                  })
+                : t("cards.bill.bankHint")
           }
           currency={card.currency}
           value={amount}
@@ -528,6 +548,29 @@ function FinalizeForm({
           error={errors.amount}
           required
         />
+        {higher && (
+          <Stack gap={4}>
+            <Text size="sm" fw={500}>
+              {t("cards.bill.differenceAs", {
+                amount: money(subtractAmounts(amount, st.amount)),
+              })}
+            </Text>
+            <SegmentedControl
+              aria-label={t("cards.bill.differenceAs", {
+                amount: money(subtractAmounts(amount, st.amount)),
+              })}
+              data={[
+                { value: "interest", label: t("cards.bill.differenceInterest") },
+                { value: "fee", label: t("cards.bill.differenceFee") },
+                { value: "adjust", label: t("cards.bill.differenceAdjust") },
+              ]}
+              value={differenceAs}
+              onChange={(v) => {
+                setDifferenceAs(v === "interest" || v === "fee" ? v : "adjust");
+              }}
+            />
+          </Stack>
+        )}
         <Stack gap="xs" component="section" aria-label={t("cards.bill.payment.title")}>
           <Text size="sm" fw={600}>
             {t("cards.bill.payment.title")}

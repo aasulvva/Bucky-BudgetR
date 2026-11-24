@@ -302,6 +302,35 @@ describe("Notifications", () => {
     expect(carried.getByText(/NOK.300\.00 of it the minimum payment/)).toBeInTheDocument();
   });
 
+  it("reminds to register a card's interest and fees after a carried bill (#263)", async () => {
+    const at = "2026-11-14T23:00:00Z";
+    apiMock.on("GET /api/v1/notifications", {
+      body: {
+        items: [
+          notification({
+            key: `card-interest:${main.id}20261101`,
+            kind: "card_interest",
+            account_id: main.id,
+            at,
+            amount: "1500.00",
+            currency: "NOK",
+          }),
+        ],
+      },
+    });
+    renderRoute("/notifications");
+    const [row] = (await rows()).map((r) => within(r));
+    if (!row) throw new Error("a row");
+    expect(await row.findByText(`Register interest and fees for ${main.name}`)).toBeInTheDocument();
+    expect(
+      row.getByText(new RegExp(`NOK.1,500\\.00 was left on the bill due ${formatDate(at)}`)),
+    ).toBeInTheDocument();
+    expect(row.getByRole("link", { name: "Register" })).toHaveAttribute(
+      "href",
+      `/accounts?interest=${main.id}`,
+    );
+  });
+
   it("says when there's nothing to do", async () => {
     apiMock.on("GET /api/v1/notifications", { body: { items: [] } });
     renderRoute("/notifications");

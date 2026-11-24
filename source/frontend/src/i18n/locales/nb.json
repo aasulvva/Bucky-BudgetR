@@ -2557,7 +2557,7 @@
       "credit_limit": "Kredittgrenser",
       "credit_limitHint": "Kredittkort der 90 % eller mer av grensen er brukt.",
       "card_bills": "Kortregninger",
-      "card_billsHint": "Regningen på et kredittkort: klar, forfaller innen dagene fremover, og overført når den ikke er betalt i sin helhet."
+      "card_billsHint": "Regningen på et kredittkort: klar, forfaller innen dagene fremover, og overført når den ikke er betalt i sin helhet, og så en påminnelse om å registrere renter og gebyrer."
     },
     "savings": {
       "title": "Penger satt av til {{name}}",
@@ -2596,6 +2596,11 @@
       "carriedBodyMinimumPaid": "{{amount}} gjensto ved forfall {{date}} og overføres til neste regning. Minstebeløpet ble betalt.",
       "open": "Åpne regningen",
       "pastDueTitle": "Regningen for {{name}} har forfalt"
+    },
+    "cardInterest": {
+      "title": "Registrer renter og gebyrer for {{name}}",
+      "body": "{{amount}} gjensto på regningen som forfalt {{date}}, så banken kan ta renter. Registrer det fakturaen viser.",
+      "open": "Registrer"
     }
   },
   "bsu": {
@@ -2887,7 +2892,30 @@
         "minimum": "Minstebeløpet som gjenstår",
         "fixed": "Høyst det som gjenstår"
       },
-      "pastDue": "Har forfalt: minstebeløpet er ikke betalt. Det som gjenstår overføres."
+      "pastDue": "Har forfalt: minstebeløpet er ikke betalt. Det som gjenstår overføres.",
+      "differenceAs": "Registrer differansen ({{amount}}) som",
+      "differenceInterest": "Renter",
+      "differenceFee": "Gebyr",
+      "differenceAdjust": "Justering",
+      "bankDiffersCharge": "Appen har {{app}}. Når du fullfører, registreres differansen som {{what}} fra {{counterparty}}, rett før {{date}}."
+    },
+    "charges": {
+      "title": "Renter og gebyrer",
+      "kind": "Renter eller gebyr",
+      "interest": "Renter",
+      "fee": "Gebyr",
+      "amount": "Beløp",
+      "when": "Når banken belastet det. Tomt betyr nå.",
+      "setAsideHint": "Holdes der til regningen er betalt, som et kjøp.",
+      "note": "Føres som en utgift på kortet med motparten <b>{{counterparty}}</b> og taggen <b>{{tag}}</b>. Den tas ikke fra en bøtte.",
+      "register": "Registrer",
+      "interestDone": "Registrerte {{amount}} i renter på {{card}}.",
+      "feeDone": "Registrerte et gebyr på {{amount}} på {{card}}.",
+      "feeCounterparty": "Gebyr",
+      "words": {
+        "interest": "renter",
+        "fee": "et gebyr"
+      }
     }
   }
 }

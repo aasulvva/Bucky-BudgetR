@@ -94,6 +94,9 @@ func (s *server) FinalizeCardBill(ctx context.Context, req api.FinalizeCardBillR
 		}
 		f.Payment = &pay
 	}
+	if d := req.Body.Difference; d != nil {
+		f.Difference = &accounts.Difference{Tag: string(d.Tag), Counterparty: d.Counterparty}
+	}
 	done, err := svc.FinalizeBill(ctx, sessionFrom(ctx).User.ID, req.AccountId, f)
 	if err != nil {
 		return nil, finalizeError(err)

@@ -67,6 +67,8 @@ type Statement struct {
 	Fixed   bool
 	FixedBy sqlc.CardStatementFix
 	FixedAt time.Time
+	// paidBefore is what the setup said was paid on it before its cutoff.
+	paidBefore decimal.Decimal
 }
 
 // Bill is a card's bill: whether it's set up, the current statement (nil
@@ -268,7 +270,7 @@ func fromRow(ctx context.Context, q *sqlc.Queries, r sqlc.CardStatement, next *t
 	st := Statement{
 		ID: r.ID, Date: dateOf(r.StatementDate), Cutoff: r.Cutoff, Due: dateOf(r.DueDate),
 		Amount: r.Amount, Minimum: r.Minimum,
-		Fixed: true, FixedBy: r.FixedBy, FixedAt: r.FixedAt,
+		Fixed: true, FixedBy: r.FixedBy, FixedAt: r.FixedAt, paidBefore: r.PaidBefore,
 	}
 	return st, paid(ctx, q, r.CardID, &st, r.PaidBefore, next)
 }
@@ -293,6 +295,19 @@ func PayAmount(st Statement, rule sqlc.CardPayRule, fixed decimal.Decimal) decim
 		return decimal.Min(fixed, st.Left)
 	}
 	return st.Left
+}
+
+// LeftAtDue is what was left to pay on st when its due day ended (in loc):
+// a balance that carried over, which the bank charges interest on (#263).
+func LeftAtDue(ctx context.Context, q *sqlc.Queries, cardID string, st Statement, loc *time.Location) (decimal.Decimal, error) {
+	end := st.Due.AddDays(1).Time(loc)
+	p, err := q.CardPaymentsBetween(ctx, sqlc.CardPaymentsBetweenParams{
+		CardID: cardID, FromAt: st.Cutoff, ToAt: pgtype.Timestamptz{Time: end, Valid: true},
+	})
+	if err != nil {
+		return decimal.Decimal{}, err
+	}
+	return decimal.Max(st.Amount.Sub(p).Sub(st.paidBefore), decimal.Zero), nil
 }
 
 // paid fills in Paid, Left and MinimumLeft.

@@ -76,6 +76,10 @@ const (
 	// KindCardBillCarried is a card's bill past its due date with something
 	// left, until the next statement.
 	KindCardBillCarried Kind = "card_bill_carried"
+	// KindCardInterest is a reminder to register the interest and fees the
+	// bank charged on a balance that carried over (#263): the bill before the
+	// current one wasn't paid in full by its due date.
+	KindCardInterest Kind = "card_interest"
 )
 
 // keyPrefix is each kind's key prefix.
@@ -84,6 +88,7 @@ var keyPrefix = map[Kind]string{
 	KindSavings: "savings:", KindSavingsShort: "savings-short:",
 	KindBSUOverLimit: "bsu-over:", KindBSUWithdrawal: "bsu-withdrawal:", KindCreditLimit: "card-limit:",
 	KindCardBill: "card-bill:", KindCardBillDue: "card-due:", KindCardBillCarried: "card-carried:",
+	KindCardInterest: "card-interest:",
 }
 
 // Severity orders notifications: alerts first.
@@ -151,6 +156,7 @@ func (s Settings) On(k Kind) bool {
 		KindSavingsShort: s.SavingsShort, KindBSUOverLimit: s.BSUOverLimit, KindBSUWithdrawal: s.BSUWithdrawal,
 		KindCreditLimit: s.CreditLimit,
 		KindCardBill:    s.CardBills, KindCardBillDue: s.CardBills, KindCardBillCarried: s.CardBills,
+		KindCardInterest: s.CardBills,
 	}[k]
 	return v == nil || *v
 }
@@ -616,6 +622,11 @@ func (s *Service) cardBills(ctx context.Context, q *sqlc.Queries, userID string,
 		if err != nil {
 			return nil, err
 		}
+		charges, err := interestReminder(ctx, q, userID, a, bill.Previous, loc)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, charges...)
 		st := bill.Current
 		if st == nil || !st.Left.IsPositive() {
 			continue
@@ -645,6 +656,31 @@ func (s *Service) cardBills(ctx context.Context, q *sqlc.Queries, userID string,
 		})
 	}
 	return out, nil
+}
+
+// interestReminder is the reminder to register interest and fees (#263)
+// when the previous statement p wasn't paid in full by its due date, until
+// interest or a fee is registered on the card from that day; none otherwise.
+// It shows until the next statement, when p is no longer the previous one.
+func interestReminder(ctx context.Context, q *sqlc.Queries, userID string, a sqlc.BankAccount,
+	p *cards.Statement, loc *time.Location) ([]Notification, error) {
+	if p == nil {
+		return nil, nil
+	}
+	left, err := cards.LeftAtDue(ctx, q, a.ID, *p, loc)
+	if err != nil || !left.IsPositive() {
+		return nil, err
+	}
+	due := p.Due.Time(loc)
+	charged, err := q.CardChargedSince(ctx, sqlc.CardChargedSinceParams{UserID: userID, CardID: a.ID, FromAt: due})
+	if err != nil || charged {
+		return nil, err
+	}
+	return []Notification{{
+		Key: keyPrefix[KindCardInterest] + p.ID, Kind: KindCardInterest, Severity: Info, At: due.UTC(),
+		AccountID: a.ID, Currency: a.Currency,
+		Amount: decimal.NullDecimal{Decimal: left, Valid: true},
+	}}, nil
 }
 
 // paymentPending reports whether a bill's payment is still to come:

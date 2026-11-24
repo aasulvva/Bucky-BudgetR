@@ -3773,6 +3773,13 @@ paths:
           due date, `card_bill_due` (warning) from then, `card_bill_carried`
           after it, until the next statement: an alert while the minimum
           isn't paid (past due), info once it is (what's left carries over).
+        - `card_interest` (#263, info, under `card_bills`): the statement
+          before a card's current one wasn't paid in full by its due date, so
+          the bank may charge interest; with `account_id`, `at` (that due
+          date's start in the user's time zone), what was left then as
+          `amount` and `currency`. Until interest or a fee (a transaction on
+          the card tagged `interest` or `fee`, not reversed) dated from that
+          due date is registered, or the next statement.
       responses:
         "200":
           description: The open notifications.
@@ -5231,6 +5238,29 @@ components:
             - $ref: "#/components/schemas/CardBillPay"
           nullable: true
           description: Null to finalize without paying.
+        difference:
+          $ref: "#/components/schemas/CardBillDifference"
+
+    CardBillDifference:
+      type: object
+      additionalProperties: false
+      required: [tag, counterparty]
+      description: |
+        Optional (#263): when the bank's amount is more than the app's,
+        the difference is registered as interest or a fee the bank charged
+        instead of a balance adjustment: an expense on the card dated just
+        before the cutoff, to `counterparty`, tagged `tag`, never triggering
+        a refill, set aside on the card's default account. Ignored when the
+        bank's amount isn't more.
+      properties:
+        tag:
+          type: string
+          enum: [interest, fee]
+        counterparty:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Usually the card's bank.
 
     CardBillPay:
       type: object
@@ -8203,7 +8233,7 @@ components:
 
     NotificationKind:
       type: string
-      enum: [approval_queue, upcoming_bill, investment_balance, bucket_uncovered, savings_transfer, savings_short, bsu_over_limit, bsu_withdrawal, credit_limit, card_bill, card_bill_due, card_bill_carried]
+      enum: [approval_queue, upcoming_bill, investment_balance, bucket_uncovered, savings_transfer, savings_short, bsu_over_limit, bsu_withdrawal, credit_limit, card_bill, card_bill_due, card_bill_carried, card_interest]
 
     Notification:
       type: object

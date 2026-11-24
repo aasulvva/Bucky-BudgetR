@@ -33,6 +33,44 @@ func (q *Queries) AccountBalanceBefore(ctx context.Context, arg AccountBalanceBe
 	return balance, err
 }
 
+const cardChargedSince = `-- name: CardChargedSince :one
+SELECT EXISTS (
+    SELECT 1
+    FROM transaction_headers h
+    JOIN LATERAL (
+        SELECT c.id FROM transaction_headers c
+        WHERE c.id = h.id OR c.parent_id = h.id
+        ORDER BY c.created_at DESC, c.id DESC
+        LIMIT 1
+    ) latest ON true
+    WHERE h.user_id = $1 AND h.correction_type = 'none'
+      AND h.transaction_at >= $2
+      AND NOT EXISTS (
+          SELECT 1 FROM transaction_headers r WHERE r.parent_id = h.id AND r.correction_type = 'reversal')
+      AND EXISTS (
+          SELECT 1 FROM bank_transactions b WHERE b.transaction_id = latest.id AND b.account_id = $3)
+      AND EXISTS (
+          SELECT 1 FROM transaction_tags tt JOIN tags t ON t.id = tt.tag_id
+          WHERE tt.transaction_id = latest.id AND lower(t.name) IN ('interest', 'fee'))
+)::boolean AS charged
+`
+
+type CardChargedSinceParams struct {
+	UserID string
+	FromAt time.Time
+	CardID string
+}
+
+// Whether interest or a fee was registered on the card dated from the moment
+// (#263): a transaction family whose newest version is on the card and
+// tagged interest or fee, not reversed.
+func (q *Queries) CardChargedSince(ctx context.Context, arg CardChargedSinceParams) (bool, error) {
+	row := q.db.QueryRow(ctx, cardChargedSince, arg.UserID, arg.FromAt, arg.CardID)
+	var charged bool
+	err := row.Scan(&charged)
+	return charged, err
+}
+
 const cardDebtHeld = `-- name: CardDebtHeld :many
 SELECT l.card_id, l.account_id, SUM(l.amount)::numeric AS held
 FROM card_debt_lines l

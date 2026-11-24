@@ -355,6 +355,144 @@ describe("Finalize bill (#262)", () => {
   });
 });
 
+describe("Finalize bill with interest or a fee (#263)", () => {
+  beforeEach(() => {
+    apiMock.on("POST /api/v1/accounts/9000/bill/finalize", {
+      body: { bill: visa().credit_card?.bill, schedule_id: null, transaction_id: null },
+    });
+  });
+
+  async function finalizeWith(amount: string) {
+    const panel = await openBill();
+    await userEvent.click(within(panel).getByRole("button", { name: "Finalize bill" }));
+    const form = await screen.findByRole("region", { name: "Finalize bill" });
+    const input = within(form).getByRole("textbox", { name: "Statement amount" });
+    await userEvent.clear(input);
+    await userEvent.type(input, amount);
+    await userEvent.click(within(form).getByRole("radio", { name: "Don't pay" }));
+    return form;
+  }
+
+  it("registers a higher bank amount's difference as interest after a carried bill", async () => {
+    apiMock.on("GET /api/v1/accounts", {
+      body: [
+        main,
+        visa({
+          previous: {
+            ...statement,
+            id: "900020261101",
+            statement_date: "2026-11-01",
+            left: "1000.00",
+          },
+        }),
+      ],
+    });
+    const form = await finalizeWith("4570");
+    expect(
+      within(form).getByText(`Register the difference (${m("50.00")}) as`),
+    ).toBeInTheDocument();
+    expect(within(form).getByRole("radio", { name: "Interest" })).toBeChecked();
+    // The card has no bank: "Interest", as Register interest says.
+    expect(
+      within(form).getByText(/registers the difference as interest from Interest/),
+    ).toBeInTheDocument();
+    await userEvent.click(within(form).getByRole("button", { name: "Finalize bill" }));
+    await waitFor(() => {
+      expect(finalizeBody()).toEqual({
+        amount: "4570.00",
+        difference: { tag: "interest", counterparty: "Interest" },
+        payment: null,
+      });
+    });
+  });
+
+  it("adjusts by default, and can register a fee to the card's bank", async () => {
+    apiMock.on("GET /api/v1/accounts", { body: [main, { ...visa(), bank: "DNB" }] });
+    const form = await finalizeWith("4570");
+    expect(within(form).getByRole("radio", { name: "Adjustment" })).toBeChecked();
+    await userEvent.click(within(form).getByRole("radio", { name: "Fee" }));
+    await userEvent.click(within(form).getByRole("button", { name: "Finalize bill" }));
+    await waitFor(() => {
+      expect(finalizeBody()).toEqual({
+        amount: "4570.00",
+        difference: { tag: "fee", counterparty: "DNB" },
+        payment: null,
+      });
+    });
+  });
+
+  it("only offers it when the bank's amount is higher", async () => {
+    const form = await finalizeWith("4500");
+    expect(within(form).queryByRole("radio", { name: "Interest" })).not.toBeInTheDocument();
+    await userEvent.click(within(form).getByRole("button", { name: "Finalize bill" }));
+    await waitFor(() => {
+      expect(finalizeBody()).toEqual({ amount: "4500.00", payment: null });
+    });
+  });
+});
+
+describe("Interest and fees on a card (#263)", () => {
+  beforeEach(() => {
+    apiMock.on("POST /api/v1/transactions", { status: 201, body: {} });
+  });
+
+  function sent() {
+    return apiMock.calls("POST /api/v1/transactions").at(-1)?.body;
+  }
+
+  it("registers interest to the card's bank, set aside on the default account", async () => {
+    apiMock.on("GET /api/v1/accounts", { body: [main, { ...visa(), bank: "DNB" }] });
+    renderRoute("/accounts");
+    const card = await screen.findByRole("article", { name: "Visa" });
+    await userEvent.click(within(card).getByRole("button", { name: "Interest and fees" }));
+    const form = await screen.findByRole("region", { name: "Interest and fees" });
+    expect(within(form).getByRole("combobox", { name: /Set aside on/ })).toHaveValue(
+      "Main account",
+    );
+    await userEvent.type(within(form).getByRole("textbox", { name: "Amount" }), "87.50");
+    await userEvent.click(within(form).getByRole("button", { name: "Register" }));
+    await waitFor(() => {
+      expect(sent()).toEqual({
+        type: "EXP",
+        account_id: "9000",
+        amount: "87.50",
+        counterparty: "DNB",
+        tags: ["interest"],
+        set_aside_account_id: "1234",
+      });
+    });
+  });
+
+  it("registers a fee set aside nowhere, from the reminder's ?interest= link, asking past the limit", async () => {
+    let calls = 0;
+    apiMock.on("POST /api/v1/transactions", () => {
+      calls++;
+      return calls === 1
+        ? problem(409, "over_credit_limit", "It's past the card's limit.")
+        : { status: 201, body: {} };
+    });
+    renderRoute("/accounts?interest=9000");
+    const form = await screen.findByRole("region", { name: "Interest and fees" });
+    await userEvent.click(within(form).getByRole("radio", { name: "Fee" }));
+    await userEvent.type(within(form).getByRole("textbox", { name: "Amount" }), "35");
+    await userEvent.click(within(form).getByRole("combobox", { name: /Set aside on/ }));
+    await userEvent.click(await screen.findByRole("option", { name: "Don't set aside" }));
+    await userEvent.click(within(form).getByRole("button", { name: "Register" }));
+    await userEvent.click(await within(form).findByRole("button", { name: "Record it anyway" }));
+    await waitFor(() => {
+      expect(sent()).toEqual({
+        type: "EXP",
+        account_id: "9000",
+        amount: "35.00",
+        counterparty: "Fee",
+        tags: ["fee"],
+        set_aside_account_id: null,
+        limit_confirmed: true,
+      });
+    });
+  });
+});
+
 describe("Pay bill (#262)", () => {
   beforeEach(() => {
     apiMock.on("POST /api/v1/transactions", { status: 201, body: {} });
