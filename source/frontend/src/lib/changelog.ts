@@ -16,6 +16,26 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.37.02",
+    date: "2026-11-25",
+    title: {
+      en: "Links on a moved transaction",
+      nb: "Lenker på en flyttet transaksjon",
+      nn: "Lenkjer på ein flytta transaksjon",
+    },
+    changes: {
+      en: [
+        "A transaction moved to another account links to the old one again, and the old one to the new one, instead of showing the link's markup as text.",
+      ],
+      nb: [
+        "En transaksjon flyttet til en annen konto lenker igjen til den gamle, og den gamle til den nye, i stedet for å vise lenkens kode som tekst.",
+      ],
+      nn: [
+        "Ein transaksjon flytta til ein annan konto lenkjer igjen til den gamle, og den gamle til den nye, i staden for å vise koden til lenkja som tekst.",
+      ],
+    },
+  },
+  {
     version: "v2.37.01",
     date: "2026-11-24",
     title: {
