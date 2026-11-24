@@ -5,8 +5,8 @@ import { useSavingsTargets } from "@/api/savings";
 import { useSchedules } from "@/api/schedules";
 import { useScheduleText } from "@/components/schedules/scheduleText";
 import { useLookups } from "@/components/transactions/lookups";
-import { formatDateTime } from "@/lib/dates";
-import { formatMoney } from "@/lib/money";
+import { formatDate, formatDateTime } from "@/lib/dates";
+import { compareAmounts, formatMoney } from "@/lib/money";
 
 export interface NotificationText {
   title: string;
@@ -21,6 +21,11 @@ export interface NotificationText {
 /** Where an investment account's notification opens: its Adjust balance. */
 export function adjustPath(accountId: string): string {
   return `/accounts?adjust=${encodeURIComponent(accountId)}`;
+}
+
+/** Where a card bill's notification opens: the card's Bill panel (#262). */
+export function billPath(cardId: string): string {
+  return `/accounts?bill=${encodeURIComponent(cardId)}`;
 }
 
 /** How each notification reads, from its kind and fields (#57). */
@@ -144,6 +149,36 @@ export function useNotificationText(): (n: Notification) => NotificationText {
           }),
           link: "/accounts",
           open: t("notifications.card.open"),
+        };
+      }
+      case "card_bill":
+      case "card_bill_due":
+      case "card_bill_carried": {
+        const money = (a: string | null) => (a ? formatMoney(a, n.currency ?? undefined) : "");
+        const vars = {
+          name: names.accountName(n.account_id ?? ""),
+          amount: money(n.amount),
+          minimum: money(n.minimum),
+          date: n.at ? formatDate(n.at) : "",
+        };
+        const minimumLeft = n.minimum !== null && compareAmounts(n.minimum, "0") > 0;
+        const key = {
+          card_bill: "ready",
+          card_bill_due: "due",
+          card_bill_carried: "carried",
+        } as const;
+        const k = key[n.kind];
+        return {
+          ...base,
+          title: t(`notifications.cardBill.${k}Title`, vars),
+          body: t(
+            minimumLeft
+              ? `notifications.cardBill.${k}Body`
+              : `notifications.cardBill.${k}BodyMinimumPaid`,
+            vars,
+          ),
+          link: billPath(n.account_id ?? ""),
+          open: t("notifications.cardBill.open"),
         };
       }
     }

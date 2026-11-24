@@ -2554,7 +2554,9 @@
       "bsu_withdrawal": "Uttak frå BSU",
       "bsu_withdrawalHint": "Pengar ein planlagd transaksjon tok ut av ein BSU-konto.",
       "credit_limit": "Kredittgrenser",
-      "credit_limitHint": "Kredittkort der 90 % eller meir av grensa er brukt."
+      "credit_limitHint": "Kredittkort der 90 % eller meir av grensa er brukt.",
+      "card_bills": "Kortrekningar",
+      "card_billsHint": "Rekninga på eit kredittkort: klar, forfell innan dagane framover, og overført når ho ikkje er betalt i si heilskap."
     },
     "savings": {
       "title": "Pengar sette av til {{name}}",
@@ -2580,6 +2582,18 @@
       "overTitle": "{{name}} er over kredittgrensa",
       "overBody": "Det er {{amount}} skuldig på kortet, meir enn kredittgrensa.",
       "open": "Opne kontoar"
+    },
+    "cardBill": {
+      "readyTitle": "Rekninga for {{name}} er klar",
+      "readyBody": "{{amount}} skal betalast innan {{date}}, minst {{minimum}}.",
+      "readyBodyMinimumPaid": "{{amount}} står att å betale innan {{date}}. Minstebeløpet er betalt.",
+      "dueTitle": "Rekninga for {{name}} forfell {{date}}",
+      "dueBody": "{{amount}} står att å betale, minst {{minimum}}.",
+      "dueBodyMinimumPaid": "{{amount}} står att å betale. Minstebeløpet er betalt.",
+      "carriedTitle": "Rekninga for {{name}} vart ikkje betalt i si heilskap",
+      "carriedBody": "{{amount}} stod att ved forfall {{date}} og vert overført, av det minstebeløpet {{minimum}}.",
+      "carriedBodyMinimumPaid": "{{amount}} stod att ved forfall {{date}} og vert overført.",
+      "open": "Opne rekninga"
     }
   },
   "bsu": {

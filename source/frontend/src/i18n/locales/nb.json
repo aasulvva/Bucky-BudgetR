@@ -2554,7 +2554,9 @@
       "bsu_withdrawal": "Uttak fra BSU",
       "bsu_withdrawalHint": "Penger en planlagt transaksjon tok ut av en BSU-konto.",
       "credit_limit": "Kredittgrenser",
-      "credit_limitHint": "Kredittkort der 90 % eller mer av grensen er brukt."
+      "credit_limitHint": "Kredittkort der 90 % eller mer av grensen er brukt.",
+      "card_bills": "Kortregninger",
+      "card_billsHint": "Regningen på et kredittkort: klar, forfaller innen dagene fremover, og overført når den ikke er betalt i sin helhet."
     },
     "savings": {
       "title": "Penger satt av til {{name}}",
@@ -2580,6 +2582,18 @@
       "overTitle": "{{name}} er over kredittgrensen",
       "overBody": "Det skyldes {{amount}} på kortet, mer enn kredittgrensen.",
       "open": "Åpne kontoer"
+    },
+    "cardBill": {
+      "readyTitle": "Regningen for {{name}} er klar",
+      "readyBody": "{{amount}} skal betales innen {{date}}, minst {{minimum}}.",
+      "readyBodyMinimumPaid": "{{amount}} gjenstår å betale innen {{date}}. Minstebeløpet er betalt.",
+      "dueTitle": "Regningen for {{name}} forfaller {{date}}",
+      "dueBody": "{{amount}} gjenstår å betale, minst {{minimum}}.",
+      "dueBodyMinimumPaid": "{{amount}} gjenstår å betale. Minstebeløpet er betalt.",
+      "carriedTitle": "Regningen for {{name}} ble ikke betalt i sin helhet",
+      "carriedBody": "{{amount}} gjensto ved forfall {{date}} og overføres, hvorav minstebeløpet er {{minimum}}.",
+      "carriedBodyMinimumPaid": "{{amount}} gjensto ved forfall {{date}} og overføres.",
+      "open": "Åpne regningen"
     }
   },
   "bsu": {

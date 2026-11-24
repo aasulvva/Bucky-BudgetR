@@ -30,6 +30,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/balance"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/bsu"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/buckets"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/calendar"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/cards"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/savings"
@@ -67,6 +68,14 @@ const (
 	// KindCreditLimit is a credit card whose debt is at cards.NearShare
 	// percent of its credit limit or more (#260).
 	KindCreditLimit Kind = "credit_limit"
+	// KindCardBill is a credit card's bill with something left to pay
+	// (#262), until it's due soon.
+	KindCardBill Kind = "card_bill"
+	// KindCardBillDue is a card's bill due within the days ahead.
+	KindCardBillDue Kind = "card_bill_due"
+	// KindCardBillCarried is a card's bill past its due date with something
+	// left, until the next statement.
+	KindCardBillCarried Kind = "card_bill_carried"
 )
 
 // keyPrefix is each kind's key prefix.
@@ -74,6 +83,7 @@ var keyPrefix = map[Kind]string{
 	KindQueue: "queue:", KindBill: "bill:", KindBalance: "balance:", KindBucket: "bucket:",
 	KindSavings: "savings:", KindSavingsShort: "savings-short:",
 	KindBSUOverLimit: "bsu-over:", KindBSUWithdrawal: "bsu-withdrawal:", KindCreditLimit: "card-limit:",
+	KindCardBill: "card-bill:", KindCardBillDue: "card-due:", KindCardBillCarried: "card-carried:",
 }
 
 // Severity orders notifications: alerts first.
@@ -109,8 +119,10 @@ type Notification struct {
 	TargetID       string
 	// Amount is the bill's amount, what the bucket is missing, what's held
 	// for the savings target, what a BSU is over its limit by, what was
-	// taken out of it, or what's owed on a credit card.
+	// taken out of it, what's owed on a credit card, or what's left of a
+	// card's bill; Minimum is what's left of its minimum payment.
 	Amount   decimal.NullDecimal
+	Minimum  decimal.NullDecimal
 	Currency string
 }
 
@@ -127,6 +139,8 @@ type Settings struct {
 	BSUOverLimit      *bool `json:"bsu_over_limit"`
 	BSUWithdrawal     *bool `json:"bsu_withdrawal"`
 	CreditLimit       *bool `json:"credit_limit"`
+	// CardBills switches all three card bill kinds (#262).
+	CardBills *bool `json:"card_bills"`
 }
 
 // On reports whether a kind shows.
@@ -136,6 +150,7 @@ func (s Settings) On(k Kind) bool {
 		KindBalance: s.InvestmentBalance, KindBucket: s.BucketUncovered, KindSavings: s.SavingsTransfer,
 		KindSavingsShort: s.SavingsShort, KindBSUOverLimit: s.BSUOverLimit, KindBSUWithdrawal: s.BSUWithdrawal,
 		KindCreditLimit: s.CreditLimit,
+		KindCardBill:    s.CardBills, KindCardBillDue: s.CardBills, KindCardBillCarried: s.CardBills,
 	}[k]
 	return v == nil || *v
 }
@@ -303,6 +318,7 @@ func (s *Service) work(ctx context.Context, q *sqlc.Queries, userID string, sett
 		{KindSavings, s.held}, {KindSavingsShort, s.short},
 		{KindBSUOverLimit, s.bsuOver}, {KindBSUWithdrawal, s.bsuWithdrawals},
 		{KindCreditLimit, s.creditLimits},
+		{KindCardBill, s.cardBills},
 	}
 	for _, step := range steps {
 		if !settings.On(step.kind) {
@@ -567,6 +583,53 @@ func (s *Service) creditLimits(ctx context.Context, q *sqlc.Queries, userID stri
 			Key:  keyPrefix[KindCreditLimit] + a.ID + ":" + level,
 			Kind: KindCreditLimit, Severity: severity, AccountID: a.ID,
 			Amount: decimal.NullDecimal{Decimal: st.Owed, Valid: true}, Currency: a.Currency,
+		})
+	}
+	return out, nil
+}
+
+// cardBills is one notification per credit card whose current statement has
+// something left to pay (#262): ready, then due soon from the days ahead,
+// then carried over after the due date. Each key names the statement, so a
+// dismissed one shows again for the next statement, or as it moves on.
+func (s *Service) cardBills(ctx context.Context, q *sqlc.Queries, userID string, settings Settings) ([]Notification, error) {
+	accounts, err := q.ListAccounts(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	var loc *time.Location
+	now := s.now()
+	out := []Notification{}
+	for _, a := range accounts {
+		if a.AccountType != sqlc.AccountTypeCreditCard || !a.CardBillSetUpAt.Valid {
+			continue
+		}
+		if loc == nil {
+			if loc, err = cards.Location(ctx, q, userID); err != nil {
+				return nil, err
+			}
+		}
+		bill, _, err := cards.BillOf(ctx, q, a, loc, now)
+		if err != nil {
+			return nil, err
+		}
+		st := bill.Current
+		if st == nil || !st.Left.IsPositive() {
+			continue
+		}
+		today := calendar.DateOf(now.In(loc))
+		kind, severity := KindCardBill, Info
+		switch {
+		case st.Due.Before(today):
+			kind, severity = KindCardBillCarried, Alert
+		case !today.Before(st.Due.AddDays(-settings.Days())):
+			kind, severity = KindCardBillDue, Warning
+		}
+		out = append(out, Notification{
+			Key: keyPrefix[kind] + st.ID, Kind: kind, Severity: severity, At: st.Due.Time(loc).UTC(),
+			AccountID: a.ID, Currency: a.Currency,
+			Amount:  decimal.NullDecimal{Decimal: st.Left, Valid: true},
+			Minimum: decimal.NullDecimal{Decimal: st.MinimumLeft, Valid: true},
 		})
 	}
 	return out, nil

@@ -84,6 +84,9 @@ type Status struct {
 	HeldOn      []Hold
 	SetAside    decimal.Decimal
 	NotSetAside decimal.Decimal
+	// Bill is the card's bill as it stands (#262); set by the accounts
+	// service.
+	Bill *Bill
 }
 
 // Hold is card debt held on an account.

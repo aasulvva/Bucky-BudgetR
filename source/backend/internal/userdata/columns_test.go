@@ -75,7 +75,7 @@ func TestColumns(t *testing.T) {
 	}
 }
 
-const exportedColumns = `bank_accounts: account_type, bank, bsu_opened_year, bsu_set_up_at, card_credit_limit, card_default_account_id, card_due_day, card_minimum_payment, card_statement_day, created_at, currency, deleted, expected_income, id, modified_at, name, user_id
+const exportedColumns = `bank_accounts: account_type, bank, bsu_opened_year, bsu_set_up_at, card_bill_set_up_at, card_credit_limit, card_default_account_id, card_due_day, card_minimum_payment, card_statement_day, created_at, currency, deleted, expected_income, id, modified_at, name, user_id
 cycles: created_at, end_at, generated, id, modified_at, start_at, state, user_id
 buckets: caf, cap_amount, cap_mode, cap_multiplier, created_at, deleted, id, importance, keep_funds, modified_at, name, negative_tf, overflow_destination, overflow_target_id, priority, refill_amount, refill_mode, source_account_id, user_id
 savings_holders: account_id, bucket_id, created_at, deleted, goal, hold_mode, id, kind, min_amount, modified_at, name, note, user_id
@@ -87,6 +87,7 @@ bank_transactions: account_id, amount, created_at, created_by, exchange_rate, id
 bucket_transactions: amount, bucket_id, created_at, created_by, cycle_id, id, transaction_id
 savings_transactions: account_id, amount, created_at, created_by, cycle_id, holder_id, id, transaction_id
 card_debt_lines: account_id, amount, card_id, created_at, created_by, id, transaction_id
+card_statements: amount, card_id, created_by, cutoff, due_date, fixed_at, fixed_by, id, minimum, paid_before, statement_date
 transaction_tags: tag_id, transaction_id, user_id
 refills: bucket_id, created_at, cycle_id, income_id, ovf_id, ref_id, trigger, user_id
 savings_budget_runs: created_at, cycle_id, entry_id, income_id, reserved, svr_id, trigger, user_id, wanted

@@ -2,12 +2,15 @@ import { Anchor, Box, Button, Card, Group, Stack, Text, ThemeIcon, Title } from 
 import {
   type Icon,
   IconAlertTriangle,
+  IconCalendarDollar,
   IconCalendarDue,
   IconCheck,
   IconChecklist,
   IconCoinOff,
   IconHomeDown,
   IconCreditCard,
+  IconCreditCardPay,
+  IconFileInvoice,
   IconHomeExclamation,
   IconPigMoney,
   IconTrendingUp,
@@ -36,6 +39,9 @@ const ICONS: Record<NotificationKind, Icon> = {
   bsu_over_limit: IconHomeExclamation,
   bsu_withdrawal: IconHomeDown,
   credit_limit: IconCreditCard,
+  card_bill: IconFileInvoice,
+  card_bill_due: IconCalendarDollar,
+  card_bill_carried: IconCreditCardPay,
 };
 
 const COLORS: Record<Notification["severity"], string> = {

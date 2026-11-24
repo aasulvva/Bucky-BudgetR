@@ -2554,7 +2554,9 @@
       "bsu_withdrawal": "BSU withdrawals",
       "bsu_withdrawalHint": "Money a scheduled transaction took out of a BSU account.",
       "credit_limit": "Credit limits",
-      "credit_limitHint": "Credit cards with 90% or more of their limit used."
+      "credit_limitHint": "Credit cards with 90% or more of their limit used.",
+      "card_bills": "Card bills",
+      "card_billsHint": "A credit card's bill: ready, due within the days ahead, and carried over when not paid in full."
     },
     "savings": {
       "title": "Money held for {{name}}",
@@ -2580,6 +2582,18 @@
       "overTitle": "{{name}} is past its credit limit",
       "overBody": "{{amount}} is owed on the card, more than its credit limit.",
       "open": "Open accounts"
+    },
+    "cardBill": {
+      "readyTitle": "{{name}}'s bill is ready",
+      "readyBody": "{{amount}} to pay by {{date}}, at least {{minimum}}.",
+      "readyBodyMinimumPaid": "{{amount}} left to pay by {{date}}. The minimum payment is paid.",
+      "dueTitle": "{{name}}'s bill is due {{date}}",
+      "dueBody": "{{amount}} is left to pay, at least {{minimum}}.",
+      "dueBodyMinimumPaid": "{{amount}} is left to pay. The minimum payment is paid.",
+      "carriedTitle": "{{name}}'s bill wasn't paid in full",
+      "carriedBody": "{{amount}} was left when it was due on {{date}} and carries over, {{minimum}} of it the minimum payment.",
+      "carriedBodyMinimumPaid": "{{amount}} was left when it was due on {{date}} and carries over.",
+      "open": "Open the bill"
     }
   },
   "bsu": {

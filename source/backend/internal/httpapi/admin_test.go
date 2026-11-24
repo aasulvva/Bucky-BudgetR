@@ -173,7 +173,7 @@ func TestPasswordLinks(t *testing.T) {
 	token := created.Link.Token
 
 	w = public("", map[string]any{"token": token})
-	if info := decodeJSON[api.PasswordLinkInfo](t, w); w.Code != http.StatusOK || info.Username != "kari" || info.Purpose != api.Setup {
+	if info := decodeJSON[api.PasswordLinkInfo](t, w); w.Code != http.StatusOK || info.Username != "kari" || info.Purpose != api.PasswordLinkInfoPurposeSetup {
 		t.Fatalf("check: %d %+v", w.Code, info)
 	}
 	for _, tc := range []struct {
@@ -213,7 +213,7 @@ func TestPasswordLinks(t *testing.T) {
 		t.Fatalf("reset with a link: %d %+v", w.Code, reset)
 	}
 	w = public("", map[string]any{"token": reset.Link.Token})
-	if info := decodeJSON[api.PasswordLinkInfo](t, w); info.Purpose != api.Reset {
+	if info := decodeJSON[api.PasswordLinkInfo](t, w); info.Purpose != api.PasswordLinkInfoPurposeReset {
 		t.Errorf("reset link: %+v", info)
 	}
 }

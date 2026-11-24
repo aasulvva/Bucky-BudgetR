@@ -125,6 +125,59 @@ func (e BucketCapMode) Valid() bool {
 	return false
 }
 
+type CardStatementFix string
+
+const (
+	CardStatementFixBank  CardStatementFix = "bank"
+	CardStatementFixDue   CardStatementFix = "due"
+	CardStatementFixSetup CardStatementFix = "setup"
+)
+
+func (e *CardStatementFix) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = CardStatementFix(s)
+	case string:
+		*e = CardStatementFix(s)
+	default:
+		return fmt.Errorf("unsupported scan type for CardStatementFix: %T", src)
+	}
+	return nil
+}
+
+type NullCardStatementFix struct {
+	CardStatementFix CardStatementFix
+	Valid            bool // Valid is true if CardStatementFix is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullCardStatementFix) Scan(value interface{}) error {
+	if value == nil {
+		ns.CardStatementFix, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.CardStatementFix.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullCardStatementFix) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.CardStatementFix), nil
+}
+
+func (e CardStatementFix) Valid() bool {
+	switch e {
+	case CardStatementFixBank,
+		CardStatementFixDue,
+		CardStatementFixSetup:
+		return true
+	}
+	return false
+}
+
 type CorrectionType string
 
 const (
@@ -866,6 +919,7 @@ type BankAccount struct {
 	CardStatementDay     pgtype.Int2
 	CardDueDay           pgtype.Int2
 	CardMinimumPayment   decimal.NullDecimal
+	CardBillSetUpAt      pgtype.Timestamptz
 }
 
 type BankTransaction struct {
@@ -928,6 +982,20 @@ type CardDebtLine struct {
 	AccountID     string
 	Amount        decimal.Decimal
 	CreatedAt     time.Time
+	CreatedBy     pgtype.Text
+}
+
+type CardStatement struct {
+	ID            string
+	CardID        string
+	StatementDate time.Time
+	Cutoff        time.Time
+	DueDate       time.Time
+	Amount        decimal.Decimal
+	Minimum       decimal.Decimal
+	PaidBefore    decimal.Decimal
+	FixedBy       CardStatementFix
+	FixedAt       time.Time
 	CreatedBy     pgtype.Text
 }
 

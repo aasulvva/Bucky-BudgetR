@@ -73,6 +73,9 @@ func toAPICard(st cards.Status) api.CreditCard {
 		SetAside:         st.SetAside.StringFixed(money.Places),
 		NotSetAside:      st.NotSetAside.StringFixed(money.Places),
 	}
+	if st.Bill != nil {
+		out.Bill = toAPIBill(*st.Bill)
+	}
 	for i, h := range st.HeldOn {
 		out.HeldOn[i] = api.CardHeldOn{AccountId: h.AccountID, Amount: h.Amount.StringFixed(money.Places)}
 	}

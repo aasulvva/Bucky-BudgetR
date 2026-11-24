@@ -7,10 +7,31 @@ package sqlc
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/shopspring/decimal"
 )
+
+const accountBalanceBefore = `-- name: AccountBalanceBefore :one
+SELECT COALESCE(SUM(l.amount), 0)::numeric AS balance
+FROM bank_transactions l
+JOIN transaction_headers h ON h.id = l.transaction_id
+WHERE l.account_id = $1 AND h.transaction_at < $2
+`
+
+type AccountBalanceBeforeParams struct {
+	AccountID string
+	Before    time.Time
+}
+
+// One account's balance counting only transactions dated before the moment.
+func (q *Queries) AccountBalanceBefore(ctx context.Context, arg AccountBalanceBeforeParams) (decimal.Decimal, error) {
+	row := q.db.QueryRow(ctx, accountBalanceBefore, arg.AccountID, arg.Before)
+	var balance decimal.Decimal
+	err := row.Scan(&balance)
+	return balance, err
+}
 
 const cardDebtHeld = `-- name: CardDebtHeld :many
 SELECT l.card_id, l.account_id, SUM(l.amount)::numeric AS held
@@ -40,6 +61,127 @@ func (q *Queries) CardDebtHeld(ctx context.Context, userID string) ([]CardDebtHe
 	for rows.Next() {
 		var i CardDebtHeldRow
 		if err := rows.Scan(&i.CardID, &i.AccountID, &i.Held); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const cardPaymentsBetween = `-- name: CardPaymentsBetween :one
+SELECT COALESCE(SUM(p.paid), 0)::numeric AS paid
+FROM (
+    SELECT SUM(l.amount) AS paid
+    FROM bank_transactions l
+    JOIN transaction_headers h ON h.id = l.transaction_id
+    WHERE l.account_id = $1 AND h.transaction_type = 'TRF'
+      AND h.transaction_at >= $2
+      AND ($3::timestamptz IS NULL OR h.transaction_at < $3::timestamptz)
+    GROUP BY COALESCE(h.parent_id, h.id)
+    HAVING SUM(l.amount) > 0
+) p
+`
+
+type CardPaymentsBetweenParams struct {
+	CardID string
+	FromAt time.Time
+	ToAt   pgtype.Timestamptz
+}
+
+// What was paid into the card by transfers dated from the moment (and before
+// the end, when given): per transaction family, its net on the card when it
+// added to it. Cash advances (transfers out) and refunds don't count.
+func (q *Queries) CardPaymentsBetween(ctx context.Context, arg CardPaymentsBetweenParams) (decimal.Decimal, error) {
+	row := q.db.QueryRow(ctx, cardPaymentsBetween, arg.CardID, arg.FromAt, arg.ToAt)
+	var paid decimal.Decimal
+	err := row.Scan(&paid)
+	return paid, err
+}
+
+const cardStatementsFor = `-- name: CardStatementsFor :many
+
+SELECT id, card_id, statement_date, cutoff, due_date, amount, minimum, paid_before, fixed_by, fixed_at, created_by FROM card_statements WHERE card_id = $1 ORDER BY statement_date DESC LIMIT $2
+`
+
+type CardStatementsForParams struct {
+	CardID string
+	N      int32
+}
+
+// A credit card's bill (#262, spec §2.2).
+// The card's fixed statements, newest first.
+func (q *Queries) CardStatementsFor(ctx context.Context, arg CardStatementsForParams) ([]CardStatement, error) {
+	rows, err := q.db.Query(ctx, cardStatementsFor, arg.CardID, arg.N)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CardStatement{}
+	for rows.Next() {
+		var i CardStatement
+		if err := rows.Scan(
+			&i.ID,
+			&i.CardID,
+			&i.StatementDate,
+			&i.Cutoff,
+			&i.DueDate,
+			&i.Amount,
+			&i.Minimum,
+			&i.PaidBefore,
+			&i.FixedBy,
+			&i.FixedAt,
+			&i.CreatedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const cardsWithBills = `-- name: CardsWithBills :many
+SELECT id, user_id, name, currency, deleted, created_at, modified_at, account_type, expected_income, bank, bsu_set_up_at, bsu_opened_year, card_default_account_id, card_credit_limit, card_statement_day, card_due_day, card_minimum_payment, card_bill_set_up_at FROM bank_accounts
+WHERE account_type = 'credit_card' AND NOT deleted AND card_bill_set_up_at IS NOT NULL
+ORDER BY user_id, id
+`
+
+// Every user's live credit cards whose bill is set up, for fixing statements
+// whose due date has passed.
+func (q *Queries) CardsWithBills(ctx context.Context) ([]BankAccount, error) {
+	rows, err := q.db.Query(ctx, cardsWithBills)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []BankAccount{}
+	for rows.Next() {
+		var i BankAccount
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Name,
+			&i.Currency,
+			&i.Deleted,
+			&i.CreatedAt,
+			&i.ModifiedAt,
+			&i.AccountType,
+			&i.ExpectedIncome,
+			&i.Bank,
+			&i.BsuSetUpAt,
+			&i.BsuOpenedYear,
+			&i.CardDefaultAccountID,
+			&i.CardCreditLimit,
+			&i.CardStatementDay,
+			&i.CardDueDay,
+			&i.CardMinimumPayment,
+			&i.CardBillSetUpAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -84,6 +226,58 @@ func (q *Queries) CreateCardDebtLine(ctx context.Context, arg CreateCardDebtLine
 		&i.AccountID,
 		&i.Amount,
 		&i.CreatedAt,
+		&i.CreatedBy,
+	)
+	return i, err
+}
+
+const createCardStatement = `-- name: CreateCardStatement :one
+INSERT INTO card_statements (id, card_id, statement_date, cutoff, due_date, amount, minimum, paid_before,
+    fixed_by, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+ON CONFLICT (card_id, statement_date) DO NOTHING
+RETURNING id, card_id, statement_date, cutoff, due_date, amount, minimum, paid_before, fixed_by, fixed_at, created_by
+`
+
+type CreateCardStatementParams struct {
+	ID            string
+	CardID        string
+	StatementDate time.Time
+	Cutoff        time.Time
+	DueDate       time.Time
+	Amount        decimal.Decimal
+	Minimum       decimal.Decimal
+	PaidBefore    decimal.Decimal
+	FixedBy       CardStatementFix
+	CreatedBy     pgtype.Text
+}
+
+// A statement already fixed for the day returns no row.
+func (q *Queries) CreateCardStatement(ctx context.Context, arg CreateCardStatementParams) (CardStatement, error) {
+	row := q.db.QueryRow(ctx, createCardStatement,
+		arg.ID,
+		arg.CardID,
+		arg.StatementDate,
+		arg.Cutoff,
+		arg.DueDate,
+		arg.Amount,
+		arg.Minimum,
+		arg.PaidBefore,
+		arg.FixedBy,
+		arg.CreatedBy,
+	)
+	var i CardStatement
+	err := row.Scan(
+		&i.ID,
+		&i.CardID,
+		&i.StatementDate,
+		&i.Cutoff,
+		&i.DueDate,
+		&i.Amount,
+		&i.Minimum,
+		&i.PaidBefore,
+		&i.FixedBy,
+		&i.FixedAt,
 		&i.CreatedBy,
 	)
 	return i, err
@@ -151,4 +345,25 @@ func (q *Queries) ListCardDebtLinesFor(ctx context.Context, ids []string) ([]Car
 		return nil, err
 	}
 	return items, nil
+}
+
+const setCardBillSetUp = `-- name: SetCardBillSetUp :one
+UPDATE bank_accounts SET card_bill_set_up_at = $3, modified_at = now()
+WHERE id = $1 AND user_id = $2 AND NOT deleted AND account_type = 'credit_card'
+  AND card_bill_set_up_at IS NULL
+RETURNING id
+`
+
+type SetCardBillSetUpParams struct {
+	ID     string
+	UserID string
+	At     pgtype.Timestamptz
+}
+
+// Marks a card's bill set up (#262); no row when it already was.
+func (q *Queries) SetCardBillSetUp(ctx context.Context, arg SetCardBillSetUpParams) (string, error) {
+	row := q.db.QueryRow(ctx, setCardBillSetUp, arg.ID, arg.UserID, arg.At)
+	var id string
+	err := row.Scan(&id)
+	return id, err
 }

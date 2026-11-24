@@ -166,6 +166,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, out, lo
 	bucketsSvc := buckets.NewService(pool, ledgerSvc, buckets.Options{
 		Now: now, OnCreate: refills.OnCreate, ReleaseSavings: savingsSvc.ReleaseBucket,
 	})
+	accountsSvc := accounts.NewService(pool, ledgerSvc, accounts.Options{Now: now, Savings: savingsSvc})
+	// Card statements are fixed once their due date passes (#262).
+	go accountsSvc.FixBillsLoop(ctx, time.Hour, logger)
 	notificationsSvc := notifications.NewService(pool, notifications.Options{Now: now, Schedules: schedulesSvc, Buckets: bucketsSvc, Savings: savingsSvc})
 	var renderer pdf.Renderer
 	if cfg.PDFChromeURL != "" {
@@ -175,7 +178,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, out, lo
 	}
 	handler, err := httpapi.NewHandler(logger, pool, httpapi.Options{
 		Auth:           authSvc,
-		Accounts:       accounts.NewService(pool, ledgerSvc, accounts.Options{Now: now, Savings: savingsSvc}),
+		Accounts:       accountsSvc,
 		Cycles:         cyclesSvc,
 		Buckets:        bucketsSvc,
 		Savings:        savingsSvc,
