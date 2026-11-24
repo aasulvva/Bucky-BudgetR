@@ -238,8 +238,8 @@ func (q *Queries) CreateCardDebtLine(ctx context.Context, arg CreateCardDebtLine
 
 const createCardStatement = `-- name: CreateCardStatement :one
 INSERT INTO card_statements (id, card_id, statement_date, cutoff, due_date, amount, minimum, paid_before,
-    fixed_by, created_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    fixed_by, created_by, fixed_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 ON CONFLICT (card_id, statement_date) DO NOTHING
 RETURNING id, card_id, statement_date, cutoff, due_date, amount, minimum, paid_before, fixed_by, fixed_at, created_by
 `
@@ -255,6 +255,7 @@ type CreateCardStatementParams struct {
 	PaidBefore    decimal.Decimal
 	FixedBy       CardStatementFix
 	CreatedBy     pgtype.Text
+	FixedAt       time.Time
 }
 
 // A statement already fixed for the day returns no row.
@@ -270,6 +271,7 @@ func (q *Queries) CreateCardStatement(ctx context.Context, arg CreateCardStateme
 		arg.PaidBefore,
 		arg.FixedBy,
 		arg.CreatedBy,
+		arg.FixedAt,
 	)
 	var i CardStatement
 	err := row.Scan(

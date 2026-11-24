@@ -51,7 +51,7 @@ export function useSchedulePreview(body: SchedulePreview | null) {
 }
 
 /** After a change: the schedules, and the money a recorded one moved. */
-function useRefreshSchedules() {
+export function useRefreshSchedules() {
   const client = useQueryClient();
   const refresh = useRefreshMoney();
   return async () => {

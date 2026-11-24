@@ -1,12 +1,11 @@
 import { Card, Select, Stack, Switch, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
-import type { NotificationSettings } from "@/api/notifications";
+import { DEFAULT_UPCOMING_DAYS, type NotificationSettings } from "@/api/notifications";
 import { useUpdatePreferences, type Preferences } from "@/app/session";
 import { ErrorAlert } from "@/components/ErrorAlert";
 
 /** Bills show this many days ahead unless set. */
-export const DEFAULT_UPCOMING_DAYS = 3;
 const DAYS = [1, 2, 3, 5, 7, 14];
 
 type Toggle =

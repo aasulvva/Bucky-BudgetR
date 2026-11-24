@@ -170,7 +170,13 @@ export function useNotificationText(): (n: Notification) => NotificationText {
         const k = key[n.kind];
         return {
           ...base,
-          title: t(`notifications.cardBill.${k}Title`, vars),
+          // Carried over with the minimum left is past due.
+          title: t(
+            k === "carried" && minimumLeft
+              ? "notifications.cardBill.pastDueTitle"
+              : `notifications.cardBill.${k}Title`,
+            vars,
+          ),
           body: t(
             minimumLeft
               ? `notifications.cardBill.${k}Body`

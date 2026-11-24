@@ -1,9 +1,19 @@
 // Credit card accounts (#260, spec §2.2).
 
-import type { Account, AccountType, Bucket, CreditCard, CreditCardFields } from "@/api/accounts";
+import type {
+  Account,
+  AccountType,
+  Bucket,
+  CardBill,
+  CardPayDefaults,
+  CreditCard,
+  CreditCardFields,
+} from "@/api/accounts";
 import type { Transaction } from "@/api/transactions";
 import { ApiError } from "@/api/errors";
 import i18n from "@/i18n";
+import { now } from "@/lib/clock";
+import { formatDate, parseDate } from "@/lib/dates";
 
 import {
   addAmounts,
@@ -104,13 +114,26 @@ export function limitAsk(error: unknown): boolean {
   return error instanceof ApiError && error.code === "over_credit_limit";
 }
 
-/** A card's fields as the form holds them. */
+export type PayRule = CardPayDefaults["rule"];
+export type PayMode = CardPayDefaults["mode"];
+
+/** The most days before the due date a bill is paid by default (#262). */
+export const MAX_PAY_DAYS_BEFORE = 14;
+
+/** A card's fields as the form holds them, with how its bill is paid (#262). */
 export interface CardDraft {
   defaultAccount: string | null;
   limit: string | null;
   statementDay: string | null;
   dueDay: string | null;
   minimum: string | null;
+  payRule: PayRule;
+  /** For a fixed payment. */
+  payAmount: string | null;
+  /** "0" for the due date. */
+  payDaysBefore: string;
+  payMode: PayMode;
+  autoFinalize: boolean;
 }
 
 export const EMPTY_CARD: CardDraft = {
@@ -119,6 +142,11 @@ export const EMPTY_CARD: CardDraft = {
   statementDay: null,
   dueDay: null,
   minimum: null,
+  payRule: "full",
+  payAmount: null,
+  payDaysBefore: "0",
+  payMode: "approve",
+  autoFinalize: false,
 };
 
 export function cardDraft(card: CreditCard): CardDraft {
@@ -128,19 +156,28 @@ export function cardDraft(card: CreditCard): CardDraft {
     statementDay: String(card.statement_day),
     dueDay: String(card.due_day),
     minimum: canonicalAmount(card.minimum_payment),
+    payRule: card.pay.rule,
+    payAmount: card.pay.amount ? canonicalAmount(card.pay.amount) : null,
+    payDaysBefore: String(card.pay.days_before),
+    payMode: card.pay.mode,
+    autoFinalize: card.pay.auto_finalize,
   };
 }
 
 export type CardField = Exclude<keyof CardDraft, "defaultAccount">;
 
+export type CardProblem = "aboveZero" | "chooseDay" | "needsDefault";
+
 /** What's wrong with each field, if anything. */
-export function cardProblems(d: CardDraft): Partial<Record<CardField, "aboveZero" | "chooseDay">> {
-  const out: Partial<Record<CardField, "aboveZero" | "chooseDay">> = {};
+export function cardProblems(d: CardDraft): Partial<Record<CardField, CardProblem>> {
+  const out: Partial<Record<CardField, CardProblem>> = {};
   const positive = (a: string | null) => a !== null && compareAmounts(a, "0") > 0;
   if (!positive(d.limit)) out.limit = "aboveZero";
   if (!positive(d.minimum)) out.minimum = "aboveZero";
   if (d.statementDay === null) out.statementDay = "chooseDay";
   if (d.dueDay === null) out.dueDay = "chooseDay";
+  if (d.payRule === "fixed" && !positive(d.payAmount)) out.payAmount = "aboveZero";
+  if (d.autoFinalize && !d.defaultAccount) out.autoFinalize = "needsDefault";
   return out;
 }
 
@@ -152,6 +189,14 @@ export function cardFields(d: CardDraft): CreditCardFields {
     statement_day: Number(d.statementDay),
     due_day: Number(d.dueDay),
     minimum_payment: d.minimum ?? "0",
+    pay: {
+      rule: d.payRule,
+      amount: d.payRule === "fixed" ? (d.payAmount ?? "0") : null,
+      days_before: Number(d.payDaysBefore),
+      mode: d.payMode,
+      // It pays from the default account, so it goes off without one.
+      auto_finalize: d.autoFinalize && d.defaultAccount !== null,
+    },
   };
 }
 
@@ -298,4 +343,135 @@ export function setAsideOf(tx: Transaction, buckets: Bucket[]): string | null {
   const bank = tx.bank_lines[0]?.amount ?? "0";
   const total = addAmounts(...tx.bucket_lines.map((l) => l.amount));
   return compareAmounts(subtractAmounts(bank, total), "0") !== 0 ? NOWHERE : null;
+}
+
+// A card's bill (#262, spec §2.2).
+
+/**
+ * Where a card's bill stands: not set up (locked), no statement yet, nothing
+ * left to pay (paid), its payment scheduled or waiting for approval, due
+ * within days (soon), or just open. Past its due date with something left,
+ * it's past due while the minimum isn't paid; with the minimum paid, what's
+ * left just carries over to the next bill (carried).
+ */
+export type BillState =
+  "locked" | "none" | "paid" | "scheduled" | "open" | "soon" | "past" | "carried";
+
+/** Today as an API date, in local time. */
+export function isoDay(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/** The API date days after (or before, when negative) date. */
+export function addDays(date: string, days: number): string {
+  const d = parseDate(date);
+  d.setDate(d.getDate() + days);
+  return isoDay(d);
+}
+
+/** Whether a card's bill waits to be set up (a card from before #262). */
+export function billLocked(card: Account): boolean {
+  return card.credit_card?.bill.set_up === false;
+}
+
+/** Whether a bill's payment is still to come: scheduled or queued. */
+export function paymentPending(bill: CardBill): boolean {
+  const s = bill.payment?.state;
+  return s === "scheduled" || s === "queued";
+}
+
+export function billState(card: Account, days: number, today: Date = now()): BillState | null {
+  const bill = card.credit_card?.bill;
+  if (!bill) return null;
+  if (!bill.set_up) return "locked";
+  const cur = bill.current;
+  if (!cur) return "none";
+  if (compareAmounts(cur.left, "0") <= 0) return "paid";
+  const day = isoDay(today);
+  if (cur.due_date < day) return compareAmounts(cur.minimum_left, "0") > 0 ? "past" : "carried";
+  if (paymentPending(bill)) return "scheduled";
+  return day >= addDays(cur.due_date, -days) ? "soon" : "open";
+}
+
+/** The day a card's bill is paid by default: its due date, or days before. */
+export function payDay(card: CreditCard, due: string): string {
+  return addDays(due, -card.pay.days_before);
+}
+
+/**
+ * What a payment by rule pays on a statement with left (and minimumLeft)
+ * to pay: all of it, the minimum, or fixed, at most what's left (as the
+ * server works it out).
+ */
+export function payAmount(
+  rule: PayRule,
+  left: string,
+  minimumLeft: string,
+  fixed: string | null,
+): string {
+  if (rule === "minimum") return minimumLeft;
+  if (rule === "fixed") {
+    const f = fixed ?? "0";
+    return compareAmounts(f, left) < 0 ? f : left;
+  }
+  return left;
+}
+
+/**
+ * What's wrong with a payment's releases (#261): one more than what's held
+ * on its account, or all of them more than the rest of the payment.
+ */
+export function releaseProblem(
+  card: Account,
+  accounts: Account[],
+  values: Record<string, string | null>,
+  rest: string,
+): string | undefined {
+  const money = (a: string) => formatMoney(a, card.currency);
+  const over = accounts.find((a) => compareAmounts(values[a.id] ?? "0", heldFor(a, card.id)) > 0);
+  if (over) {
+    return i18n.t("cards.debt.overHeld", {
+      name: over.name,
+      amount: money(heldFor(over, card.id)),
+    });
+  }
+  const total = addAmounts(
+    ...Object.values(values).filter((v): v is string => v !== null && compareAmounts(v, "0") > 0),
+  );
+  if (compareAmounts(total, rest) > 0) {
+    return i18n.t("cards.debt.overRest", { amount: money(rest) });
+  }
+  return undefined;
+}
+
+const ORANGE = "var(--mantine-color-orange-text)";
+const RED = "var(--mantine-color-red-text)";
+
+/**
+ * A card's line on a list row (#262): its bill when it needs you, due within
+ * days (orange) or past due (red), Set up bill when locked; otherwise what's
+ * available (orange near the limit).
+ */
+export function cardRow(
+  account: Account,
+  days: number,
+  today: Date = now(),
+): { text: string; color: string | undefined } | null {
+  const short = cardShort(account);
+  if (short === null) return null;
+  const state = billState(account, days, today);
+  const cur = account.credit_card?.bill.current;
+  const money = (a: string) => formatMoney(a, account.currency);
+  if (state === "locked") return { text: i18n.t("cards.setUpBillShort"), color: ORANGE };
+  if (cur && state === "past") {
+    return { text: i18n.t("cards.billPastShort", { amount: money(cur.left) }), color: RED };
+  }
+  if (cur && state === "soon") {
+    return {
+      text: i18n.t("cards.billShort", { amount: money(cur.left), date: formatDate(cur.due_date) }),
+      color: ORANGE,
+    };
+  }
+  return { text: short, color: cardNear(account) ? ORANGE : undefined };
 }

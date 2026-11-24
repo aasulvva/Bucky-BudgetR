@@ -4,8 +4,9 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
 import { accountTypeLabel, type Account, type Bucket } from "@/api/accounts";
+import { useUpcomingDays } from "@/app/session";
 import { CardLine } from "@/components/accounts/CardStatus";
-import { cardHeldLine, cardNear, cardShort, positiveHolds } from "@/lib/cards";
+import { cardHeldLine, cardRow, positiveHolds } from "@/lib/cards";
 import { shownAccounts, type WidgetInstance } from "@/lib/dashboard";
 import { addAmounts, compareAmounts, formatMoney } from "@/lib/money";
 
@@ -59,6 +60,8 @@ function AccountLink({ account }: { account: Account }) {
 function AllAccounts({ accounts, buckets }: { accounts: Account[]; buckets: Bucket[] }) {
   const { t } = useTranslation();
   const currencies = [...new Set(accounts.map((a) => a.currency))];
+  const days = useUpcomingDays();
+  const cardLines = new Map(accounts.map((a) => [a.id, cardRow(a, days)]));
   return (
     <Stack gap="xs">
       {accounts.map((a) => (
@@ -77,9 +80,9 @@ function AllAccounts({ accounts, buckets }: { accounts: Account[]; buckets: Buck
                   ` · ${t("accounts.reserved", { amount: formatMoney(a.reserved, a.currency) })}`}
               </Text>
             )}
-            {a.credit_card && (
-              <Text size="xs" c={cardNear(a) ? "var(--mantine-color-orange-text)" : "dimmed"}>
-                {cardShort(a)}
+            {cardLines.get(a.id) && (
+              <Text size="xs" c={cardLines.get(a.id)?.color ?? "dimmed"}>
+                {cardLines.get(a.id)?.text}
               </Text>
             )}
           </Box>

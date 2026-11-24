@@ -15,6 +15,9 @@ export type NotificationSettings = components["schemas"]["NotificationSettings"]
 
 export const NOTIFICATIONS_KEY = ["notifications"] as const;
 
+/** The days ahead upcoming bills show by default (Settings › Notifications). */
+export const DEFAULT_UPCOMING_DAYS = 3;
+
 export function useNotifications() {
   return useQuery({
     queryKey: NOTIFICATIONS_KEY,

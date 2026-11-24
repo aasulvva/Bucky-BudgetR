@@ -134,6 +134,10 @@ func TestCardBillAPI(t *testing.T) {
 	oneNote("due soon", api.NotificationKindCardBillDue, "1500.00", "0.00")
 	now = time.Date(2026, 11, 16, 10, 0, 0, 0, time.UTC)
 	oneNote("carried over", api.NotificationKindCardBillCarried, "1500.00", "0.00")
+	// The minimum is paid, so what's left just carries over: not past due.
+	if n := cardNotes(); n[0].Severity != api.NotificationSeverityInfo {
+		t.Fatalf("carried over with the minimum paid %+v", n[0])
+	}
 	expect(t, "switched off", do(http.MethodPatch, "/api/v1/me/preferences",
 		map[string]any{"notifications": map[string]any{"card_bills": false}}), http.StatusOK, "")
 	if n := cardNotes(); len(n) != 0 {
@@ -169,7 +173,9 @@ func TestCardBillAPI(t *testing.T) {
 	}
 	w = do(http.MethodPost, "/api/v1/accounts/"+visa.Id+"/bill/finalize", map[string]any{"amount": "3620", "payment": nil})
 	expect(t, "it matches the bank", w, http.StatusOK, "")
-	if cur = decode[api.CardBillFinalized](t, w).Bill.Current.MustGet(); !cur.Fixed || cur.FixedBy.MustGet() != api.CardStatementFixedByBank {
+	// Fixed at the app's time, which the debug clock moves.
+	if cur = decode[api.CardBillFinalized](t, w).Bill.Current.MustGet(); !cur.Fixed || cur.FixedBy.MustGet() != api.CardStatementFixedByBank ||
+		!cur.FixedAt.MustGet().Equal(now) {
 		t.Fatalf("checked %+v", cur)
 	}
 	purchase("50", "2026-11-29T12:00:00Z")
@@ -218,7 +224,15 @@ func TestCardBillAPI(t *testing.T) {
 	if err := pool.QueryRow(t.Context(), `SELECT fixed_by::text FROM card_statements WHERE id = $1`, visa.Id+"20270101").Scan(&by); err != nil || by != "due" {
 		t.Fatalf("Visa's January statement: %q, %v", by, err)
 	}
-	if cur = bill(visa.Id).Current.MustGet(); !cur.Fixed || cur.FixedBy.MustGet() != api.CardStatementFixedByDue {
+	if cur = bill(visa.Id).Current.MustGet(); !cur.Fixed || cur.FixedBy.MustGet() != api.CardStatementFixedByDue ||
+		!cur.FixedAt.MustGet().Equal(now) {
 		t.Fatalf("fixed when due %+v", cur)
+	}
+	// Nothing paid on it: past due, with the minimum left, an alert.
+	for _, n := range cardNotes() {
+		if n.AccountId.MustGet() == visa.Id &&
+			(n.Kind != api.NotificationKindCardBillCarried || n.Severity != api.NotificationSeverityAlert) {
+			t.Fatalf("past due without the minimum %+v", n)
+		}
 	}
 }

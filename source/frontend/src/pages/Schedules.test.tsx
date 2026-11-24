@@ -370,6 +370,40 @@ describe("Schedule pages", () => {
   });
 });
 
+describe("Card bill payments (#262)", () => {
+  const visa = account({ id: "9000", name: "Visa", type: "credit_card" });
+  const payment = schedule({
+    id: "1234560009",
+    transaction: { type: "TRF", account_id: main.id, to_account_id: visa.id, amount: "4520.00" },
+    mode: "approve",
+    frequency: "once",
+    start_date: "2026-12-15",
+    next_at: "2026-12-15T16:00:00Z",
+    bill: { card_id: visa.id, statement_id: "900020261201", rule: "full", amount: "4520.00" },
+  });
+
+  beforeEach(() => {
+    apiMock.on("GET /api/v1/accounts", { body: [main, savings, visa] });
+    apiMock.on("GET /api/v1/schedules", { body: [payment] });
+    apiMock.on("GET /api/v1/schedules/1234560009", { body: payment });
+  });
+
+  it("lists a bill payment by its card, paying what's left", async () => {
+    renderRoute("/transactions/scheduled");
+    const row = await screen.findByRole("link", { name: /Visa's bill/ }, { timeout: 5000 });
+    expect(row).toHaveTextContent("What's left");
+  });
+
+  it("keeps a bill payment a transfer to its card when edited", async () => {
+    renderRoute("/transactions/scheduled/1234560009/edit");
+    expect(
+      await screen.findByText(/This pays what's left on Visa's bill/, undefined, { timeout: 5000 }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: "Expense" })).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /^To/ })).toBeDisabled();
+  });
+});
+
 describe("Scheduled transactions in the list", () => {
   it("marks them and links to their schedule", async () => {
     const tx = transaction({

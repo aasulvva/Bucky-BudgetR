@@ -3771,7 +3771,8 @@ paths:
           what's left as `amount`, the minimum left as `minimum` and
           `currency`. `card_bill` (info) until `upcoming_days` before the
           due date, `card_bill_due` (warning) from then, `card_bill_carried`
-          (alert) after it, until the next statement.
+          after it, until the next statement: an alert while the minimum
+          isn't paid (past due), info once it is (what's left carries over).
       responses:
         "200":
           description: The open notifications.

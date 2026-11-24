@@ -337,6 +337,7 @@ export function scheduleTitle(
   accountName: (id: string) => string,
 ): string {
   if (s.name) return s.name;
+  if (s.bill) return t("cards.bill.scheduleTitle", { card: accountName(s.bill.card_id) });
   const tx = s.transaction;
   if (tx.type === "TRF" && tx.to_account_id) {
     return t("schedules.transferTitle", {

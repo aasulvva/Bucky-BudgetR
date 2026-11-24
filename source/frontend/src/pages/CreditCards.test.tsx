@@ -58,6 +58,9 @@ describe("Account setup with credit cards (#260)", () => {
     await pick(/^Due day/, "15");
     await userEvent.type(dialog.getByRole("textbox", { name: /Minimum payment/ }), "300");
     await userEvent.type(dialog.getByRole("textbox", { name: "Owed today" }), "4520");
+    // Its last statement (#262), so its bill is known.
+    await userEvent.type(dialog.getByRole("textbox", { name: "Its amount" }), "3000");
+    await userEvent.type(dialog.getByRole("textbox", { name: /Paid on it since/ }), "1000");
     await userEvent.click(dialog.getByRole("button", { name: "Create account" }));
 
     expect(await screen.findByText("Visa created.")).toBeInTheDocument();
@@ -71,9 +74,50 @@ describe("Account setup with credit cards (#260)", () => {
         statement_day: 31,
         due_day: 15,
         minimum_payment: "300.00",
+        pay: { rule: "full", amount: null, days_before: 0, mode: "approve", auto_finalize: false },
       },
+      last_statement: { amount: "3000.00", paid: "1000.00" },
       opening_balance: "-4520.00",
     });
+    // A long form to fill in: slow when the whole suite runs.
+  }, 15_000);
+
+  it("sets how the bill is paid, with auto-finalize from the default account (#262)", async () => {
+    apiMock.on("PATCH /api/v1/accounts/9000", { body: visa });
+    renderRoute("/accounts/setup?edit=9000");
+    const dialog = within(await screen.findByRole("dialog", { name: "Edit account" }));
+    const paying = within(dialog.getByRole("region", { name: "Paying the bill" }));
+    await userEvent.click(paying.getByRole("radio", { name: "Fixed" }));
+    await userEvent.click(dialog.getByRole("button", { name: "Save" }));
+    expect(paying.getByText("Enter an amount above 0.")).toBeInTheDocument();
+    await userEvent.type(paying.getByRole("textbox", { name: /Amount to pay/ }), "1000");
+    await pick("Pay on", "2 days before");
+    await userEvent.click(paying.getByRole("radio", { name: "Record it" }));
+    await userEvent.click(paying.getByRole("switch", { name: /^Auto-finalize/ }));
+    await userEvent.click(dialog.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByText("Visa saved.")).toBeInTheDocument();
+    expect(apiMock.calls("PATCH /api/v1/accounts/9000")[0]?.body).toMatchObject({
+      credit_card: {
+        pay: {
+          rule: "fixed",
+          amount: "1000.00",
+          days_before: 2,
+          mode: "auto",
+          auto_finalize: true,
+        },
+      },
+    });
+  });
+
+  it("can't auto-finalize without a default account (#262)", async () => {
+    apiMock.on("GET /api/v1/accounts", {
+      body: [buffer, main, { ...visa, credit_card: creditCard({ default_account_id: null }) }],
+    });
+    renderRoute("/accounts/setup?edit=9000");
+    const dialog = within(await screen.findByRole("dialog", { name: "Edit account" }));
+    expect(dialog.getByRole("switch", { name: /^Auto-finalize/ })).toBeDisabled();
+    expect(dialog.getByText("Needs a default account to pay from.")).toBeInTheDocument();
   });
 
   it("edits a card's fields, but never its type", async () => {
@@ -95,6 +139,7 @@ describe("Account setup with credit cards (#260)", () => {
         statement_day: 1,
         due_day: 15,
         minimum_payment: "500.00",
+        pay: { rule: "full", amount: null, days_before: 0, mode: "approve", auto_finalize: false },
       },
     });
   });

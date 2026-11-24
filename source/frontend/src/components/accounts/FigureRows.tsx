@@ -4,6 +4,12 @@
 import { Box, Group, Progress, Stack, Text } from "@mantine/core";
 
 const ORANGE = "var(--mantine-color-orange-text)";
+const RED = "var(--mantine-color-red-text)";
+
+function color(r: FigureRow): string | undefined {
+  if (r.red) return RED;
+  return r.orange ? ORANGE : undefined;
+}
 
 export interface FigureRow {
   label: string;
@@ -11,6 +17,8 @@ export interface FigureRow {
   value: string;
   /** The label and value in orange. */
   orange?: boolean;
+  /** The label, value and warning in red, e.g. past due (#262). */
+  red?: boolean;
   /** A bar under the row, 0–100. */
   bar?: { percent: number; label: string; orange?: boolean };
   /** Under the row on the right, dimmed: what the bar is of, e.g. the limit. */
@@ -35,16 +43,10 @@ export function FigureRows({ label, rows }: { label: string; rows: FigureRow[] }
       {rows.map((r) => (
         <Box key={r.label}>
           <Group justify="space-between" gap="xs" wrap="nowrap" align="flex-start">
-            <Text component="dt" size="sm" c={r.orange ? ORANGE : "dimmed"} style={{ minWidth: 0 }}>
+            <Text component="dt" size="sm" c={color(r) ?? "dimmed"} style={{ minWidth: 0 }}>
               {r.label}
             </Text>
-            <Text
-              component="dd"
-              size="sm"
-              m={0}
-              c={r.orange ? ORANGE : undefined}
-              style={{ whiteSpace: "nowrap" }}
-            >
+            <Text component="dd" size="sm" m={0} c={color(r)} style={{ whiteSpace: "nowrap" }}>
               {r.value}
             </Text>
           </Group>
@@ -66,7 +68,7 @@ export function FigureRows({ label, rows }: { label: string; rows: FigureRow[] }
                   </Text>
                 )}
                 {r.warning && (
-                  <Text size="xs" c={ORANGE}>
+                  <Text size="xs" c={r.red ? RED : ORANGE}>
                     {r.warning}
                   </Text>
                 )}
