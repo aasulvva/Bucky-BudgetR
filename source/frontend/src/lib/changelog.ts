@@ -16,6 +16,26 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.37.01",
+    date: "2026-11-24",
+    title: {
+      en: "PDF browser health check",
+      nb: "Helsesjekk for PDF-nettleseren",
+      nn: "Helsesjekk for PDF-nettlesaren",
+    },
+    changes: {
+      en: [
+        "The headless browser that makes the PDF reports no longer shows as unhealthy in production: its health check now asks in a way the browser accepts.",
+      ],
+      nb: [
+        "Den hodeløse nettleseren som lager PDF-rapportene, vises ikke lenger som usunn i produksjon: helsesjekken spør nå på en måte nettleseren godtar.",
+      ],
+      nn: [
+        "Den hovudlause nettlesaren som lagar PDF-rapportane, vert ikkje lenger vist som usunn i produksjon: helsesjekken spør no på ein måte nettlesaren godtek.",
+      ],
+    },
+  },
+  {
     version: "v2.37.00",
     date: "2026-11-24",
     title: {

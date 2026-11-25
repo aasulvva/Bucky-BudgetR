@@ -109,7 +109,8 @@ services:
     security_opt: [no-new-privileges:true]
     networks: [internal]
     healthcheck:
-      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9223 && printf 'GET /json/version HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q Browser <&3"]
+      # HTTP/1.1: Chrome's DevTools server refuses HTTP/1.0.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9223 && printf 'GET /json/version HTTP/1.1\\r\\nHost: 127.0.0.1\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q Browser <&3"]
       interval: 30s
       timeout: 5s
       retries: 3
