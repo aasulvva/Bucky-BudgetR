@@ -264,7 +264,7 @@ function Detail({
         <Text size="sm">
           <Trans
             i18nKey="transactions.movedTo"
-            components={{ link: <Anchor component={Link} to={openLink(tx.replaced_by)} /> }}
+            components={{ open: <Anchor component={Link} to={openLink(tx.replaced_by)} /> }}
           />
         </Text>
       )}
@@ -272,7 +272,7 @@ function Detail({
         <Text size="sm">
           <Trans
             i18nKey="transactions.movedFrom"
-            components={{ link: <Anchor component={Link} to={openLink(tx.replaces)} /> }}
+            components={{ open: <Anchor component={Link} to={openLink(tx.replaces)} /> }}
           />
         </Text>
       )}

@@ -458,4 +458,34 @@ describe("Transactions", () => {
       expect(router.state.location.search).toContain(`open=${trip.id}`);
     });
   });
+
+  it("links a moved transaction and the one it was moved from", async () => {
+    const moved = transaction({
+      id: "2026102300000008",
+      counterparty: "Kiwi",
+      replaces: "2026102300000007",
+      bank_lines: [{ account_id: buffer.id, amount: "-599.00" }],
+    });
+    const old = transaction({
+      id: "2026102300000007",
+      counterparty: "Kiwi",
+      reversed: true,
+      replaced_by: moved.id,
+      bank_lines: [],
+    });
+    apiMock.on("GET /api/v1/transactions", { body: { items: [moved], next_cursor: null } });
+    apiMock.on(`GET /api/v1/transactions/${moved.id}`, { body: { ...moved, history: [] } });
+    apiMock.on(`GET /api/v1/transactions/${old.id}`, { body: { ...old, history: [] } });
+    const { router } = renderRoute(`/transactions?open=${moved.id}`);
+    const back = await screen.findByRole("link", { name: "Open the old one" });
+    expect(back.parentElement).toHaveTextContent(
+      "Moved here from another account. Open the old one",
+    );
+    await userEvent.click(back);
+    expect(await screen.findByRole("link", { name: "Open the new transaction" })).toHaveAttribute(
+      "href",
+      expect.stringContaining(`open=${moved.id}`) as string,
+    );
+    expect(router.state.location.search).toContain(`open=${old.id}`);
+  });
 });
