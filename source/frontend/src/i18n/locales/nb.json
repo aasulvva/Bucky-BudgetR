@@ -2609,6 +2609,13 @@
       "title": "{{bucket}} tok {{amount}}",
       "body": "Kjøpet fra {{counterparty}} ventet på denne perioden og teller nå i bøtta.",
       "open": "Åpne transaksjoner"
+    },
+    "planned": {
+      "title": "{{name}} ventes {{date}}",
+      "body": "{{amount}} planlagt på {{account}}. Registrer trekket når det kommer, eller flytt datoen.",
+      "overdueTitle": "{{name}} er ikke trukket ennå",
+      "overdueBody": "Det var ventet {{date}}. Registrer trekket, eller flytt datoen hvis det er forsinket.",
+      "open": "Åpne kommende kjøp"
     }
   },
   "bsu": {

@@ -117,6 +117,7 @@ export function bucketFigures(
     capped: "0.00",
     swept: "0.00",
     left: "0.00",
+    planned: "0.00",
     ...overrides,
   };
 }

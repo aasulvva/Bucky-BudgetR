@@ -225,6 +225,8 @@ func transactionError(err error) error {
 	case errors.Is(err, transactions.ErrChargeClosed):
 		return &Error{Status: http.StatusConflict, Code: "charge_closed",
 			Detail: "Nothing is left for the bucket to take, or the bucket is gone.", Err: err}
+	case errors.Is(err, transactions.ErrPlannedClosed):
+		return plannedClosed(err)
 	case errors.Is(err, transactions.ErrCardOnly):
 		return &Error{Status: http.StatusBadRequest, Code: "card_only",
 			Detail: "Only a credit card purchase can count in its buckets as it's paid off.", Err: err}
@@ -315,6 +317,7 @@ func fromAPITransactionCreate(b api.TransactionCreate) (transactions.New, error)
 		Type: sqlc.TransactionType(b.Type), Counterparty: deref(b.Counterparty), Description: deref(b.Description),
 		AccountID: b.AccountId, ToAccountID: deref(b.ToAccountId), TriggersRefill: b.TriggersRefill,
 		BSUConfirmed: deref(b.BsuConfirmed), LimitConfirmed: deref(b.LimitConfirmed),
+		PlannedID: deref(b.PlannedPurchaseId),
 	}
 	if b.At != nil {
 		n.At = *b.At

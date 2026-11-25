@@ -38,12 +38,20 @@ func (s *server) ListBucketFigures(ctx context.Context, req api.ListBucketFigure
 	if err != nil {
 		return nil, err
 	}
-	list, err := svc.CycleFigures(ctx, sessionFrom(ctx).User.ID, req.CycleId)
+	userID := sessionFrom(ctx).User.ID
+	list, err := svc.CycleFigures(ctx, userID, req.CycleId)
 	if errors.Is(err, balance.ErrNotFound) {
 		return nil, &Error{Status: http.StatusNotFound, Code: "not_found", Detail: "Cycle not found.", Err: err}
 	}
 	if err != nil {
 		return nil, err
+	}
+	// What planned purchases set aside in the cycle (#265).
+	aside := map[string]decimal.Decimal{}
+	if s.planned != nil {
+		if aside, err = s.planned.SetAside(ctx, userID, req.CycleId); err != nil {
+			return nil, err
+		}
 	}
 	amount := func(d decimal.Decimal) string { return d.StringFixed(money.Places) }
 	out := make(api.ListBucketFigures200JSONResponse, len(list))
@@ -62,6 +70,7 @@ func (s *server) ListBucketFigures(ctx context.Context, req api.ListBucketFigure
 			Capped:       amount(f.Capped),
 			Swept:        amount(f.Swept),
 			Left:         amount(f.Left),
+			Planned:      amount(aside[f.BucketID]),
 		}
 	}
 	return out, nil

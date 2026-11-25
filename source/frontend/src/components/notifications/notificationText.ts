@@ -216,6 +216,29 @@ export function useNotificationText(): (n: Notification) => NotificationText {
           link: `/transactions?bucket_id=${encodeURIComponent(n.bucket_id ?? "")}&cycle_id=${encodeURIComponent(n.cycle_id ?? "")}&system=1`,
           open: t("notifications.bucketCharge.open"),
         };
+      case "planned_purchase": {
+        // Its day is over once the key says overdue (the severity too).
+        const overdue = n.key.endsWith(":overdue");
+        const vars = {
+          name: n.counterparty ?? "",
+          amount: n.amount ? formatMoney(n.amount, n.currency ?? undefined) : "",
+          account: names.accountName(n.account_id ?? ""),
+          date: n.at ? formatDate(n.at) : "",
+        };
+        return {
+          ...base,
+          title: t(
+            overdue ? "notifications.planned.overdueTitle" : "notifications.planned.title",
+            vars,
+          ),
+          body: t(
+            overdue ? "notifications.planned.overdueBody" : "notifications.planned.body",
+            vars,
+          ),
+          link: "/transactions/planned",
+          open: t("notifications.planned.open"),
+        };
+      }
     }
   };
 }

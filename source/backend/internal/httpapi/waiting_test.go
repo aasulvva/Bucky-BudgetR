@@ -16,6 +16,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/httpapi"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/ledger"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/notifications"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/planned"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/refill"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/schedules"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/testdb"
@@ -48,6 +49,7 @@ func newWaitingWorld(t *testing.T, start time.Time) *waitingWorld {
 		Buckets:       bk,
 		Transactions:  tx,
 		Schedules:     sch,
+		Planned:       planned.NewService(pool, planned.Options{Now: clock}),
 		Refills:       r,
 		Notifications: notifications.NewService(pool, notifications.Options{Now: clock, Schedules: sch, Buckets: bk}),
 	})
