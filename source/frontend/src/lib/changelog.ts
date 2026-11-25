@@ -16,6 +16,32 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.37.03",
+    date: "2026-11-25",
+    title: {
+      en: "Card debt in the sweep estimate, card purchases in stats, a steadier Money in and out",
+      nb: "Kortgjeld i anslaget for restsparing, kortkjøp i statistikk, en roligere Inn og ut",
+      nn: "Kortgjeld i overslaget for restsparing, kortkjøp i statistikk, ein roligare Inn og ut",
+    },
+    changes: {
+      en: [
+        "Ending a cycle estimates what an At cycle end sweep takes after the credit card debt held on the account, and counts what its buckets are owed for purchases that wait, as the sweep itself does.",
+        "Stats per bucket count a credit card purchase spent from a bucket once: its bucket part in the bucket and only the rest on No bucket. Filtered to a card, they show the buckets its purchases came from.",
+        "The Money in and out widget no longer flickers between side by side and rows in Safari when its amounts are close to not fitting.",
+      ],
+      nb: [
+        "Når en periode avsluttes, anslås det en restsparing ved periodeslutt tar etter kredittkortgjelden som holdes av på kontoen, og det bøttene har til gode for kjøp som venter, telles med, slik restsparingen selv gjør.",
+        "Statistikk per bøtte teller et kredittkortkjøp brukt fra en bøtte én gang: bøttedelen i bøtta og bare resten under Ingen bøtte. Filtrert på et kort vises bøttene kjøpene kom fra.",
+        "Inn og ut-widgeten blinker ikke lenger mellom side om side og rader i Safari når beløpene nesten ikke får plass.",
+      ],
+      nn: [
+        "Når ein periode vert avslutta, vert det rekna ut kva ei restsparing ved periodeslutt tek etter kredittkortgjelda som er halden av på kontoen, og det bøttene har til gode for kjøp som ventar, vert talt med, slik restsparinga sjølv gjer.",
+        "Statistikk per bøtte tel eit kredittkortkjøp brukt frå ei bøtte éin gong: bøttedelen i bøtta og berre resten under Inga bøtte. Filtrert på eit kort vert bøttene kjøpa kom frå viste.",
+        "Inn og ut-widgeten blinkar ikkje lenger mellom side om side og rader i Safari når beløpa nesten ikkje får plass.",
+      ],
+    },
+  },
+  {
     version: "v2.37.02",
     date: "2026-11-25",
     title: {

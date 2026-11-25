@@ -175,4 +175,29 @@ describe("sweepEstimate (#235)", () => {
     expect(sweepEstimate(all, endPreview(all, false), held, "0.00")).toBe("300.00");
     expect(sweepEstimate(all, endPreview(all, false), main, "5000.00")).toBe("0.00");
   });
+
+  it("covers the card debt held on the account first (#261)", () => {
+    const holding = {
+      ...main,
+      card_holds: [
+        { card_id: "8000", amount: "700.00" },
+        { card_id: "8001", amount: "100.00" },
+      ],
+    };
+    // 2 100 − 800 card debt − 300 for savings − 200 to keep.
+    expect(sweepEstimate(all, endPreview(all, false), holding, "200.00")).toBe("800.00");
+    // Debt above the money leaves nothing to sweep.
+    const owing = { ...main, card_holds: [{ card_id: "8000", amount: "5000.00" }] };
+    expect(sweepEstimate(all, endPreview(all, false), owing, "0.00")).toBe("0.00");
+  });
+
+  it("counts what the buckets are owed for purchases that wait (#264)", () => {
+    const owed = {
+      ...main,
+      waiting: "400.00",
+      card_holds: [{ card_id: "8000", amount: "400.00" }],
+    };
+    // The advance makes up for the debt it waits on: 2 100 − 300 − 200.
+    expect(sweepEstimate(all, endPreview(all, false), owed, "200.00")).toBe("1600.00");
+  });
 });

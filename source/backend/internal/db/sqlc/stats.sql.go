@@ -335,7 +335,13 @@ JOIN transaction_headers c ON c.id = f.id OR c.parent_id = f.id
 JOIN bucket_transactions l ON l.transaction_id = c.id
 JOIN buckets k ON k.id = l.bucket_id
 JOIN bank_accounts a ON a.id = k.source_account_id
-WHERE ($1::text[] IS NULL OR k.source_account_id = ANY($1::text[]))
+WHERE ($1::text[] IS NULL OR k.source_account_id = ANY($1::text[])
+       OR EXISTS (
+           SELECT 1 FROM transaction_headers cc
+           JOIN bank_transactions cb ON cb.transaction_id = cc.id
+           JOIN bank_accounts ca ON ca.id = cb.account_id
+           WHERE (cc.id = f.id OR cc.parent_id = f.id) AND ca.account_type = 'credit_card'
+             AND cb.account_id = ANY($1::text[])))
   AND ($2::text[] IS NULL OR l.bucket_id = ANY($2::text[]))
 GROUP BY f.id, f.transaction_type, f.transaction_at, f.counterparty, l.bucket_id, k.source_account_id, a.currency
 HAVING SUM(l.amount) <> 0
@@ -366,7 +372,9 @@ type StatsBucketNetsRow struct {
 
 // Each family's net per bucket, with the bucket's source account, for
 // families of the given types in [from_at, to_at). The account filter
-// matches the bucket's source account.
+// matches the bucket's source account, or a credit card the family has a
+// bank line on: a card purchase is spent from buckets on other accounts
+// (#261).
 func (q *Queries) StatsBucketNets(ctx context.Context, arg StatsBucketNetsParams) ([]StatsBucketNetsRow, error) {
 	rows, err := q.db.Query(ctx, statsBucketNets,
 		arg.AccountIds,

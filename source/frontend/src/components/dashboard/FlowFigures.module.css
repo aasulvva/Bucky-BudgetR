@@ -1,0 +1,5 @@
+/* The hidden copies the layout is measured from: their text is generated,
+   so it's not read out or found twice on the page. */
+.measure::before {
+  content: attr(data-text);
+}

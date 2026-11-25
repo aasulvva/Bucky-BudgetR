@@ -397,8 +397,15 @@ func (s *sums) flows(ctx context.Context, queries *sqlc.Queries, userID string, 
 	if err != nil {
 		return err
 	}
-	// What each family has on buckets per account, for the part on none.
+	// What each family has on buckets per account, for the part on none. A
+	// card purchase's bank line is on the card and its bucket lines on the
+	// buckets' accounts (#261): a bucket line on an account the family has no
+	// bank line on counts against its only one.
 	type famAccount struct{ family, account string }
+	bankAccounts := map[string][]string{}
+	for _, r := range bank {
+		bankAccounts[r.ID] = append(bankAccounts[r.ID], r.AccountID)
+	}
 	onBuckets := map[famAccount]decimal.Decimal{}
 	for _, r := range lines {
 		if v, ok := value(r.TransactionType, r.Net); ok {
@@ -409,6 +416,9 @@ func (s *sums) flows(ctx context.Context, queries *sqlc.Queries, userID string, 
 			}
 		}
 		fa := famAccount{r.ID, r.AccountID}
+		if own := bankAccounts[r.ID]; len(own) == 1 && own[0] != r.AccountID {
+			fa.account = own[0]
+		}
 		onBuckets[fa] = onBuckets[fa].Add(r.Net)
 	}
 	// Grouped by bucket without a bucket filter: the rest of each family's

@@ -41,7 +41,9 @@ ORDER BY f.transaction_at, f.id, b.account_id;
 -- name: StatsBucketNets :many
 -- Each family's net per bucket, with the bucket's source account, for
 -- families of the given types in [from_at, to_at). The account filter
--- matches the bucket's source account.
+-- matches the bucket's source account, or a credit card the family has a
+-- bank line on: a card purchase is spent from buckets on other accounts
+-- (#261).
 WITH families AS (
     SELECT h.id, h.transaction_type, h.transaction_at, latest.counterparty
     FROM transaction_headers h
@@ -67,7 +69,13 @@ JOIN transaction_headers c ON c.id = f.id OR c.parent_id = f.id
 JOIN bucket_transactions l ON l.transaction_id = c.id
 JOIN buckets k ON k.id = l.bucket_id
 JOIN bank_accounts a ON a.id = k.source_account_id
-WHERE (sqlc.narg(account_ids)::text[] IS NULL OR k.source_account_id = ANY(sqlc.narg(account_ids)::text[]))
+WHERE (sqlc.narg(account_ids)::text[] IS NULL OR k.source_account_id = ANY(sqlc.narg(account_ids)::text[])
+       OR EXISTS (
+           SELECT 1 FROM transaction_headers cc
+           JOIN bank_transactions cb ON cb.transaction_id = cc.id
+           JOIN bank_accounts ca ON ca.id = cb.account_id
+           WHERE (cc.id = f.id OR cc.parent_id = f.id) AND ca.account_type = 'credit_card'
+             AND cb.account_id = ANY(sqlc.narg(account_ids)::text[])))
   AND (sqlc.narg(bucket_ids)::text[] IS NULL OR l.bucket_id = ANY(sqlc.narg(bucket_ids)::text[]))
 GROUP BY f.id, f.transaction_type, f.transaction_at, f.counterparty, l.bucket_id, k.source_account_id, a.currency
 HAVING SUM(l.amount) <> 0
