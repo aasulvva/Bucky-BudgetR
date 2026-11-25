@@ -1,22 +1,23 @@
 import { Anchor, Box, Button, Card, Group, Stack, Text, ThemeIcon, Title } from "@mantine/core";
 import {
-  type Icon,
   IconAlertTriangle,
   IconCalendarDollar,
   IconCalendarDue,
   IconCheck,
   IconChecklist,
   IconCoinOff,
-  IconHomeDown,
   IconCreditCard,
   IconCreditCardPay,
   IconFileInvoice,
+  IconHomeDown,
   IconHomeExclamation,
   IconHourglass,
   IconPercentage,
   IconPigMoney,
+  IconShoppingCart,
   IconTrendingUp,
   IconX,
+  type Icon,
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
@@ -46,6 +47,7 @@ const ICONS: Record<NotificationKind, Icon> = {
   card_bill_carried: IconCreditCardPay,
   card_interest: IconPercentage,
   bucket_charge: IconHourglass,
+  planned_purchase: IconShoppingCart,
 };
 
 const COLORS: Record<Notification["severity"], string> = {

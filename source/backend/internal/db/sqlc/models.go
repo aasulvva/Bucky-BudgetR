@@ -553,6 +553,59 @@ func (e OverflowDestination) Valid() bool {
 	return false
 }
 
+type PlannedPurchaseStatus string
+
+const (
+	PlannedPurchaseStatusOpen      PlannedPurchaseStatus = "open"
+	PlannedPurchaseStatusCharged   PlannedPurchaseStatus = "charged"
+	PlannedPurchaseStatusCancelled PlannedPurchaseStatus = "cancelled"
+)
+
+func (e *PlannedPurchaseStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = PlannedPurchaseStatus(s)
+	case string:
+		*e = PlannedPurchaseStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for PlannedPurchaseStatus: %T", src)
+	}
+	return nil
+}
+
+type NullPlannedPurchaseStatus struct {
+	PlannedPurchaseStatus PlannedPurchaseStatus
+	Valid                 bool // Valid is true if PlannedPurchaseStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullPlannedPurchaseStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.PlannedPurchaseStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.PlannedPurchaseStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullPlannedPurchaseStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.PlannedPurchaseStatus), nil
+}
+
+func (e PlannedPurchaseStatus) Valid() bool {
+	switch e {
+	case PlannedPurchaseStatusOpen,
+		PlannedPurchaseStatusCharged,
+		PlannedPurchaseStatusCancelled:
+		return true
+	}
+	return false
+}
+
 type RefillMode string
 
 const (
@@ -1159,6 +1212,28 @@ type PasswordLink struct {
 	CreatedBy pgtype.Text
 	CreatedAt time.Time
 	ExpiresAt time.Time
+}
+
+type PlannedPurchase struct {
+	ID            string
+	UserID        string
+	Name          string
+	AccountID     string
+	Amount        decimal.Decimal
+	ExpectedAt    time.Time
+	Note          string
+	Status        PlannedPurchaseStatus
+	TransactionID pgtype.Text
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
+type PlannedPurchaseBucketLine struct {
+	PlannedID string
+	BucketID  string
+	UserID    string
+	Amount    decimal.Decimal
+	Position  int32
 }
 
 type Refill struct {

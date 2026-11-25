@@ -52,6 +52,7 @@ function notification(n: Partial<Notification> & Pick<Notification, "key" | "kin
     currency: null,
     transaction_id: null,
     counterparty: null,
+    planned_id: null,
     ...n,
   };
 }
@@ -360,6 +361,48 @@ describe("Notifications", () => {
       "href",
       `/transactions?bucket_id=${rent.id}&cycle_id=100001000002&system=1`,
     );
+  });
+
+  it("reminds of a planned purchase coming up, and when it's overdue (#265)", async () => {
+    const at = "2027-01-06T00:00:00Z";
+    const planned = {
+      kind: "planned_purchase" as const,
+      planned_id: "1000011234567890",
+      counterparty: "Game Store",
+      account_id: main.id,
+      at,
+      amount: "600.00",
+      currency: "NOK",
+    };
+    apiMock.on("GET /api/v1/notifications", {
+      body: {
+        items: [
+          notification({ ...planned, key: "planned:1000011234567890:1799193600" }),
+          notification({
+            ...planned,
+            key: "planned:1000011234567890:1799193600:overdue",
+            severity: "warning",
+          }),
+        ],
+      },
+    });
+    renderRoute("/notifications");
+    const [soon, late] = (await rows()).map((r) => within(r));
+    if (!soon || !late) throw new Error("two rows");
+    expect(await soon.findByText(`Game Store is expected ${formatDate(at)}`)).toBeInTheDocument();
+    expect(
+      soon.getByText(new RegExp(`NOK.600\\.00 planned on ${main.name}\\.`)),
+    ).toBeInTheDocument();
+    expect(soon.getByRole("link", { name: "Open planned purchases" })).toHaveAttribute(
+      "href",
+      "/transactions/planned",
+    );
+    expect(late.getByText("Game Store hasn't been charged")).toBeInTheDocument();
+    expect(
+      late.getByText(
+        `It was expected ${formatDate(at)}. Record the charge, or move the date if it's delayed.`,
+      ),
+    ).toBeInTheDocument();
   });
 
   it("says when there's nothing to do", async () => {

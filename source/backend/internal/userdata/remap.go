@@ -41,6 +41,8 @@ const (
 	// line's IDs (#264): the bucket's, then random digits.
 	kWaitingCharge
 	kWaitingLine
+	// kPlanned is a planned purchase's ID (#265).
+	kPlanned
 	// kKept is kept as it is: a notification dismissal's key (#57). It names
 	// IDs, so a clone's no longer match and are forgotten when its
 	// notifications are next read.
@@ -51,29 +53,31 @@ const (
 // A clone gives each ID a new one. TestIDColumns checks it against the
 // schema's foreign keys.
 var idColumns = map[string]map[string]kind{
-	"bank_accounts":           {"id": kAccount, "user_id": kUser, "card_default_account_id": kAccount},
-	"cycles":                  {"id": kCycle, "user_id": kUser},
-	"buckets":                 {"id": kBucket, "user_id": kUser, "source_account_id": kAccount, "overflow_target_id": kHolder},
-	"tags":                    {"id": kTag, "user_id": kUser},
-	"transaction_headers":     {"id": kTransaction, "user_id": kUser, "parent_id": kTransaction, "replaces_id": kTransaction, "created_by": kUser},
-	"bank_transactions":       {"id": kBankLine, "transaction_id": kTransaction, "account_id": kAccount, "created_by": kUser},
-	"bucket_transactions":     {"id": kBucketLine, "transaction_id": kTransaction, "bucket_id": kBucket, "cycle_id": kCycle, "created_by": kUser},
-	"savings_holders":         {"id": kHolder, "user_id": kUser, "bucket_id": kBucket, "account_id": kAccount},
-	"savings_rules":           {"id": kRule, "target_id": kHolder, "user_id": kUser},
-	"savings_transactions":    {"id": kSavingsLine, "transaction_id": kTransaction, "holder_id": kHolder, "account_id": kAccount, "cycle_id": kCycle, "created_by": kUser},
-	"card_debt_lines":         {"id": kCardLine, "transaction_id": kTransaction, "card_id": kAccount, "account_id": kAccount, "created_by": kUser},
-	"card_statements":         {"id": kStatement, "card_id": kAccount, "created_by": kUser},
-	"waiting_charges":         {"id": kWaitingCharge, "user_id": kUser, "transaction_id": kTransaction, "bucket_id": kBucket, "cycle_id": kCycle},
-	"waiting_lines":           {"id": kWaitingLine, "transaction_id": kTransaction, "purchase_id": kTransaction, "bucket_id": kBucket, "created_by": kUser},
-	"transaction_tags":        {"transaction_id": kTransaction, "tag_id": kTag, "user_id": kUser},
-	"refills":                 {"bucket_id": kBucket, "cycle_id": kCycle, "user_id": kUser, "ref_id": kTransaction, "ovf_id": kTransaction, "income_id": kTransaction},
-	"savings_budget_entries":  {"id": kBudget, "user_id": kUser, "account_id": kAccount, "target_id": kHolder},
-	"savings_budget_runs":     {"entry_id": kBudget, "cycle_id": kCycle, "user_id": kUser, "svr_id": kTransaction, "income_id": kTransaction},
-	"savings_follow_ons":      {"source_id": kTransaction, "follow_id": kTransaction, "user_id": kUser},
-	"schedules":               {"id": kSchedule, "user_id": kUser, "account_id": kAccount, "to_account_id": kAccount, "card_statement_id": kStatement},
-	"schedule_bucket_lines":   {"schedule_id": kSchedule, "bucket_id": kBucket, "user_id": kUser},
-	"schedule_occurrences":    {"id": kOccurrence, "schedule_id": kSchedule, "user_id": kUser, "transaction_id": kTransaction},
-	"notification_dismissals": {"user_id": kUser, "key": kKept},
+	"bank_accounts":                 {"id": kAccount, "user_id": kUser, "card_default_account_id": kAccount},
+	"cycles":                        {"id": kCycle, "user_id": kUser},
+	"buckets":                       {"id": kBucket, "user_id": kUser, "source_account_id": kAccount, "overflow_target_id": kHolder},
+	"tags":                          {"id": kTag, "user_id": kUser},
+	"transaction_headers":           {"id": kTransaction, "user_id": kUser, "parent_id": kTransaction, "replaces_id": kTransaction, "created_by": kUser},
+	"bank_transactions":             {"id": kBankLine, "transaction_id": kTransaction, "account_id": kAccount, "created_by": kUser},
+	"bucket_transactions":           {"id": kBucketLine, "transaction_id": kTransaction, "bucket_id": kBucket, "cycle_id": kCycle, "created_by": kUser},
+	"savings_holders":               {"id": kHolder, "user_id": kUser, "bucket_id": kBucket, "account_id": kAccount},
+	"savings_rules":                 {"id": kRule, "target_id": kHolder, "user_id": kUser},
+	"savings_transactions":          {"id": kSavingsLine, "transaction_id": kTransaction, "holder_id": kHolder, "account_id": kAccount, "cycle_id": kCycle, "created_by": kUser},
+	"card_debt_lines":               {"id": kCardLine, "transaction_id": kTransaction, "card_id": kAccount, "account_id": kAccount, "created_by": kUser},
+	"card_statements":               {"id": kStatement, "card_id": kAccount, "created_by": kUser},
+	"waiting_charges":               {"id": kWaitingCharge, "user_id": kUser, "transaction_id": kTransaction, "bucket_id": kBucket, "cycle_id": kCycle},
+	"waiting_lines":                 {"id": kWaitingLine, "transaction_id": kTransaction, "purchase_id": kTransaction, "bucket_id": kBucket, "created_by": kUser},
+	"transaction_tags":              {"transaction_id": kTransaction, "tag_id": kTag, "user_id": kUser},
+	"refills":                       {"bucket_id": kBucket, "cycle_id": kCycle, "user_id": kUser, "ref_id": kTransaction, "ovf_id": kTransaction, "income_id": kTransaction},
+	"savings_budget_entries":        {"id": kBudget, "user_id": kUser, "account_id": kAccount, "target_id": kHolder},
+	"savings_budget_runs":           {"entry_id": kBudget, "cycle_id": kCycle, "user_id": kUser, "svr_id": kTransaction, "income_id": kTransaction},
+	"savings_follow_ons":            {"source_id": kTransaction, "follow_id": kTransaction, "user_id": kUser},
+	"schedules":                     {"id": kSchedule, "user_id": kUser, "account_id": kAccount, "to_account_id": kAccount, "card_statement_id": kStatement},
+	"schedule_bucket_lines":         {"schedule_id": kSchedule, "bucket_id": kBucket, "user_id": kUser},
+	"schedule_occurrences":          {"id": kOccurrence, "schedule_id": kSchedule, "user_id": kUser, "transaction_id": kTransaction},
+	"planned_purchases":             {"id": kPlanned, "user_id": kUser, "account_id": kAccount, "transaction_id": kTransaction},
+	"planned_purchase_bucket_lines": {"planned_id": kPlanned, "bucket_id": kBucket, "user_id": kUser},
+	"notification_dismissals":       {"user_id": kUser, "key": kKept},
 }
 
 // remap returns data with new IDs for userID: new accounts, cycles, buckets,
@@ -114,6 +118,10 @@ func remap(ctx context.Context, tx pgx.Tx, userID string, data Data) (Data, erro
 	}
 	if m[kSchedule], err = newIDs(ctx, tx, userID, "schedules", keys(data.Tables["schedules"], "id"),
 		func(string) string { return ids.NewSchedule(userID) }); err != nil {
+		return Data{}, err
+	}
+	if m[kPlanned], err = newIDs(ctx, tx, userID, "planned_purchases", keys(data.Tables["planned_purchases"], "id"),
+		func(string) string { return ids.NewPlannedPurchase(userID) }); err != nil {
 		return Data{}, err
 	}
 	if m[kHolder], err = newIDs(ctx, tx, userID, "savings_holders", keys(data.Tables["savings_holders"], "id"),

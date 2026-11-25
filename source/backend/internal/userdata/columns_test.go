@@ -97,4 +97,6 @@ savings_follow_ons: created_at, follow_id, source_id, user_id
 schedules: account_id, amount, bill_rule, card_statement_id, counterparty, created_at, description, due_days, end_count, end_date, every, frequency, id, mode, name, next_at, next_index, paused, start_date, tags, time_of_day, time_zone, to_account_id, transaction_type, triggers_refill, updated_at, user_id
 schedule_bucket_lines: amount, bucket_id, position, schedule_id, user_id
 schedule_occurrences: created_at, detail, due_at, id, queued_at, reason, resolved_at, schedule_id, scheduled_at, state, transaction_id, user_id
+planned_purchases: account_id, amount, created_at, expected_at, id, name, note, status, transaction_id, updated_at, user_id
+planned_purchase_bucket_lines: amount, bucket_id, planned_id, position, user_id
 notification_dismissals: dismissed_at, key, user_id`

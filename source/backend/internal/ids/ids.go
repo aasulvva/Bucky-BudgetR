@@ -20,6 +20,7 @@
 //	CardStatement Account (card) + YYYYMMDD  12 digits (the statement day)
 //	WaitingCharge Bucket + 14 random  24 digits
 //	WaitingLine  Bucket + 14 random   24 digits
+//	PlannedPurchase User + 10 random  16 digits
 //
 // The database stores them as text with a CHECK on Kind.Pattern. They are
 // drawn with crypto/rand; see Insert for handling collisions.
@@ -74,6 +75,9 @@ var (
 	// later (#264), and WaitingLine a line of what the bucket owes for it.
 	WaitingCharge = newKind("waiting charge", 24, `^[1-9][0-9]{23}$`)
 	WaitingLine   = newKind("waiting line", 24, `^[1-9][0-9]{23}$`)
+	// PlannedPurchase is a purchase charged later, set aside in its cycle's
+	// buckets (#265).
+	PlannedPurchase = newKind("planned purchase", 16, `^[1-9][0-9]{15}$`)
 )
 
 // Valid reports whether s is a well-formed ID of this kind. For transactions
@@ -152,6 +156,10 @@ func NewWaitingCharge(bucketID string) string { return withPrefix(Bucket, bucket
 
 // NewWaitingLine returns a random ID for a waiting line on bucketID.
 func NewWaitingLine(bucketID string) string { return withPrefix(Bucket, bucketID, 14) }
+
+// NewPlannedPurchase returns a random ID for a planned purchase owned by
+// userID.
+func NewPlannedPurchase(userID string) string { return withPrefix(User, userID, 10) }
 
 // withPrefix appends n random digits to an owner ID. A malformed owner ID is
 // a programming error, so it panics rather than returning an error.

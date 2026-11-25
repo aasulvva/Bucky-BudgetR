@@ -16,6 +16,26 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.37.04",
+    date: "2026-11-25",
+    title: {
+      en: "Planned purchases, behind the scenes",
+      nb: "Kommende kjøp, bak kulissene",
+      nn: "Komande kjøp, bak kulissane",
+    },
+    changes: {
+      en: [
+        "The server can now keep planned purchases, like a pre-order charged later: set aside in its bucket in the cycle of its expected date, with a reminder near the date. The screens for them come in the next version.",
+      ],
+      nb: [
+        "Serveren kan nå holde kommende kjøp, som en forhåndsbestilling som trekkes senere: satt av i bøtta i perioden for forventet dato, med en påminnelse nær datoen. Skjermene for dem kommer i neste versjon.",
+      ],
+      nn: [
+        "Tenaren kan no halde komande kjøp, som ei førehandsbestilling som vert trekt seinare: sett av i bøtta i perioden for venta dato, med ei påminning nær datoen. Skjermane for dei kjem i neste versjon.",
+      ],
+    },
+  },
+  {
     version: "v2.37.03",
     date: "2026-11-25",
     title: {

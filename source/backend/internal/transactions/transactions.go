@@ -39,6 +39,9 @@ var (
 	// ErrCurrencyMismatch means a transfer's accounts have different
 	// currencies.
 	ErrCurrencyMismatch = errors.New("the accounts have different currencies")
+	// ErrPlannedClosed means a planned purchase was already charged or
+	// cancelled (#265).
+	ErrPlannedClosed = errors.New("the planned purchase is already charged or cancelled")
 )
 
 const (
@@ -97,6 +100,9 @@ type New struct {
 	// CountLater makes an expense's bucket parts count in their buckets
 	// later (#264); nil counts them now.
 	CountLater *CountLater
+	// PlannedID is the planned purchase an expense records the charge of
+	// (#265), which it closes; "" for none.
+	PlannedID string
 }
 
 // CountLater is when an expense's bucket parts count in their buckets
@@ -338,9 +344,19 @@ func (s *Service) Create(ctx context.Context, userID string, n New) (Transaction
 		if err := ledger.LockUser(ctx, tx, userID); err != nil {
 			return err
 		}
+		if err := checkPlanned(ctx, sqlc.New(tx), userID, n); err != nil {
+			return err
+		}
 		t, err := s.record(ctx, tx, userID, n, "")
 		if err != nil {
 			return err
+		}
+		if n.PlannedID != "" {
+			if err := sqlc.New(tx).ChargePlannedPurchase(ctx, sqlc.ChargePlannedPurchaseParams{
+				ID: n.PlannedID, UserID: userID, TransactionID: pgtype.Text{String: t.Header.ID, Valid: true},
+			}); err != nil {
+				return err
+			}
 		}
 		if n.CountLater != nil {
 			// With its waiting charges, and what a paid off part took.
@@ -1228,6 +1244,32 @@ func checkAccounts(ctx context.Context, q *sqlc.Queries, userID string, n New) e
 	if n.ToAccountID != "" && currency[n.AccountID] != currency[n.ToAccountID] {
 		return fmt.Errorf("%w: %s is %s, %s is %s", ErrCurrencyMismatch,
 			n.AccountID, currency[n.AccountID], n.ToAccountID, currency[n.ToAccountID])
+	}
+	return nil
+}
+
+// checkPlanned checks that the planned purchase an expense records the
+// charge of (#265) is the user's, open and on the expense's account, and
+// locks it.
+func checkPlanned(ctx context.Context, q *sqlc.Queries, userID string, n New) error {
+	if n.PlannedID == "" {
+		return nil
+	}
+	if n.Type != sqlc.TransactionTypeEXP {
+		return fmt.Errorf("%w: only an expense records a planned purchase's charge", ErrInvalid)
+	}
+	p, err := q.GetPlannedPurchaseForUpdate(ctx, sqlc.GetPlannedPurchaseForUpdateParams{ID: n.PlannedID, UserID: userID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("%w: planned purchase %s doesn't exist", ErrInvalid, n.PlannedID)
+	}
+	if err != nil {
+		return err
+	}
+	if p.Status != sqlc.PlannedPurchaseStatusOpen {
+		return ErrPlannedClosed
+	}
+	if p.AccountID != n.AccountID {
+		return fmt.Errorf("%w: planned purchase %s is on account %s, not %s", ErrInvalid, p.ID, p.AccountID, n.AccountID)
 	}
 	return nil
 }

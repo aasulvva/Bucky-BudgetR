@@ -2293,6 +2293,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/planned-purchases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The user's planned purchases
+         * @description Planned purchases (#265, spec §5.7), the soonest expected first: the
+         *     open ones, or with `status=closed` the charged and cancelled ones.
+         */
+        get: operations["listPlannedPurchases"];
+        put?: never;
+        /**
+         * Plan a purchase charged later
+         * @description Something like a pre-order, charged later on a soft date. It's checked
+         *     as the expense it plans would be now: the account, and each bucket
+         *     funded from it, or on a credit card from an account in its currency
+         *     (#261), together at most the amount. In the cycle it counts in
+         *     (`cycle_id`) its bucket parts are set aside, as a figure only
+         *     (`BucketFigures.planned`). Recording its charge is an expense with
+         *     `planned_purchase_id`.
+         */
+        post: operations["createPlannedPurchase"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/planned-purchases/{plannedId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plannedId: components["parameters"]["PlannedPurchaseId"];
+            };
+            cookie?: never;
+        };
+        /** One planned purchase */
+        get: operations["getPlannedPurchase"];
+        put?: never;
+        post?: never;
+        /**
+         * Cancel an open planned purchase
+         * @description It's kept as cancelled. A charged or cancelled one is 409 `planned_closed`.
+         */
+        delete: operations["cancelPlannedPurchase"];
+        options?: never;
+        head?: never;
+        /**
+         * Change an open planned purchase
+         * @description Changes the fields given, checked as in `createPlannedPurchase`;
+         *     `bucket_lines` replaces them all. Moving the date is a change of
+         *     `expected_at`, which may move it to another cycle. A charged or
+         *     cancelled one is 409 `planned_closed`.
+         */
+        patch: operations["updatePlannedPurchase"];
+        trace?: never;
+    };
     "/api/v1/notifications": {
         parameters: {
             query?: never;
@@ -2355,6 +2416,12 @@ export interface paths {
          *       `amount`, `currency`, and the purchase as `transaction_id` and
          *       `counterparty`. One per take, until dismissed or the cycle ends. A
          *       take by hand, or when a payment paid a card purchase off, has none.
+         *     - `planned_purchase` (#265, under `planned_purchases`): an open
+         *       planned purchase expected within `upcoming_days` (info), or overdue
+         *       (warning: its expected day is over and it isn't charged); with
+         *       `planned_id`, its name as `counterparty`, `account_id`, `at` (its
+         *       expected time), `amount` and `currency`. Moving its date shows it
+         *       again after a dismissal, and so does its becoming overdue.
          */
         get: operations["listNotifications"];
         put?: never;
@@ -3981,7 +4048,8 @@ export interface components {
          *     or a transfer out is negative. `budget` = `start` + `refills` +
          *     `income` + `opening_funds` + `adjustments` + `transfers`, and `left` =
          *     `budget` − `used` − `overflow`, which is the current TF while the cycle
-         *     is active.
+         *     is active. `planned` is set aside for planned purchases (#265), a
+         *     figure only.
          */
         BucketFigures: {
             bucket_id: components["schemas"]["BucketId"];
@@ -4015,6 +4083,12 @@ export interface components {
             swept: components["schemas"]["Amount"];
             /** @description What's left at the end of the cycle. */
             left: components["schemas"]["Amount"];
+            /**
+             * @description What the open planned purchases that count in this cycle set
+             *     aside in the bucket (#265): a figure only, the bucket's money
+             *     isn't touched.
+             */
+            planned: components["schemas"]["Amount"];
         };
         BucketCreate: {
             name: components["schemas"]["BucketName"];
@@ -4602,6 +4676,13 @@ export interface components {
              *     `paid` needs a credit card (400 `card_only`).
              */
             count_later?: components["schemas"]["CountLater"];
+            /**
+             * @description Only for an expense (#265): records the charge of this open
+             *     planned purchase on the same account, and closes it. The amount
+             *     and buckets may differ from the plan's. A charged or cancelled
+             *     one is 409 `planned_closed`.
+             */
+            planned_purchase_id?: components["schemas"]["PlannedPurchaseId"];
         };
         Tag: {
             name: string;
@@ -4719,6 +4800,75 @@ export interface components {
             code?: string;
             /** @description Same as the `X-Request-ID` response header. Quote it when reporting a bug. */
             request_id?: string;
+        };
+        /**
+         * @description 16-digit planned purchase ID (the owner's user ID, then 10 random digits,
+         * @example 4829131234567890
+         */
+        PlannedPurchaseId: string;
+        PlannedPurchase: {
+            id: components["schemas"]["PlannedPurchaseId"];
+            /** @description The name or store, the expense's counterparty. */
+            name: string;
+            account_id: components["schemas"]["AccountId"];
+            /** @description The expected amount, positive. */
+            amount: components["schemas"]["Amount"];
+            currency: components["schemas"]["Currency"];
+            /**
+             * Format: date-time
+             * @description When it's expected to be charged, the start of the expected day.
+             */
+            expected_at: string;
+            /** @description The expense's description. */
+            note: string;
+            /** @enum {string} */
+            status: "open" | "charged" | "cancelled";
+            /** @description The expense that recorded its charge. */
+            transaction_id: string | null;
+            /** @description Its parts per bucket, in the order given. */
+            bucket_lines: components["schemas"]["PlannedBucketLine"][];
+            /**
+             * @description The cycle an open one counts in, its parts set aside there: the
+             *     cycle that contains `expected_at`, or the active cycle once
+             *     `expected_at` is before it (delayed past its cycle, or between
+             *     cycles). Null when no cycle contains it yet, or when it's closed.
+             */
+            cycle_id: string | null;
+            /** @description An open one whose expected day is over. */
+            overdue: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        PlannedBucketLine: {
+            bucket_id: components["schemas"]["BucketId"];
+            /** @description Positive. */
+            amount: components["schemas"]["Amount"];
+        };
+        PlannedPurchaseInput: {
+            /** @description The name or store; trimmed. */
+            name: string;
+            account_id: components["schemas"]["AccountId"];
+            /** @description Positive. */
+            amount: components["schemas"]["Amount"];
+            /**
+             * Format: date-time
+             * @description The start of the expected day.
+             */
+            expected_at: string;
+            note?: string;
+            bucket_lines?: components["schemas"]["PlannedBucketLine"][];
+        };
+        /** @description The fields to change; the others stay. */
+        PlannedPurchaseUpdate: {
+            name?: string;
+            account_id?: components["schemas"]["AccountId"];
+            amount?: components["schemas"]["Amount"];
+            /** Format: date-time */
+            expected_at?: string;
+            note?: string;
+            bucket_lines?: components["schemas"]["PlannedBucketLine"][];
         };
         /**
          * @description 10-digit schedule ID (the owner's user ID, then 4 digits).
@@ -4906,7 +5056,7 @@ export interface components {
             next_cursor: string | null;
         };
         /** @enum {string} */
-        NotificationKind: "approval_queue" | "upcoming_bill" | "investment_balance" | "bucket_uncovered" | "savings_transfer" | "savings_short" | "bsu_over_limit" | "bsu_withdrawal" | "credit_limit" | "card_bill" | "card_bill_due" | "card_bill_carried" | "card_interest" | "bucket_charge";
+        NotificationKind: "approval_queue" | "upcoming_bill" | "investment_balance" | "bucket_uncovered" | "savings_transfer" | "savings_short" | "bsu_over_limit" | "bsu_withdrawal" | "credit_limit" | "card_bill" | "card_bill_due" | "card_bill_carried" | "card_interest" | "bucket_charge" | "planned_purchase";
         /**
          * @description A reminder or to-do. The client words it from `kind` and the fields
          *     that kind uses (see `listNotifications`); the others are null.
@@ -4951,8 +5101,10 @@ export interface components {
             currency: string | null;
             /** @description The purchase a bucket took (#264). */
             transaction_id: string | null;
-            /** @description The counterparty of the purchase a bucket took (#264). */
+            /** @description The counterparty of the purchase a bucket took (#264), or a planned purchase's name (#265). */
             counterparty: string | null;
+            /** @description The planned purchase (#265). */
+            planned_id: string | null;
         };
         NotificationList: {
             items: components["schemas"]["Notification"][];
@@ -4986,6 +5138,8 @@ export interface components {
             card_bills?: boolean | null;
             /** @description Purchases that waited for their buckets, taken at a cycle's start (#264). Null means true. */
             bucket_charges?: boolean | null;
+            /** @description Planned purchases expected within `upcoming_days`, or overdue (#265). Null means true. */
+            planned_purchases?: boolean | null;
         };
     };
     responses: {
@@ -5009,6 +5163,7 @@ export interface components {
         SavingsBudgetEntryId: components["schemas"]["SavingsBudgetEntryId"];
         TransactionId: components["schemas"]["TransactionId"];
         ScheduleId: components["schemas"]["ScheduleId"];
+        PlannedPurchaseId: components["schemas"]["PlannedPurchaseId"];
         ScheduledTransactionId: components["schemas"]["ScheduledTransactionId"];
     };
     requestBodies: never;
@@ -7940,6 +8095,137 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SavingsBudgetEntry"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listPlannedPurchases: {
+        parameters: {
+            query?: {
+                status?: "open" | "closed";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The planned purchases. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlannedPurchase"][];
+                };
+            };
+            401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createPlannedPurchase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlannedPurchaseInput"];
+            };
+        };
+        responses: {
+            /** @description The planned purchase. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlannedPurchase"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getPlannedPurchase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plannedId: components["parameters"]["PlannedPurchaseId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The planned purchase. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlannedPurchase"];
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    cancelPlannedPurchase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plannedId: components["parameters"]["PlannedPurchaseId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cancelled. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    updatePlannedPurchase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plannedId: components["parameters"]["PlannedPurchaseId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlannedPurchaseUpdate"];
+            };
+        };
+        responses: {
+            /** @description The planned purchase. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlannedPurchase"];
                 };
             };
             400: components["responses"]["Error"];

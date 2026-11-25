@@ -33,6 +33,7 @@ import (
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/calendar"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/cards"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/db/sqlc"
+	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/planned"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/savings"
 	"github.com/aasulvva/Bucky-BudgetR/source/backend/internal/schedules"
 )
@@ -83,6 +84,9 @@ const (
 	// KindBucketCharge is a purchase that waited for its bucket and that the
 	// bucket took at the active cycle's start (#264).
 	KindBucketCharge Kind = "bucket_charge"
+	// KindPlanned is a planned purchase expected within the days ahead, or
+	// overdue: its expected day is over and it isn't charged (#265).
+	KindPlanned Kind = "planned_purchase"
 )
 
 // keyPrefix is each kind's key prefix.
@@ -91,7 +95,7 @@ var keyPrefix = map[Kind]string{
 	KindSavings: "savings:", KindSavingsShort: "savings-short:",
 	KindBSUOverLimit: "bsu-over:", KindBSUWithdrawal: "bsu-withdrawal:", KindCreditLimit: "card-limit:",
 	KindCardBill: "card-bill:", KindCardBillDue: "card-due:", KindCardBillCarried: "card-carried:",
-	KindCardInterest: "card-interest:", KindBucketCharge: "bucket-charge:",
+	KindCardInterest: "card-interest:", KindBucketCharge: "bucket-charge:", KindPlanned: "planned:",
 }
 
 // Severity orders notifications: alerts first.
@@ -133,8 +137,11 @@ type Notification struct {
 	Minimum  decimal.NullDecimal
 	Currency string
 	// TransactionID and Counterparty are the purchase a bucket took (#264).
+	// Counterparty is also a planned purchase's name.
 	TransactionID string
 	Counterparty  string
+	// PlannedID is the planned purchase (#265).
+	PlannedID string
 }
 
 // Settings is the user's notifications preference. Nil fields use the
@@ -154,6 +161,8 @@ type Settings struct {
 	CardBills *bool `json:"card_bills"`
 	// BucketCharges switches KindBucketCharge (#264).
 	BucketCharges *bool `json:"bucket_charges"`
+	// PlannedPurchases switches KindPlanned (#265).
+	PlannedPurchases *bool `json:"planned_purchases"`
 }
 
 // On reports whether a kind shows.
@@ -164,7 +173,7 @@ func (s Settings) On(k Kind) bool {
 		KindSavingsShort: s.SavingsShort, KindBSUOverLimit: s.BSUOverLimit, KindBSUWithdrawal: s.BSUWithdrawal,
 		KindCreditLimit: s.CreditLimit,
 		KindCardBill:    s.CardBills, KindCardBillDue: s.CardBills, KindCardBillCarried: s.CardBills,
-		KindCardInterest: s.CardBills, KindBucketCharge: s.BucketCharges,
+		KindCardInterest: s.CardBills, KindBucketCharge: s.BucketCharges, KindPlanned: s.PlannedPurchases,
 	}[k]
 	return v == nil || *v
 }
@@ -347,6 +356,46 @@ func (s *Service) bucketCharges(ctx context.Context, q *sqlc.Queries, userID str
 	return out, nil
 }
 
+// planned are the open planned purchases expected within the days ahead, and
+// the overdue ones (#265), keyed by the expected time, so moving the date
+// shows one again; an overdue one is keyed apart from the reminder before.
+func (s *Service) planned(ctx context.Context, q *sqlc.Queries, userID string, settings Settings) ([]Notification, error) {
+	rows, err := q.ListPlannedPurchases(ctx, sqlc.ListPlannedPurchasesParams{
+		UserID: userID, Statuses: []string{string(sqlc.PlannedPurchaseStatusOpen)},
+	})
+	if err != nil || len(rows) == 0 {
+		return nil, err
+	}
+	accounts, err := q.AccountCurrencies(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	currency := make(map[string]string, len(accounts))
+	for _, a := range accounts {
+		currency[a.ID] = strings.TrimSpace(a.Currency)
+	}
+	now := s.now()
+	until := now.Add(time.Duration(settings.Days()) * 24 * time.Hour)
+	out := []Notification{}
+	for _, r := range rows {
+		if !r.ExpectedAt.Before(until) {
+			continue
+		}
+		n := Notification{
+			Key:  keyPrefix[KindPlanned] + r.ID + ":" + strconv.FormatInt(r.ExpectedAt.Unix(), 10),
+			Kind: KindPlanned, Severity: Info, At: r.ExpectedAt.UTC(), AccountID: r.AccountID,
+			Amount: decimal.NewNullDecimal(r.Amount), Currency: currency[r.AccountID],
+			PlannedID: r.ID, Counterparty: r.Name,
+		}
+		if !now.Before(r.ExpectedAt.Add(planned.OverdueAfter)) {
+			n.Key += ":overdue"
+			n.Severity = Warning
+		}
+		out = append(out, n)
+	}
+	return out, nil
+}
+
 // work works out the notifications of the kinds switched on, dismissed or
 // not.
 func (s *Service) work(ctx context.Context, q *sqlc.Queries, userID string, settings Settings) ([]Notification, error) {
@@ -359,7 +408,7 @@ func (s *Service) work(ctx context.Context, q *sqlc.Queries, userID string, sett
 		{KindSavings, s.held}, {KindSavingsShort, s.short},
 		{KindBSUOverLimit, s.bsuOver}, {KindBSUWithdrawal, s.bsuWithdrawals},
 		{KindCreditLimit, s.creditLimits},
-		{KindCardBill, s.cardBills}, {KindBucketCharge, s.bucketCharges},
+		{KindCardBill, s.cardBills}, {KindBucketCharge, s.bucketCharges}, {KindPlanned, s.planned},
 	}
 	for _, step := range steps {
 		if !settings.On(step.kind) {

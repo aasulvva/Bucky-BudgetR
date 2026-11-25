@@ -3793,6 +3793,136 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/v1/planned-purchases:
+    get:
+      operationId: listPlannedPurchases
+      tags: [transactions]
+      summary: The user's planned purchases
+      description: |
+        Planned purchases (#265, spec §5.7), the soonest expected first: the
+        open ones, or with `status=closed` the charged and cancelled ones.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [open, closed]
+            default: open
+      responses:
+        "200":
+          description: The planned purchases.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlannedPurchase"
+        "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+    post:
+      operationId: createPlannedPurchase
+      tags: [transactions]
+      summary: Plan a purchase charged later
+      description: |
+        Something like a pre-order, charged later on a soft date. It's checked
+        as the expense it plans would be now: the account, and each bucket
+        funded from it, or on a credit card from an account in its currency
+        (#261), together at most the amount. In the cycle it counts in
+        (`cycle_id`) its bucket parts are set aside, as a figure only
+        (`BucketFigures.planned`). Recording its charge is an expense with
+        `planned_purchase_id`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlannedPurchaseInput"
+      responses:
+        "201":
+          description: The planned purchase.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlannedPurchase"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/planned-purchases/{plannedId}:
+    parameters:
+      - $ref: "#/components/parameters/PlannedPurchaseId"
+    get:
+      operationId: getPlannedPurchase
+      tags: [transactions]
+      summary: One planned purchase
+      responses:
+        "200":
+          description: The planned purchase.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlannedPurchase"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+    patch:
+      operationId: updatePlannedPurchase
+      tags: [transactions]
+      summary: Change an open planned purchase
+      description: |
+        Changes the fields given, checked as in `createPlannedPurchase`;
+        `bucket_lines` replaces them all. Moving the date is a change of
+        `expected_at`, which may move it to another cycle. A charged or
+        cancelled one is 409 `planned_closed`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlannedPurchaseUpdate"
+      responses:
+        "200":
+          description: The planned purchase.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlannedPurchase"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+    delete:
+      operationId: cancelPlannedPurchase
+      tags: [transactions]
+      summary: Cancel an open planned purchase
+      description: It's kept as cancelled. A charged or cancelled one is 409 `planned_closed`.
+      responses:
+        "204":
+          description: Cancelled.
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        default:
+          $ref: "#/components/responses/Error"
+
   /api/v1/notifications:
     get:
       operationId: listNotifications
@@ -3852,6 +3982,12 @@ paths:
           `amount`, `currency`, and the purchase as `transaction_id` and
           `counterparty`. One per take, until dismissed or the cycle ends. A
           take by hand, or when a payment paid a card purchase off, has none.
+        - `planned_purchase` (#265, under `planned_purchases`): an open
+          planned purchase expected within `upcoming_days` (info), or overdue
+          (warning: its expected day is over and it isn't charged); with
+          `planned_id`, its name as `counterparty`, `account_id`, `at` (its
+          expected time), `amount` and `currency`. Moving its date shows it
+          again after a dismissal, and so does its becoming overdue.
       responses:
         "200":
           description: The open notifications.
@@ -3970,6 +4106,12 @@ components:
       required: true
       schema:
         $ref: "#/components/schemas/ScheduleId"
+    PlannedPurchaseId:
+      name: plannedId
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/PlannedPurchaseId"
     ScheduledTransactionId:
       name: scheduledTransactionId
       in: path
@@ -6754,8 +6896,9 @@ components:
         or a transfer out is negative. `budget` = `start` + `refills` +
         `income` + `opening_funds` + `adjustments` + `transfers`, and `left` =
         `budget` − `used` − `overflow`, which is the current TF while the cycle
-        is active.
-      required: [bucket_id, start, refills, income, opening_funds, adjustments, transfers, budget, used, overflow, capped, swept, left]
+        is active. `planned` is set aside for planned purchases (#265), a
+        figure only.
+      required: [bucket_id, start, refills, income, opening_funds, adjustments, transfers, budget, used, overflow, capped, swept, left, planned]
       properties:
         bucket_id:
           $ref: "#/components/schemas/BucketId"
@@ -6811,6 +6954,13 @@ components:
           allOf:
             - $ref: "#/components/schemas/Amount"
           description: What's left at the end of the cycle.
+        planned:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: |
+            What the open planned purchases that count in this cycle set
+            aside in the bucket (#265): a figure only, the bucket's money
+            isn't touched.
 
     BucketCreate:
       type: object
@@ -7978,6 +8128,14 @@ components:
             active cycle. Until a bucket takes its part, the part is an
             advance on the bucket's account, so unallocated doesn't change.
             `paid` needs a credit card (400 `card_only`).
+        planned_purchase_id:
+          allOf:
+            - $ref: "#/components/schemas/PlannedPurchaseId"
+          description: |
+            Only for an expense (#265): records the charge of this open
+            planned purchase on the same account, and closes it. The amount
+            and buckets may differ from the plan's. A charged or cancelled
+            one is 409 `planned_closed`.
     Tag:
       type: object
       additionalProperties: false
@@ -8148,6 +8306,131 @@ components:
         request_id:
           type: string
           description: Same as the `X-Request-ID` response header. Quote it when reporting a bug.
+
+    PlannedPurchaseId:
+      type: string
+      description: 16-digit planned purchase ID (the owner's user ID, then 10 random digits, #265).
+      pattern: "^[1-9][0-9]{15}$"
+      example: "4829131234567890"
+
+    PlannedPurchase:
+      type: object
+      additionalProperties: false
+      required: [id, name, account_id, amount, currency, expected_at, note, status, transaction_id, bucket_lines, cycle_id, overdue, created_at, updated_at]
+      properties:
+        id:
+          $ref: "#/components/schemas/PlannedPurchaseId"
+        name:
+          type: string
+          description: The name or store, the expense's counterparty.
+        account_id:
+          $ref: "#/components/schemas/AccountId"
+        amount:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: The expected amount, positive.
+        currency:
+          $ref: "#/components/schemas/Currency"
+        expected_at:
+          type: string
+          format: date-time
+          description: When it's expected to be charged, the start of the expected day.
+        note:
+          type: string
+          description: The expense's description.
+        status:
+          type: string
+          enum: [open, charged, cancelled]
+        transaction_id:
+          type: string
+          nullable: true
+          description: The expense that recorded its charge.
+        bucket_lines:
+          type: array
+          description: Its parts per bucket, in the order given.
+          items:
+            $ref: "#/components/schemas/PlannedBucketLine"
+        cycle_id:
+          type: string
+          nullable: true
+          description: |
+            The cycle an open one counts in, its parts set aside there: the
+            cycle that contains `expected_at`, or the active cycle once
+            `expected_at` is before it (delayed past its cycle, or between
+            cycles). Null when no cycle contains it yet, or when it's closed.
+        overdue:
+          type: boolean
+          description: An open one whose expected day is over.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    PlannedBucketLine:
+      type: object
+      additionalProperties: false
+      required: [bucket_id, amount]
+      properties:
+        bucket_id:
+          $ref: "#/components/schemas/BucketId"
+        amount:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Positive.
+
+    PlannedPurchaseInput:
+      type: object
+      additionalProperties: false
+      required: [name, account_id, amount, expected_at]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: The name or store; trimmed.
+        account_id:
+          $ref: "#/components/schemas/AccountId"
+        amount:
+          allOf:
+            - $ref: "#/components/schemas/Amount"
+          description: Positive.
+        expected_at:
+          type: string
+          format: date-time
+          description: The start of the expected day.
+        note:
+          type: string
+          maxLength: 500
+        bucket_lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlannedBucketLine"
+
+    PlannedPurchaseUpdate:
+      type: object
+      additionalProperties: false
+      description: The fields to change; the others stay.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        account_id:
+          $ref: "#/components/schemas/AccountId"
+        amount:
+          $ref: "#/components/schemas/Amount"
+        expected_at:
+          type: string
+          format: date-time
+        note:
+          type: string
+          maxLength: 500
+        bucket_lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlannedBucketLine"
 
     ScheduleId:
       type: string
@@ -8477,12 +8760,12 @@ components:
 
     NotificationKind:
       type: string
-      enum: [approval_queue, upcoming_bill, investment_balance, bucket_uncovered, savings_transfer, savings_short, bsu_over_limit, bsu_withdrawal, credit_limit, card_bill, card_bill_due, card_bill_carried, card_interest, bucket_charge]
+      enum: [approval_queue, upcoming_bill, investment_balance, bucket_uncovered, savings_transfer, savings_short, bsu_over_limit, bsu_withdrawal, credit_limit, card_bill, card_bill_due, card_bill_carried, card_interest, bucket_charge, planned_purchase]
 
     Notification:
       type: object
       additionalProperties: false
-      required: [key, kind, severity, at, count, overdue, schedule_id, account_id, bucket_id, cycle_id, target_id, amount, minimum, currency, transaction_id, counterparty]
+      required: [key, kind, severity, at, count, overdue, schedule_id, account_id, bucket_id, cycle_id, target_id, amount, minimum, currency, transaction_id, counterparty, planned_id]
       description: |
         A reminder or to-do. The client words it from `kind` and the fields
         that kind uses (see `listNotifications`); the others are null.
@@ -8553,7 +8836,11 @@ components:
         counterparty:
           type: string
           nullable: true
-          description: The counterparty of the purchase a bucket took (#264).
+          description: The counterparty of the purchase a bucket took (#264), or a planned purchase's name (#265).
+        planned_id:
+          type: string
+          nullable: true
+          description: The planned purchase (#265).
 
     NotificationList:
       type: object
@@ -8630,3 +8917,7 @@ components:
           type: boolean
           nullable: true
           description: Purchases that waited for their buckets, taken at a cycle's start (#264). Null means true.
+        planned_purchases:
+          type: boolean
+          nullable: true
+          description: Planned purchases expected within `upcoming_days`, or overdue (#265). Null means true.

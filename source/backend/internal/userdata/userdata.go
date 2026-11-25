@@ -56,6 +56,8 @@ var tables = []table{
 	{"schedules", "user_id = $1", "id"},
 	{"schedule_bucket_lines", "user_id = $1", "schedule_id, bucket_id"},
 	{"schedule_occurrences", "user_id = $1", "id"},
+	{"planned_purchases", "user_id = $1", "id"},
+	{"planned_purchase_bucket_lines", "user_id = $1", "planned_id, bucket_id"},
 	// The keys aren't remapped (see kKept).
 	{"notification_dismissals", "user_id = $1", "key"},
 }
@@ -153,7 +155,7 @@ func Replace(ctx context.Context, tx pgx.Tx, userID, owner string, data Data) (D
 // idsFree reports whether none of the data's IDs belong to another user
 // now, so it can be written as it is. IDs are unique across users.
 func idsFree(ctx context.Context, tx pgx.Tx, userID string, data Data) (bool, error) {
-	for _, t := range []string{"bank_accounts", "cycles", "buckets", "savings_holders", "savings_budget_entries", "tags", "transaction_headers", "schedules"} {
+	for _, t := range []string{"bank_accounts", "cycles", "buckets", "savings_holders", "savings_budget_entries", "tags", "transaction_headers", "schedules", "planned_purchases"} {
 		var taken bool
 		err := tx.QueryRow(ctx, fmt.Sprintf(`
 			SELECT EXISTS (SELECT 1 FROM %s WHERE id::text = ANY($1) AND user_id <> $2)`, t),

@@ -2609,6 +2609,13 @@
       "title": "{{bucket}} took {{amount}}",
       "body": "The purchase from {{counterparty}} waited for this cycle and now counts in the bucket.",
       "open": "Open transactions"
+    },
+    "planned": {
+      "title": "{{name}} is expected {{date}}",
+      "body": "{{amount}} planned on {{account}}. Record the charge when it comes, or move the date.",
+      "overdueTitle": "{{name}} hasn't been charged",
+      "overdueBody": "It was expected {{date}}. Record the charge, or move the date if it's delayed.",
+      "open": "Open planned purchases"
     }
   },
   "bsu": {
