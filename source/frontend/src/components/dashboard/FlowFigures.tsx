@@ -2,6 +2,10 @@ import { Anchor, Box, Group, Text } from "@mantine/core";
 import { useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 
+import { FONT_SIZE, GAP, MEASURED, figuresLayout, type Layout } from "@/lib/flowFigures";
+
+import classes from "./FlowFigures.module.css";
+
 /** One large figure: its label, its formatted amount, and where it opens. */
 export interface FlowFigureItem {
   key: string;
@@ -12,16 +16,13 @@ export interface FlowFigureItem {
   link?: { to: string; label: string };
 }
 
-/** Side by side in large or small type, or one figure per row. */
-type Layout = "large" | "small" | "rows";
-const FONT_SIZE: Record<Layout, number> = { large: 20, small: 16, rows: 18 };
-const GAP = 16;
-
 /**
- * The layout the figures fit in: side by side while the widest amount fits
- * its column, at the large size or else the small one, and in rows when
- * neither fits. An amount's width scales with its font size, so measuring
- * it in any layout tells all three apart.
+ * Picks the layout from hidden copies of the amounts at each size, never
+ * from the amounts shown, so the layout it picks can't change what it
+ * measures: Safari's text doesn't scale exactly with its font size, and
+ * measuring the shown amounts made it flip between layouts near a boundary.
+ * It checks again only when the width or the amounts change, not when the
+ * layout changes the height.
  */
 function useFiguresLayout(count: number, amounts: string) {
   const ref = useRef<HTMLDivElement>(null);
@@ -29,25 +30,32 @@ function useFiguresLayout(count: number, amounts: string) {
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const check = () => {
-      // Width per pixel of font size, for the widest amount.
-      const perPx = Math.max(
-        0,
-        ...[...el.querySelectorAll<HTMLElement>("[data-amount]")].map(
-          (a) =>
-            a.getBoundingClientRect().width /
-            (Number.parseFloat(getComputedStyle(a).fontSize) || 1),
-        ),
-      );
-      const column = (el.clientWidth - GAP * (count - 1)) / count;
-      // Nothing measured (e.g. hidden): keep the large layout.
-      const fits = (l: Layout) => perPx === 0 || perPx * FONT_SIZE[l] <= column;
-      setLayout(fits("large") ? "large" : fits("small") ? "small" : "rows");
+    let checkedWidth = -1;
+    const check = (force: boolean) => {
+      const width = el.clientWidth;
+      if (!force && width === checkedWidth) return;
+      checkedWidth = width;
+      const widest = (size: (typeof MEASURED)[number]) =>
+        Math.max(
+          0,
+          ...[...el.querySelectorAll<HTMLElement>(`[data-measure="${size}"]`)].map(
+            (a) => a.getBoundingClientRect().width,
+          ),
+        );
+      setLayout(figuresLayout({ large: widest("large"), small: widest("small") }, width, count));
     };
-    check();
-    const observer = new ResizeObserver(check);
+    check(true);
+    const observer = new ResizeObserver(() => {
+      check(false);
+    });
     observer.observe(el);
+    // The amounts' widths change once the web font has loaded.
+    let live = true;
+    void document.fonts.ready.then(() => {
+      if (live) check(true);
+    });
     return () => {
+      live = false;
       observer.disconnect();
     };
   }, [count, amounts]);
@@ -68,18 +76,43 @@ export function FlowFigures({ figures }: { figures: FlowFigureItem[] }) {
       data-layout={layout}
       style={
         stacked
-          ? { display: "flex", flexDirection: "column", gap: 4 }
+          ? { position: "relative", display: "flex", flexDirection: "column", gap: 4 }
           : {
+              position: "relative",
               display: "grid",
               gridTemplateColumns: `repeat(${String(figures.length)}, minmax(0, 1fr))`,
               gap: GAP,
             }
       }
     >
+      <Box
+        aria-hidden
+        style={{
+          position: "absolute",
+          width: 0,
+          height: 0,
+          overflow: "hidden",
+          visibility: "hidden",
+          pointerEvents: "none",
+        }}
+      >
+        {MEASURED.flatMap((size) =>
+          figures.map((f) => (
+            <Text
+              key={`${size}-${f.key}`}
+              className={classes.measure}
+              data-measure={size}
+              data-text={f.amount}
+              fz={FONT_SIZE[size]}
+              fw={700}
+              style={{ display: "block", whiteSpace: "nowrap", width: "max-content" }}
+            />
+          )),
+        )}
+      </Box>
       {figures.map((f) => {
         const value = (
           <Text
-            data-amount
             fz={FONT_SIZE[layout]}
             fw={700}
             c={f.color}

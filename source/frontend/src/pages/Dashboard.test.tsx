@@ -154,7 +154,10 @@ async function choose(dialog: HTMLElement, label: string, option: string) {
 describe("Dashboard", () => {
   it("shows the cycle, the health, the buckets, the accounts and the latest transactions", async () => {
     renderRoute("/");
-    expect(await screen.findByRole("heading", { level: 2, name: "Dashboard" })).toBeInTheDocument();
+    // The first test loads the screen's code, which can be slow on CI.
+    expect(
+      await screen.findByRole("heading", { level: 2, name: "Dashboard" }, { timeout: 5000 }),
+    ).toBeInTheDocument();
 
     const cycleWidget = await widget("Cycle");
     expect(await cycleWidget.findByText(plain(cycleRange(cycle())))).toBeInTheDocument();
@@ -1000,23 +1003,18 @@ describe("In/out widget", () => {
   });
 
   it("makes the amounts smaller, or puts them in rows, when they don't fit", async () => {
-    // jsdom has no layout: each amount is 150px wide at 20px, the widget's
-    // content `width` px wide, and there are three columns 16px apart.
+    // jsdom has no layout: each amount's hidden copy is 150px wide at the
+    // large size and 120px at the small one, the widget's content `width` px
+    // wide, and there are three columns 16px apart.
     let width = 450;
-    const style = window.getComputedStyle.bind(window);
+    const measured: Record<string, number> = { large: 150, small: 120 };
     const spies = [
       vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
         this: HTMLElement,
       ) {
-        return { width: this.hasAttribute("data-amount") ? 150 : 0 } as DOMRect;
+        return { width: measured[this.dataset.measure ?? ""] ?? 0 } as DOMRect;
       }),
       vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(() => width),
-      vi.spyOn(window, "getComputedStyle").mockImplementation((el, pseudo) => {
-        const s = style(el, pseudo);
-        return el instanceof HTMLElement && el.hasAttribute("data-amount")
-          ? Object.defineProperty(s, "fontSize", { value: "20px" })
-          : s;
-      }),
     ];
     try {
       inOut();

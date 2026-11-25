@@ -24,12 +24,22 @@ export interface Refilled {
 }
 
 /** What the preview needs of an account: its money now. */
-export interface AccountMoney {
-  id: string;
+export interface AccountMoney extends MoneyNow {
   currency: string;
+  unallocated: string;
+}
+
+/**
+ * An account's money as balance.NewMoney counts it: its balance, what its
+ * buckets are owed for purchases that wait (#264), the card debt held on it
+ * (#261) and its savings holds.
+ */
+interface MoneyNow {
+  id: string;
   balance: string;
   reserved: string;
-  unallocated: string;
+  waiting?: string;
+  card_holds?: { amount: string }[];
 }
 
 export interface EndPreview {
@@ -129,19 +139,23 @@ function backPerCurrency(
  * emptied buckets have no TF then, so the buckets left (Keep funds on, or at
  * 0 or below) are funded first, up to their TF: an underfunded account's
  * freed money goes to them. The savings holds come next, with what the
- * emptied buckets sent to savings (#233). This mirrors balance.NewMoney.
+ * emptied buckets sent to savings (#233). The money is the balance and what
+ * the buckets are owed for waiting purchases (#264), less the card debt held
+ * on the account, which is covered first (#261). This mirrors
+ * balance.NewMoney.
  */
-function unallocatedAfter(
-  buckets: Bucket[],
-  emptied: Emptied[],
-  account: { id: string; balance: string; reserved: string },
-): string {
+function unallocatedAfter(buckets: Bucket[], emptied: Emptied[], account: MoneyNow): string {
   const gone = new Set(emptied.map((e) => e.bucket.id));
   const left = buckets.filter((b) => b.source_account_id === account.id && !gone.has(b.id));
   const wanted = addAmounts(
     ...left.map((b) => (positive(b.target_funds) ? b.target_funds : "0.00")),
   );
-  const free = positive(account.balance) ? account.balance : "0.00";
+  const funds = addAmounts(account.balance, account.waiting ?? "0");
+  const holds = addAmounts(...(account.card_holds ?? []).map((h) => h.amount));
+  const debt = positive(holds) ? holds : "0.00";
+  const cardCovered = positive(funds) ? min(funds, debt) : "0.00";
+  const rest = subtractAmounts(funds, cardCovered);
+  const free = positive(rest) ? rest : "0.00";
   const toSavings = emptied
     .filter(
       (e) =>
@@ -172,7 +186,7 @@ function perCurrency(emptied: Emptied[]): { currency: string; amount: string }[]
 export function sweepEstimate(
   buckets: Bucket[],
   preview: EndPreview,
-  account: { id: string; balance: string; reserved: string },
+  account: MoneyNow,
   keep: string,
 ): string {
   const above = subtractAmounts(unallocatedAfter(buckets, preview.emptied, account), keep);
