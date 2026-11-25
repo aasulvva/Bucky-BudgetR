@@ -16,6 +16,32 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.38.00",
+    date: "2026-11-25",
+    title: {
+      en: "Planned purchases",
+      nb: "Kommende kjøp",
+      nn: "Komande kjøp",
+    },
+    changes: {
+      en: [
+        "Transactions has a Planned tab for things you'll be charged for later, like a pre-order: the store, the expected amount and day, the account and its buckets. Its buckets set it aside in the cycle of that day, so Buckets shows what's left after it.",
+        "Record charge fills in New transaction from the plan and closes it. Move date follows a delay into another cycle, and one not charged when its cycle ends is set aside in the next, marked overdue.",
+        "A reminder comes within the days ahead of the expected day, and again once it's overdue; it has its own switch in Settings › Notifications.",
+      ],
+      nb: [
+        "Transaksjoner har en fane for kommende kjøp, ting du blir trukket for senere, som en forhåndsbestilling: butikken, forventet beløp og dag, kontoen og bøttene. Bøttene setter det av i perioden for den dagen, så Bøtter viser hva som er igjen etterpå.",
+        "Registrer trekk fyller ut Ny transaksjon fra kjøpet og lukker det. Flytt dato følger en forsinkelse inn i en annen periode, og et som ikke er trukket når perioden slutter, settes av i den neste, merket forsinket.",
+        "En påminnelse kommer innen dagene før forventet dag, og igjen når det er forsinket; den har sin egen bryter i Innstillinger › Varsler.",
+      ],
+      nn: [
+        "Transaksjonar har ei fane for komande kjøp, ting du vert trekt for seinare, som ei førehandsbestilling: butikken, venta beløp og dag, kontoen og bøttene. Bøttene set det av i perioden for den dagen, så Bøtter viser kva som er att etterpå.",
+        "Registrer trekk fyller ut Ny transaksjon frå kjøpet og lukkar det. Flytt dato følgjer ei forseinking inn i ein annan periode, og eit som ikkje er trekt når perioden sluttar, vert sett av i den neste, merkt forseinka.",
+        "Ei påminning kjem innan dagane før venta dag, og igjen når det er forseinka; ho har sin eigen brytar i Innstillingar › Varsel.",
+      ],
+    },
+  },
+  {
     version: "v2.37.04",
     date: "2026-11-25",
     title: {

@@ -1,5 +1,4 @@
 import {
-  ActionIcon,
   Anchor,
   Autocomplete,
   Box,
@@ -15,21 +14,20 @@ import {
   Text,
   Textarea,
   TextInput,
-  Title,
   useMantineTheme,
 } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
-import { IconPlus, IconX } from "@tabler/icons-react";
 import { useMutation } from "@tanstack/react-query";
-import { useId, useState, type ReactNode } from "react";
-import { Trans, useTranslation } from "react-i18next";
-import { Link, useLocation, useNavigate } from "react-router";
+import { useId, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { useLocation, useNavigate } from "react-router";
 
 import { useRefreshMoney, type Account, type Bucket } from "@/api/accounts";
 import { api } from "@/api/client";
 import { useCurrentCycles, useCycles, type Cycle } from "@/api/cycles";
 import { unwrap } from "@/api/errors";
+import type { PlannedPurchase } from "@/api/planned";
 import { useApprove, useSaveSchedule } from "@/api/schedules";
 import {
   useCounterparties,
@@ -45,6 +43,7 @@ import { AmountInput } from "@/components/AmountInput";
 import { DateTimeInput } from "@/components/DateTimeInput";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { WaitingOnCard } from "@/components/accounts/WaitingOnCard";
+import { BucketSplit, type SplitErrors } from "@/components/transactions/BucketSplit";
 import {
   CarryDebt,
   PaymentReleases,
@@ -69,8 +68,9 @@ import {
 import { now } from "@/lib/clock";
 import { browserTimeZone } from "@/lib/cycleRule";
 import { cycleRange, isOverdue } from "@/lib/cycles";
-import { formatDateTime } from "@/lib/dates";
+import { formatDate, formatDateTime } from "@/lib/dates";
 import { addAmounts, compareAmounts, formatMoney, subtractAmounts } from "@/lib/money";
+import { PLANNED_PATH, chargeValues } from "@/lib/planned";
 import {
   bucketTotals,
   correctionBody,
@@ -80,8 +80,6 @@ import {
   initialAccount,
   insideCycle,
   cleanDescription,
-  newLine,
-  prefillFor,
   ruleMatches,
   waitingOnIncome,
   type SplitLine,
@@ -135,16 +133,13 @@ function rememberAccount(id: string) {
 
 const TYPES: NewTransactionType[] = ["EXP", "INC", "TRF"];
 
-interface Errors {
+interface Errors extends SplitErrors {
   amount?: string;
   account?: string;
   to?: string;
   at?: string;
-  split?: string;
   /** What a payment releases, or a transfer carries, of card debt (#261). */
   cardDebt?: string;
-  /** Per row key. */
-  lines?: Record<number, { bucket?: string; amount?: string }>;
   /** Count in bucket's cycle or month (#264). */
   count?: string;
 }
@@ -177,6 +172,9 @@ export interface ApproveOptions {
  * With `approve`, it approves a queued scheduled transaction (#155): the
  * schedule's transaction, its type fixed, dated at its scheduled time when
  * the active cycle contains it, else now; it can't repeat or be later.
+ *
+ * With `planned`, it records a planned purchase's charge (#265): an expense
+ * on its account, like the plan, which closes it.
  */
 export function TransactionForm({
   accounts,
@@ -184,12 +182,14 @@ export function TransactionForm({
   editing,
   schedule,
   approve,
+  planned,
 }: {
   accounts: Account[];
   buckets: Bucket[];
   editing?: Transaction;
   schedule?: ScheduleOptions;
   approve?: ApproveOptions;
+  planned?: PlannedPurchase;
 }) {
   const { t } = useTranslation();
   const theme = useMantineTheme();
@@ -213,6 +213,7 @@ export function TransactionForm({
     if (schedule?.editing) return valuesFromSchedule(schedule.editing);
     if (approve) return valuesFromSchedule(approve.schedule);
     if (from) return editState(from);
+    if (planned) return chargeValues(planned);
     return null;
   });
   const [newType, setType] = useState<NewTransactionType>(
@@ -267,6 +268,7 @@ export function TransactionForm({
     !editing &&
     !scheduleMode &&
     !approving &&
+    !planned &&
     !repeatOn &&
     at !== null &&
     new Date(at).getTime() > now().getTime();
@@ -521,9 +523,15 @@ export function TransactionForm({
     meta: { silentError: true },
     onSuccess: async (_, { body, addAnother }) => {
       rememberAccount(body.account_id);
-      notifications.show({ color: "green", message: t(`newTransaction.saved.${body.type}`) });
+      notifications.show({
+        color: "green",
+        message: planned
+          ? t("planned.chargeRecorded", { name: planned.name })
+          : t(`newTransaction.saved.${body.type}`),
+      });
       await refresh();
-      if (addAnother) reset();
+      if (planned) await navigate(PLANNED_PATH);
+      else if (addAnother) reset();
       else goBack("/");
     },
   });
@@ -679,6 +687,7 @@ export function TransactionForm({
               }
             : {}),
           ...(refillShown ? { triggers_refill: refillChecked } : {}),
+          ...(planned ? { planned_purchase_id: planned.id } : {}),
           ...(later && lines.length > 0 ? { count_later: countLaterOf(counted) } : {}),
           ...(setAsideShown && direct
             ? { set_aside_account_id: setAsideValue === NOWHERE ? null : setAsideValue }
@@ -754,7 +763,7 @@ export function TransactionForm({
           </Stack>
         </Card>
       )}
-      {!editing && !scheduleMode && !approving && (
+      {!editing && !scheduleMode && !approving && !planned && (
         <Switch
           label={t("newTransaction.repeat")}
           description={t("newTransaction.repeatHint")}
@@ -773,9 +782,10 @@ export function TransactionForm({
           if (v) changeAccount(v);
         }}
         error={errors.account}
-        disabled={balance || heldTransfer}
+        disabled={balance || heldTransfer || planned !== undefined}
         description={joined(
           editing && !balance && !heldTransfer ? t("newTransaction.moveHint") : undefined,
+          planned ? t("planned.chargeAccount") : undefined,
           transfer ? undefined : lockedNote,
         )}
       />
@@ -1016,7 +1026,16 @@ export function TransactionForm({
               })}
             </Text>
           )}
-          {!editing && !approving && !bill && (
+          {planned && (
+            <Text size="sm" c="dimmed">
+              {t("planned.chargeNote", {
+                name: planned.name,
+                amount: formatMoney(planned.amount, planned.currency),
+                date: formatDate(planned.expected_at),
+              })}
+            </Text>
+          )}
+          {!editing && !approving && !bill && !planned && (
             <SegmentedControl
               aria-label={t("newTransaction.type")}
               value={newType}
@@ -1100,7 +1119,7 @@ export function TransactionForm({
               style={{ borderTop: "1px solid var(--mantine-color-default-border)" }}
             >
               {cancel}
-              {!editing && !scheduled && !approving && (
+              {!editing && !scheduled && !approving && !planned && (
                 <Button
                   variant="outline"
                   loading={saving(true)}
@@ -1133,7 +1152,7 @@ export function TransactionForm({
                 zIndex: 1,
               }}
             >
-              {!editing && !scheduled && !approving && (
+              {!editing && !scheduled && !approving && !planned && (
                 <Button
                   variant="subtle"
                   loading={saving(true)}
@@ -1208,227 +1227,6 @@ function TagInput({ value, onChange }: { value: string[]; onChange: (tags: strin
       maxTags={20}
       clearable
     />
-  );
-}
-
-/**
- * The split between the account's buckets; the rest isn't tied to a bucket.
- * Locked, it only shows the lines.
- */
-function BucketSplit({
-  account,
-  accounts,
-  own,
-  all,
-  active,
-  amount,
-  lines,
-  onChange,
-  errors,
-  locked,
-  needsCycle,
-  count,
-}: {
-  account: Account | undefined;
-  accounts: Account[];
-  /** The buckets it can use: the account's, or on a card, any in its currency. */
-  own: Bucket[];
-  all: Bucket[];
-  active: Cycle | null;
-  amount: string | null;
-  lines: SplitLine[];
-  onChange: (lines: SplitLine[]) => void;
-  errors: Errors;
-  locked: boolean;
-  /** Bucket lines need an active cycle, unlike a schedule's. */
-  needsCycle: boolean;
-  /** Count in bucket (#264), under the split. */
-  count?: ReactNode;
-}) {
-  const { t } = useTranslation();
-  const money = (value: string) => formatMoney(value, account?.currency);
-  const card = isCard(account);
-  const totals = bucketTotals(amount, lines);
-  const free = own.filter((b) => !lines.some((l) => l.bucketId === b.id));
-  const summary = (
-    <>
-      <Box p="sm" bg="var(--mantine-color-default-hover)" style={{ borderRadius: 8 }}>
-        <Group justify="space-between">
-          <Text size="sm">{t("newTransaction.inBuckets")}</Text>
-          <Text size="sm">{money(totals.inBuckets)}</Text>
-        </Group>
-        <Group justify="space-between">
-          <Text size="sm" c="dimmed">
-            {t("newTransaction.notTied")}
-          </Text>
-          <Text size="sm" c={totals.over ? "var(--mantine-color-red-text)" : "dimmed"}>
-            {money(totals.notTied)}
-          </Text>
-        </Group>
-      </Box>
-      {errors.split && (
-        <Text size="sm" c="var(--mantine-color-red-text)" role="alert">
-          {errors.split}
-        </Text>
-      )}
-    </>
-  );
-
-  let body;
-  if (locked) {
-    body = (
-      <Stack gap="sm">
-        <Text size="sm" c="dimmed">
-          {t("transactions.lockedEdit")}
-        </Text>
-        {lines.map((l) => (
-          <Group key={l.key} justify="space-between">
-            <Text size="sm">
-              {all.find((b) => b.id === l.bucketId)?.name ??
-                t("transactions.unknownBucket", { id: l.bucketId })}
-            </Text>
-            <Text size="sm">{money(l.amount ?? "0")}</Text>
-          </Group>
-        ))}
-        {summary}
-      </Stack>
-    );
-  } else if (!account) {
-    body = (
-      <Text size="sm" c="dimmed">
-        {t("newTransaction.chooseAccountFirst")}
-      </Text>
-    );
-  } else if (!active && needsCycle) {
-    body = (
-      <Text size="sm" c="dimmed">
-        <Trans
-          i18nKey="newTransaction.needsCycle"
-          components={{ cycles: <Anchor component={Link} to="/cycles" /> }}
-        />
-      </Text>
-    );
-  } else if (own.length === 0 && lines.length === 0) {
-    body = (
-      <Text size="sm" c="dimmed">
-        {card
-          ? t("cards.debt.noBuckets", { currency: account.currency })
-          : t("newTransaction.noAccountBuckets")}
-      </Text>
-    );
-  } else {
-    body = (
-      <Stack gap="sm">
-        {lines.map((l) => {
-          const bucket = own.find((b) => b.id === l.bucketId);
-          const lineErrors = errors.lines?.[l.key];
-          const usable = own.filter(
-            (b) => b.id === l.bucketId || !lines.some((o) => o.bucketId === b.id),
-          );
-          const option = (b: Bucket) => ({
-            value: b.id,
-            label: t("newTransaction.bucketOption", {
-              name: b.name,
-              amount: money(b.current_available_funds),
-            }),
-          });
-          // On a card, grouped by the account they're on (#261).
-          const options = card
-            ? accounts
-                .map((a) => ({
-                  group: a.name,
-                  items: usable.filter((b) => b.source_account_id === a.id).map(option),
-                }))
-                .filter((g) => g.items.length > 0)
-            : usable.map(option);
-          const update = (change: Partial<SplitLine>) => {
-            onChange(lines.map((o) => (o.key === l.key ? { ...o, ...change } : o)));
-          };
-          return (
-            <Group key={l.key} gap="xs" align="flex-start" wrap="nowrap">
-              <Select
-                aria-label={t("newTransaction.bucket")}
-                placeholder={t("newTransaction.bucket")}
-                data={options}
-                value={l.bucketId}
-                allowDeselect={false}
-                onChange={(v) => {
-                  update({ bucketId: v });
-                }}
-                error={lineErrors?.bucket}
-                style={{ flex: 1, minWidth: 0 }}
-              />
-              <AmountInput
-                aria-label={
-                  bucket
-                    ? t("newTransaction.amountFor", { name: bucket.name })
-                    : t("newTransaction.amountForBucket")
-                }
-                currency={account.currency}
-                value={l.amount}
-                onChange={(v) => {
-                  update({ amount: v });
-                }}
-                error={lineErrors?.amount}
-                w={130}
-              />
-              <ActionIcon
-                variant="default"
-                size={36}
-                aria-label={
-                  bucket
-                    ? t("newTransaction.removeBucket", { name: bucket.name })
-                    : t("newTransaction.removeRow")
-                }
-                onClick={() => {
-                  onChange(lines.filter((o) => o.key !== l.key));
-                }}
-              >
-                <IconX size={16} />
-              </ActionIcon>
-            </Group>
-          );
-        })}
-        <Button
-          variant="subtle"
-          leftSection={<IconPlus size={16} />}
-          style={{ alignSelf: "flex-start" }}
-          disabled={free.length === 0}
-          onClick={() => {
-            // With one bucket left to pick, pick it.
-            const only = free.length === 1 ? (free[0]?.id ?? null) : null;
-            onChange([...lines, newLine(only, prefillFor(amount, lines))]);
-          }}
-        >
-          {t("newTransaction.addBucket")}
-        </Button>
-        {summary}
-      </Stack>
-    );
-  }
-
-  return (
-    <Stack
-      gap="sm"
-      style={{ flex: "1 1 360px", minWidth: 0 }}
-      component="section"
-      aria-label={t("newTransaction.buckets")}
-    >
-      <Group justify="space-between" align="baseline">
-        <Title order={3} size="h5">
-          {t("newTransaction.buckets")}
-        </Title>
-        {account && (
-          <Text size="sm" c="dimmed">
-            {card
-              ? t("cards.debt.fundedFromAny", { currency: account.currency })
-              : t("newTransaction.fundedFrom", { name: account.name })}
-          </Text>
-        )}
-      </Group>
-      {body}
-      {count}
-    </Stack>
   );
 }
 

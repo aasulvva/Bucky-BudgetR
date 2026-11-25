@@ -195,6 +195,7 @@ Planned purchases (#265, spec §5.7) live in `internal/planned`: `planned_purcha
 - `CycleOf` (pure, unit tested) picks the cycle an open plan counts in from the user's cycles: the active one when the expected time is before its start, else the one that contains it. `Service.SetAside` sums the open plans' bucket lines for a cycle, which `ListBucketFigures` adds as `planned`; nothing else (balances, allocation, cycle end) reads plans.
 - *Record charge* is `transactions.New.PlannedID`: `Create` locks the plan (`checkPlanned`) before recording the expense and marks it charged (`ChargePlannedPurchase`) in the same database transaction.
 - The notification (`KindPlanned`, key `planned:<id>:<unix expected time>`, `:overdue` once overdue) reads the plans straight from the database.
+- Frontend: `api/planned.ts` (under `PLANNED_KEY`, which `useRefreshMoney` refreshes too, as a charge closes a plan), `lib/planned.ts` (form values, bodies, `setAside` for the Buckets line and Needs attention's `plannedShort`), `components/planned/PlannedTab.tsx` and `PlannedForm.tsx`. The form reuses `components/transactions/BucketSplit.tsx`, the split of `TransactionForm`; Record charge is `TransactionForm`'s `planned` prop, from `NewTransaction` with `?planned=<id>`.
 
 ### Notifications
 

@@ -160,6 +160,21 @@ describe("Buckets", () => {
     expect(rentRow.queryByText(/waiting to count/)).not.toBeInTheDocument();
   });
 
+  it("shows what planned purchases set aside, and what's left after (#265)", async () => {
+    apiMock.on("GET /api/v1/cycles/100001000001/bucket-figures", {
+      body: [bucketFigures({ bucket_id: groceries.id, planned: "800.00" })],
+    });
+    renderRoute("/buckets");
+    const section = within(await screen.findByRole("region", { name: "Main account" }));
+    const row = within((await section.findByText("Groceries")).closest("tr") as HTMLElement);
+    const note = await row.findByText(
+      `${m("800.00")} set aside for planned purchases · ${m("-150.00")} left after`,
+    );
+    expect(note.closest("a")).toHaveAttribute("href", "/transactions/planned");
+    const rentRow = within(section.getByText("Rent").closest("tr") as HTMLElement);
+    expect(rentRow.queryByText(/set aside for planned/)).not.toBeInTheDocument();
+  });
+
   it("warns about buckets that aren't covered, in red for priority ones", async () => {
     apiMock.on("GET /api/v1/buckets", {
       body: [groceries, { ...rent, current_available_funds: "500.00" }],

@@ -542,6 +542,18 @@ describe("needsAttention", () => {
   it("is empty when all is well", () => {
     expect(needsAttention([fine], figures)).toEqual([]);
   });
+
+  it("lists a bucket short of what planned purchases set aside, after the uncovered (#265)", () => {
+    const withPlans = new Map(figures);
+    withPlans.set("1", bucketFigures({ bucket_id: "1", planned: "400.00" }));
+    withPlans.set("5", bucketFigures({ bucket_id: "5", planned: "50.00" }));
+    const list = needsAttention([fine, short, busy], withPlans);
+    // Busy's plan takes all it has, but no more.
+    expect(list.map((a) => [a.bucket.name, a.reason])).toEqual([
+      ["Short", "uncovered"],
+      ["Fine", "plannedShort"],
+    ]);
+  });
 });
 
 describe("mostUsed", () => {
