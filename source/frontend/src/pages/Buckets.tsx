@@ -56,6 +56,7 @@ import i18n from "@/i18n";
 import type { HistoryKind } from "@/lib/bucketHistory";
 import { accountSummary, coverage, isFullyManual, refillOf, toneStyle } from "@/lib/buckets";
 import { cycleRange, daysLeftLabel, isOverdue } from "@/lib/cycles";
+import { PLANNED_PATH, setAside } from "@/lib/planned";
 import { addAmounts, compareAmounts, formatMoney } from "@/lib/money";
 
 type View = "list" | "grid";
@@ -347,6 +348,7 @@ function BucketTable({
                   <Table.Td>
                     <LeftFunds bucket={b} />
                     <WaitingNote bucket={b} />
+                    <PlannedNote bucket={b} figures={figures.get(b.id)} />
                   </Table.Td>
                   <Table.Td>
                     <Group gap="xs" wrap="wrap">
@@ -400,6 +402,7 @@ function BucketCard({
           </Text>
           <LeftFunds bucket={bucket} large />
           <WaitingNote bucket={bucket} />
+          <PlannedNote bucket={bucket} figures={figures} />
         </div>
         <UsedThisCycle
           bucket={bucket}
@@ -443,6 +446,29 @@ function WaitingNote({ bucket }: { bucket: Bucket }) {
     <Text size="xs" c="dimmed" mt={4}>
       {t("waiting.bucket", { count: charges.length, amount })}
     </Text>
+  );
+}
+
+/**
+ * What planned purchases set aside in the bucket this cycle (#265), and what
+ * it has left after them, orange when that's short; it opens the Planned tab.
+ */
+function PlannedNote({ bucket, figures }: { bucket: Bucket; figures: BucketFigures | undefined }) {
+  const { t } = useTranslation();
+  const aside = setAside(bucket, figures);
+  if (!aside) return null;
+  const money = (amount: string) => formatMoney(amount, bucket.currency);
+  return (
+    <Anchor
+      component={Link}
+      to={PLANNED_PATH}
+      size="xs"
+      display="block"
+      mt={4}
+      c={aside.short ? "var(--mantine-color-orange-text)" : "dimmed"}
+    >
+      {t("planned.bucket", { amount: money(aside.planned), left: money(aside.left) })}
+    </Anchor>
   );
 }
 

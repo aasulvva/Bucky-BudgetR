@@ -1339,7 +1339,8 @@
     "backToList": "Tilbake til transaksjonen",
     "tabs": {
       "list": "Transaksjonar",
-      "scheduled": "Planlagde"
+      "scheduled": "Planlagde",
+      "planned": "Komande kjøp"
     },
     "fromSchedule": "Frå den planlagde transaksjonen <schedule>{{name}}</schedule>",
     "scheduledMark": "Ført av ein planlagd transaksjon",
@@ -2560,7 +2561,9 @@
       "card_bills": "Kortrekningar",
       "card_billsHint": "Rekninga på eit kredittkort: klar, forfell innan dagane framover, og overført når ho ikkje er betalt i si heilskap, og så ei påminning om å registrere renter og gebyr.",
       "bucket_charges": "Kjøp som tel seinare",
-      "bucket_chargesHint": "Eit kjøp som venta på bøtta si og vert teke ved starten av ein periode."
+      "bucket_chargesHint": "Eit kjøp som venta på bøtta si og vert teke ved starten av ein periode.",
+      "planned_purchases": "Komande kjøp",
+      "planned_purchasesHint": "Eit komande kjøp som er venta innan dagane framover, og eit som er forseinka."
     },
     "savings": {
       "title": "Pengar sette av til {{name}}",
@@ -2984,5 +2987,55 @@
     "bucket_other": "{{amount}} ventar på å bli talt, {{count}} kjøp",
     "payment_one": "{{amount}} av gjelda ventar på {{buckets}} etter kvart som det vert betalt ned. Innbetalingar dekkjer den eldste gjelda først, og bøttene tel det som når kjøpet.",
     "payment_other": "{{amount}} av gjelda ventar på {{buckets}} etter kvart som det vert betalt ned. Innbetalingar dekkjer den eldste gjelda først, og bøttene tel det som når kjøpa."
+  },
+  "planned": {
+    "intro": "Noko du har bestilt og vert trekt for seinare, som ei førehandsbestilling. Det som vert lagt i bøtter, vert sett av i perioden for venta dag, så du ser kva som er att.",
+    "new": "Nytt komande kjøp",
+    "edit": "Endra komande kjøp",
+    "empty": "Ingen komande kjøp.",
+    "showClosed": "Vis trekte og avlyste",
+    "closed": "Trekte og avlyste",
+    "noneClosed": "Ingen enno.",
+    "charged": "Trekt",
+    "cancelled": "Avlyst",
+    "cancelledDone": "Komande kjøp avlyst",
+    "editName": "Endra {{name}}",
+    "actions": "Handlingar for {{name}}",
+    "expected": "Venta {{date}}",
+    "inCycle": "Sett av i {{range}}",
+    "noCycle": "Ingen periode enno: vert sett av når perioden er planlagd",
+    "movesActive": "Før den aktive perioden: vert sett av i han, som forseinka",
+    "setAsideIn": "Frå {{buckets}}",
+    "overdue": "Forseinka",
+    "recordCharge": "Registrer trekk",
+    "moveDate": "Flytt dato",
+    "cancel": "Avlys kjøpet",
+    "keep": "Behald det",
+    "cancelConfirm": "Avlysa dette komande kjøpet? Bøttene set det ikkje av lenger. Det vert halde under Trekte og avlyste.",
+    "cancelName": "Avlys {{name}}",
+    "moveTitle": "Flytt {{name}}",
+    "moved": "Venta no {{date}}",
+    "short": "{{amount}} for lite til komande kjøp",
+    "bucket": "{{amount}} sett av til komande kjøp · {{left}} att etterpå",
+    "chargeRecorded": "Trekket er registrert, og {{name}} er lukka",
+    "chargeAccount": "Kontoen til det komande kjøpet.",
+    "chargeNote": "Trekket for {{name}}: {{amount}} venta {{date}}. Endra beløpet eller bøttene om det vart annleis; lagring lukkar det komande kjøpet.",
+    "closedNote": "Dette komande kjøpet er allereie trekt eller avlyst.",
+    "back": "Tilbake til komande kjøp",
+    "form": {
+      "intro": "Bøttene set det av i perioden for venta dag; ingenting vert brukt før du registrerer trekket.",
+      "name": "Namn eller butikk",
+      "nameHint": "Vert brukt som motpart for utgifta.",
+      "amount": "Venta beløp",
+      "account": "Vert trekt frå",
+      "expected": "Venta dag",
+      "note": "Notat",
+      "save": "Lagra",
+      "saveEdit": "Lagra endringar",
+      "saved": "{{name}} planlagt til {{date}}",
+      "savedEdit": "{{name}} lagra, venta {{date}}",
+      "enterName": "Skriv inn eit namn eller ein butikk.",
+      "chooseDay": "Vel venta dag."
+    }
   }
 }

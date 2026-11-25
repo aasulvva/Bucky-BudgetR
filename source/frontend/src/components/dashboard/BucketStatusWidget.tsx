@@ -20,6 +20,7 @@ import {
   type WidgetInstance,
 } from "@/lib/dashboard";
 import { compareAmounts, formatMoney, subtractAmounts } from "@/lib/money";
+import { setAside } from "@/lib/planned";
 
 import { WidgetFrame } from "./frame";
 import { BucketsSummary, Gone, MoneyState, NoBuckets, WidgetCard } from "./Widget";
@@ -106,13 +107,25 @@ function Attention({ buckets, figures }: FiguresProps) {
               })
             : reason === "uncovered"
               ? t("buckets.notCovered", { amount: money(gap) })
-              : t("dashboard.bucketStatus.used", { pct: usedPct(figures.get(bucket.id)) ?? 0 });
+              : reason === "plannedShort"
+                ? t("planned.short", {
+                    amount: money(
+                      subtractAmounts("0", setAside(bucket, figures.get(bucket.id))?.left ?? "0"),
+                    ),
+                  })
+                : t("dashboard.bucketStatus.used", { pct: usedPct(figures.get(bucket.id)) ?? 0 });
         return (
           <Group key={bucket.id} justify="space-between" gap="xs" wrap="nowrap">
             <BucketName bucket={bucket} />
             <Text
               size="sm"
-              c={reason === "mostlyUsed" ? "var(--mantine-color-yellow-text)" : toneText(tone)}
+              c={
+                reason === "mostlyUsed"
+                  ? "var(--mantine-color-yellow-text)"
+                  : reason === "plannedShort"
+                    ? "var(--mantine-color-orange-text)"
+                    : toneText(tone)
+              }
               style={{ whiteSpace: "nowrap" }}
             >
               {text}

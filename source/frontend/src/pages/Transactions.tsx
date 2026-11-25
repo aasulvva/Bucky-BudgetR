@@ -26,6 +26,7 @@ import { useCurrentCycles, useCycles, type Cycle } from "@/api/cycles";
 import { useTags, useTransactionPages } from "@/api/transactions";
 import { ErrorAlert } from "@/components/ErrorAlert";
 import { ResponsiveModal } from "@/components/ResponsiveModal";
+import { PlannedTab } from "@/components/planned/PlannedTab";
 import { QueueBadge } from "@/components/schedules/QueueBadge";
 import { ScheduledTab } from "@/components/schedules/ScheduledTab";
 import { TransactionDetail } from "@/components/transactions/TransactionDetail";
@@ -33,6 +34,7 @@ import { TransactionRow } from "@/components/transactions/TransactionRow";
 import { useLookups, type Lookups } from "@/components/transactions/lookups";
 import { cycleRange, formatDateRange } from "@/lib/cycles";
 import { formatDay } from "@/lib/dates";
+import { PLANNED_PATH } from "@/lib/planned";
 import {
   ALL_CYCLES,
   SYSTEM_TYPES,
@@ -53,8 +55,8 @@ type FilterChange = (change: Partial<TransactionFilter>) => void;
 const SCHEDULED_PATH = "/transactions/scheduled";
 
 /**
- * Transactions (spec §9, canvas "Transactions"), in two tabs: the
- * transactions, and the scheduled ones (#154).
+ * Transactions (spec §9, canvas "Transactions"), in three tabs: the
+ * transactions, the scheduled ones (#154), and planned purchases (#265).
  */
 export default function Transactions() {
   const { t } = useTranslation();
@@ -62,7 +64,12 @@ export default function Transactions() {
   const isDesktop = useMediaQuery(`(min-width: ${theme.breakpoints.sm})`, true);
   const location = useLocation();
   const navigate = useNavigate();
-  const tab = location.pathname === SCHEDULED_PATH ? "scheduled" : "list";
+  const tab =
+    location.pathname === SCHEDULED_PATH
+      ? "scheduled"
+      : location.pathname === PLANNED_PATH
+        ? "planned"
+        : "list";
   return (
     <Stack gap="md">
       <Group justify="space-between" gap="md">
@@ -76,7 +83,9 @@ export default function Transactions() {
       <Tabs
         value={tab}
         onChange={(v) => {
-          void navigate(v === "scheduled" ? SCHEDULED_PATH : "/transactions");
+          void navigate(
+            v === "scheduled" ? SCHEDULED_PATH : v === "planned" ? PLANNED_PATH : "/transactions",
+          );
         }}
       >
         <Tabs.List>
@@ -84,9 +93,16 @@ export default function Transactions() {
           <Tabs.Tab value="scheduled" rightSection={<QueueBadge />}>
             {t("transactions.tabs.scheduled")}
           </Tabs.Tab>
+          <Tabs.Tab value="planned">{t("transactions.tabs.planned")}</Tabs.Tab>
         </Tabs.List>
       </Tabs>
-      {tab === "list" ? <TransactionsTab /> : <ScheduledTab />}
+      {tab === "list" ? (
+        <TransactionsTab />
+      ) : tab === "scheduled" ? (
+        <ScheduledTab />
+      ) : (
+        <PlannedTab />
+      )}
     </Stack>
   );
 }

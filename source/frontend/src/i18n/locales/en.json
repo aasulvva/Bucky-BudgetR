@@ -1339,7 +1339,8 @@
     "backToList": "Back to the transaction",
     "tabs": {
       "list": "Transactions",
-      "scheduled": "Scheduled"
+      "scheduled": "Scheduled",
+      "planned": "Planned"
     },
     "fromSchedule": "From the schedule <schedule>{{name}}</schedule>",
     "scheduledMark": "Recorded by a schedule",
@@ -2560,7 +2561,9 @@
       "card_bills": "Card bills",
       "card_billsHint": "A credit card's bill: ready, due within the days ahead, and carried over when not paid in full, then a reminder to register the interest and fees.",
       "bucket_charges": "Purchases counted later",
-      "bucket_chargesHint": "A purchase that waited for its bucket and is taken at a cycle's start."
+      "bucket_chargesHint": "A purchase that waited for its bucket and is taken at a cycle's start.",
+      "planned_purchases": "Planned purchases",
+      "planned_purchasesHint": "A planned purchase expected within the days ahead, and one that's overdue."
     },
     "savings": {
       "title": "Money held for {{name}}",
@@ -2984,5 +2987,55 @@
     "bucket_other": "{{amount}} waiting to count, {{count}} purchases",
     "payment_one": "{{amount}} of what's owed waits for {{buckets}} as it's paid off. Payments clear the oldest debt first, and the buckets count what reaches it.",
     "payment_other": "{{amount}} of what's owed waits for {{buckets}} as it's paid off. Payments clear the oldest debt first, and the buckets count what reaches it."
+  },
+  "planned": {
+    "intro": "Something you've ordered and will be charged for later, like a pre-order. What it puts in buckets is set aside in the cycle of its expected day, so you can see what's left.",
+    "new": "New planned purchase",
+    "edit": "Edit planned purchase",
+    "empty": "No planned purchases.",
+    "showClosed": "Show charged and cancelled",
+    "closed": "Charged and cancelled",
+    "noneClosed": "None yet.",
+    "charged": "Charged",
+    "cancelled": "Cancelled",
+    "cancelledDone": "Planned purchase cancelled",
+    "editName": "Edit {{name}}",
+    "actions": "Actions for {{name}}",
+    "expected": "Expected {{date}}",
+    "inCycle": "Set aside in {{range}}",
+    "noCycle": "No cycle yet: set aside once its cycle is planned",
+    "movesActive": "Before the active cycle: set aside in it, as overdue",
+    "setAsideIn": "From {{buckets}}",
+    "overdue": "Overdue",
+    "recordCharge": "Record charge",
+    "moveDate": "Move date",
+    "cancel": "Cancel purchase",
+    "keep": "Keep it",
+    "cancelConfirm": "Cancel this planned purchase? Its buckets no longer set it aside. It's kept under Charged and cancelled.",
+    "cancelName": "Cancel {{name}}",
+    "moveTitle": "Move {{name}}",
+    "moved": "Now expected {{date}}",
+    "short": "{{amount}} short for planned purchases",
+    "bucket": "{{amount}} set aside for planned purchases · {{left}} left after",
+    "chargeRecorded": "Charge recorded, and {{name}} closed",
+    "chargeAccount": "The planned purchase's account.",
+    "chargeNote": "The charge of {{name}}: {{amount}} expected {{date}}. Change the amount or buckets if it came out different; saving closes the planned purchase.",
+    "closedNote": "This planned purchase is already charged or cancelled.",
+    "back": "Back to planned purchases",
+    "form": {
+      "intro": "Its buckets set it aside in the cycle of the expected day; nothing is spent until you record the charge.",
+      "name": "Name or store",
+      "nameHint": "Used as the expense's counterparty.",
+      "amount": "Expected amount",
+      "account": "Charged on",
+      "expected": "Expected day",
+      "note": "Note",
+      "save": "Save",
+      "saveEdit": "Save changes",
+      "saved": "{{name}} planned for {{date}}",
+      "savedEdit": "{{name}} saved, expected {{date}}",
+      "enterName": "Enter a name or store.",
+      "chooseDay": "Choose the expected day."
+    }
   }
 }

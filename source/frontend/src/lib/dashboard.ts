@@ -10,6 +10,7 @@ import type { components } from "@/api/schema";
 import { accountSummary, coverage, type Tone } from "./buckets";
 import { MAX_DAYS, type FlowFigure, type FlowPeriod } from "./flows";
 import { addAmounts, compareAmounts, percentOf } from "./money";
+import { setAside } from "./planned";
 
 type Preferences = components["schemas"]["Preferences"];
 /** A saved module as a widget names it (#201). */
@@ -785,7 +786,7 @@ export function usedPct(figures: BucketFigures | undefined): number | null {
   return percentOf(figures.used, figures.budget);
 }
 
-export type AttentionReason = "overspent" | "uncovered" | "mostlyUsed";
+export type AttentionReason = "overspent" | "uncovered" | "plannedShort" | "mostlyUsed";
 
 export interface Attention {
   bucket: Bucket;
@@ -794,21 +795,31 @@ export interface Attention {
 
 /**
  * The buckets that need attention, worst first: overspent, not fully
- * covered (priority ones first), then more than 90 % used, the most used
- * first.
+ * covered (priority ones first), short of what planned purchases set aside
+ * this cycle (#265), then more than 90 % used, the most used first.
  */
 export function needsAttention(
   buckets: Bucket[],
   figures: Map<string, BucketFigures>,
 ): Attention[] {
   const rank = (a: Attention) =>
-    a.reason === "overspent" ? 0 : a.reason === "uncovered" ? (a.bucket.priority ? 1 : 2) : 3;
+    a.reason === "overspent"
+      ? 0
+      : a.reason === "uncovered"
+        ? a.bucket.priority
+          ? 1
+          : 2
+        : a.reason === "plannedShort"
+          ? 3
+          : 4;
   const pct = (b: Bucket) => usedPct(figures.get(b.id)) ?? 0;
   return buckets
     .flatMap((bucket): Attention[] => {
       const { overspent, gap } = coverage(bucket);
       if (overspent) return [{ bucket, reason: "overspent" }];
       if (compareAmounts(gap, "0") > 0) return [{ bucket, reason: "uncovered" }];
+      if (setAside(bucket, figures.get(bucket.id))?.short)
+        return [{ bucket, reason: "plannedShort" }];
       return pct(bucket) > 90 ? [{ bucket, reason: "mostlyUsed" }] : [];
     })
     .sort(
